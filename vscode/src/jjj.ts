@@ -29,8 +29,8 @@ export interface Feature {
   id: string;
   title: string;
   milestone_id?: string;
-  status: 'Backlog' | 'InProgress' | 'Review' | 'Done' | 'Blocked';
-  priority: 'Low' | 'Medium' | 'High' | 'Critical';
+  status: 'backlog' | 'inprogress' | 'review' | 'done' | 'blocked';
+  priority: 'low' | 'medium' | 'high' | 'critical';
   task_ids: string[];
   bug_ids: string[];
   assignee?: string;
@@ -44,7 +44,7 @@ export interface Milestone {
   title: string;
   description?: string;
   target_date?: string;
-  status: 'Planning' | 'Active' | 'Released' | 'Cancelled';
+  status: 'planning' | 'active' | 'released' | 'cancelled';
   feature_ids: string[];
   bug_ids: string[];
   tags: string[];
@@ -56,8 +56,8 @@ export interface Milestone {
 export interface Bug {
   id: string;
   title: string;
-  severity: 'Low' | 'Medium' | 'High' | 'Critical';
-  status: 'New' | 'Confirmed' | 'InProgress' | 'Fixed' | 'Closed' | 'WontFix' | 'Duplicate';
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  status: 'new' | 'confirmed' | 'inprogress' | 'fixed' | 'closed' | 'wontfix' | 'duplicate';
   feature_id?: string;
   milestone_id?: string;
   assignee?: string;
@@ -81,14 +81,21 @@ export class JJJ {
   }
 
   private async exec(args: string[]): Promise<string> {
+    const config = vscode.workspace.getConfiguration('jjj');
+    const jjjPath = config.get<string>('path') || 'jjj';
+
     return new Promise((resolve, reject) => {
-      // Use jjj from the system path
-      const command = `jjj ${args.join(' ')}`;
+      const command = `${jjjPath} ${args.join(' ')}`;
 
       cp.exec(command, { cwd: this.workspaceRoot }, (error, stdout, stderr) => {
         if (error) {
           console.error(`jjj error: ${stderr}`);
-          reject(stderr);
+          // Enhance error message if command not found
+          if (stderr.includes('command not found') || error.code === 127) {
+             reject(`JJJ executable not found at '${jjjPath}'. Please check your configuration.`);
+          } else {
+             reject(stderr || error.message);
+          }
           return;
         }
         resolve(stdout.trim());
@@ -184,6 +191,44 @@ export class JJJ {
   async getMilestone(milestoneId: string): Promise<Milestone> {
     const output = await this.exec(['milestone', 'show', milestoneId, '--json']);
     return JSON.parse(output);
+  }
+
+  async updateMilestone(
+    milestoneId: string,
+    options: { description?: string; date?: string; status?: string },
+  ): Promise<void> {
+    const args = ['milestone', 'edit', milestoneId];
+    if (options.description !== undefined) {
+      args.push('--description', `"${options.description}"`);
+    }
+    if (options.date) {
+      args.push('--date', options.date);
+    }
+    if (options.status) {
+      args.push('--status', options.status);
+    }
+    await this.exec(args);
+  }
+
+  async updateFeature(
+    featureId: string,
+    options: { milestone?: string | null; priority?: string; status?: string },
+  ): Promise<void> {
+    const args = ['feature', 'edit', featureId];
+    if (options.milestone !== undefined) {
+      if (options.milestone === null) {
+        args.push('--no-milestone');
+      } else {
+        args.push('--milestone', options.milestone);
+      }
+    }
+    if (options.priority) {
+      args.push('--priority', options.priority);
+    }
+    if (options.status) {
+      args.push('--status', options.status);
+    }
+    await this.exec(args);
   }
 
   async listBugs(options?: { severity?: string; open?: boolean }): Promise<Bug[]> {

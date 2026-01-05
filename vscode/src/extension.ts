@@ -9,7 +9,9 @@ import { FeatureProvider } from './views/featureProvider';
 import { MilestoneProvider } from './views/milestoneProvider';
 import { BugProvider } from './views/bugProvider';
 import { DashboardPanel } from './views/dashboardPanel';
-import { JJJDocumentProvider } from './editors/jjjDocumentProvider';
+import { KanbanPanel } from './views/kanbanPanel';
+import { PlanningPanel } from './views/planningPanel';
+import { JJJFileSystemProvider } from './editors/jjjDocumentProvider';
 
 // This function is called when your extension is activated.
 export function activate(context: vscode.ExtensionContext) {
@@ -21,7 +23,7 @@ export function activate(context: vscode.ExtensionContext) {
   let featureProvider: FeatureProvider | undefined;
   let milestoneProvider: MilestoneProvider | undefined;
   let bugProvider: BugProvider | undefined;
-  let documentProvider: JJJDocumentProvider | undefined;
+  let documentProvider: JJJFileSystemProvider | undefined;
 
   // Create status bar item
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
@@ -78,10 +80,12 @@ export function activate(context: vscode.ExtensionContext) {
           vscode.window.registerTreeDataProvider('jjj-milestones', milestoneProvider);
           vscode.window.registerTreeDataProvider('jjj-bugs', bugProvider);
 
-          // Register custom document provider for editing items
-          documentProvider = new JJJDocumentProvider(jjj!);
+          // Register file system provider for editing items
+          documentProvider = new JJJFileSystemProvider(jjj!);
           context.subscriptions.push(
-            vscode.workspace.registerTextDocumentContentProvider('jjj', documentProvider),
+            vscode.workspace.registerFileSystemProvider('jjj', documentProvider, {
+              isCaseSensitive: true,
+            }),
           );
 
           updateStatusBar();
@@ -98,22 +102,18 @@ export function activate(context: vscode.ExtensionContext) {
   // Initial check
   checkJjjInitialization();
 
-  // Register save handler for jjj documents
+  // Register save handler for jjj documents to refresh views
   context.subscriptions.push(
-    vscode.workspace.onWillSaveTextDocument(async (event) => {
-      if (event.document.uri.scheme === 'jjj' && documentProvider) {
-        event.waitUntil(
-          documentProvider.saveDocument(event.document).then((success) => {
-            if (success) {
-              // Refresh providers after successful save
-              taskProvider?.refresh();
-              featureProvider?.refresh();
-              milestoneProvider?.refresh();
-              bugProvider?.refresh();
-              updateStatusBar();
-            }
-          }),
-        );
+    vscode.workspace.onDidSaveTextDocument(async (document) => {
+      if (document.uri.scheme === 'jjj') {
+        // Refresh providers after successful save
+        taskProvider?.refresh();
+        featureProvider?.refresh();
+        milestoneProvider?.refresh();
+        bugProvider?.refresh();
+        KanbanPanel.currentPanel?.refresh();
+        PlanningPanel.currentPanel?.refresh();
+        updateStatusBar();
       }
     }),
   );
@@ -125,13 +125,9 @@ export function activate(context: vscode.ExtensionContext) {
       return;
     }
 
-    const uri = vscode.Uri.parse(`jjj://${type}/${id}.yaml`);
+    const uri = vscode.Uri.parse(`jjj:///${type}/${id}.yaml`);
 
     try {
-      // Load content
-      const content = await documentProvider.loadContent(uri);
-      documentProvider.update(uri, content);
-
       // Open document
       const doc = await vscode.workspace.openTextDocument(uri);
       await vscode.window.showTextDocument(doc, {
@@ -212,6 +208,28 @@ export function activate(context: vscode.ExtensionContext) {
     }),
   );
 
+  // Register command to open kanban board
+  context.subscriptions.push(
+    vscode.commands.registerCommand('jjj.openKanban', () => {
+      if (jjj) {
+        KanbanPanel.createOrShow(context.extensionUri, jjj);
+      } else {
+        vscode.window.showErrorMessage('JJJ not initialized');
+      }
+    }),
+  );
+
+  // Register command to open planning view
+  context.subscriptions.push(
+    vscode.commands.registerCommand('jjj.openPlanning', () => {
+      if (jjj) {
+        PlanningPanel.createOrShow(context.extensionUri, jjj);
+      } else {
+        vscode.window.showErrorMessage('JJJ not initialized');
+      }
+    }),
+  );
+
   // Register create commands
   context.subscriptions.push(
     vscode.commands.registerCommand('jjj.createTask', async () => {
@@ -248,15 +266,17 @@ export function activate(context: vscode.ExtensionContext) {
         });
         const tags = tagsInput
           ? tagsInput
-              .split(',')
-              .map((t) => t.trim())
-              .filter((t) => t.length > 0)
+            .split(',')
+            .map((t) => t.trim())
+            .filter((t) => t.length > 0)
           : [];
 
         // Create Task
         await jjj.createTask(title, selectedFeature.description, tags);
         vscode.window.showInformationMessage(`Created task: ${title}`);
         taskProvider?.refresh();
+        KanbanPanel.currentPanel?.refresh();
+        PlanningPanel.currentPanel?.refresh();
       } catch (error) {
         vscode.window.showErrorMessage(`Failed to create task: ${error}`);
       }
@@ -310,6 +330,8 @@ export function activate(context: vscode.ExtensionContext) {
         });
         vscode.window.showInformationMessage(`Created feature: ${title}`);
         featureProvider?.refresh();
+        KanbanPanel.currentPanel?.refresh();
+        PlanningPanel.currentPanel?.refresh();
       } catch (error) {
         vscode.window.showErrorMessage(`Failed to create feature: ${error}`);
       }
@@ -360,6 +382,8 @@ export function activate(context: vscode.ExtensionContext) {
         });
         vscode.window.showInformationMessage(`Created bug: ${title}`);
         bugProvider?.refresh();
+        KanbanPanel.currentPanel?.refresh();
+        PlanningPanel.currentPanel?.refresh();
       } catch (error) {
         vscode.window.showErrorMessage(`Failed to create bug: ${error}`);
       }
@@ -400,6 +424,8 @@ export function activate(context: vscode.ExtensionContext) {
         });
         vscode.window.showInformationMessage(`Created milestone: ${title}`);
         milestoneProvider?.refresh();
+        KanbanPanel.currentPanel?.refresh();
+        PlanningPanel.currentPanel?.refresh();
       } catch (error) {
         vscode.window.showErrorMessage(`Failed to create milestone: ${error}`);
       }
@@ -460,4 +486,4 @@ export function activate(context: vscode.ExtensionContext) {
 
 // This function is called when your extension is deactivated
 // eslint-disable-next-line @typescript-eslint/no-empty-function
-export function deactivate() {}
+export function deactivate() { }

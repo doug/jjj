@@ -1,14 +1,7 @@
-mod cli;
-mod commands;
-mod error;
-mod jj;
-mod models;
-mod storage;
-mod tui;
-mod utils;
-
 use clap::Parser;
-use error::Result;
+use jjj::cli;
+use jjj::commands;
+use jjj::error::Result;
 
 fn main() -> Result<()> {
     let cli = cli::Cli::parse();

@@ -72,6 +72,22 @@ pub enum Commands {
         #[command(subcommand)]
         action: TagAction,
     },
+    /// Start working on a task
+    Start {
+        /// Task ID (to resume) or Task Title (to create)
+        arg: String,
+
+        /// Link to a feature (e.g., F-1)
+        #[arg(long)]
+        feature: Option<String>,
+    },
+
+    /// Submit current changes (squash and complete task)
+    Submit {
+        /// Force submit (bypass review check)
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 #[derive(Subcommand)]

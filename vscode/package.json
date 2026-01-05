@@ -20,6 +20,16 @@
     "onView:jjj-tasks"
   ],
   "contributes": {
+    "configuration": {
+      "title": "JJJ",
+      "properties": {
+        "jjj.path": {
+          "type": "string",
+          "default": "jjj",
+          "description": "Path to the jjj executable"
+        }
+      }
+    },
     "commands": [
       {
         "command": "jjj.init",
@@ -48,6 +58,16 @@
       {
         "command": "jjj.openDashboard",
         "title": "JJJ: Open Dashboard"
+      },
+      {
+        "command": "jjj.openKanban",
+        "title": "JJJ: Open Kanban Board",
+        "icon": "$(project)"
+      },
+      {
+        "command": "jjj.openPlanning",
+        "title": "JJJ: Open Planning View",
+        "icon": "$(list-tree)"
       },
       {
         "command": "jjj.refreshTasks",

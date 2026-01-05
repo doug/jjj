@@ -97,13 +97,13 @@ export class BugItem extends vscode.TreeItem {
 
   private _getSeverityEmoji(): string {
     switch (this.bug.severity) {
-      case 'Critical':
+      case 'critical':
         return '🔴 Critical';
-      case 'High':
+      case 'high':
         return '🟠 High';
-      case 'Medium':
+      case 'medium':
         return '🟡 Medium';
-      case 'Low':
+      case 'low':
         return '🟢 Low';
       default:
         return this.bug.severity || '';
@@ -112,18 +112,18 @@ export class BugItem extends vscode.TreeItem {
 
   private _getIcon(): vscode.ThemeIcon {
     switch (this.bug.status) {
-      case 'Fixed':
+      case 'fixed':
         return new vscode.ThemeIcon('check', new vscode.ThemeColor('testing.iconPassed'));
-      case 'Closed':
+      case 'closed':
         return new vscode.ThemeIcon('circle-slash', new vscode.ThemeColor('testing.iconSkipped'));
-      case 'InProgress':
+      case 'inprogress':
         return new vscode.ThemeIcon('tools', new vscode.ThemeColor('charts.blue'));
-      case 'Confirmed':
+      case 'confirmed':
         return new vscode.ThemeIcon('bug', new vscode.ThemeColor('charts.orange'));
-      case 'New':
+      case 'new':
         return new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('testing.iconErrored'));
-      case 'WontFix':
-      case 'Duplicate':
+      case 'wontfix':
+      case 'duplicate':
         return new vscode.ThemeIcon('circle-outline', new vscode.ThemeColor('testing.iconSkipped'));
       default:
         return new vscode.ThemeIcon('bug');

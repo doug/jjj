@@ -95,13 +95,13 @@ export class MilestoneItem extends vscode.TreeItem {
 
   private _getIcon(): vscode.ThemeIcon {
     switch (this.milestone.status) {
-      case 'Released':
+      case 'released':
         return new vscode.ThemeIcon('package', new vscode.ThemeColor('testing.iconPassed'));
-      case 'Active':
+      case 'active':
         return new vscode.ThemeIcon('rocket', new vscode.ThemeColor('charts.blue'));
-      case 'Planning':
+      case 'planning':
         return new vscode.ThemeIcon('calendar', new vscode.ThemeColor('charts.yellow'));
-      case 'Cancelled':
+      case 'cancelled':
         return new vscode.ThemeIcon('circle-slash', new vscode.ThemeColor('testing.iconFailed'));
       default:
         return new vscode.ThemeIcon('milestone');

@@ -51,20 +51,20 @@ suite('BugProvider Test Suite', () => {
     const children = (await bugProvider.getChildren()) as BugItem[];
 
     // Check critical severity
-    const criticalBug = children.find((b) => b.bug.severity === 'Critical');
+    const criticalBug = children.find((b) => b.bug.severity === 'critical');
     assert.ok(criticalBug, 'Should have critical severity bug');
     const criticalDesc = typeof criticalBug.description === 'string' ? criticalBug.description : '';
     assert.ok(criticalDesc.includes('🔴'), 'Critical bug should have red indicator');
     assert.ok(criticalDesc.includes('Critical'), 'Critical bug should display severity text');
 
     // Check high severity
-    const highBug = children.find((b) => b.bug.severity === 'High');
+    const highBug = children.find((b) => b.bug.severity === 'high');
     assert.ok(highBug, 'Should have high severity bug');
     const highDesc = typeof highBug.description === 'string' ? highBug.description : '';
     assert.ok(highDesc.includes('🟠'), 'High bug should have orange indicator');
 
     // Check medium severity
-    const mediumBug = children.find((b) => b.bug.severity === 'Medium');
+    const mediumBug = children.find((b) => b.bug.severity === 'medium');
     assert.ok(mediumBug, 'Should have medium severity bug');
     const mediumDesc = typeof mediumBug.description === 'string' ? mediumBug.description : '';
     assert.ok(mediumDesc.includes('🟡'), 'Medium bug should have yellow indicator');
@@ -103,15 +103,15 @@ suite('BugProvider Test Suite', () => {
   test('BugItem should have correct icon based on status', async () => {
     const children = (await bugProvider.getChildren()) as BugItem[];
 
-    const inProgressBug = children.find((b) => b.bug.status === 'InProgress');
+    const inProgressBug = children.find((b) => b.bug.status === 'inprogress');
     assert.ok(inProgressBug, 'Should have in progress bug');
     assert.ok(inProgressBug.iconPath, 'In progress bug should have icon');
 
-    const confirmedBug = children.find((b) => b.bug.status === 'Confirmed');
+    const confirmedBug = children.find((b) => b.bug.status === 'confirmed');
     assert.ok(confirmedBug, 'Should have confirmed bug');
     assert.ok(confirmedBug.iconPath, 'Confirmed bug should have icon');
 
-    const newBug = children.find((b) => b.bug.status === 'New');
+    const newBug = children.find((b) => b.bug.status === 'new');
     assert.ok(newBug, 'Should have new bug');
     assert.ok(newBug.iconPath, 'New bug should have icon');
   });

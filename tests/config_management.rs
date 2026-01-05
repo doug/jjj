@@ -104,15 +104,15 @@ fn test_add_tags_to_config() {
     assert!(config.tags.is_empty());
 
     // When: I add tags
-    config.add_tag("backend".to_string());
-    config.add_tag("frontend".to_string());
-    config.add_tag("database".to_string());
+    config.add_tag("backend".to_string(), None, None);
+    config.add_tag("frontend".to_string(), None, None);
+    config.add_tag("database".to_string(), None, None);
 
     // Then: All tags should be present
     assert_eq!(config.tags.len(), 3);
-    assert!(config.tags.contains(&"backend".to_string()));
-    assert!(config.tags.contains(&"frontend".to_string()));
-    assert!(config.tags.contains(&"database".to_string()));
+    assert!(config.tags.iter().any(|t| t.name == "backend"));
+    assert!(config.tags.iter().any(|t| t.name == "frontend"));
+    assert!(config.tags.iter().any(|t| t.name == "database"));
 }
 
 /// Behavior: Adding duplicate tags
@@ -120,11 +120,11 @@ fn test_add_tags_to_config() {
 fn test_add_duplicate_tag() {
     // Given: A config with existing tags
     let mut config = ProjectConfig::default();
-    config.add_tag("backend".to_string());
+    config.add_tag("backend".to_string(), None, None);
     let initial_count = config.tags.len();
 
     // When: I try to add the same tag again
-    config.add_tag("backend".to_string());
+    config.add_tag("backend".to_string(), None, None);
 
     // Then: It should not be duplicated
     assert_eq!(config.tags.len(), initial_count);
@@ -187,8 +187,8 @@ fn test_config_serialization_toml() {
     let mut config = ProjectConfig::default();
     config.name = Some("Test Project".to_string());
     config.add_column("Blocked".to_string());
-    config.add_tag("backend".to_string());
-    config.add_tag("frontend".to_string());
+    config.add_tag("backend".to_string(), None, None);
+    config.add_tag("frontend".to_string(), None, None);
     config.default_reviewers = vec!["alice".to_string(), "bob".to_string()];
     config.settings.insert("require_approval".to_string(), "true".to_string());
 
@@ -224,8 +224,13 @@ fn test_custom_workflow_columns() {
             "QA Testing".to_string(),
             "Staging".to_string(),
             "Production".to_string(),
+            "Production".to_string(),
         ],
-        tags: vec!["bug".to_string(), "feature".to_string(), "refactor".to_string()],
+        tags: vec![
+            jjj::models::Tag { id: "tag-1".to_string(), name: "bug".to_string(), description: None, color: None },
+            jjj::models::Tag { id: "tag-2".to_string(), name: "feature".to_string(), description: None, color: None },
+            jjj::models::Tag { id: "tag-3".to_string(), name: "refactor".to_string(), description: None, color: None },
+        ],
         default_reviewers: vec![],
         settings: std::collections::HashMap::new(),
     };

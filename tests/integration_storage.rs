@@ -64,8 +64,8 @@ fn test_project_config_roundtrip() {
     // Given: A project configuration
     let mut config = ProjectConfig::default();
     config.name = Some("Test Project".to_string());
-    config.add_tag("backend".to_string());
-    config.add_tag("frontend".to_string());
+    config.add_tag("backend".to_string(), None, None);
+    config.add_tag("frontend".to_string(), None, None);
 
     // When: I serialize to TOML
     let toml_str = toml::to_string(&config).expect("Failed to serialize");
@@ -99,7 +99,7 @@ fn test_task_json_roundtrip() {
     assert_eq!(loaded.id, task.id);
     assert_eq!(loaded.title, task.title);
     assert_eq!(loaded.column, task.column);
-    assert_eq!(loaded.tags, task.tags);
+    assert_eq!(loaded.tag_ids, task.tag_ids);
     assert_eq!(loaded.assignee, task.assignee);
     assert_eq!(loaded.change_ids, task.change_ids);
 }
@@ -212,7 +212,7 @@ fn test_empty_collections_serialize() {
     let json = serde_json::to_string(&task).expect("Failed");
 
     // Then: Empty collections are present
-    assert!(json.contains("\"tags\""));
+    assert!(json.contains("\"tag_ids\""));
     assert!(json.contains("\"change_ids\""));
 }
 

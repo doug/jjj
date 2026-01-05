@@ -71,13 +71,13 @@ export class FeatureItem extends vscode.TreeItem {
 
   private _getPriorityEmoji(): string {
     switch (this.feature.priority) {
-      case 'Critical':
+      case 'critical':
         return '🔴';
-      case 'High':
+      case 'high':
         return '🟠';
-      case 'Medium':
+      case 'medium':
         return '🟡';
-      case 'Low':
+      case 'low':
         return '🟢';
       default:
         return '';
@@ -86,15 +86,15 @@ export class FeatureItem extends vscode.TreeItem {
 
   private _getIcon(): vscode.ThemeIcon {
     switch (this.feature.status) {
-      case 'Done':
+      case 'done':
         return new vscode.ThemeIcon('check', new vscode.ThemeColor('testing.iconPassed'));
-      case 'InProgress':
+      case 'inprogress':
         return new vscode.ThemeIcon('sync', new vscode.ThemeColor('charts.blue'));
-      case 'Review':
+      case 'review':
         return new vscode.ThemeIcon('eye', new vscode.ThemeColor('charts.purple'));
-      case 'Blocked':
+      case 'blocked':
         return new vscode.ThemeIcon('error', new vscode.ThemeColor('testing.iconFailed'));
-      case 'Backlog':
+      case 'backlog':
       default:
         return new vscode.ThemeIcon('circle-outline');
     }

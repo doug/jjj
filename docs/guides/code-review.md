@@ -74,19 +74,47 @@ Review requested for change kpqxywon
 Reviewers: @alice, @bob
 ```
 
-### 2. Reviewer: Start Reviewing
+### 2. Reviewer: Inspect and Run Code
 
-Alice receives a notification (or checks pending reviews):
+Alice receives a notification and wants to test the code locally.
+
+#### Fetch and Checkout
 
 ```bash
-# List pending reviews
-jjj review list --pending
+# 1. Fetch latest changes from remote
+jj git fetch
 
-# Start reviewing the change
+# 2. Check out the change to review
+# This creates a new working copy on top of the change without modifying it
+jj new kpqxywon
+```
+
+#### Rebase if Needed
+
+If the change is based on an old main, Alice can rebase it locally to test against the latest code:
+
+```bash
+# Rebase the change onto the latest main
+jj rebase -r kpqxywon -d main
+
+# Note: This only affects Alice's local view. The Change ID remains the same.
+```
+
+#### Run Tests
+
+Now Alice can run the code, run tests, or start the app:
+
+```bash
+cargo test
+npm start
+```
+
+#### Start Review Mode
+
+Once ready to leave comments:
+
+```bash
 jjj review start kpqxywon
-
-# Check out the change to review locally
-jj edit kpqxywon
 ```
 
 ### 3. Reviewer: Add Comments
@@ -170,6 +198,50 @@ jjj review approve kpqxywon
 ```
 
 Now both reviewers have approved, and the change can be merged.
+
+### 7. Landing Changes (The Merge Flow)
+
+Since `jjj` decouples review from the forge (GitHub/GitLab), "merging" is simply updating the main branch.
+
+#### Role: Author or Maintainer
+
+1.  **Rebase onto latest main**:
+    ```bash
+    jj git fetch
+    jj rebase -r kpqxywon -d main
+    ```
+
+2.  **Advance main bookmark**:
+    ```bash
+    jj bookmark set main -r kpqxywon
+    ```
+
+3.  **Push to upstream**:
+    ```bash
+    # Push the new main
+    jj git push -b main
+    
+    # CRITICAL: Push the review metadata
+    # This publishes the "Approved" status that you (or reviewers) added.
+    # Without this, the upstream repo won't know the change was approved.
+    jj git push -b jjj/meta
+    ```
+
+#### Hybrid Workflow (GitHub/GitLab)
+
+If your team requires Pull Requests for compliance or CI gating:
+
+1.  **Push your change as a bookmark**:
+    ```bash
+    jj bookmark set my-feature -r kpqxywon
+    jj git push -b my-feature
+    ```
+
+2.  **Open PR**: Open a PR on GitHub/GitLab targeting `main`.
+3.  **Link jjj**: Paste the `jjj review status` output in the PR description to show it has been reviewed.
+4.  **Merge**: Use the "Squash and Merge" button on GitHub.
+
+> **Note**: In the hybrid flow, the **review and approval happen in the `jjj` CLI**. The GitHub PR is used primarily for CI checks and the final merge button. You do *not* need to use GitHub's review interface.
 
 ## Advanced Features
 
@@ -445,7 +517,13 @@ jjj review comment kpqxywon \
 >     jj show  # Review your own diff
 >     # Look for debugging code, TODOs, etc.
 
-> **Use Descriptive Change Descriptions**
+> **Use Feature-Based Bookmarks**
+>
+> To make changes easier to find without memorizing Change IDs, name your bookmarks using the Feature ID:
+>
+>     jj bookmark set feature/F-1-login
+>
+> This helps teammates find the code for "Feature F-1" instantly.
 >
 > Write clear commit messages:
 >

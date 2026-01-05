@@ -21,7 +21,8 @@
       "Bash(fi)",
       "Bash(npm run compile:*)",
       "Bash(npm run format:*)",
-      "Bash(npm run format:check:*)"
+      "Bash(npm run format:check:*)",
+      "Bash(jjj feature list:*)"
     ],
     "deny": [],
     "ask": []

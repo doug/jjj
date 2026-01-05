@@ -189,6 +189,27 @@ View the shadow graph:
 jj log -r jjj/meta
 ```
 
+## Syncing with Team
+
+To share your tasks and reviews, you need to sync the `jjj/meta` bookmark.
+
+### Pushing Changes
+When you push your code, also push the metadata:
+
+```bash
+jj git push -b jjj/meta
+```
+
+### Fetching Updates
+To see updates from your team:
+
+```bash
+jj git fetch
+```
+
+> **Tip:** Make sure you're tracking the remote bookmark:
+> `jj bookmark track jjj/meta@origin`
+
 ## Common Commands
 
 Here are the most frequently used commands:

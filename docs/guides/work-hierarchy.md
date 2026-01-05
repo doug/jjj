@@ -20,6 +20,17 @@ graph TD
     B1 -.linked to.-> F1
 ```
 
+## Quick Heuristic
+
+If you're unsure what to use, ask yourself:
+
+*   **Feature**: Is this **value for the user**? (The "What")
+    *   *Example: "Dark Mode", "User Profile", "Search"*
+*   **Task**: Is this **work for me** to build the feature? (The "How")
+    *   *Example: "Update CSS variables", "Create API endpoint", "Write tests"*
+*   **Bug**: Is this **broken behavior**? (The "Oops")
+    *   *Example: "App crashes on launch", "Save button doesn't work"*
+
 ## The Hierarchy Levels
 
 ### Milestones (M-*)

@@ -50,7 +50,7 @@ suite('FeatureProvider Test Suite', () => {
     const children = (await featureProvider.getChildren()) as FeatureItem[];
 
     // Check critical priority
-    const criticalFeature = children.find((f) => f.feature.priority === 'Critical');
+    const criticalFeature = children.find((f) => f.feature.priority === 'critical');
     assert.ok(criticalFeature, 'Should have critical priority feature');
     assert.ok(
       (typeof criticalFeature.description === 'string' ? criticalFeature.description : '').includes(
@@ -60,7 +60,7 @@ suite('FeatureProvider Test Suite', () => {
     );
 
     // Check high priority
-    const highFeature = children.find((f) => f.feature.priority === 'High');
+    const highFeature = children.find((f) => f.feature.priority === 'high');
     assert.ok(highFeature, 'Should have high priority feature');
     assert.ok(
       (typeof highFeature.description === 'string' ? highFeature.description : '').includes('🟠'),
@@ -99,11 +99,11 @@ suite('FeatureProvider Test Suite', () => {
   test('FeatureItem should have correct icon based on status', async () => {
     const children = (await featureProvider.getChildren()) as FeatureItem[];
 
-    const doneFeature = children.find((f) => f.feature.status === 'Done');
+    const doneFeature = children.find((f) => f.feature.status === 'done');
     assert.ok(doneFeature, 'Should have done feature');
     assert.ok(doneFeature.iconPath, 'Done feature should have icon');
 
-    const inProgressFeature = children.find((f) => f.feature.status === 'InProgress');
+    const inProgressFeature = children.find((f) => f.feature.status === 'inprogress');
     assert.ok(inProgressFeature, 'Should have in progress feature');
     assert.ok(inProgressFeature.iconPath, 'In progress feature should have icon');
   });

@@ -91,10 +91,17 @@ impl JjClient {
         Ok(())
     }
 
-    /// Create a new empty change
+    /// Create a new empty change and set description
     pub fn new_empty_change(&self, message: &str) -> Result<String> {
-        self.execute(&["new", "--no-edit", "-m", message])?;
+        self.execute(&["new"])?;
+        self.describe(message)?;
         self.current_change_id()
+    }
+
+    /// Set the description of the current change
+    pub fn describe(&self, message: &str) -> Result<()> {
+        self.execute(&["describe", "-m", message])?;
+        Ok(())
     }
 
     /// Get the description of a change

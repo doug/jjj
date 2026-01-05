@@ -89,15 +89,15 @@ suite('MilestoneProvider Test Suite', () => {
   test('MilestoneItem should have correct icon based on status', async () => {
     const children = (await milestoneProvider.getChildren()) as MilestoneItem[];
 
-    const activeMilestone = children.find((m) => m.milestone.status === 'Active');
+    const activeMilestone = children.find((m) => m.milestone.status === 'active');
     assert.ok(activeMilestone, 'Should have active milestone');
     assert.ok(activeMilestone.iconPath, 'Active milestone should have icon');
 
-    const releasedMilestone = children.find((m) => m.milestone.status === 'Released');
+    const releasedMilestone = children.find((m) => m.milestone.status === 'released');
     assert.ok(releasedMilestone, 'Should have released milestone');
     assert.ok(releasedMilestone.iconPath, 'Released milestone should have icon');
 
-    const planningMilestone = children.find((m) => m.milestone.status === 'Planning');
+    const planningMilestone = children.find((m) => m.milestone.status === 'planning');
     assert.ok(planningMilestone, 'Should have planning milestone');
     assert.ok(planningMilestone.iconPath, 'Planning milestone should have icon');
   });

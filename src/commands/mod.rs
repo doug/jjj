@@ -1,18 +1,18 @@
-mod board;
-mod bug;
-mod dashboard;
-mod feature;
-mod init;
-mod milestone;
-mod resolve;
-mod review;
-mod tag;
-mod task;
+pub mod board;
+pub mod bug;
+pub mod dashboard;
+pub mod feature;
+pub mod init;
+pub mod milestone;
+pub mod resolve;
+pub mod review;
+pub mod tag;
+pub mod task;
+pub mod workflow;
 
 use crate::cli::{Cli, Commands};
 use crate::error::Result;
 
-/// Execute the CLI command
 pub fn execute(cli: Cli) -> Result<()> {
     match cli.command {
         Commands::Init => init::execute(),
@@ -25,5 +25,9 @@ pub fn execute(cli: Cli) -> Result<()> {
         Commands::Feature { action } => feature::execute(action),
         Commands::Bug { action } => bug::execute(action),
         Commands::Tag { action } => tag::execute(action),
+        
+        // New Workflow Commands
+        Commands::Start { arg, feature } => workflow::start(arg, feature),
+        Commands::Submit { force } => workflow::submit(force),
     }
 }

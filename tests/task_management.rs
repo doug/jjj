@@ -15,7 +15,7 @@ fn test_create_task_with_defaults() {
     assert_eq!(task.id, task_id);
     assert_eq!(task.title, title);
     assert_eq!(task.column, column);
-    assert!(task.tags.is_empty());
+    assert!(task.tag_ids.is_empty());
     assert!(task.assignee.is_none());
     assert!(task.change_ids.is_empty());
     assert_eq!(task.comment_count, 0);
@@ -34,9 +34,9 @@ fn test_add_tags_to_task() {
     task.add_tag("database".to_string());
 
     // Then: The task should have the tags and version should increment
-    assert_eq!(task.tags.len(), 2);
-    assert!(task.tags.contains("backend"));
-    assert!(task.tags.contains("database"));
+    assert_eq!(task.tag_ids.len(), 2);
+    assert!(task.tag_ids.contains("backend"));
+    assert!(task.tag_ids.contains("database"));
     assert_eq!(task.version, initial_version + 2);
 }
 
@@ -54,8 +54,8 @@ fn test_remove_tag_from_task() {
 
     // Then: The tag should be removed and version incremented
     assert!(removed);
-    assert!(!task.tags.contains("backend"));
-    assert!(task.tags.contains("frontend"));
+    assert!(!task.tag_ids.contains("backend"));
+    assert!(task.tag_ids.contains("frontend"));
     assert_eq!(task.version, version_before_removal + 1);
 }
 
@@ -170,7 +170,7 @@ fn test_filter_tasks_by_column() {
     // When: I filter by "TODO" column
     let filter = TaskFilter {
         column: Some("TODO".to_string()),
-        tag: None,
+        tag_id: None,
         assignee: None,
     };
 
@@ -196,7 +196,7 @@ fn test_filter_tasks_by_tag() {
     // When: I filter by "backend" tag
     let filter = TaskFilter {
         column: None,
-        tag: Some("backend".to_string()),
+        tag_id: Some("backend".to_string()),
         assignee: None,
     };
 
@@ -222,7 +222,7 @@ fn test_filter_tasks_by_assignee() {
     // When: I filter by "alice"
     let filter = TaskFilter {
         column: None,
-        tag: None,
+        tag_id: None,
         assignee: Some("alice".to_string()),
     };
 
@@ -251,7 +251,7 @@ fn test_filter_tasks_with_multiple_criteria() {
     // When: I filter by TODO column, backend tag, and alice
     let filter = TaskFilter {
         column: Some("TODO".to_string()),
-        tag: Some("backend".to_string()),
+        tag_id: Some("backend".to_string()),
         assignee: Some("alice".to_string()),
     };
 
@@ -280,7 +280,7 @@ fn test_task_serialization() {
     assert_eq!(deserialized.id, task.id);
     assert_eq!(deserialized.title, task.title);
     assert_eq!(deserialized.column, task.column);
-    assert_eq!(deserialized.tags, task.tags);
+    assert_eq!(deserialized.tag_ids, task.tag_ids);
     assert_eq!(deserialized.assignee, task.assignee);
     assert_eq!(deserialized.change_ids, task.change_ids);
     assert_eq!(deserialized.description, task.description);

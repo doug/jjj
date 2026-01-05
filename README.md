@@ -33,7 +33,25 @@ jjj maintains a parallel directory structure within the jjj/meta bookmark.
 
 ### **State Propagation**
 
-When you run jj git push, you push both your code branches and the jjj/meta bookmark. Your team fetches jjj/meta to receive task updates and code reviews.
+To share tasks and reviews with your team, you must push the `jjj/meta` bookmark.
+
+**Pushing changes:**
+```bash
+# Push your changes and the jjj metadata
+jj git push -b jjj/meta
+```
+
+**Fetching updates:**
+```bash
+# Fetch updates from the team
+jj git fetch
+```
+
+**One-time setup:**
+If you haven't already, track the remote metadata bookmark:
+```bash
+jj bookmark track jjj/meta@origin
+```
 
 ## **III. Workflow: Project Management (Kanban)**
 
