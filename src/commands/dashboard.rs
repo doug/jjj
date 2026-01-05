@@ -4,13 +4,15 @@ use crate::models::ReviewStatus;
 use crate::storage::MetadataStore;
 use crate::utils;
 
-pub fn execute() -> Result<()> {
+pub fn execute(json: bool) -> Result<()> {
     let jj_client = JjClient::new()?;
     let user_identity = jj_client.user_identity()?;
     let store = MetadataStore::new(jj_client)?;
 
-    println!("Dashboard for {}", user_identity);
-    println!();
+    if !json {
+        println!("Dashboard for {}", user_identity);
+        println!();
+    }
 
     // Show tasks assigned to user
     let tasks = store.list_tasks()?;
@@ -81,6 +83,16 @@ pub fn execute() -> Result<()> {
 
     if my_tasks.is_empty() && pending_reviews.is_empty() && my_reviews.is_empty() {
         println!("No pending tasks or reviews.");
+    }
+
+    if json {
+        let dashboard_data = serde_json::json!({
+            "my_tasks": my_tasks,
+            "pending_reviews": pending_reviews,
+            "my_reviews": my_reviews,
+        });
+        println!("{}", serde_json::to_string_pretty(&dashboard_data)?);
+        return Ok(());
     }
 
     Ok(())

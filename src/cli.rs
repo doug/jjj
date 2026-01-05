@@ -14,7 +14,11 @@ pub enum Commands {
     Init,
 
     /// Display the Kanban board
-    Board,
+    Board {
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+    },
 
     /// Manage tasks
     Task {
@@ -29,7 +33,11 @@ pub enum Commands {
     },
 
     /// Show dashboard with pending reviews and tasks
-    Dashboard,
+    Dashboard {
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+    },
 
     /// Resolve conflicts in tasks or reviews
     Resolve {
@@ -39,6 +47,24 @@ pub enum Commands {
         /// Pick a specific version (e.g., "Done", "Blocked")
         #[arg(long)]
         pick: Option<String>,
+    },
+
+    /// Manage milestones
+    Milestone {
+        #[command(subcommand)]
+        action: MilestoneAction,
+    },
+
+    /// Manage features
+    Feature {
+        #[command(subcommand)]
+        action: FeatureAction,
+    },
+
+    /// Manage bugs
+    Bug {
+        #[command(subcommand)]
+        action: BugAction,
     },
 }
 
@@ -71,6 +97,10 @@ pub enum TaskAction {
         /// Filter by tag
         #[arg(long)]
         tag: Option<String>,
+
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
     },
 
     /// Show task details
@@ -149,6 +179,10 @@ pub enum ReviewAction {
         /// Show only reviews requesting your input
         #[arg(long)]
         pending: bool,
+
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
     },
 
     /// Start reviewing a change
@@ -195,5 +229,215 @@ pub enum ReviewAction {
         /// Summary message
         #[arg(long)]
         message: String,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum MilestoneAction {
+    /// Create a new milestone
+    New {
+        /// Milestone title
+        title: String,
+
+        /// Target date (YYYY-MM-DD)
+        #[arg(long)]
+        date: Option<String>,
+
+        /// Description
+        #[arg(long)]
+        description: Option<String>,
+    },
+
+    /// List all milestones
+    List {
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Show milestone details
+    Show {
+        /// Milestone ID (e.g., M-1)
+        milestone_id: String,
+
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Add a feature to a milestone
+    AddFeature {
+        /// Milestone ID (e.g., M-1)
+        milestone_id: String,
+
+        /// Feature ID (e.g., F-1)
+        feature_id: String,
+    },
+
+    /// Add a bug to a milestone
+    AddBug {
+        /// Milestone ID (e.g., M-1)
+        milestone_id: String,
+
+        /// Bug ID (e.g., B-1)
+        bug_id: String,
+    },
+
+    /// Show roadmap view
+    Roadmap {
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum FeatureAction {
+    /// Create a new feature
+    New {
+        /// Feature title
+        title: String,
+
+        /// Milestone this feature belongs to (e.g., M-1)
+        #[arg(long)]
+        milestone: Option<String>,
+
+        /// Priority (low, medium, high, critical)
+        #[arg(long)]
+        priority: Option<String>,
+
+        /// Description
+        #[arg(long)]
+        description: Option<String>,
+    },
+
+    /// List all features
+    List {
+        /// Filter by milestone
+        #[arg(long)]
+        milestone: Option<String>,
+
+        /// Filter by status
+        #[arg(long)]
+        status: Option<String>,
+
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Show feature details
+    Show {
+        /// Feature ID (e.g., F-1)
+        feature_id: String,
+
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Show feature board view
+    Board {
+        /// Feature ID (e.g., F-1)
+        feature_id: Option<String>,
+
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Show feature progress
+    Progress {
+        /// Feature ID (e.g., F-1)
+        feature_id: String,
+    },
+
+    /// Move feature to different status
+    Move {
+        /// Feature ID (e.g., F-1)
+        feature_id: String,
+
+        /// Target status (backlog, inprogress, review, done, blocked)
+        status: String,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum BugAction {
+    /// Report a new bug
+    New {
+        /// Bug title
+        title: String,
+
+        /// Severity (low, medium, high, critical)
+        #[arg(long)]
+        severity: Option<String>,
+
+        /// Description
+        #[arg(long)]
+        description: Option<String>,
+
+        /// Reproduction steps
+        #[arg(long)]
+        repro: Option<String>,
+    },
+
+    /// List all bugs
+    List {
+        /// Filter by severity
+        #[arg(long)]
+        severity: Option<String>,
+
+        /// Filter by status
+        #[arg(long)]
+        status: Option<String>,
+
+        /// Show only open bugs
+        #[arg(long)]
+        open: bool,
+
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Show bug details
+    Show {
+        /// Bug ID (e.g., B-1)
+        bug_id: String,
+
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Link bug to feature or milestone
+    Link {
+        /// Bug ID (e.g., B-1)
+        bug_id: String,
+
+        /// Feature to link to (e.g., F-1)
+        #[arg(long)]
+        feature: Option<String>,
+
+        /// Milestone to link to (e.g., M-1)
+        #[arg(long)]
+        milestone: Option<String>,
+    },
+
+    /// Update bug status
+    Status {
+        /// Bug ID (e.g., B-1)
+        bug_id: String,
+
+        /// New status (new, confirmed, inprogress, fixed, closed, wontfix, duplicate)
+        status: String,
+    },
+
+    /// Show bug triage view
+    Triage {
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
     },
 }

@@ -22,6 +22,11 @@ impl JjClient {
         Ok(Self { jj_path, repo_root })
     }
 
+    pub fn with_root(root: PathBuf) -> Result<Self> {
+        let jj_path = which::which("jj").map_err(|_| JjjError::JjNotFound)?;
+        Ok(Self { jj_path, repo_root: root })
+    }
+
     /// Find the repository root by looking for .jj directory
     fn find_repo_root() -> Result<PathBuf> {
         let current_dir = std::env::current_dir()?;
@@ -47,6 +52,7 @@ impl JjClient {
 
     /// Execute a jj command and return the output
     pub fn execute(&self, args: &[&str]) -> Result<String> {
+        eprintln!("DEBUG: jj {}", args.join(" "));
         let output = Command::new(&self.jj_path)
             .args(args)
             .current_dir(&self.repo_root)
@@ -63,7 +69,7 @@ impl JjClient {
 
     /// Get the current change ID
     pub fn current_change_id(&self) -> Result<String> {
-        let output = self.execute(&["log", "-r", "@", "-T", "change_id"])?;
+        let output = self.execute(&["log", "--no-graph", "-r", "@", "-T", "change_id"])?;
         Ok(output.trim().to_string())
     }
 
@@ -81,7 +87,7 @@ impl JjClient {
 
     /// Checkout a specific revision
     pub fn checkout(&self, revision: &str) -> Result<()> {
-        self.execute(&["checkout", revision])?;
+        self.execute(&["new", revision])?;
         Ok(())
     }
 
@@ -93,13 +99,13 @@ impl JjClient {
 
     /// Get the description of a change
     pub fn change_description(&self, change_id: &str) -> Result<String> {
-        let output = self.execute(&["log", "-r", change_id, "-T", "description"])?;
+        let output = self.execute(&["log", "--no-graph", "-r", change_id, "-T", "description"])?;
         Ok(output.trim().to_string())
     }
 
     /// Get the author of a change
     pub fn change_author(&self, change_id: &str) -> Result<String> {
-        let output = self.execute(&["log", "-r", change_id, "-T", "author"])?;
+        let output = self.execute(&["log", "--no-graph", "-r", change_id, "-T", "author"])?;
         Ok(output.trim().to_string())
     }
 

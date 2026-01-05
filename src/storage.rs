@@ -1,6 +1,6 @@
 use crate::error::{JjjError, Result};
 use crate::jj::JjClient;
-use crate::models::{Comment, ProjectConfig, ReviewManifest, Task};
+use crate::models::{Bug, Comment, Feature, Milestone, ProjectConfig, ReviewManifest, Task};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -8,6 +8,9 @@ const META_BOOKMARK: &str = "jjj/meta";
 const CONFIG_FILE: &str = "config.toml";
 const TASKS_DIR: &str = "tasks";
 const REVIEWS_DIR: &str = "reviews";
+const MILESTONES_DIR: &str = "milestones";
+const FEATURES_DIR: &str = "features";
+const BUGS_DIR: &str = "bugs";
 
 /// Storage layer for jjj metadata
 pub struct MetadataStore {
@@ -16,6 +19,9 @@ pub struct MetadataStore {
 
     /// JJ client for interacting with the repository
     jj_client: JjClient,
+
+    /// JJ client for the metadata workspace
+    meta_client: JjClient,
 }
 
 impl MetadataStore {
@@ -24,9 +30,12 @@ impl MetadataStore {
         let repo_root = jj_client.repo_root().to_path_buf();
         let meta_path = repo_root.join(".jj").join("jjj-meta");
 
+        let meta_client = JjClient::with_root(meta_path.clone())?;
+
         Ok(Self {
             meta_path,
             jj_client,
+            meta_client,
         })
     }
 
@@ -49,6 +58,9 @@ impl MetadataStore {
         // Create initial structure
         fs::create_dir_all(self.meta_path.join(TASKS_DIR))?;
         fs::create_dir_all(self.meta_path.join(REVIEWS_DIR))?;
+        fs::create_dir_all(self.meta_path.join(MILESTONES_DIR))?;
+        fs::create_dir_all(self.meta_path.join(FEATURES_DIR))?;
+        fs::create_dir_all(self.meta_path.join(BUGS_DIR))?;
 
         // Create default config
         let default_config = ProjectConfig::default();
@@ -63,9 +75,8 @@ impl MetadataStore {
     /// Ensure the metadata directory is checked out
     fn ensure_meta_checkout(&self) -> Result<()> {
         if !self.meta_path.exists() {
-            fs::create_dir_all(&self.meta_path)?;
-            // Checkout jjj/meta into the metadata path
-            self.jj_client.checkout(META_BOOKMARK)?;
+            // Create workspace for metadata
+            self.jj_client.execute(&["workspace", "add", self.meta_path.to_str().unwrap(), "-r", META_BOOKMARK])?;
         }
         Ok(())
     }
@@ -325,25 +336,227 @@ impl MetadataStore {
         Ok(format!("c-{}", max_id + 1))
     }
 
+    /// Load a milestone by ID
+    pub fn load_milestone(&self, milestone_id: &str) -> Result<Milestone> {
+        self.ensure_meta_checkout()?;
+
+        let milestone_path = self
+            .meta_path
+            .join(MILESTONES_DIR)
+            .join(format!("{}.json", milestone_id));
+
+        if !milestone_path.exists() {
+            return Err(format!("Milestone {} not found", milestone_id).into());
+        }
+
+        let content = fs::read_to_string(milestone_path)?;
+        let milestone: Milestone = serde_json::from_str(&content)?;
+        Ok(milestone)
+    }
+
+    /// Save a milestone
+    pub fn save_milestone(&self, milestone: &Milestone) -> Result<()> {
+        self.ensure_meta_checkout()?;
+
+        let milestones_dir = self.meta_path.join(MILESTONES_DIR);
+        fs::create_dir_all(&milestones_dir)?;
+
+        let milestone_path = milestones_dir.join(format!("{}.json", milestone.id));
+        let content = serde_json::to_string_pretty(milestone)?;
+        fs::write(milestone_path, content)?;
+
+        Ok(())
+    }
+
+    /// List all milestones
+    pub fn list_milestones(&self) -> Result<Vec<Milestone>> {
+        self.ensure_meta_checkout()?;
+
+        let milestones_dir = self.meta_path.join(MILESTONES_DIR);
+        if !milestones_dir.exists() {
+            return Ok(Vec::new());
+        }
+
+        let mut milestones = Vec::new();
+        for entry in fs::read_dir(milestones_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+
+            if path.extension().and_then(|s| s.to_str()) == Some("json") {
+                let content = fs::read_to_string(&path)?;
+                if let Ok(milestone) = serde_json::from_str::<Milestone>(&content) {
+                    milestones.push(milestone);
+                }
+            }
+        }
+
+        Ok(milestones)
+    }
+
+    /// Generate next milestone ID
+    pub fn next_milestone_id(&self) -> Result<String> {
+        let milestones = self.list_milestones()?;
+
+        let max_id = milestones
+            .iter()
+            .filter_map(|m| m.id.strip_prefix("M-").and_then(|s| s.parse::<u32>().ok()))
+            .max()
+            .unwrap_or(0);
+
+        Ok(format!("M-{}", max_id + 1))
+    }
+
+    /// Load a feature by ID
+    pub fn load_feature(&self, feature_id: &str) -> Result<Feature> {
+        self.ensure_meta_checkout()?;
+
+        let feature_path = self
+            .meta_path
+            .join(FEATURES_DIR)
+            .join(format!("{}.json", feature_id));
+
+        if !feature_path.exists() {
+            return Err(format!("Feature {} not found", feature_id).into());
+        }
+
+        let content = fs::read_to_string(feature_path)?;
+        let feature: Feature = serde_json::from_str(&content)?;
+        Ok(feature)
+    }
+
+    /// Save a feature
+    pub fn save_feature(&self, feature: &Feature) -> Result<()> {
+        self.ensure_meta_checkout()?;
+
+        let features_dir = self.meta_path.join(FEATURES_DIR);
+        fs::create_dir_all(&features_dir)?;
+
+        let feature_path = features_dir.join(format!("{}.json", feature.id));
+        let content = serde_json::to_string_pretty(feature)?;
+        fs::write(feature_path, content)?;
+
+        Ok(())
+    }
+
+    /// List all features
+    pub fn list_features(&self) -> Result<Vec<Feature>> {
+        self.ensure_meta_checkout()?;
+
+        let features_dir = self.meta_path.join(FEATURES_DIR);
+        if !features_dir.exists() {
+            return Ok(Vec::new());
+        }
+
+        let mut features = Vec::new();
+        for entry in fs::read_dir(features_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+
+            if path.extension().and_then(|s| s.to_str()) == Some("json") {
+                let content = fs::read_to_string(&path)?;
+                if let Ok(feature) = serde_json::from_str::<Feature>(&content) {
+                    features.push(feature);
+                }
+            }
+        }
+
+        Ok(features)
+    }
+
+    /// Generate next feature ID
+    pub fn next_feature_id(&self) -> Result<String> {
+        let features = self.list_features()?;
+
+        let max_id = features
+            .iter()
+            .filter_map(|f| f.id.strip_prefix("F-").and_then(|s| s.parse::<u32>().ok()))
+            .max()
+            .unwrap_or(0);
+
+        Ok(format!("F-{}", max_id + 1))
+    }
+
+    /// Load a bug by ID
+    pub fn load_bug(&self, bug_id: &str) -> Result<Bug> {
+        self.ensure_meta_checkout()?;
+
+        let bug_path = self
+            .meta_path
+            .join(BUGS_DIR)
+            .join(format!("{}.json", bug_id));
+
+        if !bug_path.exists() {
+            return Err(format!("Bug {} not found", bug_id).into());
+        }
+
+        let content = fs::read_to_string(bug_path)?;
+        let bug: Bug = serde_json::from_str(&content)?;
+        Ok(bug)
+    }
+
+    /// Save a bug
+    pub fn save_bug(&self, bug: &Bug) -> Result<()> {
+        self.ensure_meta_checkout()?;
+
+        let bugs_dir = self.meta_path.join(BUGS_DIR);
+        fs::create_dir_all(&bugs_dir)?;
+
+        let bug_path = bugs_dir.join(format!("{}.json", bug.id));
+        let content = serde_json::to_string_pretty(bug)?;
+        fs::write(bug_path, content)?;
+
+        Ok(())
+    }
+
+    /// List all bugs
+    pub fn list_bugs(&self) -> Result<Vec<Bug>> {
+        self.ensure_meta_checkout()?;
+
+        let bugs_dir = self.meta_path.join(BUGS_DIR);
+        if !bugs_dir.exists() {
+            return Ok(Vec::new());
+        }
+
+        let mut bugs = Vec::new();
+        for entry in fs::read_dir(bugs_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+
+            if path.extension().and_then(|s| s.to_str()) == Some("json") {
+                let content = fs::read_to_string(&path)?;
+                if let Ok(bug) = serde_json::from_str::<Bug>(&content) {
+                    bugs.push(bug);
+                }
+            }
+        }
+
+        Ok(bugs)
+    }
+
+    /// Generate next bug ID
+    pub fn next_bug_id(&self) -> Result<String> {
+        let bugs = self.list_bugs()?;
+
+        let max_id = bugs
+            .iter()
+            .filter_map(|b| b.id.strip_prefix("B-").and_then(|s| s.parse::<u32>().ok()))
+            .max()
+            .unwrap_or(0);
+
+        Ok(format!("B-{}", max_id + 1))
+    }
+
     /// Commit changes to the metadata
     fn commit_changes(&self, message: &str) -> Result<()> {
-        // Save current working change
-        let current_change = self.jj_client.current_change_id()?;
-
-        // Switch to jjj/meta bookmark
-        self.jj_client.checkout(META_BOOKMARK)?;
-
-        // Create a new change on top of jjj/meta
-        let meta_change = self.jj_client.new_empty_change(message)?;
-
-        // The files are already written to disk in the save_* methods
-        // jj will automatically track them in the new change
-
+        // Create a new change in the metadata workspace
+        self.meta_client.new_empty_change(message)?;
+        
         // Update the bookmark to point to the new change
+        // We need to get the change ID from the metadata workspace
+        let meta_change = self.meta_client.current_change_id()?;
+        
+        // Update bookmark in the main repo (bookmarks are shared)
         self.jj_client.execute(&["bookmark", "set", META_BOOKMARK, "-r", &meta_change])?;
-
-        // Switch back to the original working change
-        self.jj_client.checkout(&current_change)?;
 
         Ok(())
     }

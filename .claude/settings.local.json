@@ -6,7 +6,8 @@
       "Bash(chmod:*)",
       "Bash(find:*)",
       "Bash(cargo build:*)",
-      "Bash(perl -i -pe:*)"
+      "Bash(perl -i -pe:*)",
+      "Bash(cargo run:*)"
     ],
     "deny": [],
     "ask": []

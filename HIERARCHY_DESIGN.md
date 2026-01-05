@@ -7,44 +7,20 @@ This document describes the enhanced hierarchical work item structure for jjj.
 ## Hierarchy Levels
 
 ```
-Epic (E-1)
-  └─ Milestone (M-1)
-      ├─ Feature (F-1)
-      │   └─ Task (T-1)
-      │   └─ Task (T-2)
-      ├─ Feature (F-2)
-      │   └─ Task (T-3)
-      ├─ Bug (B-1) [linked to F-1]
-      ├─ Bug (B-2) [standalone]
-      └─ Chore (C-1)
+Milestone (M-1)
+  ├─ Feature (F-1)
+  │   └─ Task (T-1)
+  │   └─ Task (T-2)
+  ├─ Feature (F-2)
+  │   └─ Task (T-3)
+  ├─ Bug (B-1) [linked to F-1]
+  ├─ Bug (B-2) [standalone]
+  └─ Chore (C-1)
 ```
 
 ## Work Item Types
 
-### 1. Epic (E-*)
-**Purpose**: Strategic initiatives or large bodies of work spanning multiple milestones
-
-**Properties**:
-- Title (e.g., "Multi-tenant Support")
-- Description (strategic goals)
-- Owner/Champion
-- Status (Planning, In Progress, Complete)
-- Timeline (start/end dates)
-- Child milestones
-- Tags/Labels
-- Budget/Resources (optional)
-
-**Example**:
-```
-E-1: Multi-tenant Support
-  Description: Enable the platform to support multiple isolated customers
-  Owner: alice@example.com
-  Status: In Progress
-  Timeline: Q1 2025 - Q3 2025
-  Milestones: M-1, M-2, M-3
-```
-
-### 2. Milestone (M-*)
+### 1. Milestone (M-*)
 **Purpose**: Time-boxed releases or project phases
 
 **Properties**:
@@ -52,7 +28,6 @@ E-1: Multi-tenant Support
 - Description
 - Target date (release date)
 - Status (Planning, Active, Released, Cancelled)
-- Parent epic (optional)
 - Child features/bugs/chores
 - Tags
 - Version number (optional)
@@ -62,20 +37,18 @@ E-1: Multi-tenant Support
 M-1: v1.0 Release
   Description: First production release
   Target Date: 2025-12-31
-  Epic: E-1
   Status: Active
   Features: F-1, F-2, F-3
   Bugs: B-5, B-7
 ```
 
-### 3. Feature (F-*)
+### 2. Feature (F-*)
 **Purpose**: User-visible capabilities or improvements
 
 **Properties**:
 - Title (e.g., "User Authentication")
 - Description (user story format)
 - Parent milestone (optional)
-- Parent epic (optional)
 - Status (Backlog, In Progress, Review, Done)
 - Assignee
 - Child tasks
@@ -89,14 +62,13 @@ M-1: v1.0 Release
 F-1: User Authentication
   Description: As a user, I want to log in securely
   Milestone: M-1
-  Epic: E-1
   Status: In Progress
   Tasks: T-1, T-2, T-3
   Related Bugs: B-1
   Priority: High
 ```
 
-### 4. Task (T-*)
+### 3. Task (T-*)
 **Purpose**: Individual units of technical work
 
 **Properties**:
@@ -119,7 +91,7 @@ T-1: Implement password hashing
   Tags: backend, security
 ```
 
-### 5. Bug (B-*)
+### 4. Bug (B-*)
 **Purpose**: Defects or issues reported by users/QA
 
 **Properties**:
@@ -147,7 +119,7 @@ B-1: Login fails with special characters
   Assignee: alice@example.com
 ```
 
-### 6. Chore (C-*)
+### 5. Chore (C-*)
 **Purpose**: Technical work with no direct user-visible impact
 
 **Properties**:
@@ -173,10 +145,6 @@ C-1: Refactor database connection pooling
 
 ### Parent-Child
 ```
-Epic
-  ├─ contains → Milestone(s)
-  └─ contains → Feature(s) [can skip milestone]
-
 Milestone
   ├─ contains → Feature(s)
   ├─ contains → Bug(s)
@@ -190,7 +158,6 @@ Feature
 ### Cross-Links
 - Bug → Feature (optional)
 - Bug → Milestone (optional)
-- Feature → Epic (optional, if not in milestone)
 - All items → Change IDs (via jj)
 
 ## Workflows
@@ -275,24 +242,7 @@ M-2 (v1.1) ─────────────────●──→ Mar 3
   F-3 ░░░░░░░░░░░░ 0%
 ```
 
-### 4. Epic Tracker
-```
-E-1: Multi-tenant Support
-  M-1 (Q1) ████████████ 100% ✓
-  M-2 (Q2) ████░░░░░░░░ 40%
-  M-3 (Q3) ░░░░░░░░░░░░ 0%
-```
-
 ## CLI Commands
-
-### Epic Management
-```bash
-jjj epic new "Multi-tenant Support" --owner alice
-jjj epic list
-jjj epic show E-1
-jjj epic add-milestone E-1 M-1
-jjj epic progress E-1  # Show completion %
-```
 
 ### Milestone Management
 ```bash
@@ -343,8 +293,6 @@ jjj chore show C-1
 ```
 jjj/meta/
 ├── config.toml
-├── epics/
-│   └── E-1.json
 ├── milestones/
 │   └── M-1.toml
 ├── features/
@@ -382,17 +330,15 @@ jjj bug trends
 ## Benefits of This Structure
 
 ### 1. **Flexibility**
-- Epics are optional (for large projects)
 - Features can exist without milestones (backlog)
 - Bugs can be standalone or linked
 
 ### 2. **Clarity**
-- Clear separation: Epic (why) → Milestone (when) → Feature (what) → Task (how)
+- Clear separation: Milestone (when) → Feature (what) → Task (how)
 - Bugs are first-class citizens
 - Chores acknowledged as real work
 
 ### 3. **Tracking**
-- Roll-up metrics (epic → milestone → feature → task)
 - Multiple views for different audiences
 - Progress visibility at all levels
 
@@ -412,11 +358,6 @@ jjj bug trends
 - Milestone entity
 - Milestone roadmap view
 - Release planning
-
-### Phase 3: Epics (Later)
-- Epic entity
-- Multi-milestone tracking
-- Portfolio management
 
 ## Alternative Simplifications
 
@@ -438,22 +379,19 @@ Milestone (release)
   └─ Chore (technical)
 ```
 - Pros: Good balance, covers most needs
-- Cons: No epic level for long-term planning
 
 ### Option C: Full Hierarchy (Recommended)
 ```
-Epic (strategic)
-  └─ Milestone (release)
-      ├─ Feature → Task
-      ├─ Bug
-      └─ Chore
+Milestone (release)
+  ├─ Feature → Task
+  ├─ Bug
+  └─ Chore
 ```
 - Pros: Full flexibility, scales well
 - Cons: More complex, steeper learning curve
 
 ## Recommendation
 
-**Start with Option B (Three-Level)**, add Epics later if needed.
 
 This gives you:
 - ✅ Release planning (Milestones)
@@ -462,4 +400,3 @@ This gives you:
 - ✅ Bug management (Bugs)
 - ✅ Technical debt (Chores)
 
-Most teams won't need Epics initially, but the structure allows adding them later without breaking changes.

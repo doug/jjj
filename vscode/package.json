@@ -10,6 +10,49 @@
     "Other"
   ],
   "main": "./out/extension.js",
+  "activationEvents": [
+    "onView:jjj-tasks"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "jjj.init",
+        "title": "JJJ: Initialize Repository"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "jjj-sidebar-view",
+          "title": "JJJ",
+          "icon": "$(beaker)"
+        }
+      ]
+    },
+    "views": {
+      "jjj-sidebar-view": [
+        {
+          "id": "jjj-welcome",
+          "name": "Welcome",
+          "when": "!jjj.initialized"
+        },
+        {
+          "id": "jjj-tasks",
+          "name": "Tasks",
+          "when": "jjj.initialized"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "jjj.init",
+          "when": "view == jjj-welcome",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",

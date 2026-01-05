@@ -8,7 +8,7 @@ use crate::utils;
 pub fn execute(action: TaskAction) -> Result<()> {
     match action {
         TaskAction::New { title, feature, tag, column } => create_task(title, feature, tag, column),
-        TaskAction::List { column, tag } => list_tasks(column, tag),
+        TaskAction::List { column, tag, json } => list_tasks(column, tag, json),
         TaskAction::Show { task_id } => show_task(task_id),
         TaskAction::Attach { task_id } => attach_task(task_id),
         TaskAction::Detach { task_id, change_id } => detach_task(task_id, change_id),
@@ -51,7 +51,7 @@ fn create_task(title: String, feature_id: String, tags: Vec<String>, column: Opt
     Ok(())
 }
 
-fn list_tasks(column: Option<String>, tag: Option<String>) -> Result<()> {
+fn list_tasks(column: Option<String>, tag: Option<String>, json: bool) -> Result<()> {
     let jj_client = JjClient::new()?;
     let store = MetadataStore::new(jj_client)?;
 
@@ -63,6 +63,11 @@ fn list_tasks(column: Option<String>, tag: Option<String>) -> Result<()> {
 
     let tasks = store.list_tasks()?;
     let filtered_tasks: Vec<_> = tasks.iter().filter(|t| filter.matches(t)).collect();
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&filtered_tasks)?);
+        return Ok(());
+    }
 
     if filtered_tasks.is_empty() {
         println!("No tasks found.");

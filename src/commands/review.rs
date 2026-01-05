@@ -9,7 +9,7 @@ use chrono::Utc;
 pub fn execute(action: ReviewAction) -> Result<()> {
     match action {
         ReviewAction::Request { reviewers, stack } => request_review(reviewers, stack),
-        ReviewAction::List { mine, pending } => list_reviews(mine, pending),
+        ReviewAction::List { mine, pending, json } => list_reviews(mine, pending, json),
         ReviewAction::Start { change_id } => start_review(change_id),
         ReviewAction::Comment { change_id, file, line, body } => {
             add_comment(change_id, file, line, body)
@@ -49,7 +49,7 @@ fn request_review(reviewers: Vec<String>, _stack: bool) -> Result<()> {
     Ok(())
 }
 
-fn list_reviews(mine: bool, pending: bool) -> Result<()> {
+fn list_reviews(mine: bool, pending: bool, json: bool) -> Result<()> {
     let jj_client = JjClient::new()?;
     let user_identity = jj_client.user_identity()?;
     let store = MetadataStore::new(jj_client)?;
@@ -68,6 +68,11 @@ fn list_reviews(mine: bool, pending: bool) -> Result<()> {
             true
         })
         .collect();
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&filtered_reviews)?);
+        return Ok(());
+    }
 
     if filtered_reviews.is_empty() {
         println!("No reviews found.");
