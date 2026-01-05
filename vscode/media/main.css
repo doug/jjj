@@ -1,0 +1,45 @@
+body {
+    padding: 20px;
+}
+
+h1 {
+    font-size: 2em;
+    margin-bottom: 20px;
+    font-weight: bold;
+}
+
+h2 {
+    font-size: 1.5em;
+    margin-top: 20px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid var(--vscode-panel-border);
+    padding-bottom: 5px;
+}
+
+ul {
+    list-style: none;
+    padding: 0;
+}
+
+li {
+    margin-bottom: 8px;
+    padding: 8px;
+    background-color: var(--vscode-editor-inactiveSelectionBackground);
+    border-radius: 4px;
+}
+
+li:hover {
+    background-color: var(--vscode-editor-selectionBackground);
+}
+
+.review-link,
+.task-link {
+    font-weight: bold;
+    text-decoration: none;
+}
+
+#refresh-btn {
+    width: auto;
+    margin-bottom: 20px;
+    padding: 8px 16px;
+}

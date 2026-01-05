@@ -119,13 +119,14 @@ jjj task new "Implement password hashing" \
   --tag security
 ```
 
-!!! warning "Tasks Require Features"
-    Every task **must** belong to a feature. This is enforced to keep work organized and prevent orphaned tasks.
-
-    If you have miscellaneous tasks, create organizational features like:
-    - `F-99: Technical Improvements`
-    - `F-100: Bug Fixes`
-    - `F-101: Documentation`
+> **Tasks Require Features**
+>
+> Every task **must** belong to a feature. This is enforced to keep work organized and prevent orphaned tasks.
+>
+> If you have miscellaneous tasks, create organizational features like:
+> - `F-99: Technical Improvements`
+> - `F-100: Bug Fixes`
+> - `F-101: Documentation`
 
 ### Bugs (B-*)
 
@@ -475,30 +476,30 @@ jjj feature list --milestone M-1 --json | \
 
 ## Best Practices
 
-!!! tip "Start Small, Scale Up"
-    Begin with just features and tasks. Add milestones when planning releases. Use bugs when needed.
-
-!!! tip "Use Consistent Naming"
-    - Milestones: "v1.0 Release", "Sprint 5", "Q2 2026"
-    - Features: User stories or capabilities ("User Authentication", "Dark Mode")
-    - Tasks: Action-oriented ("Implement...", "Create...", "Fix...")
-    - Bugs: Observable problems ("Login fails when...", "UI glitch in...")
-
-!!! tip "Keep Features Small"
-    Aim for 3-8 tasks per feature. Larger features should be split into multiple smaller features.
-
-!!! tip "Link Bugs to Features"
-    Even if a bug can be standalone, linking to its feature helps with:
-    - Feature quality tracking
-    - Release notes generation
-    - Impact assessment
-
-!!! tip "Use Tags for Cross-Cutting Concerns"
-    Tags aren't hierarchical - use them for:
-    - Technology (`backend`, `frontend`, `database`)
-    - Team (`team-alpha`, `team-beta`)
-    - Type (`security`, `performance`, `docs`)
-
+> **Start Small, Scale Up**
+>
+> Begin with just features and tasks. Add milestones when planning releases. Use bugs when needed.
+> **Use Consistent Naming**
+>
+> - Milestones: "v1.0 Release", "Sprint 5", "Q2 2026"
+> - Features: User stories or capabilities ("User Authentication", "Dark Mode")
+> - Tasks: Action-oriented ("Implement...", "Create...", "Fix...")
+> - Bugs: Observable problems ("Login fails when...", "UI glitch in...")
+> **Keep Features Small**
+>
+> Aim for 3-8 tasks per feature. Larger features should be split into multiple smaller features.
+> **Link Bugs to Features**
+>
+> Even if a bug can be standalone, linking to its feature helps with:
+> - Feature quality tracking
+> - Release notes generation
+> - Impact assessment
+> **Use Tags for Cross-Cutting Concerns**
+>
+> Tags aren't hierarchical - use them for:
+> - Technology (`backend`, `frontend`, `database`)
+> - Team (`team-alpha`, `team-beta`)
+> - Type (`security`, `performance`, `docs`)
 ## Summary
 
 | Level | Required Parent | Can Have Children | Use Case |

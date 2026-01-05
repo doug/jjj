@@ -2,7 +2,7 @@ use crate::error::{JjjError, Result};
 use crate::jj::JjClient;
 use crate::models::{Bug, Comment, Feature, Milestone, ProjectConfig, ReviewManifest, Task};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 const META_BOOKMARK: &str = "jjj/meta";
 const CONFIG_FILE: &str = "config.toml";
@@ -18,7 +18,7 @@ pub struct MetadataStore {
     meta_path: PathBuf,
 
     /// JJ client for interacting with the repository
-    jj_client: JjClient,
+    pub jj_client: JjClient,
 
     /// JJ client for the metadata workspace
     meta_client: JjClient,
@@ -81,10 +81,6 @@ impl MetadataStore {
         Ok(())
     }
 
-    /// Get the path to the metadata directory
-    pub fn meta_path(&self) -> &Path {
-        &self.meta_path
-    }
 
     /// Load project configuration
     pub fn load_config(&self) -> Result<ProjectConfig> {
@@ -252,24 +248,6 @@ impl MetadataStore {
         Ok(reviews)
     }
 
-    /// Load a comment
-    pub fn load_comment(&self, change_id: &str, comment_id: &str) -> Result<Comment> {
-        self.ensure_meta_checkout()?;
-
-        let comment_path = self.meta_path
-            .join(REVIEWS_DIR)
-            .join(change_id)
-            .join("comments")
-            .join(format!("{}.json", comment_id));
-
-        if !comment_path.exists() {
-            return Err(format!("Comment {} not found", comment_id).into());
-        }
-
-        let content = fs::read_to_string(comment_path)?;
-        let comment: Comment = serde_json::from_str(&content)?;
-        Ok(comment)
-    }
 
     /// Save a comment
     pub fn save_comment(&self, comment: &Comment) -> Result<()> {

@@ -1,38 +1,40 @@
 # jjj Documentation
 
-This directory contains the complete documentation for jjj, built with [MkDocs Material](https://squidfunk.github.io/mkdocs-material/).
+This directory contains the complete documentation for jjj, built with [mdBook](https://rust-lang.github.io/mdBook/).
 
 ## Building the Documentation
 
 ### Prerequisites
 
-You need Python 3.8+ and pip installed.
+You need Rust installed (mdBook is a Rust tool).
 
 ### Setup
 
-1. **Install dependencies**:
+1. **Install mdBook**:
    ```bash
-   pip install -r requirements.txt
+   cargo install mdbook
    ```
 
-2. **Serve locally** (with live reload):
+
+3. **Serve locally** (with live reload):
    ```bash
-   mkdocs serve
+   mdbook serve
    ```
 
-   Open http://127.0.0.1:8000 in your browser.
+   Open http://localhost:3000 in your browser.
 
-3. **Build static site**:
+4. **Build static site**:
    ```bash
-   mkdocs build
+   mdbook build
    ```
 
-   Output will be in `site/` directory.
+   Output will be in `book/` directory.
 
 ## Documentation Structure
 
 ```
 docs/
+├── SUMMARY.md                   # Table of contents (navigation)
 ├── index.md                     # Homepage
 ├── getting-started/
 │   ├── installation.md          # How to install jjj
@@ -74,22 +76,24 @@ docs/
 
 ### Formatting
 
-We use MkDocs Material extensions:
+We use mdBook with mermaid plugins:
 
 #### Admonitions
 
+Use blockquotes with bold titles:
+
 ```markdown
-!!! note "Optional Title"
-    This is a note
+> **Note**
+>
+> This is a note
 
-!!! tip
-    This is a helpful tip
+> **Tip**
+>
+> This is a helpful tip
 
-!!! warning
-    This is a warning
-
-!!! danger
-    This is dangerous!
+> **Warning**
+>
+> This is a warning
 ```
 
 #### Code Blocks
@@ -105,22 +109,6 @@ pub struct Task {
     title: String,
 }
 ​```
-```
-
-#### Tabs
-
-```markdown
-=== "macOS"
-
-    ​```bash
-    brew install jjj
-    ​```
-
-=== "Linux"
-
-    ​```bash
-    cargo install jjj
-    ​```
 ```
 
 #### Diagrams (Mermaid)
@@ -142,9 +130,18 @@ Use relative links:
 [CLI Reference](../reference/cli.md)
 ```
 
+## Adding New Pages
+
+1. **Create the markdown file** in the appropriate directory
+2. **Add to SUMMARY.md** to include it in navigation:
+   ```markdown
+   - [New Page Title](path/to/page.md)
+   ```
+3. **Test locally**: Run `mdbook serve` and verify
+
 ## Contributing to Docs
 
-1. **Edit locally**: Make changes and preview with `mkdocs serve`
+1. **Edit locally**: Make changes and preview with `mdbook serve`
 2. **Check links**: Ensure all links work
 3. **Test code examples**: Verify all examples actually work
 4. **Check formatting**: Preview renders correctly
@@ -154,31 +151,38 @@ Use relative links:
 ### GitHub Pages
 
 ```bash
-# Build and deploy to gh-pages branch
-mkdocs gh-deploy
+# Build the book
+mdbook build
+
+# Copy book/ directory to gh-pages branch
+git checkout -b gh-pages
+cp -r book/* .
+git add .
+git commit -m "Update documentation"
+git push origin gh-pages
 ```
 
 ### Manual Deploy
 
 ```bash
 # Build static site
-mkdocs build
+mdbook build
 
-# Upload site/ directory to your hosting
-rsync -avz site/ user@host:/var/www/docs/
+# Upload book/ directory to your hosting
+rsync -avz book/ user@host:/var/www/docs/
 ```
 
 ## Customization
 
-Edit `mkdocs.yml` in the project root to:
+Edit `book.toml` in the project root to:
 
 - Change theme colors
-- Add/remove navigation sections
-- Enable/disable features
-- Modify site metadata
+- Add/remove plugins
+- Modify build settings
+- Configure search
 
 ## Getting Help
 
-- [MkDocs Documentation](https://www.mkdocs.org/)
-- [Material Theme Docs](https://squidfunk.github.io/mkdocs-material/)
+- [mdBook Documentation](https://rust-lang.github.io/mdBook/)
+- [mdBook Mermaid](https://github.com/badboy/mdbook-mermaid)
 - [Markdown Guide](https://www.markdownguide.org/)

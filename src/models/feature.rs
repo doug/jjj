@@ -33,7 +33,7 @@ pub struct Feature {
 
     /// Tags for categorization
     #[serde(default)]
-    pub tags: HashSet<String>,
+    pub tag_ids: HashSet<String>,
 
     /// Priority level
     pub priority: Priority,
@@ -97,7 +97,7 @@ impl Feature {
             assignee: None,
             task_ids: Vec::new(),
             bug_ids: Vec::new(),
-            tags: HashSet::new(),
+            tag_ids: HashSet::new(),
             priority: Priority::default(),
             story_points: None,
             created_at: now,
@@ -144,15 +144,15 @@ impl Feature {
     }
 
     /// Add a tag
-    pub fn add_tag(&mut self, tag: String) {
-        if self.tags.insert(tag) {
+    pub fn add_tag(&mut self, tag_id: String) {
+        if self.tag_ids.insert(tag_id) {
             self.updated_at = Utc::now();
         }
     }
 
     /// Remove a tag
-    pub fn remove_tag(&mut self, tag: &str) -> bool {
-        if self.tags.remove(tag) {
+    pub fn remove_tag(&mut self, tag_id: &str) -> bool {
+        if self.tag_ids.remove(tag_id) {
             self.updated_at = Utc::now();
             true
         } else {
@@ -258,7 +258,7 @@ mod tests {
         let mut feature = Feature::new("F-1".to_string(), "User Auth".to_string());
         feature.set_priority(Priority::High);
         feature.add_task("T-1".to_string());
-        feature.add_tag("backend".to_string());
+        feature.add_tag("tag-1".to_string());
 
         let json = serde_json::to_string_pretty(&feature).expect("Failed to serialize");
         let deserialized: Feature = serde_json::from_str(&json).expect("Failed to deserialize");
@@ -266,6 +266,6 @@ mod tests {
         assert_eq!(deserialized.id, feature.id);
         assert_eq!(deserialized.priority, Priority::High);
         assert_eq!(deserialized.task_ids.len(), 1);
-        assert_eq!(deserialized.tags.len(), 1);
+        assert_eq!(deserialized.tag_ids.len(), 1);
     }
 }

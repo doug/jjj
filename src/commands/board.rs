@@ -2,7 +2,6 @@ use crate::error::Result;
 use crate::jj::JjClient;
 use crate::storage::MetadataStore;
 use crate::tui;
-use crate::utils;
 
 pub fn execute(json: bool) -> Result<()> {
     let jj_client = JjClient::new()?;

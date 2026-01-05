@@ -3,7 +3,7 @@ use crate::error::Result;
 use crate::jj::JjClient;
 use crate::models::{Milestone, MilestoneStatus};
 use crate::storage::MetadataStore;
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::{NaiveDate, Utc};
 
 pub fn execute(action: MilestoneAction) -> Result<()> {
     let jj_client = JjClient::new()?;
@@ -14,7 +14,26 @@ pub fn execute(action: MilestoneAction) -> Result<()> {
             title,
             date,
             description,
-        } => create_milestone(&store, title, date, description),
+            tag,
+        } => create_milestone(&store, title, date, description, tag),
+        MilestoneAction::Edit {
+            milestone_id,
+            title,
+            date,
+            description,
+            status,
+            add_tag,
+            remove_tag,
+        } => edit_milestone(
+            &store,
+            milestone_id,
+            title,
+            date,
+            description,
+            status,
+            add_tag,
+            remove_tag,
+        ),
         MilestoneAction::List { json } => list_milestones(&store, json),
         MilestoneAction::Show {
             milestone_id,
@@ -29,6 +48,7 @@ pub fn execute(action: MilestoneAction) -> Result<()> {
             bug_id,
         } => add_bug(&store, milestone_id, bug_id),
         MilestoneAction::Roadmap { json } => show_roadmap(&store, json),
+        MilestoneAction::Assign { milestone_id, to } => assign_milestone(&store, milestone_id, to),
     }
 }
 
@@ -37,43 +57,116 @@ fn create_milestone(
     title: String,
     date: Option<String>,
     description: Option<String>,
+    tags: Vec<String>,
 ) -> Result<()> {
-    let milestone_id = store.next_milestone_id()?;
+    store.with_metadata(&format!("Create milestone {}", title), || {
+        let mut config = store.load_config()?;
+        let milestone_id = store.next_milestone_id()?;
 
-    // Parse date if provided
-    let target_date = if let Some(date_str) = date {
-        let naive_date = NaiveDate::parse_from_str(&date_str, "%Y-%m-%d")
-            .map_err(|_| format!("Invalid date format: {}. Use YYYY-MM-DD", date_str))?;
-        Some(naive_date.and_hms_opt(0, 0, 0).unwrap().and_utc())
-    } else {
-        None
-    };
+        // Parse date if provided
+        let target_date = if let Some(date_str) = date {
+            let naive_date = NaiveDate::parse_from_str(&date_str, "%Y-%m-%d")
+                .map_err(|_| format!("Invalid date format: {}. Use YYYY-MM-DD", date_str))?;
+            Some(naive_date.and_hms_opt(0, 0, 0).unwrap().and_utc())
+        } else {
+            None
+        };
 
-    let milestone = Milestone {
-        id: milestone_id.clone(),
-        title: title.clone(),
-        description,
-        target_date,
-        status: MilestoneStatus::Planning,
-        feature_ids: Vec::new(),
-        bug_ids: Vec::new(),
-        tags: Vec::new(),
-        version: None,
-        created_at: Utc::now(),
-        updated_at: Utc::now(),
-    };
+        let mut milestone = Milestone {
+            id: milestone_id.clone(),
+            title: title.clone(),
+            description,
+            target_date,
+            status: MilestoneStatus::Planning,
+            feature_ids: Vec::new(),
+            bug_ids: Vec::new(),
+            tag_ids: std::collections::HashSet::new(),
+            version: None,
+            assignee: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
 
-    store.with_metadata(&format!("Create milestone {}", milestone_id), || {
+        // Resolve and add tags
+        for tag_input in tags {
+            let tag_id = crate::utils::resolve_tag(&mut config, &tag_input);
+            milestone.add_tag(tag_id);
+        }
+
+        store.save_config(&config)?;
         store.save_milestone(&milestone)?;
+        println!("Created milestone {} ({})", milestone_id, title);
         Ok(())
-    })?;
+    })
+}
 
-    println!("Created milestone {} ({})", milestone_id, title);
-    Ok(())
+fn edit_milestone(
+    store: &MetadataStore,
+    milestone_id: String,
+    title: Option<String>,
+    date: Option<String>,
+    description: Option<String>,
+    status: Option<String>,
+    add_tags: Vec<String>,
+    remove_tags: Vec<String>,
+) -> Result<()> {
+    store.with_metadata(&format!("Edit milestone {}", milestone_id), || {
+        let mut milestone = store.load_milestone(&milestone_id)?;
+        let mut config = store.load_config()?;
+
+        if let Some(t) = title {
+            milestone.title = t;
+        }
+
+        if let Some(d) = date {
+            let naive_date = NaiveDate::parse_from_str(&d, "%Y-%m-%d")
+                .map_err(|_| format!("Invalid date format: {}. Use YYYY-MM-DD", d))?;
+            milestone.target_date = Some(naive_date.and_hms_opt(0, 0, 0).unwrap().and_utc());
+        }
+
+        if let Some(desc) = description {
+            milestone.description = Some(desc);
+        }
+
+        if let Some(s) = status {
+            milestone.status = match s.to_lowercase().as_str() {
+                "planning" => MilestoneStatus::Planning,
+                "active" => MilestoneStatus::Active,
+                "released" => MilestoneStatus::Released,
+                "cancelled" => MilestoneStatus::Cancelled,
+                _ => return Err(format!("Invalid status: {}. Use planning, active, released, or cancelled", s).into()),
+            };
+        }
+
+        for tag_input in add_tags {
+            let tag_id = crate::utils::resolve_tag(&mut config, &tag_input);
+            milestone.add_tag(tag_id);
+        }
+
+        for tag_input in remove_tags {
+            let tag_id = if let Some(tag) = config.get_tag(&tag_input) {
+                Some(tag.id.clone())
+            } else if let Some(tag) = config.get_tag_by_name(&tag_input) {
+                Some(tag.id.clone())
+            } else {
+                Some(tag_input)
+            };
+            
+            if let Some(id) = tag_id {
+                milestone.remove_tag(&id);
+            }
+        }
+
+        store.save_config(&config)?;
+        store.save_milestone(&milestone)?;
+        println!("Updated milestone {}", milestone_id);
+        Ok(())
+    })
 }
 
 fn list_milestones(store: &MetadataStore, json: bool) -> Result<()> {
     let milestones = store.list_milestones()?;
+    let config = store.load_config()?;
 
     if json {
         println!("{}", serde_json::to_string_pretty(&milestones)?);
@@ -94,12 +187,31 @@ fn list_milestones(store: &MetadataStore, json: bool) -> Result<()> {
         };
 
         let status_str = format!("{:?}", milestone.status);
+
+        let tag_names: Vec<String> = milestone
+            .tag_ids
+            .iter()
+            .map(|id| {
+                config
+                    .get_tag(id)
+                    .map(|t| t.name.clone())
+                    .unwrap_or_else(|| id.clone())
+            })
+            .collect();
+        
+        let tags_str = if tag_names.is_empty() {
+            String::new()
+        } else {
+            format!(" [{}]", tag_names.join(", "))
+        };
+
         println!(
-            "  {} - {} [{}]{} ({} features, {} bugs)",
+            "  {} - {} [{}]{}{} ({} features, {} bugs)",
             milestone.id,
             milestone.title,
             status_str,
             date_str,
+            tags_str,
             milestone.feature_ids.len(),
             milestone.bug_ids.len()
         );
@@ -110,6 +222,7 @@ fn list_milestones(store: &MetadataStore, json: bool) -> Result<()> {
 
 fn show_milestone(store: &MetadataStore, milestone_id: String, json: bool) -> Result<()> {
     let milestone = store.load_milestone(&milestone_id)?;
+    let config = store.load_config()?;
 
     if json {
         println!("{}", serde_json::to_string_pretty(&milestone)?);
@@ -136,6 +249,20 @@ fn show_milestone(store: &MetadataStore, milestone_id: String, json: bool) -> Re
                 }
             }
         }
+    }
+
+    if !milestone.tag_ids.is_empty() {
+        let tag_names: Vec<String> = milestone
+            .tag_ids
+            .iter()
+            .map(|id| {
+                config
+                    .get_tag(id)
+                    .map(|t| t.name.clone())
+                    .unwrap_or_else(|| id.clone())
+            })
+            .collect();
+        println!("Tags: {}", tag_names.join(", "));
     }
 
     println!("\nFeatures ({}):", milestone.feature_ids.len());
@@ -272,5 +399,28 @@ fn show_roadmap(store: &MetadataStore, json: bool) -> Result<()> {
         println!();
     }
 
+    Ok(())
+}
+
+fn assign_milestone(store: &MetadataStore, milestone_id: String, assignee: Option<String>) -> Result<()> {
+    // Determine assignee
+    let assignee_name = if let Some(name) = assignee {
+        name
+    } else {
+        // Default to current user
+        store.jj_client.user_name()?
+    };
+    
+    let assignee_clone = assignee_name.clone();
+
+    store.with_metadata(&format!("Assign milestone {} to {}", milestone_id, assignee_name), || {
+        let mut milestone = store.load_milestone(&milestone_id)?;
+        milestone.assignee = Some(assignee_name.clone());
+        milestone.updated_at = Utc::now();
+        store.save_milestone(&milestone)?;
+        Ok(())
+    })?;
+
+    println!("Assigned milestone {} to {}", milestone_id, assignee_clone);
     Ok(())
 }

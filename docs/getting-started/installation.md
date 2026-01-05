@@ -13,31 +13,31 @@ Before installing jjj, you need:
 
 If you don't have Jujutsu installed yet:
 
-=== "macOS"
+**macOS:**
 
-    ```bash
-    brew install jj
-    ```
+```bash
+brew install jj
+```
 
-=== "Linux"
+**Linux:**
 
-    ```bash
-    # Arch Linux
-    pacman -S jujutsu
+```bash
+# Arch Linux
+pacman -S jujutsu
 
-    # Or build from source
-    cargo install --git https://github.com/martinvonz/jj jj-cli
-    ```
+# Or build from source
+cargo install --git https://github.com/martinvonz/jj jj-cli
+```
 
-=== "Windows"
+**Windows:**
 
-    ```powershell
-    # Using winget
-    winget install jujutsu
+```powershell
+# Using winget
+winget install jujutsu
 
-    # Or using cargo
-    cargo install --git https://github.com/martinvonz/jj jj-cli
-    ```
+# Or using cargo
+cargo install --git https://github.com/martinvonz/jj jj-cli
+```
 
 Verify jj is installed:
 
@@ -104,9 +104,10 @@ eval "$(jjj completion zsh)"
 jjj completion fish > ~/.config/fish/completions/jjj.fish
 ```
 
-!!! note "Completion Support"
-    Shell completion will be available in a future release. The command structure above is planned but not yet implemented.
-
+> **Completion Support**
+>
+> Shell completion will be available in a future release. The command structure above is planned but not yet implemented.
+```
 ## Editor Integration
 
 ### VSCode

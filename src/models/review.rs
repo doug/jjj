@@ -174,6 +174,7 @@ impl CommentLocation {
 
         best_match
     }
+
 }
 
 impl Comment {

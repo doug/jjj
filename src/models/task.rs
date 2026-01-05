@@ -17,9 +17,9 @@ pub struct Task {
     /// Current column (e.g., "TODO", "In Progress", "Done")
     pub column: String,
 
-    /// Tags for categorization (e.g., "backend", "frontend")
+    /// Tags for categorization (e.g., "tag-1", "tag-2")
     #[serde(default)]
-    pub tags: HashSet<String>,
+    pub tag_ids: HashSet<String>,
 
     /// Assigned user (e.g., "@james")
     pub assignee: Option<String>,
@@ -55,7 +55,7 @@ impl Task {
             title,
             feature_id,
             column,
-            tags: HashSet::new(),
+            tag_ids: HashSet::new(),
             assignee: None,
             change_ids: Vec::new(),
             comment_count: 0,
@@ -67,15 +67,15 @@ impl Task {
     }
 
     /// Add a tag to the task
-    pub fn add_tag(&mut self, tag: String) {
-        self.tags.insert(tag);
+    pub fn add_tag(&mut self, tag_id: String) {
+        self.tag_ids.insert(tag_id);
         self.updated_at = Utc::now();
         self.version += 1;
     }
 
     /// Remove a tag from the task
-    pub fn remove_tag(&mut self, tag: &str) -> bool {
-        let removed = self.tags.remove(tag);
+    pub fn remove_tag(&mut self, tag_id: &str) -> bool {
+        let removed = self.tag_ids.remove(tag_id);
         if removed {
             self.updated_at = Utc::now();
             self.version += 1;
@@ -116,7 +116,7 @@ impl Task {
 #[derive(Debug, Default)]
 pub struct TaskFilter {
     pub column: Option<String>,
-    pub tag: Option<String>,
+    pub tag_id: Option<String>,
     pub assignee: Option<String>,
 }
 
@@ -128,8 +128,8 @@ impl TaskFilter {
             }
         }
 
-        if let Some(ref tag) = self.tag {
-            if !task.tags.contains(tag) {
+        if let Some(ref tag_id) = self.tag_id {
+            if !task.tag_ids.contains(tag_id) {
                 return false;
             }
         }

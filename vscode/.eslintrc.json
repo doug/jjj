@@ -1,48 +1,37 @@
 {
   "root": true,
   "parser": "@typescript-eslint/parser",
-  "plugins": [
-    "@typescript-eslint"
-  ],
-  "extends": [
-    "eslint:recommended",
-    "plugin:@typescript-eslint/recommended"
-  ],
+  "plugins": ["@typescript-eslint"],
+  "extends": ["eslint:recommended", "plugin:@typescript-eslint/recommended"],
   "rules": {
-    "semi": [
-      2,
-      "always"
-    ],
-    "no-trailing-spaces": "error",
-    "indent": [
-      "error",
-      2,
+    // Formatting is handled by Prettier, so we disable these rules
+    "semi": "off",
+    "quotes": "off",
+    "indent": "off",
+    "no-trailing-spaces": "off",
+    "no-multiple-empty-lines": "off",
+    "comma-dangle": "off",
+    "arrow-parens": "off",
+    "max-len": "off",
+    // TypeScript-specific formatting rules - let Prettier handle them
+    "@typescript-eslint/semi": "off",
+    "@typescript-eslint/quotes": "off",
+    "@typescript-eslint/indent": "off",
+    "@typescript-eslint/comma-dangle": "off",
+    // Keep code quality rules (non-formatting)
+    "@typescript-eslint/no-unused-vars": [
+      "warn",
       {
-        "SwitchCase": 1
+        "argsIgnorePattern": "^_",
+        "varsIgnorePattern": "^_"
       }
     ],
-    "no-multiple-empty-lines": [
-      "error",
-      {
-        "max": 1,
-        "maxEOF": 1
-      }
-    ],
-    "quotes": [
-      "error",
-      "single",
-      {
-        "allowTemplateLiterals": true
-      }
-    ]
+    "@typescript-eslint/no-explicit-any": "warn",
+    "no-console": "off"
   },
   "env": {
     "node": true,
     "es6": true
   },
-  "ignorePatterns": [
-    "out",
-    "dist",
-    "node_modules"
-  ]
+  "ignorePatterns": ["out", "dist", "node_modules", "*.js", "*.d.ts"]
 }

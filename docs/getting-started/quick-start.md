@@ -24,9 +24,9 @@ This creates the metadata structure in your repository:
     └── reviews/       # Code review data
 ```
 
-!!! tip "What just happened?"
-    jjj created an orphaned commit history (shadow graph) to store metadata separately from your project code. This bookmark is called `jjj/meta`.
-
+> **What just happened?**
+>
+> jjj created an orphaned commit history (shadow graph) to store metadata separately from your project code. This bookmark is called `jjj/meta`.
 ## Create Your First Task
 
 Let's create a simple task:
@@ -236,27 +236,30 @@ You now know the basics! Continue learning:
 
 ## Quick Tips
 
-!!! tip "Use Tags for Organization"
-    ```bash
-    jjj task new "Fix login bug" --feature F-1 --tag backend --tag auth
-    jjj task list --tag backend
-    ```
+> **Use Tags for Organization**
+>
+> Use tags to organize and filter your tasks:
+>
+>     jjj task new "Fix login bug" --feature F-1 --tag backend --tag auth
+>     jjj task list --tag backend
 
-!!! tip "Filter Your Board"
-    ```bash
-    # Show only tasks in a specific column
-    jjj task list --column "In Progress"
+> **Filter Your Board**
+>
+> Show only tasks in a specific column or feature:
+>
+>     # Show only tasks in a specific column
+>     jjj task list --column "In Progress"
+>
+>     # Show tasks for a specific feature
+>     jjj feature board F-1
 
-    # Show tasks for a specific feature
-    jjj feature board F-1
-    ```
+> **Export for Reporting**
+>
+> Export all data as JSON for external tools:
+>
+>     jjj board --json > board-snapshot.json
+>     jjj milestone list --json > milestones.json
 
-!!! tip "Export for Reporting"
-    ```bash
-    # Export all data as JSON for external tools
-    jjj board --json > board-snapshot.json
-    jjj milestone list --json > milestones.json
-    ```
-
-!!! warning "Remember: Tasks Require Features"
-    Every task must belong to a feature. If you try to create a task without `--feature`, you'll get an error. Create a feature first!
+> **Remember: Tasks Require Features**
+>
+> Every task must belong to a feature. If you try to create a task without `--feature`, you'll get an error. Create a feature first!

@@ -1,6 +1,8 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+use std::collections::HashSet;
+
 /// A milestone represents a release, sprint, or delivery target
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Milestone {
@@ -29,10 +31,13 @@ pub struct Milestone {
 
     /// Tags for categorization
     #[serde(default)]
-    pub tags: Vec<String>,
+    pub tag_ids: HashSet<String>,
 
     /// Version number (optional, e.g., "1.0.0")
     pub version: Option<String>,
+
+    /// Assigned owner/lead
+    pub assignee: Option<String>,
 
     /// Creation timestamp
     pub created_at: DateTime<Utc>,
@@ -70,8 +75,9 @@ impl Milestone {
             status: MilestoneStatus::Planning,
             feature_ids: Vec::new(),
             bug_ids: Vec::new(),
-            tags: Vec::new(),
+            tag_ids: HashSet::new(),
             version: None,
+            assignee: None,
             created_at: now,
             updated_at: now,
         }
@@ -127,6 +133,7 @@ impl Milestone {
         self.updated_at = Utc::now();
     }
 
+
     /// Check if milestone is overdue
     pub fn is_overdue(&self) -> bool {
         if let Some(target) = self.target_date {
@@ -141,6 +148,23 @@ impl Milestone {
         self.target_date.map(|target| {
             (target - Utc::now()).num_days()
         })
+    }
+
+    /// Add a tag
+    pub fn add_tag(&mut self, tag_id: String) {
+        if self.tag_ids.insert(tag_id) {
+            self.updated_at = Utc::now();
+        }
+    }
+
+    /// Remove a tag
+    pub fn remove_tag(&mut self, tag_id: &str) -> bool {
+        if self.tag_ids.remove(tag_id) {
+            self.updated_at = Utc::now();
+            true
+        } else {
+            false
+        }
     }
 }
 
@@ -168,15 +192,6 @@ mod tests {
     }
 
     #[test]
-    fn test_add_duplicate_feature() {
-        let mut milestone = Milestone::new("M-1".to_string(), "v1.0".to_string());
-        milestone.add_feature("F-1".to_string());
-        milestone.add_feature("F-1".to_string());
-
-        assert_eq!(milestone.feature_ids.len(), 1);
-    }
-
-    #[test]
     fn test_remove_feature() {
         let mut milestone = Milestone::new("M-1".to_string(), "v1.0".to_string());
         milestone.add_feature("F-1".to_string());
@@ -186,6 +201,15 @@ mod tests {
         assert!(removed);
         assert_eq!(milestone.feature_ids.len(), 1);
         assert!(!milestone.feature_ids.contains(&"F-1".to_string()));
+    }
+
+    #[test]
+    fn test_add_duplicate_feature() {
+        let mut milestone = Milestone::new("M-1".to_string(), "v1.0".to_string());
+        milestone.add_feature("F-1".to_string());
+        milestone.add_feature("F-1".to_string());
+
+        assert_eq!(milestone.feature_ids.len(), 1);
     }
 
     #[test]

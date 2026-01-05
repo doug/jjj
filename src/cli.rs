@@ -66,6 +66,12 @@ pub enum Commands {
         #[command(subcommand)]
         action: BugAction,
     },
+
+    /// Manage tags
+    Tag {
+        #[command(subcommand)]
+        action: TagAction,
+    },
 }
 
 #[derive(Subcommand)]
@@ -155,6 +161,16 @@ pub enum TaskAction {
     Delete {
         /// Task ID (e.g., T-101)
         task_id: String,
+    },
+
+    /// Assign a task to a person
+    Assign {
+        /// Task ID (e.g., T-101)
+        task_id: String,
+
+        /// Assignee name (if not specified, assigns to self)
+        #[arg(long)]
+        to: Option<String>,
     },
 }
 
@@ -246,6 +262,40 @@ pub enum MilestoneAction {
         /// Description
         #[arg(long)]
         description: Option<String>,
+
+        /// Tags to apply
+        #[arg(long)]
+        tag: Vec<String>,
+    },
+
+    /// Edit milestone details
+    Edit {
+        /// Milestone ID (e.g., M-1)
+        milestone_id: String,
+
+        /// New title
+        #[arg(long)]
+        title: Option<String>,
+
+        /// New target date
+        #[arg(long)]
+        date: Option<String>,
+
+        /// New description
+        #[arg(long)]
+        description: Option<String>,
+
+        /// New status
+        #[arg(long)]
+        status: Option<String>,
+
+        /// Add tags
+        #[arg(long)]
+        add_tag: Vec<String>,
+
+        /// Remove tags
+        #[arg(long)]
+        remove_tag: Vec<String>,
     },
 
     /// List all milestones
@@ -289,6 +339,16 @@ pub enum MilestoneAction {
         #[arg(long)]
         json: bool,
     },
+
+    /// Assign a milestone to a person
+    Assign {
+        /// Milestone ID (e.g., M-1)
+        milestone_id: String,
+
+        /// Assignee name (if not specified, assigns to self)
+        #[arg(long)]
+        to: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -309,6 +369,40 @@ pub enum FeatureAction {
         /// Description
         #[arg(long)]
         description: Option<String>,
+
+        /// Tags to apply
+        #[arg(long)]
+        tag: Vec<String>,
+    },
+
+    /// Edit feature details
+    Edit {
+        /// Feature ID (e.g., F-1)
+        feature_id: String,
+
+        /// New title
+        #[arg(long)]
+        title: Option<String>,
+
+        /// New milestone
+        #[arg(long)]
+        milestone: Option<String>,
+
+        /// New priority
+        #[arg(long)]
+        priority: Option<String>,
+
+        /// New status
+        #[arg(long)]
+        status: Option<String>,
+
+        /// Add tags
+        #[arg(long)]
+        add_tag: Vec<String>,
+
+        /// Remove tags
+        #[arg(long)]
+        remove_tag: Vec<String>,
     },
 
     /// List all features
@@ -360,6 +454,16 @@ pub enum FeatureAction {
         /// Target status (backlog, inprogress, review, done, blocked)
         status: String,
     },
+
+    /// Assign a feature to a person
+    Assign {
+        /// Feature ID (e.g., F-1)
+        feature_id: String,
+
+        /// Assignee name (if not specified, assigns to self)
+        #[arg(long)]
+        to: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -380,6 +484,32 @@ pub enum BugAction {
         /// Reproduction steps
         #[arg(long)]
         repro: Option<String>,
+
+        /// Tags to apply
+        #[arg(long)]
+        tag: Vec<String>,
+    },
+
+    /// Edit bug details
+    Edit {
+        /// Bug ID (e.g., B-1)
+        bug_id: String,
+
+        /// New title
+        #[arg(long)]
+        title: Option<String>,
+
+        /// New severity
+        #[arg(long)]
+        severity: Option<String>,
+
+        /// Add tags
+        #[arg(long)]
+        add_tag: Vec<String>,
+
+        /// Remove tags
+        #[arg(long)]
+        remove_tag: Vec<String>,
     },
 
     /// List all bugs
@@ -439,5 +569,63 @@ pub enum BugAction {
         /// Output in JSON format
         #[arg(long)]
         json: bool,
+    },
+
+    /// Assign a bug to a person
+    Assign {
+        /// Bug ID (e.g., B-1)
+        bug_id: String,
+
+        /// Assignee name (if not specified, assigns to self)
+        #[arg(long)]
+        to: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum TagAction {
+    /// List all tags
+    List {
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Create a new tag
+    New {
+        /// Tag name
+        name: String,
+
+        /// Description
+        #[arg(long)]
+        desc: Option<String>,
+
+        /// Color (hex or name)
+        #[arg(long)]
+        color: Option<String>,
+    },
+
+    /// Edit a tag
+    Edit {
+        /// Tag ID (e.g., tag-1)
+        tag_id: String,
+
+        /// New name
+        #[arg(long)]
+        name: Option<String>,
+
+        /// New description
+        #[arg(long)]
+        desc: Option<String>,
+
+        /// New color
+        #[arg(long)]
+        color: Option<String>,
+    },
+
+    /// Delete a tag
+    Delete {
+        /// Tag ID (e.g., tag-1)
+        tag_id: String,
     },
 }

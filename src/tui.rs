@@ -72,12 +72,50 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
             if let Event::Key(key) = event::read()? {
                 match key.code {
                     KeyCode::Char('q') => return Ok(()),
-                    KeyCode::Right => app.selected_column = (app.selected_column + 1) % app.columns.len(),
+                    KeyCode::Right => {
+                        app.selected_column = (app.selected_column + 1) % app.columns.len();
+                        app.selected_task = None; // Reset task selection when changing column
+                    }
                     KeyCode::Left => {
                         if app.selected_column > 0 {
                             app.selected_column -= 1;
                         } else {
                             app.selected_column = app.columns.len() - 1;
+                        }
+                        app.selected_task = None;
+                    }
+                    KeyCode::Down => {
+                        let current_col = &app.columns[app.selected_column];
+                        let task_count = app.tasks.iter().filter(|t| &t.column == current_col).count();
+                        if task_count > 0 {
+                            let next = match app.selected_task {
+                                Some(i) => {
+                                    if i >= task_count - 1 {
+                                        0
+                                    } else {
+                                        i + 1
+                                    }
+                                }
+                                None => 0,
+                            };
+                            app.selected_task = Some(next);
+                        }
+                    }
+                    KeyCode::Up => {
+                        let current_col = &app.columns[app.selected_column];
+                        let task_count = app.tasks.iter().filter(|t| &t.column == current_col).count();
+                        if task_count > 0 {
+                            let next = match app.selected_task {
+                                Some(i) => {
+                                    if i == 0 {
+                                        task_count - 1
+                                    } else {
+                                        i - 1
+                                    }
+                                }
+                                None => task_count - 1,
+                            };
+                            app.selected_task = Some(next);
                         }
                     }
                     _ => {}
@@ -134,12 +172,9 @@ fn ui(f: &mut Frame, app: &mut App) {
         .highlight_style(Style::default().add_modifier(Modifier::BOLD).fg(Color::Yellow))
         .highlight_symbol(">> ");
 
-    f.render_widget(tasks_list, chunks[1]);
+    let mut state = ratatui::widgets::ListState::default();
+    state.select(app.selected_task);
+
+    f.render_stateful_widget(tasks_list, chunks[1], &mut state);
 }
 
-/// Launch the interactive review TUI
-pub fn launch_review(_change_id: &str) -> Result<()> {
-    println!("Interactive review TUI not yet implemented.");
-    println!("Use 'jjj review start <change-id>' for a simple text-based view.");
-    Ok(())
-}

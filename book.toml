@@ -1,0 +1,15 @@
+[book]
+title = "jjj - Jujutsu Project Manager"
+authors = ["jjj Contributors"]
+description = "Distributed project management and code review for Jujutsu"
+language = "en"
+src = "docs"
+
+[output.html]
+default-theme = "navy"
+preferred-dark-theme = "navy"
+git-repository-url = "https://github.com/yourusername/jjj"
+edit-url-template = "https://github.com/yourusername/jjj/edit/main/{path}"
+[output.html.playground]
+editable = false
+copyable = true

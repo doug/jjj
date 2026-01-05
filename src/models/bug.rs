@@ -38,7 +38,7 @@ pub struct Bug {
 
     /// Tags for categorization
     #[serde(default)]
-    pub tags: HashSet<String>,
+    pub tag_ids: HashSet<String>,
 
     /// Version where bug was found
     pub affected_version: Option<String>,
@@ -126,7 +126,7 @@ impl Bug {
             assignee: None,
             reporter: None,
             change_ids: Vec::new(),
-            tags: HashSet::new(),
+            tag_ids: HashSet::new(),
             affected_version: None,
             fixed_version: None,
             repro_steps: None,
@@ -181,15 +181,15 @@ impl Bug {
     }
 
     /// Add a tag
-    pub fn add_tag(&mut self, tag: String) {
-        if self.tags.insert(tag) {
+    pub fn add_tag(&mut self, tag_id: String) {
+        if self.tag_ids.insert(tag_id) {
             self.updated_at = Utc::now();
         }
     }
 
     /// Remove a tag
-    pub fn remove_tag(&mut self, tag: &str) -> bool {
-        if self.tags.remove(tag) {
+    pub fn remove_tag(&mut self, tag_id: &str) -> bool {
+        if self.tag_ids.remove(tag_id) {
             self.updated_at = Utc::now();
             true
         } else {
@@ -321,7 +321,7 @@ mod tests {
         let mut bug = Bug::new("B-1".to_string(), "Login fails".to_string(), Severity::Critical);
         bug.set_feature(Some("F-1".to_string()));
         bug.attach_change("abc123".to_string());
-        bug.add_tag("security".to_string());
+        bug.add_tag("tag-1".to_string());
 
         let json = serde_json::to_string_pretty(&bug).expect("Failed to serialize");
         let deserialized: Bug = serde_json::from_str(&json).expect("Failed to deserialize");
@@ -330,6 +330,6 @@ mod tests {
         assert_eq!(deserialized.severity, Severity::Critical);
         assert_eq!(deserialized.feature_id, Some("F-1".to_string()));
         assert_eq!(deserialized.change_ids.len(), 1);
-        assert_eq!(deserialized.tags.len(), 1);
+        assert_eq!(deserialized.tag_ids.len(), 1);
     }
 }

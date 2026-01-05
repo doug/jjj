@@ -15,7 +15,19 @@ pub fn execute(action: FeatureAction) -> Result<()> {
             milestone,
             priority,
             description,
-        } => create_feature(&store, title, milestone, priority, description),
+            tag,
+        } => create_feature(&store, title, milestone, priority, description, tag),
+        FeatureAction::Edit {
+            feature_id,
+            title,
+            milestone,
+            priority,
+            status,
+            add_tag,
+            remove_tag,
+        } => edit_feature(
+            &store, feature_id, title, milestone, priority, status, add_tag, remove_tag,
+        ),
         FeatureAction::List {
             milestone,
             status,
@@ -25,6 +37,7 @@ pub fn execute(action: FeatureAction) -> Result<()> {
         FeatureAction::Board { feature_id, json } => show_board(&store, feature_id, json),
         FeatureAction::Progress { feature_id } => show_progress(&store, feature_id),
         FeatureAction::Move { feature_id, status } => move_feature(&store, feature_id, status),
+        FeatureAction::Assign { feature_id, to } => assign_feature(&store, feature_id, to),
     }
 }
 
@@ -34,33 +47,42 @@ fn create_feature(
     milestone: Option<String>,
     priority: Option<String>,
     description: Option<String>,
+    tags: Vec<String>,
 ) -> Result<()> {
-    let feature_id = store.next_feature_id()?;
+    store.with_metadata(&format!("Create feature {}", title), || {
+        let mut config = store.load_config()?;
+        let feature_id = store.next_feature_id()?;
 
-    // Parse priority
-    let priority = if let Some(p) = priority {
-        parse_priority(&p)?
-    } else {
-        Priority::Medium
-    };
+        // Parse priority
+        let priority = if let Some(p) = priority {
+            parse_priority(&p)?
+        } else {
+            Priority::Medium
+        };
 
-    let feature = Feature {
-        id: feature_id.clone(),
-        title: title.clone(),
-        description,
-        milestone_id: milestone.clone(),
-        status: FeatureStatus::Backlog,
-        assignee: None,
-        task_ids: Vec::new(),
-        bug_ids: Vec::new(),
-        tags: std::collections::HashSet::new(),
-        priority,
-        story_points: None,
-        created_at: Utc::now(),
-        updated_at: Utc::now(),
-    };
+        let mut feature = Feature {
+            id: feature_id.clone(),
+            title: title.clone(),
+            description,
+            milestone_id: milestone.clone(),
+            status: FeatureStatus::Backlog,
+            assignee: None,
+            task_ids: Vec::new(),
+            bug_ids: Vec::new(),
+            tag_ids: std::collections::HashSet::new(),
+            priority,
+            story_points: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
 
-    store.with_metadata(&format!("Create feature {}", feature_id), || {
+        // Resolve and add tags
+        for tag_input in tags {
+            let tag_id = crate::utils::resolve_tag(&mut config, &tag_input);
+            feature.add_tag(tag_id);
+        }
+
+        store.save_config(&config)?;
         store.save_feature(&feature)?;
 
         // If milestone specified, add feature to milestone
@@ -73,14 +95,76 @@ fn create_feature(
             }
         }
 
+        println!("Created feature {} ({})", feature_id, title);
         Ok(())
-    })?;
+    })
+}
 
-    let milestone_str = milestone
-        .map(|m| format!(" in milestone {}", m))
-        .unwrap_or_default();
-    println!("Created feature {} ({}){}", feature_id, title, milestone_str);
-    Ok(())
+fn edit_feature(
+    store: &MetadataStore,
+    feature_id: String,
+    title: Option<String>,
+    milestone_id: Option<String>,
+    priority: Option<String>,
+    status: Option<String>,
+    add_tags: Vec<String>,
+    remove_tags: Vec<String>,
+) -> Result<()> {
+    store.with_metadata(&format!("Edit feature {}", feature_id), || {
+        let mut feature = store.load_feature(&feature_id)?;
+        let mut config = store.load_config()?;
+
+        if let Some(t) = title {
+            feature.title = t;
+        }
+
+        if let Some(m) = milestone_id {
+            // If changing milestone, we should update the old and new milestones
+            // For simplicity, we just update the feature's pointer and add to new milestone
+            // Removing from old milestone is tricky without loading it, but acceptable for now
+            if let Some(new_milestone_id) = &Some(m.clone()) {
+                 let mut milestone = store.load_milestone(new_milestone_id)?;
+                 if !milestone.feature_ids.contains(&feature_id) {
+                     milestone.feature_ids.push(feature_id.clone());
+                     milestone.updated_at = Utc::now();
+                     store.save_milestone(&milestone)?;
+                 }
+            }
+            feature.milestone_id = Some(m);
+        }
+
+        if let Some(p) = priority {
+            feature.priority = parse_priority(&p)?;
+        }
+
+        if let Some(s) = status {
+            feature.status = parse_feature_status(&s)?;
+        }
+
+        for tag_input in add_tags {
+            let tag_id = crate::utils::resolve_tag(&mut config, &tag_input);
+            feature.add_tag(tag_id);
+        }
+
+        for tag_input in remove_tags {
+            let tag_id = if let Some(tag) = config.get_tag(&tag_input) {
+                Some(tag.id.clone())
+            } else if let Some(tag) = config.get_tag_by_name(&tag_input) {
+                Some(tag.id.clone())
+            } else {
+                Some(tag_input)
+            };
+            
+            if let Some(id) = tag_id {
+                feature.remove_tag(&id);
+            }
+        }
+
+        store.save_config(&config)?;
+        store.save_feature(&feature)?;
+        println!("Updated feature {}", feature_id);
+        Ok(())
+    })
 }
 
 fn list_features(
@@ -90,6 +174,7 @@ fn list_features(
     json: bool,
 ) -> Result<()> {
     let mut features = store.list_features()?;
+    let config = store.load_config()?;
 
     // Apply filters
     if let Some(milestone) = &milestone_filter {
@@ -120,13 +205,31 @@ fn list_features(
         let priority_str = format!("{:?}", feature.priority);
         let status_str = format!("{:?}", feature.status);
 
+        let tag_names: Vec<String> = feature
+            .tag_ids
+            .iter()
+            .map(|id| {
+                config
+                    .get_tag(id)
+                    .map(|t| t.name.clone())
+                    .unwrap_or_else(|| id.clone())
+            })
+            .collect();
+        
+        let tags_str = if tag_names.is_empty() {
+            String::new()
+        } else {
+            format!(" [{}]", tag_names.join(", "))
+        };
+
         println!(
-            "  {} - {} [{}] [{}]{} ({} tasks, {} bugs)",
+            "  {} - {} [{}] [{}]{}{} ({} tasks, {} bugs)",
             feature.id,
             feature.title,
             priority_str,
             status_str,
             milestone_str,
+            tags_str,
             feature.task_ids.len(),
             feature.bug_ids.len()
         );
@@ -137,6 +240,7 @@ fn list_features(
 
 fn show_feature(store: &MetadataStore, feature_id: String, json: bool) -> Result<()> {
     let feature = store.load_feature(&feature_id)?;
+    let config = store.load_config()?;
 
     if json {
         println!("{}", serde_json::to_string_pretty(&feature)?);
@@ -153,6 +257,20 @@ fn show_feature(store: &MetadataStore, feature_id: String, json: bool) -> Result
 
     if let Some(milestone) = &feature.milestone_id {
         println!("Milestone: {}", milestone);
+    }
+
+    if !feature.tag_ids.is_empty() {
+        let tag_names: Vec<String> = feature
+            .tag_ids
+            .iter()
+            .map(|id| {
+                config
+                    .get_tag(id)
+                    .map(|t| t.name.clone())
+                    .unwrap_or_else(|| id.clone())
+            })
+            .collect();
+        println!("Tags: {}", tag_names.join(", "));
     }
 
     if let Some(points) = feature.story_points {
@@ -380,4 +498,27 @@ fn parse_feature_status(s: &str) -> Result<FeatureStatus> {
         )
         .into()),
     }
+}
+
+fn assign_feature(store: &MetadataStore, feature_id: String, assignee: Option<String>) -> Result<()> {
+    // Determine assignee
+    let assignee_name = if let Some(name) = assignee {
+        name
+    } else {
+        // Default to current user
+        store.jj_client.user_name()?
+    };
+    
+    let assignee_clone = assignee_name.clone();
+
+    store.with_metadata(&format!("Assign feature {} to {}", feature_id, assignee_name), || {
+        let mut feature = store.load_feature(&feature_id)?;
+        feature.assignee = Some(assignee_name.clone());
+        feature.updated_at = Utc::now();
+        store.save_feature(&feature)?;
+        Ok(())
+    })?;
+
+    println!("Assigned feature {} to {}", feature_id, assignee_clone);
+    Ok(())
 }

@@ -214,7 +214,7 @@ fn test_config_serialization_toml() {
 #[test]
 fn test_custom_workflow_columns() {
     // Given: A team with a custom workflow
-    let mut config = ProjectConfig {
+    let config = ProjectConfig {
         name: Some("Custom Workflow Project".to_string()),
         columns: vec![
             "Backlog".to_string(),

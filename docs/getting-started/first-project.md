@@ -469,17 +469,18 @@ Now that you've completed a full workflow:
 
 ## Tips for Success
 
-!!! tip "Start with Milestones"
-    Always create milestones first to give your features context and deadlines.
-
-!!! tip "Keep Features Small"
-    Aim for 3-8 tasks per feature. Larger features should be split.
-
-!!! tip "Use Tags Consistently"
-    Establish tag conventions (e.g., `backend`, `frontend`, `api`, `ui`) early.
-
-!!! tip "Review Regularly"
-    Run `jjj dashboard` daily to stay on top of reviews and tasks.
-
-!!! tip "Export Before Releases"
-    Create JSON snapshots before major releases for historical records.
+> **Start with Milestones**
+>
+> Always create milestones first to give your features context and deadlines.
+> **Keep Features Small**
+>
+> Aim for 3-8 tasks per feature. Larger features should be split.
+> **Use Tags Consistently**
+>
+> Establish tag conventions (e.g., `backend`, `frontend`, `api`, `ui`) early.
+> **Review Regularly**
+>
+> Run `jjj dashboard` daily to stay on top of reviews and tasks.
+> **Export Before Releases**
+>
+> Create JSON snapshots before major releases for historical records.

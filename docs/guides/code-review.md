@@ -432,38 +432,39 @@ jjj review comment kpqxywon \
 
 ## Best Practices
 
-!!! tip "Review Early, Review Often"
-    Request reviews for work-in-progress changes to get feedback early.
+> **Review Early, Review Often**
+>
+> Request reviews for work-in-progress changes to get feedback early.
+> **Keep Changes Small**
+>
+> Smaller changes = faster reviews = better feedback. Aim for < 400 lines changed.
+> **Review Your Own Code First**
+>
+> Before requesting review, check your own diff:
+>
+>     jj show  # Review your own diff
+>     # Look for debugging code, TODOs, etc.
 
-!!! tip "Keep Changes Small"
-    Smaller changes = faster reviews = better feedback. Aim for < 400 lines changed.
+> **Use Descriptive Change Descriptions**
+>
+> Write clear commit messages:
+>
+>     jj describe -m "Add bcrypt password hashing
+>
+>     Replaces SHA-256 with bcrypt for better security.
+>     Uses DEFAULT_COST (12) for work factor.
+>
+>     Addresses: B-5 (password security)"
 
-!!! tip "Review Your Own Code First"
-    Before requesting review:
-    ```bash
-    jj show  # Review your own diff
-    # Look for debugging code, TODOs, etc.
-    ```
-
-!!! tip "Use Descriptive Change Descriptions"
-    ```bash
-    jj describe -m "Add bcrypt password hashing
-
-    Replaces SHA-256 with bcrypt for better security.
-    Uses DEFAULT_COST (12) for work factor.
-
-    Addresses: B-5 (password security)"
-    ```
-
-!!! tip "Respond to All Comments"
-    Either:
-    - Fix the issue and amend
-    - Reply explaining why you disagree
-    - Mark as "won't fix" with reason
-
-!!! warning "Don't Squash Before Review Complete"
-    Wait for approval before squashing commits. Comments may be lost!
-
+> **Respond to All Comments**
+>
+> Either:
+> - Fix the issue and amend
+> - Reply explaining why you disagree
+> - Mark as "won't fix" with reason
+> **Don't Squash Before Review Complete**
+>
+> Wait for approval before squashing commits. Comments may be lost!
 ## Troubleshooting
 
 ### Comments Not Relocating

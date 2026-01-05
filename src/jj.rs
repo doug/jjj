@@ -173,7 +173,7 @@ impl JjClient {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    
 
     #[test]
     fn test_jj_detection() {

@@ -6,6 +6,7 @@ mod init;
 mod milestone;
 mod resolve;
 mod review;
+mod tag;
 mod task;
 
 use crate::cli::{Cli, Commands};
@@ -23,5 +24,6 @@ pub fn execute(cli: Cli) -> Result<()> {
         Commands::Milestone { action } => milestone::execute(action),
         Commands::Feature { action } => feature::execute(action),
         Commands::Bug { action } => bug::execute(action),
+        Commands::Tag { action } => tag::execute(action),
     }
 }

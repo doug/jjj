@@ -15,7 +15,15 @@ pub fn execute(action: BugAction) -> Result<()> {
             severity,
             description,
             repro,
-        } => create_bug(&store, title, severity, description, repro),
+            tag,
+        } => create_bug(&store, title, severity, description, repro, tag),
+        BugAction::Edit {
+            bug_id,
+            title,
+            severity,
+            add_tag,
+            remove_tag,
+        } => edit_bug(&store, bug_id, title, severity, add_tag, remove_tag),
         BugAction::List {
             severity,
             status,
@@ -30,6 +38,7 @@ pub fn execute(action: BugAction) -> Result<()> {
         } => link_bug(&store, bug_id, feature, milestone),
         BugAction::Status { bug_id, status } => update_status(&store, bug_id, status),
         BugAction::Triage { json } => show_triage(&store, json),
+        BugAction::Assign { bug_id, to } => assign_bug(&store, bug_id, to),
     }
 }
 
@@ -39,45 +48,100 @@ fn create_bug(
     severity: Option<String>,
     description: Option<String>,
     repro_steps: Option<String>,
+    tags: Vec<String>,
 ) -> Result<()> {
-    let bug_id = store.next_bug_id()?;
+    store.with_metadata(&format!("Create bug {}", title), || {
+        let mut config = store.load_config()?;
+        let bug_id = store.next_bug_id()?;
 
-    // Parse severity
-    let severity = if let Some(s) = severity {
-        parse_severity(&s)?
-    } else {
-        Severity::Medium
-    };
-    let severity_clone = severity.clone();
+        // Parse severity
+        let severity = if let Some(s) = severity {
+            parse_severity(&s)?
+        } else {
+            Severity::Medium
+        };
+        let severity_clone = severity.clone();
 
-    let bug = Bug {
-        id: bug_id.clone(),
-        title: title.clone(),
-        description,
-        severity,
-        status: BugStatus::New,
-        feature_id: None,
-        milestone_id: None,
-        assignee: None,
-        reporter: None,
-        change_ids: Vec::new(),
-        tags: std::collections::HashSet::new(),
-        affected_version: None,
-        fixed_version: None,
-        repro_steps,
-        expected_behavior: None,
-        actual_behavior: None,
-        created_at: Utc::now(),
-        updated_at: Utc::now(),
-    };
+        let mut bug = Bug {
+            id: bug_id.clone(),
+            title: title.clone(),
+            description,
+            severity,
+            status: BugStatus::New,
+            feature_id: None,
+            milestone_id: None,
+            assignee: None,
+            reporter: None,
+            change_ids: Vec::new(),
+            tag_ids: std::collections::HashSet::new(),
+            affected_version: None,
+            fixed_version: None,
+            repro_steps,
+            expected_behavior: None,
+            actual_behavior: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
 
-    store.with_metadata(&format!("Create bug {}", bug_id), || {
+        // Resolve and add tags
+        for tag_input in tags {
+            let tag_id = crate::utils::resolve_tag(&mut config, &tag_input);
+            bug.add_tag(tag_id);
+        }
+
+        store.save_config(&config)?;
         store.save_bug(&bug)?;
-        Ok(())
-    })?;
 
-    println!("Created bug {} ({}) [Severity: {:?}]", bug_id, title, severity_clone);
-    Ok(())
+        println!("Created bug {} ({}) [Severity: {:?}]", bug_id, title, severity_clone);
+        Ok(())
+    })
+}
+
+fn edit_bug(
+    store: &MetadataStore,
+    bug_id: String,
+    title: Option<String>,
+    severity: Option<String>,
+    add_tags: Vec<String>,
+    remove_tags: Vec<String>,
+) -> Result<()> {
+    store.with_metadata(&format!("Edit bug {}", bug_id), || {
+        let mut bug = store.load_bug(&bug_id)?;
+        let mut config = store.load_config()?;
+
+        if let Some(t) = title {
+            bug.title = t;
+        }
+
+        if let Some(s) = severity {
+            bug.severity = parse_severity(&s)?;
+        }
+
+        for tag_input in add_tags {
+            let tag_id = crate::utils::resolve_tag(&mut config, &tag_input);
+            bug.add_tag(tag_id);
+        }
+
+        for tag_input in remove_tags {
+            // For removal, we try to resolve ID, but if it's a name, we find the ID
+            let tag_id = if let Some(tag) = config.get_tag(&tag_input) {
+                Some(tag.id.clone())
+            } else if let Some(tag) = config.get_tag_by_name(&tag_input) {
+                Some(tag.id.clone())
+            } else {
+                Some(tag_input)
+            };
+            
+            if let Some(id) = tag_id {
+                bug.remove_tag(&id);
+            }
+        }
+
+        store.save_config(&config)?;
+        store.save_bug(&bug)?;
+        println!("Updated bug {}", bug_id);
+        Ok(())
+    })
 }
 
 fn list_bugs(
@@ -115,6 +179,8 @@ fn list_bugs(
     }
 
     println!("Bugs:");
+    let config = store.load_config()?; // Load config for tag names
+
     for bug in bugs {
         let severity_str = format!("{:?}", bug.severity);
         let status_str = format!("{:?}", bug.status);
@@ -134,9 +200,26 @@ fn list_bugs(
             }
         };
 
+        let tag_names: Vec<String> = bug
+            .tag_ids
+            .iter()
+            .map(|id| {
+                config
+                    .get_tag(id)
+                    .map(|t| t.name.clone())
+                    .unwrap_or_else(|| id.clone())
+            })
+            .collect();
+        
+        let tags_str = if tag_names.is_empty() {
+            String::new()
+        } else {
+            format!(" [{}]", tag_names.join(", "))
+        };
+
         println!(
-            "  {} - {} [{}] [{}]{}",
-            bug.id, bug.title, severity_str, status_str, links
+            "  {} - {} [{}] [{}]{}{}",
+            bug.id, bug.title, severity_str, status_str, links, tags_str
         );
     }
 
@@ -282,6 +365,29 @@ fn update_status(store: &MetadataStore, bug_id: String, status: String) -> Resul
     })?;
 
     println!("Updated bug {} status to {:?}", bug_id, new_status_clone);
+    Ok(())
+}
+
+fn assign_bug(store: &MetadataStore, bug_id: String, assignee: Option<String>) -> Result<()> {
+    // Determine assignee
+    let assignee_name = if let Some(name) = assignee {
+        name
+    } else {
+        // Default to current user
+        store.jj_client.user_name()?
+    };
+    
+    let assignee_clone = assignee_name.clone();
+
+    store.with_metadata(&format!("Assign bug {} to {}", bug_id, assignee_name), || {
+        let mut bug = store.load_bug(&bug_id)?;
+        bug.assignee = Some(assignee_name.clone());
+        bug.updated_at = Utc::now();
+        store.save_bug(&bug)?;
+        Ok(())
+    })?;
+
+    println!("Assigned bug {} to {}", bug_id, assignee_clone);
     Ok(())
 }
 

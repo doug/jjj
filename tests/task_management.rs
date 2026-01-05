@@ -1,5 +1,4 @@
 use jjj::models::{Task, TaskFilter};
-use std::collections::HashSet;
 
 /// Behavior: Creating a new task
 #[test]

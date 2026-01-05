@@ -3,6 +3,12 @@
   "displayName": "JJJ VS Code Extension",
   "description": "VS Code extension for task management and code review, powered by the jjj command-line tool.",
   "version": "0.0.1",
+  "publisher": "jjj",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/doug/jjj"
+  },
   "engines": {
     "vscode": "^1.70.0"
   },
@@ -18,6 +24,84 @@
       {
         "command": "jjj.init",
         "title": "JJJ: Initialize Repository"
+      },
+      {
+        "command": "jjj.openTask",
+        "title": "JJJ: Open Task"
+      },
+      {
+        "command": "jjj.openReview",
+        "title": "JJJ: Open Review"
+      },
+      {
+        "command": "jjj.openFeature",
+        "title": "JJJ: Open Feature"
+      },
+      {
+        "command": "jjj.openMilestone",
+        "title": "JJJ: Open Milestone"
+      },
+      {
+        "command": "jjj.openBug",
+        "title": "JJJ: Open Bug"
+      },
+      {
+        "command": "jjj.openDashboard",
+        "title": "JJJ: Open Dashboard"
+      },
+      {
+        "command": "jjj.refreshTasks",
+        "title": "JJJ: Refresh Tasks",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "jjj.refreshReviews",
+        "title": "JJJ: Refresh Reviews",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "jjj.refreshFeatures",
+        "title": "JJJ: Refresh Features",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "jjj.refreshMilestones",
+        "title": "JJJ: Refresh Milestones",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "jjj.refreshBugs",
+        "title": "JJJ: Refresh Bugs",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "jjj.refreshAll",
+        "title": "JJJ: Refresh All Views"
+      },
+      {
+        "command": "jjj.toggleTaskGrouping",
+        "title": "JJJ: Toggle Task Grouping",
+        "icon": "$(group-by-ref-type)"
+      },
+      {
+        "command": "jjj.createTask",
+        "title": "JJJ: Create Task",
+        "icon": "$(plus)"
+      },
+      {
+        "command": "jjj.createFeature",
+        "title": "JJJ: Create Feature",
+        "icon": "$(plus)"
+      },
+      {
+        "command": "jjj.createBug",
+        "title": "JJJ: Create Bug",
+        "icon": "$(plus)"
+      },
+      {
+        "command": "jjj.createMilestone",
+        "title": "JJJ: Create Milestone",
+        "icon": "$(plus)"
       }
     ],
     "viewsContainers": {
@@ -37,8 +121,28 @@
           "when": "!jjj.initialized"
         },
         {
+          "id": "jjj-milestones",
+          "name": "Milestones",
+          "when": "jjj.initialized"
+        },
+        {
+          "id": "jjj-features",
+          "name": "Features",
+          "when": "jjj.initialized"
+        },
+        {
           "id": "jjj-tasks",
           "name": "Tasks",
+          "when": "jjj.initialized"
+        },
+        {
+          "id": "jjj-bugs",
+          "name": "Bugs",
+          "when": "jjj.initialized"
+        },
+        {
+          "id": "jjj-reviews",
+          "name": "Reviews",
           "when": "jjj.initialized"
         }
       ]
@@ -49,6 +153,56 @@
           "command": "jjj.init",
           "when": "view == jjj-welcome",
           "group": "navigation"
+        },
+        {
+          "command": "jjj.refreshTasks",
+          "when": "view == jjj-tasks",
+          "group": "navigation@1"
+        },
+        {
+          "command": "jjj.toggleTaskGrouping",
+          "when": "view == jjj-tasks",
+          "group": "navigation@2"
+        },
+        {
+          "command": "jjj.refreshReviews",
+          "when": "view == jjj-reviews",
+          "group": "navigation"
+        },
+        {
+          "command": "jjj.refreshFeatures",
+          "when": "view == jjj-features",
+          "group": "navigation"
+        },
+        {
+          "command": "jjj.refreshMilestones",
+          "when": "view == jjj-milestones",
+          "group": "navigation"
+        },
+        {
+          "command": "jjj.refreshBugs",
+          "when": "view == jjj-bugs",
+          "group": "navigation"
+        },
+        {
+          "command": "jjj.createTask",
+          "when": "view == jjj-tasks",
+          "group": "inline"
+        },
+        {
+          "command": "jjj.createFeature",
+          "when": "view == jjj-features",
+          "group": "inline"
+        },
+        {
+          "command": "jjj.createMilestone",
+          "when": "view == jjj-milestones",
+          "group": "inline"
+        },
+        {
+          "command": "jjj.createBug",
+          "when": "view == jjj-bugs",
+          "group": "inline"
         }
       ]
     }
@@ -59,19 +213,31 @@
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
-    "test": "node ./out/test/runTests.js"
+    "format": "prettier --write \"src/**/*.{ts,js,json,md}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,js,json,md}\"",
+    "test": "npm run compile && node ./out/test/runTests.js",
+    "test:unit": "npm run test",
+    "generate-goldens": "UPDATE_GOLDENS=true npm run test",
+    "package": "vsce package",
+    "package:install": "vsce package && code --install-extension *.vsix"
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.0"
   },
   "devDependencies": {
-    "@types/vscode": "^1.70.0",
     "@types/glob": "^8.0.0",
+    "@types/js-yaml": "^4.0.5",
     "@types/mocha": "^10.0.0",
     "@types/node": "16.x",
+    "@types/vscode": "^1.70.0",
     "@typescript-eslint/eslint-plugin": "^5.42.0",
     "@typescript-eslint/parser": "^5.42.0",
+    "@vscode/test-electron": "^2.2.0",
+    "@vscode/vsce": "^2.32.0",
     "eslint": "^8.24.0",
     "glob": "^8.0.3",
     "mocha": "^10.1.0",
-    "typescript": "^4.9.4",
-    "@vscode/test-electron": "^2.2.0"
+    "prettier": "^3.6.2",
+    "typescript": "^4.9.4"
   }
 }

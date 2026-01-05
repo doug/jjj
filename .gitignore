@@ -2,6 +2,11 @@
 /target/
 Cargo.lock
 
+# mdBook build artifacts
+/book/
+mdbook-admonish.css
+
+# VSCode extension
 node_modules/
 out/
 
@@ -17,3 +22,6 @@ out/
 Thumbs.db
 
 .venv/
+
+*.vsix
+.vscode-test/

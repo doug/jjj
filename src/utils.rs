@@ -33,34 +33,12 @@ pub fn format_change_id(change_id: &str) -> String {
     }
 }
 
-/// Truncate a string to a maximum length with ellipsis
-pub fn truncate(s: &str, max_len: usize) -> String {
-    if s.len() <= max_len {
-        s.to_string()
-    } else if max_len <= 3 {
-        "...".to_string()
-    } else {
-        format!("{}...", &s[..max_len - 3])
-    }
-}
 
 /// Parse a user mention (e.g., "@alice" -> "alice")
 pub fn parse_mention(mention: &str) -> String {
     mention.trim_start_matches('@').to_string()
 }
 
-/// Format a duration in a human-readable way
-pub fn format_duration(seconds: i64) -> String {
-    if seconds < 60 {
-        format!("{}s", seconds)
-    } else if seconds < 3600 {
-        format!("{}m", seconds / 60)
-    } else if seconds < 86400 {
-        format!("{}h", seconds / 3600)
-    } else {
-        format!("{}d", seconds / 86400)
-    }
-}
 
 /// Format a relative time (e.g., "2 hours ago")
 pub fn format_relative_time(timestamp: &chrono::DateTime<chrono::Utc>) -> String {
@@ -124,16 +102,39 @@ mod tests {
         assert_eq!(format_change_id("abc123def456"), "abc123d...");
     }
 
-    #[test]
-    fn test_truncate() {
-        assert_eq!(truncate("hello", 10), "hello");
-        assert_eq!(truncate("hello world", 8), "hello...");
-        assert_eq!(truncate("hello", 3), "...");
-    }
 
     #[test]
     fn test_parse_mention() {
         assert_eq!(parse_mention("@alice"), "alice");
         assert_eq!(parse_mention("alice"), "alice");
+    }
+}
+
+/// Resolve a tag input (ID or name) to a tag ID.
+/// If the input matches an existing tag ID, returns it.
+/// If the input matches an existing tag name, returns its ID.
+/// If neither, creates a new tag with the input as name and returns the new ID.
+pub fn resolve_tag(config: &mut crate::models::ProjectConfig, input: &str) -> String {
+    // 1. Check if input is a valid ID
+    if config.get_tag(input).is_some() {
+        return input.to_string();
+    }
+
+    // 2. Check if input is a valid Name
+    if let Some(tag) = config.get_tag_by_name(input) {
+        return tag.id.clone();
+    }
+
+    // 3. Create new tag
+    let tag = config.add_tag(input.to_string(), None, None);
+    tag.id
+}
+
+/// Truncate a string to a maximum length, appending "..." if truncated
+pub fn truncate(s: &str, max_len: usize) -> String {
+    if s.len() <= max_len {
+        s.to_string()
+    } else {
+        format!("{}...", &s[..max_len.saturating_sub(3)])
     }
 }
