@@ -1,0 +1,52 @@
+[package]
+name = "jjj"
+version = "0.1.0"
+edition = "2021"
+authors = ["jjj contributors"]
+description = "Distributed project management and code review for Jujutsu"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/yourusername/jjj"
+
+[dependencies]
+# CLI parsing
+clap = { version = "4.5", features = ["derive", "cargo"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+# Date/time handling
+chrono = { version = "0.4", features = ["serde"] }
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Terminal UI
+ratatui = "0.29"
+crossterm = "0.28"
+
+# Process execution (for jj commands)
+which = "7.0"
+
+# File system operations
+walkdir = "2.5"
+
+# Hashing for context fingerprints
+sha2 = "0.10"
+
+# Fuzzy matching for comment relocation
+similar = "2.6"
+
+[dev-dependencies]
+tempfile = "3.13"
+pretty_assertions = "1.4"
+
+[lib]
+name = "jjj"
+path = "src/lib.rs"
+
+[[bin]]
+name = "jjj"
+path = "src/main.rs"

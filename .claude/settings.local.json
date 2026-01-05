@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo check:*)",
+      "Bash(cargo test:*)",
+      "Bash(chmod:*)",
+      "Bash(find:*)",
+      "Bash(cargo build:*)",
+      "Bash(perl -i -pe:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
