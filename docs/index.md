@@ -137,8 +137,8 @@ Code review comments use **SHA-256 hashing** of surrounding code context to inte
 ## Community & Support
 
 - **Documentation**: You're reading it! 📖
-- **Issues**: [GitHub Issues](https://github.com/yourusername/jjj/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/jjj/discussions)
+- **Issues**: [GitHub Issues](https://github.com/doug/jjj/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/doug/jjj/discussions)
 
 ## License
 

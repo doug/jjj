@@ -53,7 +53,7 @@ Currently, jjj must be built from source:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/jjj.git
+git clone https://github.com/doug/jjj.git
 cd jjj
 
 # Build and install
@@ -224,6 +224,6 @@ Now that jjj is installed, proceed to:
 If you encounter issues:
 
 - Check the [troubleshooting section](#troubleshooting) above
-- Search [existing issues](https://github.com/yourusername/jjj/issues)
-- Ask in [GitHub Discussions](https://github.com/yourusername/jjj/discussions)
-- Open a [new issue](https://github.com/yourusername/jjj/issues/new)
+- Search [existing issues](https://github.com/doug/jjj/issues)
+- Ask in [GitHub Discussions](https://github.com/doug/jjj/discussions)
+- Open a [new issue](https://github.com/doug/jjj/issues/new)

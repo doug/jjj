@@ -314,10 +314,10 @@ jjj/
 
 ## Community
 
-- **Repository**: https://github.com/yourusername/jjj (to be created)
+- **Repository**: https://github.com/doug/jjj
 - **Issues**: GitHub Issues
 - **Discussions**: GitHub Discussions
-- **Documentation**: docs/ (to be created)
+- **Documentation**: docs/
 
 ## License
 

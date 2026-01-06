@@ -15,7 +15,7 @@ Get started with **jjj** in 5 minutes!
 
 2. **Build jjj**
    ```bash
-   git clone https://github.com/yourusername/jjj
+   git clone https://github.com/doug/jjj
    cd jjj
    cargo build --release
    ```

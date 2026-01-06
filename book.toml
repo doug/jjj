@@ -6,10 +6,11 @@ language = "en"
 src = "docs"
 
 [output.html]
-default-theme = "navy"
+default-theme = "light"
 preferred-dark-theme = "navy"
-git-repository-url = "https://github.com/yourusername/jjj"
-edit-url-template = "https://github.com/yourusername/jjj/edit/main/{path}"
+git-repository-url = "https://github.com/doug/jjj"
+edit-url-template = "https://github.com/doug/jjj/edit/main/{path}"
+
 [output.html.playground]
 editable = false
 copyable = true
