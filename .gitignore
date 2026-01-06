@@ -28,3 +28,17 @@ Thumbs.db
 
 # Claude Code
 .claude/
+
+# Claude-generated summary files (use docs/ for documentation)
+/*_SUMMARY.md
+/*_STATUS.md
+/*_PROGRESS.md
+/*_PLAN.md
+/FEATURES.md
+/TESTING.md
+/WORK_HIERARCHY.md
+/HIERARCHY_*.md
+/IMPLEMENTATION_*.md
+/SESSION_*.md
+/README_QUICKSTART.md
+/VSCODE_EXTENSION_PLAN.md

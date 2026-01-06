@@ -125,14 +125,14 @@ eval (jjj completion elvish | slurp)
 
 ### VSCode
 
-A VSCode extension for jjj is in development. It will provide:
+A VSCode extension for jjj provides IDE integration with:
 
-- Interactive board view
-- Task management sidebar
-- Code review integration
-- Quick actions from the command palette
+- Sidebar views for tasks, features, milestones, bugs, and reviews
+- Command palette integration
+- JSON-based communication with jjj CLI
+- Planned: Interactive Kanban board, code review, and more
 
-Stay tuned for the official release!
+See the [VSCode Extension Guide](../guides/vscode-extension.md) for installation and usage instructions.
 
 ### Other Editors
 

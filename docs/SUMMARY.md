@@ -19,6 +19,7 @@
 - [Task Management](guides/task-management.md)
 - [Board & Dashboard](guides/board-dashboard.md)
 - [Integration with Jujutsu](guides/jujutsu-integration.md)
+- [VSCode Extension](guides/vscode-extension.md)
 
 ---
 
@@ -49,3 +50,9 @@
 - [Storage & Metadata](architecture/storage.md)
 - [Change ID Tracking](architecture/change-tracking.md)
 - [Comment Relocation](architecture/comment-relocation.md)
+
+---
+
+# Contributing
+
+- [Testing](contributing/testing.md)
