@@ -104,10 +104,23 @@ eval "$(jjj completion zsh)"
 jjj completion fish > ~/.config/fish/completions/jjj.fish
 ```
 
-> **Completion Support**
->
-> Shell completion will be available in a future release. The command structure above is planned but not yet implemented.
+### PowerShell
+
+```powershell
+# Add to your PowerShell profile
+jjj completion powershell | Out-String | Invoke-Expression
+
+# Or save to profile
+jjj completion powershell >> $PROFILE
 ```
+
+### Elvish
+
+```bash
+# Add to your ~/.elvish/rc.elv
+eval (jjj completion elvish | slurp)
+```
+
 ## Editor Integration
 
 ### VSCode

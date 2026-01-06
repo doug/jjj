@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 
 #[derive(Parser)]
 #[command(name = "jjj")]
@@ -88,6 +88,21 @@ pub enum Commands {
         #[arg(long)]
         force: bool,
     },
+
+    /// Generate shell completions
+    Completion {
+        /// Shell to generate completions for
+        shell: Shell,
+    },
+}
+
+#[derive(ValueEnum, Clone, Debug)]
+pub enum Shell {
+    Bash,
+    Zsh,
+    Fish,
+    PowerShell,
+    Elvish,
 }
 
 #[derive(Subcommand)]

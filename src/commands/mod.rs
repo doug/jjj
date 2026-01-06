@@ -1,5 +1,6 @@
 pub mod board;
 pub mod bug;
+pub mod completion;
 pub mod dashboard;
 pub mod feature;
 pub mod init;
@@ -25,9 +26,12 @@ pub fn execute(cli: Cli) -> Result<()> {
         Commands::Feature { action } => feature::execute(action),
         Commands::Bug { action } => bug::execute(action),
         Commands::Tag { action } => tag::execute(action),
-        
+
         // New Workflow Commands
         Commands::Start { arg, feature } => workflow::start(arg, feature),
         Commands::Submit { force } => workflow::submit(force),
+
+        // Shell completion
+        Commands::Completion { shell } => completion::execute(shell),
     }
 }

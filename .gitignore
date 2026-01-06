@@ -25,3 +25,6 @@ Thumbs.db
 
 *.vsix
 .vscode-test/
+
+# Claude Code
+.claude/
