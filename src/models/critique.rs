@@ -38,6 +38,22 @@ pub struct Critique {
     #[serde(default)]
     pub evidence: String,
 
+    /// Optional file path for code-level critiques
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file_path: Option<String>,
+
+    /// Starting line number
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line_start: Option<usize>,
+
+    /// Ending line number
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line_end: Option<usize>,
+
+    /// Code context for display/matching
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub code_context: Vec<String>,
+
     /// Discussion thread
     #[serde(default)]
     pub replies: Vec<Reply>,
@@ -170,6 +186,10 @@ impl Critique {
             updated_at: now,
             argument: String::new(),
             evidence: String::new(),
+            file_path: None,
+            line_start: None,
+            line_end: None,
+            code_context: Vec::new(),
             replies: Vec::new(),
         }
     }
@@ -230,6 +250,26 @@ impl Critique {
         };
         self.replies.push(reply);
         self.updated_at = Utc::now();
+    }
+
+    /// Set code location for this critique
+    pub fn set_location(
+        &mut self,
+        file_path: String,
+        line_start: usize,
+        line_end: Option<usize>,
+        code_context: Vec<String>,
+    ) {
+        self.file_path = Some(file_path);
+        self.line_start = Some(line_start);
+        self.line_end = line_end.or(Some(line_start));
+        self.code_context = code_context;
+        self.updated_at = Utc::now();
+    }
+
+    /// Check if this critique has a code location
+    pub fn has_location(&self) -> bool {
+        self.file_path.is_some() && self.line_start.is_some()
     }
 }
 
@@ -363,5 +403,37 @@ mod tests {
         assert_eq!(critique.replies[0].author, "alice");
         assert_eq!(critique.replies[0].body, "I disagree");
         assert!(critique.replies[0].id.starts_with("CQ-1-R"));
+    }
+
+    #[test]
+    fn test_critique_with_location() {
+        let mut critique = Critique::new(
+            "CQ-1".to_string(),
+            "SQL injection".to_string(),
+            "S-1".to_string(),
+        );
+
+        critique.set_location(
+            "src/db.rs".to_string(),
+            42,
+            Some(45),
+            vec!["let query = format!(...)".to_string()],
+        );
+
+        assert_eq!(critique.file_path, Some("src/db.rs".to_string()));
+        assert_eq!(critique.line_start, Some(42));
+        assert_eq!(critique.line_end, Some(45));
+        assert!(critique.has_location());
+    }
+
+    #[test]
+    fn test_critique_without_location() {
+        let critique = Critique::new(
+            "CQ-1".to_string(),
+            "Conceptual critique".to_string(),
+            "S-1".to_string(),
+        );
+
+        assert!(!critique.has_location());
     }
 }
