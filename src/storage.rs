@@ -501,9 +501,9 @@ impl MetadataStore {
             updated_at: frontmatter.updated_at,
             argument: sections.get("Argument").cloned().unwrap_or_default(),
             evidence: sections.get("Evidence").cloned().unwrap_or_default(),
-            file_path: None,
-            line_start: None,
-            line_end: None,
+            file_path: frontmatter.file_path,
+            line_start: frontmatter.line_start,
+            line_end: frontmatter.line_end,
             code_context: Vec::new(),
             replies: Vec::new(),
         };

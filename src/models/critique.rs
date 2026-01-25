@@ -283,6 +283,12 @@ pub struct CritiqueFrontmatter {
     pub severity: CritiqueSeverity,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub author: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line_start: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line_end: Option<usize>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -296,6 +302,9 @@ impl From<&Critique> for CritiqueFrontmatter {
             status: c.status.clone(),
             severity: c.severity.clone(),
             author: c.author.clone(),
+            file_path: c.file_path.clone(),
+            line_start: c.line_start,
+            line_end: c.line_end,
             created_at: c.created_at,
             updated_at: c.updated_at,
         }
