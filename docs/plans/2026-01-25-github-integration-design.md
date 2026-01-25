@@ -96,24 +96,31 @@ export GITHUB_TOKEN=ghp_...
 
 ## CLI Commands
 
-### New `github` Subcommand
+### New `sync` Command (Extensible for Multiple Sources)
+
+The `sync` command uses `jjj sync <source>` pattern, enabling future sources (buganizer, jira, etc.):
 
 ```bash
 # Sync state from GitHub
-jjj github sync                    # Pull all changes from GitHub
-jjj github sync --dry-run          # Show what would sync
+jjj sync github                    # Pull all changes from GitHub
+jjj sync github --dry-run          # Show what would sync
 
 # Import issues as problems
-jjj github import #123             # Import specific issue
-jjj github import --all            # Import all unlinked open issues
-jjj github import --label bug      # Import issues with label
+jjj sync github import #123        # Import specific issue
+jjj sync github import --all       # Import all unlinked open issues
+jjj sync github import --label bug # Import issues with label
 
 # Create PR explicitly (when auto_push = false)
-jjj github pr                      # Create PR for current solution
-jjj github pr S-1                  # Create PR for specific solution
+jjj sync github pr                 # Create PR for current solution
+jjj sync github pr S-1             # Create PR for specific solution
 
 # Status
-jjj github status                  # Show sync status and linked entities
+jjj sync github status             # Show sync status and linked entities
+
+# Future sources follow same pattern:
+# jjj sync buganizer
+# jjj sync buganizer import b/12345
+# jjj sync jira import PROJ-123
 ```
 
 ### Modified Existing Commands
@@ -138,13 +145,13 @@ jjj problem solve P-1              # Solves + closes linked issue
 **Always explicit (regardless of config):**
 
 ```bash
-jjj github sync                    # Required to pull from GitHub
-jjj github import #123             # Required to import issues
+jjj sync github                    # Required to pull from GitHub
+jjj sync github import #123        # Required to import issues
 ```
 
 ## Sync Behavior
 
-### What `jjj github sync` Pulls
+### What `jjj sync github` Pulls
 
 | GitHub State | jjj Action |
 |--------------|------------|
@@ -196,7 +203,7 @@ When creating a PR, jjj generates:
 jjj problem new "Search is slow"     # P-1 created
 
 # Optionally push to GitHub
-jjj github pr-issue P-1              # Creates issue #50
+jjj sync github issue P-1            # Creates issue #50
 
 # Work on solution
 jjj start "Add search index" --problem P-1
@@ -204,22 +211,22 @@ jjj start "Add search index" --problem P-1
 
 # Push branch, create PR explicitly
 jjj submit                           # Pushes branch
-jjj github pr                        # Creates PR #51
+jjj sync github pr                   # Creates PR #51
 
 # Teammate reviews on GitHub
-jjj github sync                      # Imports critique CQ-1
+jjj sync github                      # Imports critique CQ-1
 
 # Address and update
 jjj critique address CQ-1
 jjj submit
-jjj github pr                        # Updates PR
+jjj sync github pr                   # Updates PR
 
 # Complete
-jjj github sync                      # Imports LGTM
+jjj sync github                      # Imports LGTM
 jjj solution accept S-1              # Local accept
-jjj github merge S-1                 # Merges PR
+jjj sync github merge S-1            # Merges PR
 jjj problem solve P-1
-jjj github close P-1                 # Closes issue
+jjj sync github close P-1            # Closes issue
 ```
 
 ### Workflow B: Auto-Push Enabled
@@ -242,14 +249,14 @@ jjj start "Add search index" --problem P-1
 jjj submit                           # PR #51 created
 
 # Teammate reviews on GitHub
-jjj github sync                      # Imports critique CQ-1
+jjj sync github                      # Imports critique CQ-1
 
 # Address and re-submit - auto-updates PR
 jjj critique address CQ-1
 jjj submit                           # PR updated
 
 # Complete - auto-merges and closes
-jjj github sync                      # Imports LGTM
+jjj sync github                      # Imports LGTM
 jjj solution accept S-1              # Merges PR #51
 jjj problem solve P-1                # Closes issue #50
 ```
@@ -260,7 +267,7 @@ jjj problem solve P-1                # Closes issue #50
 # Someone creates issue #60 on GitHub
 
 # Import it
-jjj github import #60                # Creates P-2 linked to #60
+jjj sync github import #60           # Creates P-2 linked to #60
 
 # Work normally
 jjj start "Fix the bug" --problem P-2
@@ -277,26 +284,26 @@ Warning: GitHub unreachable, PR not created
 ✓ Solution S-1 submitted locally
   Branch pushed to origin/s-1-fix-auth
 
-Run 'jjj github pr' when online to create PR.
+Run 'jjj sync github pr' when online to create PR.
 ```
 
 ### Conflict Detection
 
 ```bash
-$ jjj github sync
+$ jjj sync github
 Warning: Conflict detected for P-1
   Local: status = open
   GitHub #50: status = closed
 
 Resolve with:
-  jjj problem solve P-1     # Accept GitHub state
-  jjj github reopen P-1     # Push local state
+  jjj problem solve P-1        # Accept GitHub state
+  jjj sync github reopen P-1   # Push local state
 ```
 
 ### Auth Failures
 
 ```bash
-$ jjj github sync
+$ jjj sync github
 Error: GitHub authentication failed
 
 Run 'gh auth login' or set GITHUB_TOKEN environment variable.
@@ -306,15 +313,16 @@ Run 'gh auth login' or set GITHUB_TOKEN environment variable.
 
 ### New Files
 
-- `src/commands/github.rs` - All GitHub subcommands
-- `src/github/mod.rs` - GitHub API client wrapper
-- `src/github/sync.rs` - Sync logic
-- `src/github/mapping.rs` - Entity mapping helpers
+- `src/commands/sync.rs` - Sync command dispatcher
+- `src/sync/mod.rs` - Sync trait and common logic
+- `src/sync/github/mod.rs` - GitHub sync implementation
+- `src/sync/github/api.rs` - GitHub API client wrapper
+- `src/sync/github/mapping.rs` - Entity mapping helpers
 
 ### Modified Files
 
-- `src/cli.rs` - Add `GithubAction` enum
-- `src/commands/mod.rs` - Add github module
+- `src/cli.rs` - Add `SyncAction` enum with source subcommands
+- `src/commands/mod.rs` - Add sync module
 - `src/models/problem.rs` - Add `github_issue` field
 - `src/models/solution.rs` - Add `github_pr`, `github_branch` fields
 - `src/models/critique.rs` - Add `github_review_id` field
@@ -334,13 +342,14 @@ octocrab = "0.32"  # GitHub API client
 
 | Aspect | Decision |
 |--------|----------|
+| Command pattern | `jjj sync <source>` - extensible for future sources |
 | Sync direction | Bidirectional peer sync |
 | Entity mapping | Problem=Issue, Solution=Branch+PR |
 | Critique source | PR "Request Changes" only |
-| Sync trigger | Explicit `jjj github sync` for reading |
+| Sync trigger | Explicit `jjj sync github` for reading |
 | Auto-push | Opt-in via `auto_push = true` config |
 | Detection | Auto-detect from git remote, opt-out available |
 | Auth | Use `gh` CLI or `GITHUB_TOKEN` env var |
-| Import | Manual `jjj github import #N` or `--all` |
+| Import | Manual `jjj sync github import #N` or `--all` |
 
-GitHub integration extends jjj to teams already using GitHub, without compromising offline-first local workflows.
+GitHub integration extends jjj to teams already using GitHub, without compromising offline-first local workflows. The `jjj sync <source>` pattern enables future integrations (buganizer, jira, etc.) with consistent UX.
