@@ -1,9 +1,9 @@
 use crate::error::{JjjError, Result};
 use crate::jj::JjClient;
 use crate::models::{
-    Comment, Critique, CritiqueFrontmatter, CritiqueStatus, Milestone, MilestoneFrontmatter,
+    Critique, CritiqueFrontmatter, CritiqueStatus, Milestone, MilestoneFrontmatter,
     Problem, ProblemFrontmatter, ProblemStatus,
-    ProjectConfig, ReviewManifest, Solution, SolutionFrontmatter, SolutionStatus,
+    ProjectConfig, Solution, SolutionFrontmatter, SolutionStatus,
 };
 use std::fs;
 use std::path::PathBuf;
@@ -14,7 +14,6 @@ const PROBLEMS_DIR: &str = "problems";
 const SOLUTIONS_DIR: &str = "solutions";
 const CRITIQUES_DIR: &str = "critiques";
 const MILESTONES_DIR: &str = "milestones";
-const REVIEWS_DIR: &str = "reviews";
 
 /// Storage layer for jjj metadata
 pub struct MetadataStore {
@@ -135,7 +134,6 @@ impl MetadataStore {
         fs::create_dir_all(self.meta_path.join(SOLUTIONS_DIR))?;
         fs::create_dir_all(self.meta_path.join(CRITIQUES_DIR))?;
         fs::create_dir_all(self.meta_path.join(MILESTONES_DIR))?;
-        fs::create_dir_all(self.meta_path.join(REVIEWS_DIR))?;
 
         // Create default config
         let default_config = ProjectConfig::default();
@@ -710,136 +708,6 @@ impl MetadataStore {
             .unwrap_or(0);
 
         Ok(format!("M-{}", max_id + 1))
-    }
-
-    // =========================================================================
-    // Review Operations (unchanged from original)
-    // =========================================================================
-
-    /// Load a review manifest
-    pub fn load_review(&self, change_id: &str) -> Result<ReviewManifest> {
-        self.ensure_meta_checkout()?;
-
-        let review_path = self
-            .meta_path
-            .join(REVIEWS_DIR)
-            .join(change_id)
-            .join("manifest.toml");
-
-        if !review_path.exists() {
-            return Err(JjjError::ReviewNotFound(change_id.to_string()));
-        }
-
-        let content = fs::read_to_string(review_path)?;
-        let manifest: ReviewManifest = toml::from_str(&content)?;
-        Ok(manifest)
-    }
-
-    /// Save a review manifest
-    pub fn save_review(&self, manifest: &ReviewManifest) -> Result<()> {
-        self.ensure_meta_checkout()?;
-
-        let review_dir = self.meta_path.join(REVIEWS_DIR).join(&manifest.change_id);
-        fs::create_dir_all(&review_dir)?;
-
-        let manifest_path = review_dir.join("manifest.toml");
-        let content = toml::to_string_pretty(manifest)?;
-        fs::write(manifest_path, content)?;
-
-        Ok(())
-    }
-
-    /// List all review manifests
-    pub fn list_reviews(&self) -> Result<Vec<ReviewManifest>> {
-        self.ensure_meta_checkout()?;
-
-        let reviews_dir = self.meta_path.join(REVIEWS_DIR);
-        if !reviews_dir.exists() {
-            return Ok(Vec::new());
-        }
-
-        let mut reviews = Vec::new();
-        for entry in fs::read_dir(reviews_dir)? {
-            let entry = entry?;
-            let path = entry.path();
-
-            if path.is_dir() {
-                let manifest_path = path.join("manifest.toml");
-                if manifest_path.exists() {
-                    let content = fs::read_to_string(&manifest_path)?;
-                    if let Ok(manifest) = toml::from_str::<ReviewManifest>(&content) {
-                        reviews.push(manifest);
-                    }
-                }
-            }
-        }
-
-        Ok(reviews)
-    }
-
-    /// Save a comment
-    pub fn save_comment(&self, comment: &Comment) -> Result<()> {
-        self.ensure_meta_checkout()?;
-
-        let comments_dir = self
-            .meta_path
-            .join(REVIEWS_DIR)
-            .join(&comment.target_change_id)
-            .join("comments");
-
-        fs::create_dir_all(&comments_dir)?;
-
-        let comment_path = comments_dir.join(format!("{}.json", comment.id));
-        let content = serde_json::to_string_pretty(comment)?;
-        fs::write(comment_path, content)?;
-
-        Ok(())
-    }
-
-    /// List all comments for a change
-    pub fn list_comments(&self, change_id: &str) -> Result<Vec<Comment>> {
-        self.ensure_meta_checkout()?;
-
-        let comments_dir = self
-            .meta_path
-            .join(REVIEWS_DIR)
-            .join(change_id)
-            .join("comments");
-
-        if !comments_dir.exists() {
-            return Ok(Vec::new());
-        }
-
-        let mut comments = Vec::new();
-        for entry in fs::read_dir(comments_dir)? {
-            let entry = entry?;
-            let path = entry.path();
-
-            if path.extension().and_then(|s| s.to_str()) == Some("json") {
-                let content = fs::read_to_string(&path)?;
-                if let Ok(comment) = serde_json::from_str::<Comment>(&content) {
-                    comments.push(comment);
-                }
-            }
-        }
-
-        // Sort by timestamp
-        comments.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
-
-        Ok(comments)
-    }
-
-    /// Generate next comment ID
-    pub fn next_comment_id(&self, change_id: &str) -> Result<String> {
-        let comments = self.list_comments(change_id)?;
-
-        let max_id = comments
-            .iter()
-            .filter_map(|comment| comment.id.strip_prefix("c-").and_then(|s| s.parse::<u32>().ok()))
-            .max()
-            .unwrap_or(0);
-
-        Ok(format!("c-{}", max_id + 1))
     }
 
     // =========================================================================

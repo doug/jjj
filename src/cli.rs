@@ -38,12 +38,6 @@ pub enum Commands {
         action: CritiqueAction,
     },
 
-    /// Manage code reviews
-    Review {
-        #[command(subcommand)]
-        action: ReviewAction,
-    },
-
     /// Show dashboard with pending work
     Dashboard {
         /// Output in JSON format
@@ -97,7 +91,7 @@ pub enum Commands {
     },
 
     /// Request review on current change's solution (shorthand for solution review)
-    #[command(name = "request-review")]
+    #[command(name = "review")]
     ReviewShorthand {
         /// Reviewers (e.g., @alice, @bob)
         reviewers: Vec<String>,
@@ -545,84 +539,6 @@ pub enum MilestoneAction {
         /// Assignee name (if not specified, assigns to self)
         #[arg(long)]
         to: Option<String>,
-    },
-}
-
-// =============================================================================
-// Review Commands
-// =============================================================================
-
-#[derive(Subcommand)]
-pub enum ReviewAction {
-    /// Request a review for the current change
-    Request {
-        /// Reviewers (e.g., @alice, @bob)
-        reviewers: Vec<String>,
-
-        /// Include the entire stack
-        #[arg(long)]
-        stack: bool,
-    },
-
-    /// List pending reviews
-    List {
-        /// Show only reviews you requested
-        #[arg(long)]
-        mine: bool,
-
-        /// Show only reviews requesting your input
-        #[arg(long)]
-        pending: bool,
-
-        /// Output in JSON format
-        #[arg(long)]
-        json: bool,
-    },
-
-    /// Start reviewing a change
-    Start {
-        /// Change ID to review
-        change_id: String,
-    },
-
-    /// Add a comment to a change
-    Comment {
-        /// Change ID
-        change_id: String,
-
-        /// File path
-        #[arg(long)]
-        file: Option<String>,
-
-        /// Line number
-        #[arg(long)]
-        line: Option<usize>,
-
-        /// Comment body
-        #[arg(long)]
-        body: String,
-    },
-
-    /// Show review status
-    Status {
-        /// Change ID (if not specified, uses current change)
-        change_id: Option<String>,
-    },
-
-    /// Approve a change
-    Approve {
-        /// Change ID (if not specified, uses current change)
-        change_id: Option<String>,
-    },
-
-    /// Request changes on a review
-    RequestChanges {
-        /// Change ID (if not specified, uses current change)
-        change_id: Option<String>,
-
-        /// Summary message
-        #[arg(long)]
-        message: String,
     },
 }
 

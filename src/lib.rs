@@ -13,7 +13,7 @@ pub mod utils;
 // Re-export commonly used types
 pub use error::{JjjError, Result};
 pub use models::{
-    Bug, BugStatus, Comment, CommentLocation, Feature, FeatureStatus, Milestone,
-    MilestoneStatus, Priority, ProjectConfig, ReviewManifest, ReviewStatus, Severity, Task,
-    TaskFilter,
+    Critique, CritiqueSeverity, CritiqueStatus, Milestone,
+    MilestoneStatus, Problem, ProblemStatus, ProjectConfig,
+    Solution, SolutionStatus,
 };

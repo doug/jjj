@@ -17,23 +17,47 @@ pub enum JjjError {
     #[error("jjj not initialized in this repository.\n\nRun 'jjj init' to set up project management.")]
     MetaBranchNotFound,
 
-    #[error("Task {0} not found.\n\nUse 'jjj task list' to see all tasks.")]
-    TaskNotFound(String),
+    #[error("Problem {0} not found.\n\nUse 'jjj problem list' to see all problems.")]
+    ProblemNotFound(String),
 
-    #[error("Review for change {0} not found.\n\nUse 'jjj review list' to see pending reviews\nor 'jjj review request' to create one.")]
-    ReviewNotFound(String),
+    #[error("Solution {0} not found.\n\nUse 'jjj solution list' to see all solutions.")]
+    SolutionNotFound(String),
+
+    #[error("Critique {0} not found.\n\nUse 'jjj critique list' to see all critiques.")]
+    CritiqueNotFound(String),
+
+    #[error("Milestone {0} not found.\n\nUse 'jjj milestone list' to see all milestones.")]
+    MilestoneNotFound(String),
 
     #[error("Conflict detected in {0}. Resolve with 'jjj resolve'")]
     Conflict(String),
 
-    #[error("Invalid task ID: {0}")]
-    InvalidTaskId(String),
+    #[error("Invalid problem ID: {0}. Expected format: P-<number>")]
+    InvalidProblemId(String),
+
+    #[error("Invalid solution ID: {0}. Expected format: S-<number>")]
+    InvalidSolutionId(String),
+
+    #[error("Invalid critique ID: {0}. Expected format: CQ-<number>")]
+    InvalidCritiqueId(String),
 
     #[error("Invalid change ID: {0}")]
     InvalidChangeId(String),
 
+    #[error("Cannot mark problem as solved: {0}")]
+    CannotSolveProblem(String),
+
+    #[error("Cannot accept solution: {0}")]
+    CannotAcceptSolution(String),
+
+    #[error("Failed to parse frontmatter: {0}")]
+    FrontmatterParse(String),
+
     #[error("Failed to parse JSON: {0}")]
     JsonParse(#[from] serde_json::Error),
+
+    #[error("Failed to parse YAML: {0}")]
+    YamlParse(#[from] serde_yaml::Error),
 
     #[error("Failed to parse TOML: {0}")]
     TomlParse(#[from] toml::de::Error),

@@ -6,7 +6,6 @@ pub mod init;
 pub mod milestone;
 pub mod problem;
 pub mod resolve;
-pub mod review;
 pub mod solution;
 pub mod tag;
 pub mod workflow;
@@ -21,7 +20,6 @@ pub fn execute(cli: Cli) -> Result<()> {
         Commands::Problem { action } => problem::execute(action),
         Commands::Solution { action } => solution::execute(action),
         Commands::Critique { action } => critique::execute(action),
-        Commands::Review { action } => review::execute(action),
         Commands::Dashboard { json } => dashboard::execute(json),
         Commands::Resolve { id, pick } => resolve::execute(id, pick),
         Commands::Milestone { action } => milestone::execute(action),

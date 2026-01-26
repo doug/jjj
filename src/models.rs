@@ -1,13 +1,11 @@
-mod bug;
 mod config;
-mod feature;
+mod critique;
 mod milestone;
-mod review;
-mod task;
+mod problem;
+mod solution;
 
-pub use bug::*;
 pub use config::*;
-pub use feature::*;
+pub use critique::*;
 pub use milestone::*;
-pub use review::*;
-pub use task::*;
+pub use problem::*;
+pub use solution::*;

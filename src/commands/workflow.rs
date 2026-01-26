@@ -1,85 +1,84 @@
 use crate::error::Result;
 use crate::jj::JjClient;
-use crate::models::{ReviewStatus, Task};
+use crate::models::{ProblemStatus, Solution, SolutionStatus};
 use crate::storage::MetadataStore;
 
-pub fn start(arg: String, feature_id: Option<String>) -> Result<()> {
+pub fn start(arg: String, problem_id: Option<String>) -> Result<()> {
     let jj_client = JjClient::new()?;
     let store = MetadataStore::new(jj_client.clone())?;
-    let config = store.load_config()?;
 
-    // Check if arg is a Task ID
-    if let Ok(task) = store.load_task(&arg) {
-        println!("Resuming task {} ({})", task.id, task.title);
+    // Check if arg is a Solution ID
+    if let Ok(solution) = store.load_solution(&arg) {
+        println!("Resuming solution {} ({})", solution.id, solution.title);
 
-        // Check if task has an active change attached
-        if let Some(change_id) = task.change_ids.last() {
+        // Check if solution has an active change attached
+        if let Some(change_id) = solution.change_ids.last() {
             println!("Switching to change {}", change_id);
             jj_client.edit(change_id)?;
         } else {
-            println!("No active change for task. Creating new change.");
-            jj_client.new_empty_change(&task.title)?;
-            
-            // Attach new change to task
+            println!("No active change for solution. Creating new change.");
+            jj_client.new_empty_change(&solution.title)?;
+
+            // Attach new change to solution
             let change_id = jj_client.current_change_id()?;
-            let mut task = task;
-            task.attach_change(change_id);
-            task.move_to_column("In Progress".to_string());
-            store.save_task(&task)?;
+            let mut solution = solution;
+            solution.attach_change(change_id);
+            solution.start_testing();
+            store.save_solution(&solution)?;
+
+            // Update problem status
+            let mut problem = store.load_problem(&solution.problem_id)?;
+            if problem.status == ProblemStatus::Open {
+                problem.set_status(ProblemStatus::InProgress);
+                store.save_problem(&problem)?;
+            }
         }
 
         return Ok(());
     }
 
-    // Treat arg as Title for new Task
+    // Treat arg as Title for new Solution
     let title = arg;
-    println!("Starting new task: {}", title);
 
-    store.with_metadata(&format!("Start task {}", title), || {
+    // Problem is required for new solutions
+    let problem_id = match problem_id {
+        Some(pid) => pid,
+        None => {
+            return Err(
+                "Problem ID required for new solutions. Use --problem P-1 or provide a solution ID to resume."
+                    .into(),
+            );
+        }
+    };
+
+    // Validate problem exists
+    let problem = store.load_problem(&problem_id)?;
+
+    println!("Starting new solution: {}", title);
+    println!("  Addresses: {} - {}", problem.id, problem.title);
+
+    store.with_metadata(&format!("Start solution: {}", title), || {
         // Create new empty change
         jj_client.new_empty_change(&title)?;
         let change_id = jj_client.current_change_id()?;
 
-        // Create Task
-        let task_id = store.next_task_id()?;
-        // Handle feature linking
-        let feature = if let Some(fid) = feature_id {
-            // Validate feature exists
-            if store.load_feature(&fid).is_err() {
-                 return Err(format!("Feature {} not found", fid).into());
-            }
-            fid
-        } else {
-             // Fallback: use empty string if no feature provided
-             String::new()
-        };
+        // Create Solution
+        let solution_id = store.next_solution_id()?;
+        let mut solution = Solution::new(solution_id.clone(), title.clone(), problem_id.clone());
+        solution.attach_change(change_id);
+        solution.start_testing();
 
-        // Determine column (In Progress)
-        let default_column = "In Progress".to_string();
-        let column = if !config.is_valid_column(&default_column) {
-             // Fallback if "In Progress" doesn't exist, use second column or first
-             if config.columns.len() > 1 {
-                 config.columns[1].clone()
-             } else {
-                 config.columns[0].clone()
-             }
-        } else {
-            default_column
-        };
+        store.save_solution(&solution)?;
 
-        let mut task = Task::new(task_id.clone(), title.clone(), feature.clone(), column);
-        task.attach_change(change_id);
-        
-        store.save_task(&task)?;
-
-        // If feature provided, link it
-        if !feature.is_empty() {
-            let mut feat = store.load_feature(&feature)?;
-            feat.add_task(task_id.clone());
-            store.save_feature(&feat)?;
+        // Update problem
+        let mut problem = store.load_problem(&problem_id)?;
+        problem.add_solution(solution_id.clone());
+        if problem.status == ProblemStatus::Open {
+            problem.set_status(ProblemStatus::InProgress);
         }
+        store.save_problem(&problem)?;
 
-        println!("Started task {} ({})", task.id, task.title);
+        println!("Started solution {} ({})", solution.id, solution.title);
         Ok(())
     })
 }
@@ -89,17 +88,19 @@ pub fn submit(force: bool) -> Result<()> {
     let store = MetadataStore::new(jj_client.clone())?;
 
     let change_id = jj_client.current_change_id()?;
-    
-    // 1. Review Check
+
+    // 1. Review Check (solution-level)
     if !force {
-        match store.load_review(&change_id) {
-            Ok(review) => {
-                if review.status != ReviewStatus::Approved {
-                    return Err(format!("Change {} is not approved. Current status: {:?}. Use --force to bypass.", change_id, review.status).into());
-                }
-            },
-            Err(_) => {
-                return Err(format!("No review found for change {}. Use --force to bypass.", change_id).into());
+        let solutions = store.list_solutions()?;
+        let solution = solutions.iter().find(|s| s.change_ids.contains(&change_id));
+
+        if let Some(sol) = solution {
+            if !sol.requested_reviewers.is_empty() && !sol.has_lgtm_from_requested_reviewer() {
+                return Err(format!(
+                    "Solution {} has not been LGTM'd by a requested reviewer. Use --force to bypass.",
+                    sol.id
+                )
+                .into());
             }
         }
     }
@@ -112,20 +113,32 @@ pub fn submit(force: bool) -> Result<()> {
     println!("Squashing...");
     jj_client.squash()?;
 
-    // 4. Update Task Status
-    let tasks = store.list_tasks()?;
-    let mut tasks_to_update = Vec::new();
-    
-    for task in tasks {
-        if task.change_ids.contains(&change_id) {
-            tasks_to_update.push(task);
+    // 4. Update Solution Status
+    let solutions = store.list_solutions()?;
+    let mut solutions_to_update = Vec::new();
+
+    for solution in solutions {
+        if solution.change_ids.contains(&change_id) {
+            solutions_to_update.push(solution);
         }
     }
 
-    for mut task in tasks_to_update {
-        task.move_to_column("Done".to_string());
-        store.save_task(&task)?;
-        println!("Task {} moved to Done.", task.id);
+    for mut solution in solutions_to_update {
+        // Mark solution as accepted if it was testing
+        if solution.status == SolutionStatus::Testing {
+            solution.accept();
+            store.save_solution(&solution)?;
+            println!("Solution {} accepted.", solution.id);
+
+            // Check if we can solve the problem
+            let (can_solve, _) = store.can_solve_problem(&solution.problem_id)?;
+            if can_solve {
+                let mut problem = store.load_problem(&solution.problem_id)?;
+                problem.set_status(ProblemStatus::Solved);
+                store.save_problem(&problem)?;
+                println!("Problem {} solved.", problem.id);
+            }
+        }
     }
 
     println!("Submitted successfully.");
