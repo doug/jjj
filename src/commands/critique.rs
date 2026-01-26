@@ -28,6 +28,7 @@ pub fn execute(action: CritiqueAction) -> Result<()> {
         CritiqueAction::Address { critique_id } => address_critique(critique_id),
         CritiqueAction::Validate { critique_id } => validate_critique(critique_id),
         CritiqueAction::Dismiss { critique_id } => dismiss_critique(critique_id),
+        CritiqueAction::Reply { critique_id, body } => reply_to_critique(critique_id, body),
     }
 }
 
@@ -191,6 +192,15 @@ fn show_critique(critique_id: String, json: bool) -> Result<()> {
         println!("\n## Evidence\n{}", critique.evidence);
     }
 
+    // Show replies
+    if !critique.replies.is_empty() {
+        println!("\n## Discussion ({} replies)", critique.replies.len());
+        for reply in &critique.replies {
+            println!("\n### {} @ {}", reply.author, reply.created_at.format("%Y-%m-%d %H:%M"));
+            println!("{}", reply.body);
+        }
+    }
+
     println!("\nCreated: {}", critique.created_at.format("%Y-%m-%d %H:%M"));
     println!("Updated: {}", critique.updated_at.format("%Y-%m-%d %H:%M"));
 
@@ -287,6 +297,24 @@ fn dismiss_critique(critique_id: String) -> Result<()> {
             "Critique {} dismissed (shown to be incorrect or irrelevant)",
             critique_id
         );
+        Ok(())
+    })
+}
+
+fn reply_to_critique(critique_id: String, body: String) -> Result<()> {
+    let jj_client = JjClient::new()?;
+    let store = MetadataStore::new(jj_client)?;
+
+    store.with_metadata(&format!("Reply to critique {}", critique_id), || {
+        let mut critique = store.load_critique(&critique_id)?;
+        let author = store.jj_client.user_identity()?;
+
+        critique.add_reply(author.clone(), body.clone());
+        store.save_critique(&critique)?;
+
+        let reply_id = &critique.replies.last().unwrap().id;
+        println!("Added reply {} to critique {}", reply_id, critique_id);
+
         Ok(())
     })
 }

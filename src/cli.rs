@@ -412,6 +412,15 @@ pub enum CritiqueAction {
         /// Critique ID (e.g., CQ-1)
         critique_id: String,
     },
+
+    /// Reply to a critique
+    Reply {
+        /// Critique ID (e.g., CQ-1)
+        critique_id: String,
+
+        /// Reply body
+        body: String,
+    },
 }
 
 // =============================================================================
