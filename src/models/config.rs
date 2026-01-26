@@ -17,6 +17,14 @@ pub struct Tag {
     pub color: Option<String>,
 }
 
+/// Review configuration
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ReviewConfig {
+    /// Whether solutions require LGTM by default
+    #[serde(default)]
+    pub default_required: bool,
+}
+
 /// Project-wide configuration stored in config.toml
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectConfig {
@@ -24,11 +32,7 @@ pub struct ProjectConfig {
     #[serde(default)]
     pub name: Option<String>,
 
-    /// Column definitions for the Kanban board
-    #[serde(default = "default_columns")]
-    pub columns: Vec<String>,
-
-    /// Valid tags for tasks
+    /// Valid tags for entities
     #[serde(default)]
     pub tags: Vec<Tag>,
 
@@ -36,55 +40,28 @@ pub struct ProjectConfig {
     #[serde(default)]
     pub default_reviewers: Vec<String>,
 
+    /// Review settings
+    #[serde(default)]
+    pub review: ReviewConfig,
+
     /// Custom settings
     #[serde(default)]
     pub settings: HashMap<String, String>,
-}
-
-fn default_columns() -> Vec<String> {
-    vec![
-        "TODO".to_string(),
-        "In Progress".to_string(),
-        "Review".to_string(),
-        "Done".to_string(),
-    ]
 }
 
 impl Default for ProjectConfig {
     fn default() -> Self {
         Self {
             name: None,
-            columns: default_columns(),
             tags: Vec::new(),
             default_reviewers: Vec::new(),
+            review: ReviewConfig::default(),
             settings: HashMap::new(),
         }
     }
 }
 
 impl ProjectConfig {
-    /// Check if a column name is valid
-    pub fn is_valid_column(&self, column: &str) -> bool {
-        self.columns.iter().any(|c| c == column)
-    }
-
-    /// Add a new column
-    pub fn add_column(&mut self, column: String) {
-        if !self.columns.contains(&column) {
-            self.columns.push(column);
-        }
-    }
-
-    /// Remove a column
-    pub fn remove_column(&mut self, column: &str) -> bool {
-        if let Some(pos) = self.columns.iter().position(|c| c == column) {
-            self.columns.remove(pos);
-            true
-        } else {
-            false
-        }
-    }
-
     /// Add a tag
     pub fn add_tag(&mut self, name: String, description: Option<String>, color: Option<String>) -> Tag {
         // Check if tag with name already exists
@@ -122,5 +99,33 @@ impl ProjectConfig {
     /// Get tag by name
     pub fn get_tag_by_name(&self, name: &str) -> Option<&Tag> {
         self.tags.iter().find(|t| t.name == name)
+    }
+
+    /// Remove a tag by ID
+    pub fn remove_tag(&mut self, id: &str) -> bool {
+        if let Some(pos) = self.tags.iter().position(|t| t.id == id) {
+            self.tags.remove(pos);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Edit a tag
+    pub fn edit_tag(&mut self, id: &str, name: Option<String>, description: Option<String>, color: Option<String>) -> bool {
+        if let Some(tag) = self.tags.iter_mut().find(|t| t.id == id) {
+            if let Some(n) = name {
+                tag.name = n;
+            }
+            if description.is_some() {
+                tag.description = description;
+            }
+            if color.is_some() {
+                tag.color = color;
+            }
+            true
+        } else {
+            false
+        }
     }
 }
