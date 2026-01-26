@@ -13,17 +13,29 @@ pub enum Commands {
     /// Initialize jjj in the current repository
     Init,
 
-    /// Display the Kanban board
+    /// Display the board (solutions by status)
     Board {
         /// Output in JSON format
         #[arg(long)]
         json: bool,
     },
 
-    /// Manage tasks
-    Task {
+    /// Manage problems (what needs to be solved)
+    Problem {
         #[command(subcommand)]
-        action: TaskAction,
+        action: ProblemAction,
+    },
+
+    /// Manage solutions (conjectures to solve problems)
+    Solution {
+        #[command(subcommand)]
+        action: SolutionAction,
+    },
+
+    /// Manage critiques (criticism of solutions)
+    Critique {
+        #[command(subcommand)]
+        action: CritiqueAction,
     },
 
     /// Manage code reviews
@@ -32,19 +44,19 @@ pub enum Commands {
         action: ReviewAction,
     },
 
-    /// Show dashboard with pending reviews and tasks
+    /// Show dashboard with pending work
     Dashboard {
         /// Output in JSON format
         #[arg(long)]
         json: bool,
     },
 
-    /// Resolve conflicts in tasks or reviews
+    /// Resolve conflicts
     Resolve {
-        /// Task or Change ID to resolve
+        /// ID to resolve
         id: String,
 
-        /// Pick a specific version (e.g., "Done", "Blocked")
+        /// Pick a specific version
         #[arg(long)]
         pick: Option<String>,
     },
@@ -55,34 +67,23 @@ pub enum Commands {
         action: MilestoneAction,
     },
 
-    /// Manage features
-    Feature {
-        #[command(subcommand)]
-        action: FeatureAction,
-    },
-
-    /// Manage bugs
-    Bug {
-        #[command(subcommand)]
-        action: BugAction,
-    },
-
     /// Manage tags
     Tag {
         #[command(subcommand)]
         action: TagAction,
     },
-    /// Start working on a task
+
+    /// Start working on a solution
     Start {
-        /// Task ID (to resume) or Task Title (to create)
+        /// Solution ID (to resume) or Title (to create new solution)
         arg: String,
 
-        /// Link to a feature (e.g., F-1)
+        /// Problem this solution addresses (required for new solutions)
         #[arg(long)]
-        feature: Option<String>,
+        problem: Option<String>,
     },
 
-    /// Submit current changes (squash and complete task)
+    /// Submit current changes (squash and complete solution)
     Submit {
         /// Force submit (bypass review check)
         #[arg(long)]
@@ -105,79 +106,75 @@ pub enum Shell {
     Elvish,
 }
 
+// =============================================================================
+// Problem Commands
+// =============================================================================
+
 #[derive(Subcommand)]
-pub enum TaskAction {
-    /// Create a new task
+pub enum ProblemAction {
+    /// Create a new problem
     New {
-        /// Task title
+        /// Problem title
         title: String,
 
-        /// Feature this task belongs to (e.g., F-1)
+        /// Parent problem (for sub-problems)
         #[arg(long)]
-        feature: String,
+        parent: Option<String>,
 
-        /// Tags to apply (e.g., "backend", "frontend")
+        /// Milestone to target
+        #[arg(long)]
+        milestone: Option<String>,
+
+        /// Tags to apply
         #[arg(long)]
         tag: Vec<String>,
-
-        /// Initial column (default: "TODO")
-        #[arg(long)]
-        column: Option<String>,
     },
 
-    /// List all tasks
+    /// List all problems
     List {
-        /// Filter by column
+        /// Filter by status
         #[arg(long)]
-        column: Option<String>,
+        status: Option<String>,
 
-        /// Filter by tag
+        /// Show as tree (hierarchical view)
         #[arg(long)]
-        tag: Option<String>,
+        tree: bool,
+
+        /// Filter by milestone
+        #[arg(long)]
+        milestone: Option<String>,
 
         /// Output in JSON format
         #[arg(long)]
         json: bool,
     },
 
-    /// Show task details
+    /// Show problem details
     Show {
-        /// Task ID (e.g., T-101)
-        task_id: String,
+        /// Problem ID (e.g., P-1)
+        problem_id: String,
+
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
     },
 
-    /// Attach the current change to a task
-    Attach {
-        /// Task ID (e.g., T-101)
-        task_id: String,
-    },
-
-    /// Detach a change from a task
-    Detach {
-        /// Task ID (e.g., T-101)
-        task_id: String,
-
-        /// Change ID (if not specified, uses current change)
-        change_id: Option<String>,
-    },
-
-    /// Move a task to a different column
-    Move {
-        /// Task ID (e.g., T-101)
-        task_id: String,
-
-        /// Target column name
-        column: String,
-    },
-
-    /// Edit task details
+    /// Edit problem details
     Edit {
-        /// Task ID (e.g., T-101)
-        task_id: String,
+        /// Problem ID (e.g., P-1)
+        problem_id: String,
 
         /// New title
         #[arg(long)]
         title: Option<String>,
+
+        /// New status (open, in_progress, solved, dissolved)
+        #[arg(long)]
+        status: Option<String>,
+
+        /// Set parent problem
+        #[arg(long)]
+        parent: Option<String>,
 
         /// Add tags
         #[arg(long)]
@@ -188,22 +185,337 @@ pub enum TaskAction {
         remove_tag: Vec<String>,
     },
 
-    /// Delete a task
-    Delete {
-        /// Task ID (e.g., T-101)
-        task_id: String,
+    /// Show problem hierarchy as tree
+    Tree {
+        /// Starting problem ID (defaults to all root problems)
+        problem_id: Option<String>,
     },
 
-    /// Assign a task to a person
+    /// Mark problem as solved (requires accepted solution)
+    Solve {
+        /// Problem ID (e.g., P-1)
+        problem_id: String,
+    },
+
+    /// Mark problem as dissolved (based on false premises)
+    Dissolve {
+        /// Problem ID (e.g., P-1)
+        problem_id: String,
+    },
+
+    /// Assign a problem to a person
     Assign {
-        /// Task ID (e.g., T-101)
-        task_id: String,
+        /// Problem ID (e.g., P-1)
+        problem_id: String,
 
         /// Assignee name (if not specified, assigns to self)
         #[arg(long)]
         to: Option<String>,
     },
 }
+
+// =============================================================================
+// Solution Commands
+// =============================================================================
+
+#[derive(Subcommand)]
+pub enum SolutionAction {
+    /// Create a new solution (conjecture)
+    New {
+        /// Solution title
+        title: String,
+
+        /// Problem this solution addresses (required)
+        #[arg(long)]
+        problem: String,
+
+        /// Tags to apply
+        #[arg(long)]
+        tag: Vec<String>,
+    },
+
+    /// List all solutions
+    List {
+        /// Filter by problem
+        #[arg(long)]
+        problem: Option<String>,
+
+        /// Filter by status (proposed, testing, refuted, accepted)
+        #[arg(long)]
+        status: Option<String>,
+
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Show solution details
+    Show {
+        /// Solution ID (e.g., S-1)
+        solution_id: String,
+
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Edit solution details
+    Edit {
+        /// Solution ID (e.g., S-1)
+        solution_id: String,
+
+        /// New title
+        #[arg(long)]
+        title: Option<String>,
+
+        /// New status
+        #[arg(long)]
+        status: Option<String>,
+
+        /// Add tags
+        #[arg(long)]
+        add_tag: Vec<String>,
+
+        /// Remove tags
+        #[arg(long)]
+        remove_tag: Vec<String>,
+    },
+
+    /// Attach current jj change to solution
+    Attach {
+        /// Solution ID (e.g., S-1)
+        solution_id: String,
+    },
+
+    /// Detach a change from solution
+    Detach {
+        /// Solution ID (e.g., S-1)
+        solution_id: String,
+
+        /// Change ID (if not specified, uses current change)
+        change_id: Option<String>,
+    },
+
+    /// Move solution to testing status
+    Test {
+        /// Solution ID (e.g., S-1)
+        solution_id: String,
+    },
+
+    /// Accept solution (requires no valid critiques)
+    Accept {
+        /// Solution ID (e.g., S-1)
+        solution_id: String,
+    },
+
+    /// Refute solution (criticism showed it won't work)
+    Refute {
+        /// Solution ID (e.g., S-1)
+        solution_id: String,
+    },
+
+    /// Assign a solution to a person
+    Assign {
+        /// Solution ID (e.g., S-1)
+        solution_id: String,
+
+        /// Assignee name (if not specified, assigns to self)
+        #[arg(long)]
+        to: Option<String>,
+    },
+}
+
+// =============================================================================
+// Critique Commands
+// =============================================================================
+
+#[derive(Subcommand)]
+pub enum CritiqueAction {
+    /// Add a critique to a solution
+    New {
+        /// Solution to critique (e.g., S-1)
+        solution_id: String,
+
+        /// Critique title
+        title: String,
+
+        /// Severity (low, medium, high, critical)
+        #[arg(long, default_value = "medium")]
+        severity: String,
+
+        /// File path for code-level critique
+        #[arg(long)]
+        file: Option<String>,
+
+        /// Line number for code-level critique
+        #[arg(long)]
+        line: Option<usize>,
+    },
+
+    /// List critiques
+    List {
+        /// Filter by solution
+        #[arg(long)]
+        solution: Option<String>,
+
+        /// Filter by status (open, addressed, valid, dismissed)
+        #[arg(long)]
+        status: Option<String>,
+
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Show critique details
+    Show {
+        /// Critique ID (e.g., CQ-1)
+        critique_id: String,
+
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Edit critique details
+    Edit {
+        /// Critique ID (e.g., CQ-1)
+        critique_id: String,
+
+        /// New title
+        #[arg(long)]
+        title: Option<String>,
+
+        /// New severity
+        #[arg(long)]
+        severity: Option<String>,
+
+        /// New status
+        #[arg(long)]
+        status: Option<String>,
+    },
+
+    /// Mark critique as addressed (solution was modified)
+    Address {
+        /// Critique ID (e.g., CQ-1)
+        critique_id: String,
+    },
+
+    /// Validate critique (it's correct, solution should be refuted)
+    Validate {
+        /// Critique ID (e.g., CQ-1)
+        critique_id: String,
+    },
+
+    /// Dismiss critique (incorrect or irrelevant)
+    Dismiss {
+        /// Critique ID (e.g., CQ-1)
+        critique_id: String,
+    },
+}
+
+// =============================================================================
+// Milestone Commands
+// =============================================================================
+
+#[derive(Subcommand)]
+pub enum MilestoneAction {
+    /// Create a new milestone
+    New {
+        /// Milestone title
+        title: String,
+
+        /// Target date (YYYY-MM-DD)
+        #[arg(long)]
+        date: Option<String>,
+
+        /// Tags to apply
+        #[arg(long)]
+        tag: Vec<String>,
+    },
+
+    /// Edit milestone details
+    Edit {
+        /// Milestone ID (e.g., M-1)
+        milestone_id: String,
+
+        /// New title
+        #[arg(long)]
+        title: Option<String>,
+
+        /// New target date
+        #[arg(long)]
+        date: Option<String>,
+
+        /// New status (planning, active, completed, cancelled)
+        #[arg(long)]
+        status: Option<String>,
+
+        /// Add tags
+        #[arg(long)]
+        add_tag: Vec<String>,
+
+        /// Remove tags
+        #[arg(long)]
+        remove_tag: Vec<String>,
+    },
+
+    /// List all milestones
+    List {
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Show milestone details
+    Show {
+        /// Milestone ID (e.g., M-1)
+        milestone_id: String,
+
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Add a problem to milestone
+    AddProblem {
+        /// Milestone ID (e.g., M-1)
+        milestone_id: String,
+
+        /// Problem ID (e.g., P-1)
+        problem_id: String,
+    },
+
+    /// Remove a problem from milestone
+    RemoveProblem {
+        /// Milestone ID (e.g., M-1)
+        milestone_id: String,
+
+        /// Problem ID (e.g., P-1)
+        problem_id: String,
+    },
+
+    /// Show roadmap view (problems and solution progress)
+    Roadmap {
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Assign a milestone to a person
+    Assign {
+        /// Milestone ID (e.g., M-1)
+        milestone_id: String,
+
+        /// Assignee name (if not specified, assigns to self)
+        #[arg(long)]
+        to: Option<String>,
+    },
+}
+
+// =============================================================================
+// Review Commands
+// =============================================================================
 
 #[derive(Subcommand)]
 pub enum ReviewAction {
@@ -279,339 +591,9 @@ pub enum ReviewAction {
     },
 }
 
-#[derive(Subcommand)]
-pub enum MilestoneAction {
-    /// Create a new milestone
-    New {
-        /// Milestone title
-        title: String,
-
-        /// Target date (YYYY-MM-DD)
-        #[arg(long)]
-        date: Option<String>,
-
-        /// Description
-        #[arg(long)]
-        description: Option<String>,
-
-        /// Tags to apply
-        #[arg(long)]
-        tag: Vec<String>,
-    },
-
-    /// Edit milestone details
-    Edit {
-        /// Milestone ID (e.g., M-1)
-        milestone_id: String,
-
-        /// New title
-        #[arg(long)]
-        title: Option<String>,
-
-        /// New target date
-        #[arg(long)]
-        date: Option<String>,
-
-        /// New description
-        #[arg(long)]
-        description: Option<String>,
-
-        /// New status
-        #[arg(long)]
-        status: Option<String>,
-
-        /// Add tags
-        #[arg(long)]
-        add_tag: Vec<String>,
-
-        /// Remove tags
-        #[arg(long)]
-        remove_tag: Vec<String>,
-    },
-
-    /// List all milestones
-    List {
-        /// Output in JSON format
-        #[arg(long)]
-        json: bool,
-    },
-
-    /// Show milestone details
-    Show {
-        /// Milestone ID (e.g., M-1)
-        milestone_id: String,
-
-        /// Output in JSON format
-        #[arg(long)]
-        json: bool,
-    },
-
-    /// Add a feature to a milestone
-    AddFeature {
-        /// Milestone ID (e.g., M-1)
-        milestone_id: String,
-
-        /// Feature ID (e.g., F-1)
-        feature_id: String,
-    },
-
-    /// Add a bug to a milestone
-    AddBug {
-        /// Milestone ID (e.g., M-1)
-        milestone_id: String,
-
-        /// Bug ID (e.g., B-1)
-        bug_id: String,
-    },
-
-    /// Show roadmap view
-    Roadmap {
-        /// Output in JSON format
-        #[arg(long)]
-        json: bool,
-    },
-
-    /// Assign a milestone to a person
-    Assign {
-        /// Milestone ID (e.g., M-1)
-        milestone_id: String,
-
-        /// Assignee name (if not specified, assigns to self)
-        #[arg(long)]
-        to: Option<String>,
-    },
-}
-
-#[derive(Subcommand)]
-pub enum FeatureAction {
-    /// Create a new feature
-    New {
-        /// Feature title
-        title: String,
-
-        /// Milestone this feature belongs to (e.g., M-1)
-        #[arg(long)]
-        milestone: Option<String>,
-
-        /// Priority (low, medium, high, critical)
-        #[arg(long)]
-        priority: Option<String>,
-
-        /// Description
-        #[arg(long)]
-        description: Option<String>,
-
-        /// Tags to apply
-        #[arg(long)]
-        tag: Vec<String>,
-    },
-
-    /// Edit feature details
-    Edit {
-        /// Feature ID (e.g., F-1)
-        feature_id: String,
-
-        /// New title
-        #[arg(long)]
-        title: Option<String>,
-
-        /// New milestone
-        #[arg(long)]
-        milestone: Option<String>,
-
-        /// New priority
-        #[arg(long)]
-        priority: Option<String>,
-
-        /// New status
-        #[arg(long)]
-        status: Option<String>,
-
-        /// Add tags
-        #[arg(long)]
-        add_tag: Vec<String>,
-
-        /// Remove tags
-        #[arg(long)]
-        remove_tag: Vec<String>,
-    },
-
-    /// List all features
-    List {
-        /// Filter by milestone
-        #[arg(long)]
-        milestone: Option<String>,
-
-        /// Filter by status
-        #[arg(long)]
-        status: Option<String>,
-
-        /// Output in JSON format
-        #[arg(long)]
-        json: bool,
-    },
-
-    /// Show feature details
-    Show {
-        /// Feature ID (e.g., F-1)
-        feature_id: String,
-
-        /// Output in JSON format
-        #[arg(long)]
-        json: bool,
-    },
-
-    /// Show feature board view
-    Board {
-        /// Feature ID (e.g., F-1)
-        feature_id: Option<String>,
-
-        /// Output in JSON format
-        #[arg(long)]
-        json: bool,
-    },
-
-    /// Show feature progress
-    Progress {
-        /// Feature ID (e.g., F-1)
-        feature_id: String,
-    },
-
-    /// Move feature to different status
-    Move {
-        /// Feature ID (e.g., F-1)
-        feature_id: String,
-
-        /// Target status (backlog, inprogress, review, done, blocked)
-        status: String,
-    },
-
-    /// Assign a feature to a person
-    Assign {
-        /// Feature ID (e.g., F-1)
-        feature_id: String,
-
-        /// Assignee name (if not specified, assigns to self)
-        #[arg(long)]
-        to: Option<String>,
-    },
-}
-
-#[derive(Subcommand)]
-pub enum BugAction {
-    /// Report a new bug
-    New {
-        /// Bug title
-        title: String,
-
-        /// Severity (low, medium, high, critical)
-        #[arg(long)]
-        severity: Option<String>,
-
-        /// Description
-        #[arg(long)]
-        description: Option<String>,
-
-        /// Reproduction steps
-        #[arg(long)]
-        repro: Option<String>,
-
-        /// Tags to apply
-        #[arg(long)]
-        tag: Vec<String>,
-    },
-
-    /// Edit bug details
-    Edit {
-        /// Bug ID (e.g., B-1)
-        bug_id: String,
-
-        /// New title
-        #[arg(long)]
-        title: Option<String>,
-
-        /// New severity
-        #[arg(long)]
-        severity: Option<String>,
-
-        /// Add tags
-        #[arg(long)]
-        add_tag: Vec<String>,
-
-        /// Remove tags
-        #[arg(long)]
-        remove_tag: Vec<String>,
-    },
-
-    /// List all bugs
-    List {
-        /// Filter by severity
-        #[arg(long)]
-        severity: Option<String>,
-
-        /// Filter by status
-        #[arg(long)]
-        status: Option<String>,
-
-        /// Show only open bugs
-        #[arg(long)]
-        open: bool,
-
-        /// Output in JSON format
-        #[arg(long)]
-        json: bool,
-    },
-
-    /// Show bug details
-    Show {
-        /// Bug ID (e.g., B-1)
-        bug_id: String,
-
-        /// Output in JSON format
-        #[arg(long)]
-        json: bool,
-    },
-
-    /// Link bug to feature or milestone
-    Link {
-        /// Bug ID (e.g., B-1)
-        bug_id: String,
-
-        /// Feature to link to (e.g., F-1)
-        #[arg(long)]
-        feature: Option<String>,
-
-        /// Milestone to link to (e.g., M-1)
-        #[arg(long)]
-        milestone: Option<String>,
-    },
-
-    /// Update bug status
-    Status {
-        /// Bug ID (e.g., B-1)
-        bug_id: String,
-
-        /// New status (new, confirmed, inprogress, fixed, closed, wontfix, duplicate)
-        status: String,
-    },
-
-    /// Show bug triage view
-    Triage {
-        /// Output in JSON format
-        #[arg(long)]
-        json: bool,
-    },
-
-    /// Assign a bug to a person
-    Assign {
-        /// Bug ID (e.g., B-1)
-        bug_id: String,
-
-        /// Assignee name (if not specified, assigns to self)
-        #[arg(long)]
-        to: Option<String>,
-    },
-}
+// =============================================================================
+// Tag Commands
+// =============================================================================
 
 #[derive(Subcommand)]
 pub enum TagAction {
