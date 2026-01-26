@@ -323,6 +323,21 @@ pub enum SolutionAction {
         #[arg(long)]
         to: Option<String>,
     },
+
+    /// Request review on a solution
+    Review {
+        /// Solution ID (e.g., S-1)
+        solution_id: String,
+
+        /// Reviewers (e.g., @alice, @bob)
+        reviewers: Vec<String>,
+    },
+
+    /// LGTM a solution (mark as reviewed)
+    Lgtm {
+        /// Solution ID (e.g., S-1)
+        solution_id: String,
+    },
 }
 
 // =============================================================================
