@@ -95,6 +95,17 @@ pub enum Commands {
         /// Shell to generate completions for
         shell: Shell,
     },
+
+    /// Request review on current change's solution (shorthand for solution review)
+    #[command(name = "request-review")]
+    ReviewShorthand {
+        /// Reviewers (e.g., @alice, @bob)
+        reviewers: Vec<String>,
+    },
+
+    /// LGTM current change's solution (shorthand for solution lgtm)
+    #[command(name = "lgtm")]
+    LgtmShorthand,
 }
 
 #[derive(ValueEnum, Clone, Debug)]
