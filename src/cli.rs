@@ -307,10 +307,14 @@ pub enum SolutionAction {
         solution_id: String,
     },
 
-    /// Accept solution (requires no valid critiques)
+    /// Accept solution (requires no open critiques)
     Accept {
         /// Solution ID (e.g., S-1)
         solution_id: String,
+
+        /// Force accept even with open critiques
+        #[arg(long)]
+        force: bool,
     },
 
     /// Refute solution (criticism showed it won't work)

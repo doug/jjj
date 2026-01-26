@@ -1,7 +1,7 @@
 use crate::cli::SolutionAction;
 use crate::error::Result;
 use crate::jj::JjClient;
-use crate::models::{ProblemStatus, Solution, SolutionStatus};
+use crate::models::{CritiqueStatus, ProblemStatus, Solution, SolutionStatus};
 use crate::storage::MetadataStore;
 use std::io::{self, Write};
 
@@ -27,7 +27,7 @@ pub fn execute(action: SolutionAction) -> Result<()> {
             change_id,
         } => detach_change(solution_id, change_id),
         SolutionAction::Test { solution_id } => test_solution(solution_id),
-        SolutionAction::Accept { solution_id } => accept_solution(solution_id),
+        SolutionAction::Accept { solution_id, force } => accept_solution(solution_id, force),
         SolutionAction::Refute { solution_id } => refute_solution(solution_id),
         SolutionAction::Assign { solution_id, to } => assign_solution(solution_id, to),
         SolutionAction::Review { solution_id, reviewers } => request_review(solution_id, reviewers),
@@ -282,26 +282,76 @@ fn test_solution(solution_id: String) -> Result<()> {
     })
 }
 
-fn accept_solution(solution_id: String) -> Result<()> {
+fn accept_solution(solution_id: String, force: bool) -> Result<()> {
     let jj_client = JjClient::new()?;
     let store = MetadataStore::new(jj_client)?;
+    let config = store.load_config()?;
 
-    // Check if can be accepted
-    let (can_accept, message) = store.can_accept_solution(&solution_id)?;
+    let solution = store.load_solution(&solution_id)?;
+    let critiques = store.list_critiques()?;
 
-    if !can_accept {
-        return Err(crate::error::JjjError::CannotAcceptSolution(message));
+    // Find open critiques for this solution
+    let open_critiques: Vec<_> = critiques
+        .iter()
+        .filter(|c| c.solution_id == solution_id && c.status == CritiqueStatus::Open)
+        .collect();
+
+    // Check critique blocking
+    if !open_critiques.is_empty() {
+        if !force {
+            eprintln!("Error: Cannot accept {} - {} open critique(s):\n", solution_id, open_critiques.len());
+            for c in &open_critiques {
+                let location = c.file_path.as_ref()
+                    .map(|f| format!(" - {}:{}", f, c.line_start.unwrap_or(0)))
+                    .unwrap_or_default();
+                eprintln!("  {}: {} [{}]{}", c.id, c.title, c.severity, location);
+            }
+            eprintln!();
+            eprintln!("Resolve with: jjj critique address {}", open_critiques[0].id);
+            eprintln!("Or dismiss:   jjj critique dismiss {}", open_critiques[0].id);
+            eprintln!("Or force:     jjj solution accept {} --force", solution_id);
+            return Err(crate::error::JjjError::CannotAcceptSolution("Open critiques block acceptance".to_string()));
+        }
+        eprintln!("Warning: Accepting with {} open critique(s):", open_critiques.len());
+        for c in &open_critiques {
+            eprintln!("  {}: {} [{}]", c.id, c.title, c.severity);
+        }
     }
 
-    if !message.is_empty() {
-        println!("{}", message);
+    // Check review requirement
+    let requires_review = solution.requires_review.unwrap_or(config.review.default_required);
+    if requires_review {
+        if solution.requested_reviewers.is_empty() {
+            if !force {
+                eprintln!("Error: Solution requires review but no reviewers requested.");
+                eprintln!("Request review: jjj solution review {} @reviewer", solution_id);
+                eprintln!("Or force:       jjj solution accept {} --force", solution_id);
+                return Err(crate::error::JjjError::CannotAcceptSolution("No reviewers requested".to_string()));
+            }
+            eprintln!("Warning: Accepting without requested reviewers.");
+        } else if !solution.has_lgtm_from_requested_reviewer() {
+            if !force {
+                eprintln!("Error: Solution requires LGTM from a requested reviewer.");
+                eprintln!("Requested: {}", solution.requested_reviewers.join(", "));
+                eprintln!("LGTM'd:    {}", if solution.reviewed_by.is_empty() { "none".to_string() } else { solution.reviewed_by.join(", ") });
+                eprintln!("Or force:  jjj solution accept {} --force", solution_id);
+                return Err(crate::error::JjjError::CannotAcceptSolution("No LGTM from requested reviewer".to_string()));
+            }
+            eprintln!("Warning: Accepting without LGTM from requested reviewer.");
+        }
     }
 
     store.with_metadata(&format!("Accept solution {}", solution_id), || {
         let mut solution = store.load_solution(&solution_id)?;
         solution.accept();
         store.save_solution(&solution)?;
-        println!("Solution {} accepted", solution_id);
+
+        let status = if force && !open_critiques.is_empty() {
+            "accepted (forced)"
+        } else {
+            "accepted"
+        };
+        println!("Solution {} {}", solution_id, status);
 
         // Check if we should solve the parent problem
         let (can_solve, _) = store.can_solve_problem(&solution.problem_id)?;
