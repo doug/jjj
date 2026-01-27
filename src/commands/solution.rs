@@ -7,7 +7,7 @@ use std::io::{self, Write};
 
 pub fn execute(action: SolutionAction) -> Result<()> {
     match action {
-        SolutionAction::New { title, problem, tag } => new_solution(title, problem, tag),
+        SolutionAction::New { title, problem, supersedes: _, tag } => new_solution(title, problem, tag),
         SolutionAction::List {
             problem,
             status,

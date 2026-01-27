@@ -8,6 +8,7 @@ pub fn execute(action: ProblemAction) -> Result<()> {
     match action {
         ProblemAction::New {
             title,
+            priority: _,
             parent,
             milestone,
             tag,
@@ -23,13 +24,14 @@ pub fn execute(action: ProblemAction) -> Result<()> {
             problem_id,
             title,
             status,
+            priority: _,
             parent,
             add_tag,
             remove_tag,
         } => edit_problem(problem_id, title, status, parent, add_tag, remove_tag),
         ProblemAction::Tree { problem_id } => show_tree(problem_id),
         ProblemAction::Solve { problem_id } => solve_problem(problem_id),
-        ProblemAction::Dissolve { problem_id } => dissolve_problem(problem_id),
+        ProblemAction::Dissolve { problem_id, reason: _ } => dissolve_problem(problem_id),
         ProblemAction::Assign { problem_id, to } => assign_problem(problem_id, to),
     }
 }

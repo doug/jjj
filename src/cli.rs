@@ -141,6 +141,10 @@ pub enum ProblemAction {
         /// Problem title
         title: String,
 
+        /// Priority (P0/critical, P1/high, P2/medium, P3/low)
+        #[arg(long, default_value = "medium")]
+        priority: String,
+
         /// Parent problem (for sub-problems)
         #[arg(long)]
         parent: Option<String>,
@@ -196,6 +200,10 @@ pub enum ProblemAction {
         #[arg(long)]
         status: Option<String>,
 
+        /// Set priority (P0/critical, P1/high, P2/medium, P3/low)
+        #[arg(long)]
+        priority: Option<String>,
+
         /// Set parent problem
         #[arg(long)]
         parent: Option<String>,
@@ -225,6 +233,10 @@ pub enum ProblemAction {
     Dissolve {
         /// Problem ID (e.g., P-1)
         problem_id: String,
+
+        /// Reason for dissolving (why the problem was based on false premises)
+        #[arg(long)]
+        reason: Option<String>,
     },
 
     /// Assign a problem to a person
@@ -252,6 +264,10 @@ pub enum SolutionAction {
         /// Problem this solution addresses (required)
         #[arg(long)]
         problem: String,
+
+        /// Solution this supersedes (e.g., S-1)
+        #[arg(long)]
+        supersedes: Option<String>,
 
         /// Tags to apply
         #[arg(long)]
