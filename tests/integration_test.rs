@@ -293,3 +293,43 @@ fn test_next_priority_sorting() {
     assert_eq!(todo_items[2]["entity_id"].as_str(), Some("P-1"),
         "Expected Low (P-1) third, got {:?}", todo_items[2]["entity_id"]);
 }
+
+#[test]
+fn test_solution_lgtm_with_comment() {
+    if which::which("jj").is_err() { return; }
+    let temp_dir = setup_test_repo();
+    let dir = temp_dir.path();
+
+    run_jjj(dir, &["init"]);
+    run_jjj(dir, &["problem", "new", "Review Problem"]);
+    run_jjj(dir, &["solution", "new", "Test Solution", "--problem", "P-1"]);
+    run_jjj(dir, &["solution", "review", "S-1", "@alice"]);
+
+    let output = run_jjj(dir, &["solution", "lgtm", "S-1", "--comment", "looks good"]);
+    assert!(output.status.success(), "lgtm failed: {}", String::from_utf8_lossy(&output.stderr));
+
+    let show = run_jjj(dir, &["solution", "show", "S-1", "--json"]);
+    assert!(show.status.success(), "solution show --json failed: {}", String::from_utf8_lossy(&show.stderr));
+    let stdout = String::from_utf8_lossy(&show.stdout);
+    assert!(stdout.contains("sign_offs") || stdout.contains("looks good"),
+        "Expected sign_off data in output: {}", stdout);
+}
+
+#[test]
+fn test_solution_new_with_review() {
+    if which::which("jj").is_err() { return; }
+    let temp_dir = setup_test_repo();
+    let dir = temp_dir.path();
+
+    run_jjj(dir, &["init"]);
+    run_jjj(dir, &["problem", "new", "Review Problem"]);
+
+    let output = run_jjj(dir, &["solution", "new", "With Review", "--problem", "P-1", "--review", "@alice", "--review", "@bob"]);
+    assert!(output.status.success(), "new with review failed: {}", String::from_utf8_lossy(&output.stderr));
+
+    let show = run_jjj(dir, &["solution", "show", "S-1", "--json"]);
+    assert!(show.status.success(), "solution show --json failed: {}", String::from_utf8_lossy(&show.stderr));
+    let stdout = String::from_utf8_lossy(&show.stdout);
+    assert!(stdout.contains("alice"), "Expected alice in output: {}", stdout);
+    assert!(stdout.contains("bob"), "Expected bob in output: {}", stdout);
+}
