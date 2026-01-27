@@ -27,6 +27,9 @@ Thumbs.db
 *.vsix
 .vscode-test/
 
+# Worktrees
+.worktrees/
+
 # Claude Code
 .claude/
 
