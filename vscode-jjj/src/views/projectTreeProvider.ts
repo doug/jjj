@@ -145,16 +145,20 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode>, v
 
   async handleDrop(target: TreeNode | undefined, dataTransfer: vscode.DataTransfer): Promise<void> {
     const item = dataTransfer.get(MIME_TYPE);
-    if (!item || !target) { return; }
+    if (!item) { return; }
+
+    // Only accept drops onto milestones (including Backlog)
+    if (!(target instanceof MilestoneNode)) { return; }
 
     const problemIds: string[] = item.value;
-    const targetMilestoneId = target instanceof MilestoneNode
-      ? target.milestone?.id ?? null
-      : null;
+    const targetMilestoneId = target.milestone?.id ?? null;
 
     for (const problemId of problemIds) {
       const problem = this.cache.getProblem(problemId);
       if (!problem) { continue; }
+
+      // Skip if already in the target milestone
+      if (problem.milestone_id === targetMilestoneId) { continue; }
 
       // Remove from old milestone
       if (problem.milestone_id) {
