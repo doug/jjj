@@ -8,7 +8,6 @@ pub mod next;
 pub mod problem;
 pub mod resolve;
 pub mod solution;
-pub mod tag;
 pub mod workflow;
 
 use crate::cli::{Cli, Commands, SolutionAction};
@@ -24,7 +23,6 @@ pub fn execute(cli: Cli) -> Result<()> {
         Commands::Dashboard { json } => dashboard::execute(json),
         Commands::Resolve { id, pick } => resolve::execute(id, pick),
         Commands::Milestone { action } => milestone::execute(action),
-        Commands::Tag { action } => tag::execute(action),
 
         // Workflow Commands
         Commands::Start { arg, problem } => workflow::start(arg, problem),

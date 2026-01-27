@@ -9,42 +9,7 @@ fn test_default_project_config() {
 
     // Then: It should have sensible defaults
     assert!(config.name.is_none());
-    assert!(config.tags.is_empty());
     assert!(config.default_reviewers.is_empty());
-}
-
-/// Behavior: Adding tags to config
-#[test]
-fn test_add_tags_to_config() {
-    // Given: A config with no tags
-    let mut config = ProjectConfig::default();
-    assert!(config.tags.is_empty());
-
-    // When: I add tags
-    config.add_tag("backend".to_string(), None, None);
-    config.add_tag("frontend".to_string(), None, None);
-    config.add_tag("database".to_string(), None, None);
-
-    // Then: All tags should be present
-    assert_eq!(config.tags.len(), 3);
-    assert!(config.tags.iter().any(|t| t.name == "backend"));
-    assert!(config.tags.iter().any(|t| t.name == "frontend"));
-    assert!(config.tags.iter().any(|t| t.name == "database"));
-}
-
-/// Behavior: Adding duplicate tags
-#[test]
-fn test_add_duplicate_tag() {
-    // Given: A config with existing tags
-    let mut config = ProjectConfig::default();
-    config.add_tag("backend".to_string(), None, None);
-    let initial_count = config.tags.len();
-
-    // When: I try to add the same tag again
-    config.add_tag("backend".to_string(), None, None);
-
-    // Then: It should not be duplicated
-    assert_eq!(config.tags.len(), initial_count);
 }
 
 /// Behavior: Custom project settings
@@ -103,8 +68,6 @@ fn test_config_serialization_toml() {
     // Given: A fully configured project
     let mut config = ProjectConfig::default();
     config.name = Some("Test Project".to_string());
-    config.add_tag("backend".to_string(), None, None);
-    config.add_tag("frontend".to_string(), None, None);
     config.default_reviewers = vec!["alice".to_string(), "bob".to_string()];
     config.settings.insert("require_approval".to_string(), "true".to_string());
 
@@ -113,7 +76,6 @@ fn test_config_serialization_toml() {
 
     // Then: It should contain all configuration
     assert!(toml_string.contains("Test Project"));
-    assert!(toml_string.contains("backend"));
     assert!(toml_string.contains("alice"));
 
     // When: I deserialize back
@@ -121,7 +83,6 @@ fn test_config_serialization_toml() {
 
     // Then: All data should be preserved
     assert_eq!(deserialized.name, config.name);
-    assert_eq!(deserialized.tags.len(), config.tags.len());
     assert_eq!(deserialized.default_reviewers.len(), config.default_reviewers.len());
 }
 

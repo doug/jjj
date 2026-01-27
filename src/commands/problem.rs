@@ -11,8 +11,7 @@ pub fn execute(action: ProblemAction) -> Result<()> {
             priority,
             parent,
             milestone,
-            tag,
-        } => new_problem(title, priority, parent, milestone, tag),
+        } => new_problem(title, priority, parent, milestone),
         ProblemAction::List {
             status,
             tree,
@@ -26,9 +25,7 @@ pub fn execute(action: ProblemAction) -> Result<()> {
             status,
             priority,
             parent,
-            add_tag,
-            remove_tag,
-        } => edit_problem(problem_id, title, status, priority, parent, add_tag, remove_tag),
+        } => edit_problem(problem_id, title, status, priority, parent),
         ProblemAction::Tree { problem_id } => show_tree(problem_id),
         ProblemAction::Solve { problem_id } => solve_problem(problem_id),
         ProblemAction::Dissolve { problem_id, reason } => dissolve_problem(problem_id, reason),
@@ -41,7 +38,6 @@ fn new_problem(
     priority: String,
     parent: Option<String>,
     milestone: Option<String>,
-    tags: Vec<String>,
 ) -> Result<()> {
     let jj_client = JjClient::new()?;
     let store = MetadataStore::new(jj_client)?;
@@ -81,11 +77,6 @@ fn new_problem(
             let mut ms = store.load_milestone(milestone_id)?;
             ms.add_problem(problem_id.clone());
             store.save_milestone(&ms)?;
-        }
-
-        // Add tags
-        for tag in tags {
-            problem.add_tag(tag);
         }
 
         store.save_problem(&problem)?;
@@ -220,10 +211,6 @@ fn show_problem(problem_id: String, json: bool) -> Result<()> {
         println!("Assignee: {}", assignee);
     }
 
-    if !problem.tags.is_empty() {
-        println!("Tags: {}", problem.tags.iter().cloned().collect::<Vec<_>>().join(", "));
-    }
-
     // Show description
     if !problem.description.is_empty() {
         println!("\n## Description\n{}", problem.description);
@@ -275,8 +262,6 @@ fn edit_problem(
     status: Option<String>,
     priority: Option<String>,
     parent: Option<String>,
-    add_tags: Vec<String>,
-    remove_tags: Vec<String>,
 ) -> Result<()> {
     let jj_client = JjClient::new()?;
     let store = MetadataStore::new(jj_client)?;
@@ -307,14 +292,6 @@ fn edit_problem(
             } else {
                 Some(new_parent)
             });
-        }
-
-        for tag in add_tags {
-            problem.add_tag(tag);
-        }
-
-        for tag in remove_tags {
-            problem.remove_tag(&tag);
         }
 
         store.save_problem(&problem)?;

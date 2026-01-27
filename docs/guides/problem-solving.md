@@ -27,7 +27,7 @@ jjj problem new "Search queries take over 5 seconds on large datasets" --priorit
 **Technical debt** -- Internal quality issues that slow down development.
 
 ```bash
-jjj problem new "Authentication module has no test coverage" --tag tech-debt
+jjj problem new "Authentication module has no test coverage"
 ```
 
 The key question is: "Is there a gap between how things are and how they should be?" If yes, create a problem.
@@ -227,7 +227,7 @@ Here is a typical problem-solving workflow from start to finish:
 
 ```bash
 # 1. Identify the problem
-jjj problem new "Search results include deleted items" --priority high --tag search
+jjj problem new "Search results include deleted items" --priority high
 
 # 2. Investigate and decompose if needed
 jjj problem new "Soft-deleted records not filtered in search index" --parent P-20

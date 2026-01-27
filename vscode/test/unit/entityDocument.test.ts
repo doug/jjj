@@ -8,7 +8,7 @@ import { Problem, Solution, Critique, Milestone, JjjCli } from "../../src/cli";
 function makeProblem(overrides: Partial<Problem> = {}): Problem {
   return {
     id: "P-1", title: "Search is slow", parent_id: null, status: "open",
-    solution_ids: ["S-1"], child_ids: [], milestone_id: "M-1", tags: ["performance", "database"],
+    solution_ids: ["S-1"], child_ids: [], milestone_id: "M-1",
     assignee: "doug", created_at: "", updated_at: "",
     description: "Search queries take 3+ seconds", context: "",
     priority: "medium", dissolved_reason: null,
@@ -19,7 +19,7 @@ function makeProblem(overrides: Partial<Problem> = {}): Problem {
 function makeSolution(overrides: Partial<Solution> = {}): Solution {
   return {
     id: "S-1", title: "Add search index", problem_id: "P-1", status: "testing",
-    critique_ids: ["CQ-1"], change_ids: ["kxq2p"], tags: [],
+    critique_ids: ["CQ-1"], change_ids: ["kxq2p"],
     assignee: "doug", reviewers: ["alice"],
     sign_offs: [{ reviewer: "alice", at: "2026-01-27T15:30:00Z", comment: "looks good" }],
     force_accepted: false, created_at: "", updated_at: "",
@@ -45,7 +45,7 @@ function makeCritique(overrides: Partial<Critique> = {}): Critique {
 function makeMilestone(overrides: Partial<Milestone> = {}): Milestone {
   return {
     id: "M-1", title: "v0.2 Release", target_date: "2025-03-01", status: "active",
-    problem_ids: ["P-1"], tags: [], assignee: "doug", created_at: "", updated_at: "",
+    problem_ids: ["P-1"], assignee: "doug", created_at: "", updated_at: "",
     goals: "Ship search improvements", success_criteria: "Sub-second queries",
     ...overrides,
   };
@@ -108,12 +108,6 @@ describe("EntityDocumentProvider", () => {
       const content = provider.provideTextDocumentContent(uri);
       assert.ok(content.includes("Status: open"));
       assert.ok(content.includes("Milestone: M-1"));
-    });
-
-    it("includes tags", () => {
-      const uri = vscode.Uri.parse("jjj:///problem/P-1.md");
-      const content = provider.provideTextDocumentContent(uri);
-      assert.ok(content.includes("performance, database"));
     });
 
     it("includes description", () => {

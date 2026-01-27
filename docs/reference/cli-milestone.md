@@ -13,12 +13,11 @@ jjj milestone new <title> [OPTIONS]
 | Flag | Type | Description |
 |------|------|-------------|
 | `--date` | string | Target date (YYYY-MM-DD) |
-| `--tag` | string (repeatable) | Tags to apply |
 
 ```bash,test
 jjj init
 jjj milestone new "v1.0 Release" --date 2025-06-01
-jjj milestone new "Q3 Goals" --tag quarterly
+jjj milestone new "Q3 Goals"
 jjj milestone list
 ```
 
@@ -35,8 +34,6 @@ jjj milestone edit <milestone_id> [OPTIONS]
 | `--title` | string | New title |
 | `--date` | string | New target date (YYYY-MM-DD) |
 | `--status` | string | New status (planning, active, completed, cancelled) |
-| `--add-tag` | string (repeatable) | Add tags |
-| `--remove-tag` | string (repeatable) | Remove tags |
 
 ```bash,test
 jjj milestone edit M-1 --status active

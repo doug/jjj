@@ -74,7 +74,7 @@ fn test_init_and_create_problem_solution() {
     assert!(stdout.contains("P-1") || stdout.contains("Integration Problem"));
 
     // 3. Create a solution associated with the problem
-    let output = run_jjj(dir_path, &["solution", "new", "Test Solution", "--problem", "P-1", "--tag", "integration"]);
+    let output = run_jjj(dir_path, &["solution", "new", "Test Solution", "--problem", "P-1"]);
     assert!(output.status.success(), "solution new failed: {}", String::from_utf8_lossy(&output.stderr));
 
     // 4. List solutions and verify

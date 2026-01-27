@@ -1,6 +1,5 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SignOff {
@@ -33,10 +32,6 @@ pub struct Solution {
     /// Associated jj change IDs implementing this solution
     #[serde(default)]
     pub change_ids: Vec<String>,
-
-    /// Tags for categorization
-    #[serde(default)]
-    pub tags: HashSet<String>,
 
     /// Assigned owner
     pub assignee: Option<String>,
@@ -131,7 +126,6 @@ impl Solution {
             status: SolutionStatus::Proposed,
             critique_ids: Vec::new(),
             change_ids: Vec::new(),
-            tags: HashSet::new(),
             assignee: None,
             reviewers: Vec::new(),
             sign_offs: Vec::new(),
@@ -186,23 +180,6 @@ impl Solution {
     pub fn set_status(&mut self, status: SolutionStatus) {
         self.status = status;
         self.updated_at = Utc::now();
-    }
-
-    /// Add a tag
-    pub fn add_tag(&mut self, tag: String) {
-        if self.tags.insert(tag) {
-            self.updated_at = Utc::now();
-        }
-    }
-
-    /// Remove a tag
-    pub fn remove_tag(&mut self, tag: &str) -> bool {
-        if self.tags.remove(tag) {
-            self.updated_at = Utc::now();
-            true
-        } else {
-            false
-        }
     }
 
     /// Check if solution is active (can be worked on)
@@ -306,8 +283,6 @@ pub struct SolutionFrontmatter {
     pub critique_ids: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub change_ids: Vec<String>,
-    #[serde(default, skip_serializing_if = "HashSet::is_empty")]
-    pub tags: HashSet<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub assignee: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -331,7 +306,6 @@ impl From<&Solution> for SolutionFrontmatter {
             status: s.status.clone(),
             critique_ids: s.critique_ids.clone(),
             change_ids: s.change_ids.clone(),
-            tags: s.tags.clone(),
             assignee: s.assignee.clone(),
             reviewers: s.reviewers.clone(),
             sign_offs: s.sign_offs.clone(),

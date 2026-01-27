@@ -11,7 +11,6 @@ export interface Problem {
   solution_ids: string[];
   child_ids: string[];
   milestone_id: string | null;
-  tags: string[];
   assignee: string | null;
   created_at: string;
   updated_at: string;
@@ -28,7 +27,6 @@ export interface Solution {
   status: "proposed" | "testing" | "accepted" | "refuted";
   critique_ids: string[];
   change_ids: string[];
-  tags: string[];
   assignee: string | null;
   reviewers: string[];
   sign_offs: Array<{ reviewer: string; at: string; comment?: string }>;
@@ -71,7 +69,6 @@ export interface Milestone {
   target_date: string | null;
   status: "planning" | "active" | "completed" | "cancelled";
   problem_ids: string[];
-  tags: string[];
   assignee: string | null;
   created_at: string;
   updated_at: string;
@@ -174,10 +171,6 @@ export class JjjCli {
 
   async dashboard(): Promise<DashboardData> {
     return this.execJson<DashboardData>(["dashboard"]);
-  }
-
-  async tagList(): Promise<string[]> {
-    return this.execJson<string[]>(["tag", "list"]);
   }
 
   // --- Mutations ---

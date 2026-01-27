@@ -64,8 +64,6 @@ fn test_project_config_roundtrip() {
     // Given: A project configuration
     let mut config = ProjectConfig::default();
     config.name = Some("Test Project".to_string());
-    config.add_tag("backend".to_string(), None, None);
-    config.add_tag("frontend".to_string(), None, None);
 
     // When: I serialize to TOML
     let toml_str = toml::to_string(&config).expect("Failed to serialize");
@@ -74,7 +72,6 @@ fn test_project_config_roundtrip() {
     let loaded: ProjectConfig = toml::from_str(&toml_str).expect("Failed to deserialize");
 
     assert_eq!(loaded.name, config.name);
-    assert_eq!(loaded.tags.len(), config.tags.len());
 }
 
 #[test]
@@ -200,31 +197,6 @@ fn test_problem_dag_structure() {
     // Then: The DAG relationship should be established
     assert!(child.parent_id.as_deref() == Some("P-1"));
     assert!(parent.child_ids.contains(&"P-2".to_string()));
-}
-
-#[test]
-fn test_solution_tags() {
-    // Given: A solution
-    let mut solution = Solution::new(
-        "S-1".to_string(),
-        "Test solution".to_string(),
-        "P-1".to_string(),
-    );
-
-    // When: I add tags
-    solution.add_tag("backend".to_string());
-    solution.add_tag("api".to_string());
-
-    // Then: Tags should be present
-    assert!(solution.tags.contains("backend"));
-    assert!(solution.tags.contains("api"));
-
-    // When: I remove a tag
-    solution.remove_tag("backend");
-
-    // Then: Only remaining tag should exist
-    assert!(!solution.tags.contains("backend"));
-    assert!(solution.tags.contains("api"));
 }
 
 #[test]

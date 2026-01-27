@@ -14,19 +14,6 @@ default_reviewers = ["alice", "bob"]
 # Custom key-value settings
 [settings]
 key = "value"
-
-# Tag definitions
-[[tags]]
-id = "tag-1"
-name = "backend"
-description = "Backend-related work"
-color = "blue"
-
-[[tags]]
-id = "tag-2"
-name = "urgent"
-description = "Needs immediate attention"
-color = "red"
 ```
 
 ## Fields
@@ -36,29 +23,8 @@ color = "red"
 | `name` | string | Project name |
 | `default_reviewers` | string[] | Reviewers added to all new solutions |
 | `settings` | map | Arbitrary key-value pairs for custom settings |
-| `tags` | array | Tag definitions with id, name, description, color |
 
 > **Deprecated:** `review.default_required` has been removed. Review is now per-solution: a solution requires review when it has assigned reviewers. Use `--review` on `jjj solution new` or `jjj solution review` to assign reviewers. Solutions without assigned reviewers do not require sign-offs.
-
-## Tag Management
-
-Tags are managed through the `jjj tag` command:
-
-```bash,test
-jjj init
-jjj tag new "backend" --desc "Backend work" --color blue
-jjj tag new "frontend" --desc "Frontend work" --color green
-jjj tag list
-```
-
-Tags can be edited or deleted:
-
-```bash
-jjj tag edit tag-1 --name "server" --color purple
-jjj tag delete tag-2
-```
-
-Tags are applied to problems, solutions, and milestones using `--tag` on creation or `--add-tag`/`--remove-tag` on edit.
 
 ## VS Code Extension
 

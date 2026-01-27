@@ -7,7 +7,7 @@ use std::io::{self, Write};
 
 pub fn execute(action: SolutionAction) -> Result<()> {
     match action {
-        SolutionAction::New { title, problem, supersedes, tag, review } => new_solution(title, problem, supersedes, tag, review),
+        SolutionAction::New { title, problem, supersedes, review } => new_solution(title, problem, supersedes, review),
         SolutionAction::List {
             problem,
             status,
@@ -18,9 +18,7 @@ pub fn execute(action: SolutionAction) -> Result<()> {
             solution_id,
             title,
             status,
-            add_tag,
-            remove_tag,
-        } => edit_solution(solution_id, title, status, add_tag, remove_tag),
+        } => edit_solution(solution_id, title, status),
         SolutionAction::Attach { solution_id } => attach_change(solution_id),
         SolutionAction::Detach {
             solution_id,
@@ -35,7 +33,7 @@ pub fn execute(action: SolutionAction) -> Result<()> {
     }
 }
 
-fn new_solution(title: String, problem_id: String, supersedes: Option<String>, tags: Vec<String>, reviewers: Vec<String>) -> Result<()> {
+fn new_solution(title: String, problem_id: String, supersedes: Option<String>, reviewers: Vec<String>) -> Result<()> {
     let jj_client = JjClient::new()?;
     let store = MetadataStore::new(jj_client)?;
 
@@ -48,11 +46,6 @@ fn new_solution(title: String, problem_id: String, supersedes: Option<String>, t
 
         // Set supersedes
         solution.supersedes = supersedes.clone();
-
-        // Add tags
-        for tag in tags {
-            solution.add_tag(tag);
-        }
 
         // Add reviewers
         for reviewer in &reviewers {
@@ -159,13 +152,6 @@ fn show_solution(solution_id: String, json: bool) -> Result<()> {
         println!("Assignee: {}", assignee);
     }
 
-    if !solution.tags.is_empty() {
-        println!(
-            "Tags: {}",
-            solution.tags.iter().cloned().collect::<Vec<_>>().join(", ")
-        );
-    }
-
     // Show attached changes
     if !solution.change_ids.is_empty() {
         println!("\n## Changes ({})", solution.change_ids.len());
@@ -232,8 +218,6 @@ fn edit_solution(
     solution_id: String,
     title: Option<String>,
     status: Option<String>,
-    add_tags: Vec<String>,
-    remove_tags: Vec<String>,
 ) -> Result<()> {
     let jj_client = JjClient::new()?;
     let store = MetadataStore::new(jj_client)?;
@@ -248,14 +232,6 @@ fn edit_solution(
         if let Some(status_str) = status {
             let new_status: SolutionStatus = status_str.parse().map_err(|e: String| e)?;
             solution.set_status(new_status);
-        }
-
-        for tag in add_tags {
-            solution.add_tag(tag);
-        }
-
-        for tag in remove_tags {
-            solution.remove_tag(&tag);
         }
 
         store.save_solution(&solution)?;

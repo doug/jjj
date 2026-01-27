@@ -14,7 +14,6 @@ jjj solution new <title> --problem <problem_id> [OPTIONS]
 |------|------|----------|-------------|
 | `--problem` | string | yes | Problem this solution addresses |
 | `--supersedes` | string | no | Solution this supersedes (e.g., S-1) |
-| `--tag` | string (repeatable) | no | Tags to apply |
 | `--review` | string (repeatable) | no | Assign reviewers at creation (e.g., `@alice`) |
 
 ```bash,test
@@ -82,8 +81,6 @@ jjj solution edit <solution_id> [OPTIONS]
 |------|------|-------------|
 | `--title` | string | New title |
 | `--status` | string | New status |
-| `--add-tag` | string (repeatable) | Add tags |
-| `--remove-tag` | string (repeatable) | Remove tags |
 
 ```bash
 jjj solution edit S-1 --title "Add connection pooling with retry"

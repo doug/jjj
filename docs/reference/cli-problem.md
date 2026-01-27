@@ -1,6 +1,6 @@
 # Problem Commands
 
-Problems represent what needs to be solved. They can be organized hierarchically with parent-child relationships, assigned to milestones, and tagged.
+Problems represent what needs to be solved. They can be organized hierarchically with parent-child relationships and assigned to milestones.
 
 ## `jjj problem new`
 
@@ -15,13 +15,12 @@ jjj problem new <title> [OPTIONS]
 | `--priority` | string | `medium` | Priority: P0/critical, P1/high, P2/medium, P3/low |
 | `--parent` | string | | Parent problem ID for sub-problems |
 | `--milestone` | string | | Milestone to target |
-| `--tag` | string (repeatable) | | Tags to apply |
 
 ```bash,test
 jjj init
 jjj problem new "App crashes on startup" --priority high
 jjj problem new "Null pointer in auth module" --parent P-1
-jjj problem new "Improve test coverage" --tag testing --tag backend
+jjj problem new "Improve test coverage"
 ```
 
 ## `jjj problem list`
@@ -77,12 +76,9 @@ jjj problem edit <problem_id> [OPTIONS]
 | `--status` | string | New status (open, in_progress, solved, dissolved) |
 | `--priority` | string | Set priority (P0/critical, P1/high, P2/medium, P3/low) |
 | `--parent` | string | Set parent problem |
-| `--add-tag` | string (repeatable) | Add tags |
-| `--remove-tag` | string (repeatable) | Remove tags |
 
 ```bash,test
 jjj problem edit P-1 --title "App crashes on cold startup" --priority critical
-jjj problem edit P-1 --add-tag urgent --remove-tag testing
 ```
 
 ## `jjj problem tree`

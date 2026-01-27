@@ -7,15 +7,13 @@ use chrono::NaiveDate;
 
 pub fn execute(action: MilestoneAction) -> Result<()> {
     match action {
-        MilestoneAction::New { title, date, tag } => create_milestone(title, date, tag),
+        MilestoneAction::New { title, date } => create_milestone(title, date),
         MilestoneAction::Edit {
             milestone_id,
             title,
             date,
             status,
-            add_tag,
-            remove_tag,
-        } => edit_milestone(milestone_id, title, date, status, add_tag, remove_tag),
+        } => edit_milestone(milestone_id, title, date, status),
         MilestoneAction::List { json } => list_milestones(json),
         MilestoneAction::Show { milestone_id, json } => show_milestone(milestone_id, json),
         MilestoneAction::AddProblem {
@@ -31,7 +29,7 @@ pub fn execute(action: MilestoneAction) -> Result<()> {
     }
 }
 
-fn create_milestone(title: String, date: Option<String>, tags: Vec<String>) -> Result<()> {
+fn create_milestone(title: String, date: Option<String>) -> Result<()> {
     let jj_client = JjClient::new()?;
     let store = MetadataStore::new(jj_client)?;
 
@@ -50,11 +48,6 @@ fn create_milestone(title: String, date: Option<String>, tags: Vec<String>) -> R
         let mut milestone = Milestone::new(milestone_id.clone(), title.clone());
         milestone.set_target_date(target_date);
 
-        // Add tags
-        for tag in tags {
-            milestone.add_tag(tag);
-        }
-
         store.save_milestone(&milestone)?;
         println!("Created milestone {} ({})", milestone_id, title);
         if let Some(d) = target_date {
@@ -69,8 +62,6 @@ fn edit_milestone(
     title: Option<String>,
     date: Option<String>,
     status: Option<String>,
-    add_tags: Vec<String>,
-    remove_tags: Vec<String>,
 ) -> Result<()> {
     let jj_client = JjClient::new()?;
     let store = MetadataStore::new(jj_client)?;
@@ -91,14 +82,6 @@ fn edit_milestone(
         if let Some(s) = status {
             let new_status: MilestoneStatus = s.parse().map_err(|e: String| e)?;
             milestone.set_status(new_status);
-        }
-
-        for tag in add_tags {
-            milestone.add_tag(tag);
-        }
-
-        for tag in remove_tags {
-            milestone.remove_tag(&tag);
         }
 
         store.save_milestone(&milestone)?;
@@ -182,13 +165,6 @@ fn show_milestone(milestone_id: String, json: bool) -> Result<()> {
 
     if let Some(ref assignee) = milestone.assignee {
         println!("Assignee: {}", assignee);
-    }
-
-    if !milestone.tags.is_empty() {
-        println!(
-            "Tags: {}",
-            milestone.tags.iter().cloned().collect::<Vec<_>>().join(", ")
-        );
     }
 
     // Show goals

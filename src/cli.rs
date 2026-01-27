@@ -61,12 +61,6 @@ pub enum Commands {
         action: MilestoneAction,
     },
 
-    /// Manage tags
-    Tag {
-        #[command(subcommand)]
-        action: TagAction,
-    },
-
     /// Start working on a solution
     Start {
         /// Solution ID (to resume) or Title (to create new solution)
@@ -156,10 +150,6 @@ pub enum ProblemAction {
         /// Milestone to target
         #[arg(long)]
         milestone: Option<String>,
-
-        /// Tags to apply
-        #[arg(long)]
-        tag: Vec<String>,
     },
 
     /// List all problems
@@ -211,14 +201,6 @@ pub enum ProblemAction {
         /// Set parent problem
         #[arg(long)]
         parent: Option<String>,
-
-        /// Add tags
-        #[arg(long)]
-        add_tag: Vec<String>,
-
-        /// Remove tags
-        #[arg(long)]
-        remove_tag: Vec<String>,
     },
 
     /// Show problem hierarchy as tree
@@ -273,10 +255,6 @@ pub enum SolutionAction {
         #[arg(long)]
         supersedes: Option<String>,
 
-        /// Tags to apply
-        #[arg(long)]
-        tag: Vec<String>,
-
         /// Assign reviewers (e.g., @alice, @bob)
         #[arg(long)]
         review: Vec<String>,
@@ -319,14 +297,6 @@ pub enum SolutionAction {
         /// New status
         #[arg(long)]
         status: Option<String>,
-
-        /// Add tags
-        #[arg(long)]
-        add_tag: Vec<String>,
-
-        /// Remove tags
-        #[arg(long)]
-        remove_tag: Vec<String>,
     },
 
     /// Attach current jj change to solution
@@ -507,10 +477,6 @@ pub enum MilestoneAction {
         /// Target date (YYYY-MM-DD)
         #[arg(long)]
         date: Option<String>,
-
-        /// Tags to apply
-        #[arg(long)]
-        tag: Vec<String>,
     },
 
     /// Edit milestone details
@@ -529,14 +495,6 @@ pub enum MilestoneAction {
         /// New status (planning, active, completed, cancelled)
         #[arg(long)]
         status: Option<String>,
-
-        /// Add tags
-        #[arg(long)]
-        add_tag: Vec<String>,
-
-        /// Remove tags
-        #[arg(long)]
-        remove_tag: Vec<String>,
     },
 
     /// List all milestones
@@ -592,54 +550,3 @@ pub enum MilestoneAction {
     },
 }
 
-// =============================================================================
-// Tag Commands
-// =============================================================================
-
-#[derive(Subcommand)]
-pub enum TagAction {
-    /// List all tags
-    List {
-        /// Output in JSON format
-        #[arg(long)]
-        json: bool,
-    },
-
-    /// Create a new tag
-    New {
-        /// Tag name
-        name: String,
-
-        /// Description
-        #[arg(long)]
-        desc: Option<String>,
-
-        /// Color (hex or name)
-        #[arg(long)]
-        color: Option<String>,
-    },
-
-    /// Edit a tag
-    Edit {
-        /// Tag ID (e.g., tag-1)
-        tag_id: String,
-
-        /// New name
-        #[arg(long)]
-        name: Option<String>,
-
-        /// New description
-        #[arg(long)]
-        desc: Option<String>,
-
-        /// New color
-        #[arg(long)]
-        color: Option<String>,
-    },
-
-    /// Delete a tag
-    Delete {
-        /// Tag ID (e.g., tag-1)
-        tag_id: String,
-    },
-}

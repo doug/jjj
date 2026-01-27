@@ -1,6 +1,5 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 
 /// A milestone represents a cycle when we expect to have reasonable solutions
 /// for a set of problems. It's a temporal target for problem resolution.
@@ -21,10 +20,6 @@ pub struct Milestone {
     /// Problems we aim to solve this cycle
     #[serde(default)]
     pub problem_ids: Vec<String>,
-
-    /// Tags for categorization
-    #[serde(default)]
-    pub tags: HashSet<String>,
 
     /// Assigned owner/lead
     pub assignee: Option<String>,
@@ -102,7 +97,6 @@ impl Milestone {
             target_date: None,
             status: MilestoneStatus::Planning,
             problem_ids: Vec::new(),
-            tags: HashSet::new(),
             assignee: None,
             created_at: now,
             updated_at: now,
@@ -142,23 +136,6 @@ impl Milestone {
         self.updated_at = Utc::now();
     }
 
-    /// Add a tag
-    pub fn add_tag(&mut self, tag: String) {
-        if self.tags.insert(tag) {
-            self.updated_at = Utc::now();
-        }
-    }
-
-    /// Remove a tag
-    pub fn remove_tag(&mut self, tag: &str) -> bool {
-        if self.tags.remove(tag) {
-            self.updated_at = Utc::now();
-            true
-        } else {
-            false
-        }
-    }
-
     /// Check if milestone is overdue
     pub fn is_overdue(&self) -> bool {
         if let Some(target) = self.target_date {
@@ -189,8 +166,6 @@ pub struct MilestoneFrontmatter {
     pub status: MilestoneStatus,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub problem_ids: Vec<String>,
-    #[serde(default, skip_serializing_if = "HashSet::is_empty")]
-    pub tags: HashSet<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub assignee: Option<String>,
     pub created_at: DateTime<Utc>,
@@ -205,7 +180,6 @@ impl From<&Milestone> for MilestoneFrontmatter {
             target_date: m.target_date,
             status: m.status.clone(),
             problem_ids: m.problem_ids.clone(),
-            tags: m.tags.clone(),
             assignee: m.assignee.clone(),
             created_at: m.created_at,
             updated_at: m.updated_at,

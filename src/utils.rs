@@ -110,26 +110,6 @@ mod tests {
     }
 }
 
-/// Resolve a tag input (ID or name) to a tag ID.
-/// If the input matches an existing tag ID, returns it.
-/// If the input matches an existing tag name, returns its ID.
-/// If neither, creates a new tag with the input as name and returns the new ID.
-pub fn resolve_tag(config: &mut crate::models::ProjectConfig, input: &str) -> String {
-    // 1. Check if input is a valid ID
-    if config.get_tag(input).is_some() {
-        return input.to_string();
-    }
-
-    // 2. Check if input is a valid Name
-    if let Some(tag) = config.get_tag_by_name(input) {
-        return tag.id.clone();
-    }
-
-    // 3. Create new tag
-    let tag = config.add_tag(input.to_string(), None, None);
-    tag.id
-}
-
 /// Truncate a string to a maximum length, appending "..." if truncated
 pub fn truncate(s: &str, max_len: usize) -> String {
     if s.len() <= max_len {

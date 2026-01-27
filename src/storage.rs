@@ -221,7 +221,6 @@ impl MetadataStore {
             solution_ids: frontmatter.solution_ids,
             child_ids: frontmatter.child_ids,
             milestone_id: frontmatter.milestone_id,
-            tags: frontmatter.tags,
             assignee: frontmatter.assignee,
             created_at: frontmatter.created_at,
             updated_at: frontmatter.updated_at,
@@ -372,7 +371,6 @@ impl MetadataStore {
             status: frontmatter.status,
             critique_ids: frontmatter.critique_ids,
             change_ids: frontmatter.change_ids,
-            tags: frontmatter.tags,
             assignee: frontmatter.assignee,
             reviewers: frontmatter.reviewers,
             sign_offs: frontmatter.sign_offs,
@@ -643,7 +641,6 @@ impl MetadataStore {
             target_date: frontmatter.target_date,
             status: frontmatter.status,
             problem_ids: frontmatter.problem_ids,
-            tags: frontmatter.tags,
             assignee: frontmatter.assignee,
             created_at: frontmatter.created_at,
             updated_at: frontmatter.updated_at,
@@ -818,7 +815,6 @@ impl MetadataStore {
 mod tests {
     use super::*;
     use crate::models::Priority;
-    use std::collections::HashSet;
     use chrono::Utc;
 
     #[test]
@@ -874,7 +870,6 @@ This is the context.
             solution_ids: vec![],
             child_ids: vec![],
             milestone_id: None,
-            tags: HashSet::new(),
             assignee: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),

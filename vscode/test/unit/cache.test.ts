@@ -6,7 +6,7 @@ import { JjjCli, Problem, Solution, Critique, Milestone } from "../../src/cli";
 function makeProblem(overrides: Partial<Problem> = {}): Problem {
   return {
     id: "P-1", title: "Test problem", parent_id: null, status: "open",
-    solution_ids: [], child_ids: [], milestone_id: null, tags: [],
+    solution_ids: [], child_ids: [], milestone_id: null,
     assignee: null, created_at: "", updated_at: "", description: "", context: "",
     priority: "medium", dissolved_reason: null,
     ...overrides,
@@ -16,7 +16,7 @@ function makeProblem(overrides: Partial<Problem> = {}): Problem {
 function makeSolution(overrides: Partial<Solution> = {}): Solution {
   return {
     id: "S-1", title: "Test solution", problem_id: "P-1", status: "proposed",
-    critique_ids: [], change_ids: [], tags: [], assignee: null,
+    critique_ids: [], change_ids: [], assignee: null,
     reviewers: [], sign_offs: [], force_accepted: false,
     created_at: "", updated_at: "", approach: "", tradeoffs: "",
     supersedes: null,
@@ -37,7 +37,7 @@ function makeCritique(overrides: Partial<Critique> = {}): Critique {
 function makeMilestone(overrides: Partial<Milestone> = {}): Milestone {
   return {
     id: "M-1", title: "Test milestone", target_date: null, status: "active",
-    problem_ids: [], tags: [], assignee: null, created_at: "", updated_at: "",
+    problem_ids: [], assignee: null, created_at: "", updated_at: "",
     goals: "", success_criteria: "",
     ...overrides,
   };

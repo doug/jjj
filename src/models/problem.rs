@@ -1,6 +1,5 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 
 /// A problem represents something that needs to be addressed.
 /// Problems are fundamental - all knowledge begins with problems.
@@ -32,10 +31,6 @@ pub struct Problem {
 
     /// Target milestone (optional)
     pub milestone_id: Option<String>,
-
-    /// Tags for categorization
-    #[serde(default)]
-    pub tags: HashSet<String>,
 
     /// Assigned owner
     pub assignee: Option<String>,
@@ -164,7 +159,6 @@ impl Problem {
             solution_ids: Vec::new(),
             child_ids: Vec::new(),
             milestone_id: None,
-            tags: HashSet::new(),
             assignee: None,
             created_at: now,
             updated_at: now,
@@ -237,23 +231,6 @@ impl Problem {
         self.updated_at = Utc::now();
     }
 
-    /// Add a tag
-    pub fn add_tag(&mut self, tag: String) {
-        if self.tags.insert(tag) {
-            self.updated_at = Utc::now();
-        }
-    }
-
-    /// Remove a tag
-    pub fn remove_tag(&mut self, tag: &str) -> bool {
-        if self.tags.remove(tag) {
-            self.updated_at = Utc::now();
-            true
-        } else {
-            false
-        }
-    }
-
     /// Check if problem is open (can be worked on)
     pub fn is_open(&self) -> bool {
         matches!(self.status, ProblemStatus::Open | ProblemStatus::InProgress)
@@ -295,8 +272,6 @@ pub struct ProblemFrontmatter {
     pub child_ids: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub milestone_id: Option<String>,
-    #[serde(default, skip_serializing_if = "HashSet::is_empty")]
-    pub tags: HashSet<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub assignee: Option<String>,
     pub created_at: DateTime<Utc>,
@@ -316,7 +291,6 @@ impl From<&Problem> for ProblemFrontmatter {
             solution_ids: p.solution_ids.clone(),
             child_ids: p.child_ids.clone(),
             milestone_id: p.milestone_id.clone(),
-            tags: p.tags.clone(),
             assignee: p.assignee.clone(),
             created_at: p.created_at,
             updated_at: p.updated_at,
