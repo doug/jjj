@@ -72,8 +72,36 @@ fn setup_doc_test_repo() -> tempfile::TempDir {
     dir
 }
 
+fn split_shell_args(cmd: &str) -> Vec<String> {
+    let mut args = Vec::new();
+    let mut current = String::new();
+    let mut in_quotes = false;
+
+    for ch in cmd.chars() {
+        match ch {
+            '"' => {
+                in_quotes = !in_quotes;
+                // Don't include the quote character in the arg
+            }
+            ' ' | '\t' if !in_quotes => {
+                if !current.is_empty() {
+                    args.push(current.clone());
+                    current.clear();
+                }
+            }
+            _ => {
+                current.push(ch);
+            }
+        }
+    }
+    if !current.is_empty() {
+        args.push(current);
+    }
+    args
+}
+
 fn run_doc_command(dir: &Path, cmd_line: &str) -> (bool, String, String) {
-    let parts: Vec<&str> = cmd_line.split_whitespace().collect();
+    let parts = split_shell_args(cmd_line);
     if parts.is_empty() {
         return (true, String::new(), String::new());
     }

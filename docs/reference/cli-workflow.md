@@ -78,7 +78,6 @@ jjj next [OPTIONS]
 Items are sorted by priority. Categories include open critiques to address, solutions needing review, solutions in testing, and open problems without solutions.
 
 ```bash,test
-jjj init
 jjj next
 jjj next --all
 jjj next --mine --limit 10
@@ -122,7 +121,6 @@ jjj board [OPTIONS]
 | `--json` | bool | Output in JSON format |
 
 ```bash,test
-jjj init
 jjj board
 jjj board --json
 ```
