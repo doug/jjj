@@ -11,6 +11,7 @@ function makeProblem(overrides: Partial<Problem> = {}): Problem {
     solution_ids: ["S-1"], child_ids: [], milestone_id: "M-1", tags: ["performance", "database"],
     assignee: "doug", created_at: "", updated_at: "",
     description: "Search queries take 3+ seconds", context: "",
+    priority: "medium", dissolved_reason: null,
     ...overrides,
   };
 }
@@ -22,6 +23,7 @@ function makeSolution(overrides: Partial<Solution> = {}): Solution {
     assignee: "doug", requested_reviewers: ["alice"], reviewed_by: ["alice"],
     requires_review: null, created_at: "", updated_at: "",
     approach: "Add a B-tree index", tradeoffs: "Extra storage",
+    supersedes: null,
     ...overrides,
   };
 }
@@ -126,6 +128,26 @@ describe("EntityDocumentProvider", () => {
       assert.ok(content.includes("[testing]"));
     });
 
+    it("includes priority", () => {
+      const uri = vscode.Uri.parse("jjj:///problem/P-1.md");
+      const content = provider.provideTextDocumentContent(uri);
+      assert.ok(content.includes("Priority: medium"));
+    });
+
+    it("shows dissolved reason when dissolved", async () => {
+      const dissolvedProblem = makeProblem({
+        id: "P-2", status: "dissolved",
+        dissolved_reason: "The data was correct; our test was wrong",
+      });
+      cli.listProblems.resolves([makeProblem(), dissolvedProblem]);
+      await cache.refresh();
+
+      const uri = vscode.Uri.parse("jjj:///problem/P-2.md");
+      const content = provider.provideTextDocumentContent(uri);
+      assert.ok(content.includes("Dissolved Reason"));
+      assert.ok(content.includes("our test was wrong"));
+    });
+
     it("shows not found for unknown id", () => {
       const uri = vscode.Uri.parse("jjj:///problem/P-99.md");
       const content = provider.provideTextDocumentContent(uri);
@@ -157,6 +179,18 @@ describe("EntityDocumentProvider", () => {
       const uri = vscode.Uri.parse("jjj:///solution/S-1.md");
       const content = provider.provideTextDocumentContent(uri);
       assert.ok(content.includes("kxq2p"));
+    });
+
+    it("shows supersedes when set", async () => {
+      const solution2 = makeSolution({
+        id: "S-2", title: "Use connection pool", supersedes: "S-1",
+      });
+      cli.listSolutions.resolves([makeSolution(), solution2]);
+      await cache.refresh();
+
+      const uri = vscode.Uri.parse("jjj:///solution/S-2.md");
+      const content = provider.provideTextDocumentContent(uri);
+      assert.ok(content.includes("Supersedes: S-1"));
     });
   });
 

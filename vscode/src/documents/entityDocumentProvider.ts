@@ -52,7 +52,7 @@ export class EntityDocumentProvider implements vscode.TextDocumentContentProvide
     return [
       `${p.title}`,
       "\u2501".repeat(60),
-      `Status: ${p.status}  \u2502  Milestone: ${p.milestone_id || "Backlog"}  \u2502  Assignee: ${p.assignee || "unassigned"}`,
+      `Status: ${p.status}  \u2502  Priority: ${p.priority}  \u2502  Milestone: ${p.milestone_id || "Backlog"}  \u2502  Assignee: ${p.assignee || "unassigned"}`,
       `Tags: ${p.tags.length > 0 ? p.tags.join(", ") : "none"}`,
       "",
       "## Description",
@@ -60,6 +60,7 @@ export class EntityDocumentProvider implements vscode.TextDocumentContentProvide
       p.description || "(no description)",
       "",
       p.context ? `## Context\n\n${p.context}\n` : "",
+      p.dissolved_reason ? `## Dissolved Reason\n\n${p.dissolved_reason}\n` : "",
       `## Solutions (${solutions.length})`,
       solutionList,
     ].filter(Boolean).join("\n");
@@ -90,6 +91,7 @@ export class EntityDocumentProvider implements vscode.TextDocumentContentProvide
       "\u2501".repeat(60),
       `Status: ${s.status}  \u2502  Problem: ${s.problem_id}  \u2502  Assignee: ${s.assignee || "unassigned"}`,
       `Reviewers: ${reviewers}`,
+      s.supersedes ? `Supersedes: ${s.supersedes}` : "",
       `Tags: ${s.tags.length > 0 ? s.tags.join(", ") : "none"}`,
       "",
       "## Approach",

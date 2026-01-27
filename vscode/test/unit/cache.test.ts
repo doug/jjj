@@ -8,6 +8,7 @@ function makeProblem(overrides: Partial<Problem> = {}): Problem {
     id: "P-1", title: "Test problem", parent_id: null, status: "open",
     solution_ids: [], child_ids: [], milestone_id: null, tags: [],
     assignee: null, created_at: "", updated_at: "", description: "", context: "",
+    priority: "medium", dissolved_reason: null,
     ...overrides,
   };
 }
@@ -18,6 +19,7 @@ function makeSolution(overrides: Partial<Solution> = {}): Solution {
     critique_ids: [], change_ids: [], tags: [], assignee: null,
     requested_reviewers: [], reviewed_by: [], requires_review: null,
     created_at: "", updated_at: "", approach: "", tradeoffs: "",
+    supersedes: null,
     ...overrides,
   };
 }

@@ -17,6 +17,8 @@ export interface Problem {
   updated_at: string;
   description: string;
   context: string;
+  priority: "low" | "medium" | "high" | "critical";
+  dissolved_reason: string | null;
 }
 
 export interface Solution {
@@ -35,6 +37,7 @@ export interface Solution {
   updated_at: string;
   approach: string;
   tradeoffs: string;
+  supersedes: string | null;
 }
 
 export interface Reply {
@@ -84,6 +87,8 @@ export interface NextItem {
   summary: string;
   suggested_command: string;
   details: { id: string; text: string; severity?: string }[];
+  priority: string;
+  priority_sort: number;
 }
 
 export interface NextResult {

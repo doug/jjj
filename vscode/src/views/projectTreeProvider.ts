@@ -22,7 +22,7 @@ class ProblemNode extends vscode.TreeItem {
   constructor(public readonly problem: Problem) {
     super(problem.title, vscode.TreeItemCollapsibleState.Collapsed);
     this.contextValue = "problem";
-    this.description = `${problem.id} [${problem.status}]`;
+    this.description = `${problem.id} [${problem.status}]${problem.priority !== "medium" ? ` ${problem.priority}` : ""}`;
     this.iconPath = problem.status === "solved"
       ? new vscode.ThemeIcon("check", new vscode.ThemeColor("testing.iconPassed"))
       : problem.status === "in_progress"
