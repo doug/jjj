@@ -68,10 +68,11 @@ pub struct Solution {
 }
 
 /// Status of a solution (conjecture)
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum SolutionStatus {
     /// Conjecture put forward, not yet tested
+    #[default]
     Proposed,
 
     /// Being implemented/tested
@@ -82,12 +83,6 @@ pub enum SolutionStatus {
 
     /// Survived criticism, adopted as current best solution
     Accepted,
-}
-
-impl Default for SolutionStatus {
-    fn default() -> Self {
-        SolutionStatus::Proposed
-    }
 }
 
 impl std::fmt::Display for SolutionStatus {

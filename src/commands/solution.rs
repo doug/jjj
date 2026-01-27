@@ -148,8 +148,8 @@ fn list_solutions(
     }
 
     println!(
-        "{:<8} {:<12} {:<10} {}",
-        "ID", "STATUS", "PROBLEM", "TITLE"
+        "{:<8} {:<12} {:<10} TITLE",
+        "ID", "STATUS", "PROBLEM",
     );
     println!("{}", "-".repeat(70));
 
@@ -379,18 +379,16 @@ fn accept_solution(solution_id: String, force: bool) -> Result<()> {
 
     // Check review requirement
     let requires_review = solution.requires_review();
-    if requires_review {
-        if !solution.all_reviewers_signed_off() {
-            if !force {
-                eprintln!("Error: Solution requires sign-off from all reviewers.");
-                eprintln!("Reviewers: {}", solution.reviewers.join(", "));
-                let signed: Vec<_> = solution.sign_offs.iter().map(|so| so.reviewer.as_str()).collect();
-                eprintln!("Signed off: {}", if signed.is_empty() { "none".to_string() } else { signed.join(", ") });
-                eprintln!("Or force:  jjj solution accept {} --force", solution_id);
-                return Err(crate::error::JjjError::CannotAcceptSolution("Not all reviewers signed off".to_string()));
-            }
-            eprintln!("Warning: Accepting without full reviewer sign-off.");
+    if requires_review && !solution.all_reviewers_signed_off() {
+        if !force {
+            eprintln!("Error: Solution requires sign-off from all reviewers.");
+            eprintln!("Reviewers: {}", solution.reviewers.join(", "));
+            let signed: Vec<_> = solution.sign_offs.iter().map(|so| so.reviewer.as_str()).collect();
+            eprintln!("Signed off: {}", if signed.is_empty() { "none".to_string() } else { signed.join(", ") });
+            eprintln!("Or force:  jjj solution accept {} --force", solution_id);
+            return Err(crate::error::JjjError::CannotAcceptSolution("Not all reviewers signed off".to_string()));
         }
+        eprintln!("Warning: Accepting without full reviewer sign-off.");
     }
 
     store.with_metadata(&format!("Accept solution {}", solution_id), || {

@@ -73,7 +73,7 @@ fn parse_body_sections(body: &str) -> std::collections::HashMap<String, String> 
             if !current_section.is_empty() {
                 sections.insert(current_section.clone(), current_content.trim().to_string());
             }
-            current_section = line[3..].to_string();
+            current_section = line.strip_prefix("## ").unwrap().to_string();
             current_content = String::new();
         } else {
             current_content.push_str(line);

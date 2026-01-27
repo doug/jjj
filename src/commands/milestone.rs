@@ -106,7 +106,7 @@ fn list_milestones(json: bool) -> Result<()> {
         return Ok(());
     }
 
-    println!("{:<8} {:<12} {:<12} {:<6} {}", "ID", "STATUS", "TARGET", "PROBS", "TITLE");
+    println!("{:<8} {:<12} {:<12} {:<6} TITLE", "ID", "STATUS", "TARGET", "PROBS");
     println!("{}", "-".repeat(60));
 
     for milestone in &milestones {

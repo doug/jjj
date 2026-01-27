@@ -57,7 +57,7 @@ fn new_problem(
         let mut problem = Problem::new(problem_id.clone(), title.clone());
 
         // Set priority
-        problem.priority = priority.parse::<Priority>().map_err(|e| e)?;
+        problem.priority = priority.parse::<Priority>()?;
 
         // Set parent
         if let Some(ref parent_id) = parent {
@@ -129,7 +129,7 @@ fn list_problems(
             return Ok(());
         }
 
-        println!("{:<8} {:<12} {}", "ID", "STATUS", "TITLE");
+        println!("{:<8} {:<12} TITLE", "ID", "STATUS");
         println!("{}", "-".repeat(60));
 
         for problem in &problems {
@@ -279,7 +279,7 @@ fn edit_problem(
         }
 
         if let Some(p_str) = priority {
-            problem.priority = p_str.parse::<Priority>().map_err(|e| e)?;
+            problem.priority = p_str.parse::<Priority>()?;
         }
 
         if let Some(new_parent) = parent {

@@ -135,8 +135,8 @@ fn list_critiques(
     }
 
     println!(
-        "{:<8} {:<12} {:<10} {:<10} {}",
-        "ID", "STATUS", "SEVERITY", "SOLUTION", "TITLE"
+        "{:<8} {:<12} {:<10} {:<10} TITLE",
+        "ID", "STATUS", "SEVERITY", "SOLUTION"
     );
     println!("{}", "-".repeat(80));
 

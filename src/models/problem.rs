@@ -55,19 +55,14 @@ pub struct Problem {
 }
 
 /// Priority level for a problem (P0 = most critical, P3 = lowest)
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
 #[serde(rename_all = "snake_case")]
 pub enum Priority {
     Low,
+    #[default]
     Medium,
     High,
     Critical,
-}
-
-impl Default for Priority {
-    fn default() -> Self {
-        Priority::Medium
-    }
 }
 
 impl std::fmt::Display for Priority {
@@ -99,10 +94,11 @@ impl std::str::FromStr for Priority {
 }
 
 /// Status of a problem
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ProblemStatus {
     /// Problem identified, not yet being addressed
+    #[default]
     Open,
 
     /// Actively working on solutions
@@ -113,12 +109,6 @@ pub enum ProblemStatus {
 
     /// Problem was based on false premises or became irrelevant
     Dissolved,
-}
-
-impl Default for ProblemStatus {
-    fn default() -> Self {
-        ProblemStatus::Open
-    }
 }
 
 impl std::fmt::Display for ProblemStatus {

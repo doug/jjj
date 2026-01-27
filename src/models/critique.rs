@@ -76,10 +76,11 @@ pub struct Reply {
 }
 
 /// Status of a critique
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum CritiqueStatus {
     /// Critique raised, not yet addressed
+    #[default]
     Open,
 
     /// Solution modified to address this critique
@@ -90,12 +91,6 @@ pub enum CritiqueStatus {
 
     /// Critique shown to be incorrect or irrelevant
     Dismissed,
-}
-
-impl Default for CritiqueStatus {
-    fn default() -> Self {
-        CritiqueStatus::Open
-    }
 }
 
 impl std::fmt::Display for CritiqueStatus {
@@ -124,13 +119,14 @@ impl std::str::FromStr for CritiqueStatus {
 }
 
 /// Severity level for critiques
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "lowercase")]
 pub enum CritiqueSeverity {
     /// Minor issue, doesn't fundamentally challenge the solution
     Low,
 
     /// Moderate issue that should be addressed
+    #[default]
     Medium,
 
     /// Significant problem that may invalidate the solution
@@ -138,12 +134,6 @@ pub enum CritiqueSeverity {
 
     /// Critical flaw that definitely invalidates the solution
     Critical,
-}
-
-impl Default for CritiqueSeverity {
-    fn default() -> Self {
-        CritiqueSeverity::Medium
-    }
 }
 
 impl std::fmt::Display for CritiqueSeverity {

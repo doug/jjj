@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Project-wide configuration stored in config.toml
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ProjectConfig {
     /// Project name
     #[serde(default)]
@@ -17,12 +17,3 @@ pub struct ProjectConfig {
     pub settings: HashMap<String, String>,
 }
 
-impl Default for ProjectConfig {
-    fn default() -> Self {
-        Self {
-            name: None,
-            default_reviewers: Vec::new(),
-            settings: HashMap::new(),
-        }
-    }
-}
