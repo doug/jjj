@@ -359,6 +359,19 @@ fn solve_problem(problem_id: String) -> Result<()> {
         println!("{}", message);
     }
 
+    // Warn about active solutions still in progress
+    let solutions = store.list_solutions()?;
+    let active: Vec<_> = solutions.iter()
+        .filter(|s| s.problem_id == problem_id && s.is_active())
+        .collect();
+    if !active.is_empty() {
+        eprintln!("Warning: {} active solution(s) still in progress:", active.len());
+        for s in &active {
+            eprintln!("  {}: {} [{}]", s.id, s.title, s.status);
+        }
+        eprintln!("Proceeding with solve anyway.");
+    }
+
     store.with_metadata(&format!("Solve problem {}", problem_id), || {
         let mut problem = store.load_problem(&problem_id)?;
         problem.set_status(ProblemStatus::Solved);
