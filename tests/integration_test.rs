@@ -147,3 +147,77 @@ fn test_problem_hierarchy() {
     // Should mention it has sub-problems
     assert!(stdout.contains("P-2") || stdout.contains("Sub-problems") || stdout.contains("Child"));
 }
+
+#[test]
+fn test_problem_priority() {
+    if which::which("jj").is_err() {
+        return;
+    }
+
+    let temp_dir = setup_test_repo();
+    let dir_path = temp_dir.path();
+    run_jjj(dir_path, &["init"]);
+
+    // Create with P0 priority
+    let output = run_jjj(dir_path, &["problem", "new", "Critical bug", "--priority", "P0"]);
+    assert!(output.status.success(), "problem new with priority failed: {}", String::from_utf8_lossy(&output.stderr));
+
+    // Verify in show output (text mode should show priority)
+    let output = run_jjj(dir_path, &["problem", "show", "P-1"]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("P0/critical") || stdout.contains("Critical"), "Priority not shown in output: {}", stdout);
+
+    // Create with default priority
+    let output = run_jjj(dir_path, &["problem", "new", "Normal bug"]);
+    assert!(output.status.success());
+    let output = run_jjj(dir_path, &["problem", "show", "P-2"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("P2/medium") || stdout.contains("Medium"), "Default priority not shown: {}", stdout);
+}
+
+#[test]
+fn test_problem_dissolve_reason() {
+    if which::which("jj").is_err() {
+        return;
+    }
+
+    let temp_dir = setup_test_repo();
+    let dir_path = temp_dir.path();
+    run_jjj(dir_path, &["init"]);
+
+    let output = run_jjj(dir_path, &["problem", "new", "Ghost bug"]);
+    assert!(output.status.success());
+
+    let output = run_jjj(dir_path, &["problem", "dissolve", "P-1", "--reason", "Test data was stale"]);
+    assert!(output.status.success(), "dissolve with reason failed: {}", String::from_utf8_lossy(&output.stderr));
+
+    let output = run_jjj(dir_path, &["problem", "show", "P-1"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("dissolved"), "Status not dissolved: {}", stdout);
+    assert!(stdout.contains("Test data was stale"), "Dissolved reason not shown: {}", stdout);
+}
+
+#[test]
+fn test_solution_supersedes() {
+    if which::which("jj").is_err() {
+        return;
+    }
+
+    let temp_dir = setup_test_repo();
+    let dir_path = temp_dir.path();
+    run_jjj(dir_path, &["init"]);
+
+    run_jjj(dir_path, &["problem", "new", "Slow queries"]);
+    run_jjj(dir_path, &["solution", "new", "Add index", "--problem", "P-1"]);
+    run_jjj(dir_path, &["solution", "refute", "S-1"]);
+
+    let output = run_jjj(dir_path, &["solution", "new", "Use connection pool", "--problem", "P-1", "--supersedes", "S-1"]);
+    assert!(output.status.success(), "solution new with supersedes failed: {}", String::from_utf8_lossy(&output.stderr));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Supersedes") || stdout.contains("S-1"), "Supersedes not shown in creation output: {}", stdout);
+
+    let output = run_jjj(dir_path, &["solution", "show", "S-2"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Supersedes") || stdout.contains("S-1"), "Supersedes not shown in show: {}", stdout);
+}

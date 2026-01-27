@@ -7,7 +7,7 @@ use std::io::{self, Write};
 
 pub fn execute(action: SolutionAction) -> Result<()> {
     match action {
-        SolutionAction::New { title, problem, supersedes: _, tag } => new_solution(title, problem, tag),
+        SolutionAction::New { title, problem, supersedes, tag } => new_solution(title, problem, supersedes, tag),
         SolutionAction::List {
             problem,
             status,
@@ -35,7 +35,7 @@ pub fn execute(action: SolutionAction) -> Result<()> {
     }
 }
 
-fn new_solution(title: String, problem_id: String, tags: Vec<String>) -> Result<()> {
+fn new_solution(title: String, problem_id: String, supersedes: Option<String>, tags: Vec<String>) -> Result<()> {
     let jj_client = JjClient::new()?;
     let store = MetadataStore::new(jj_client)?;
 
@@ -45,6 +45,9 @@ fn new_solution(title: String, problem_id: String, tags: Vec<String>) -> Result<
     store.with_metadata(&format!("Create solution: {}", title), || {
         let solution_id = store.next_solution_id()?;
         let mut solution = Solution::new(solution_id.clone(), title.clone(), problem_id.clone());
+
+        // Set supersedes
+        solution.supersedes = supersedes.clone();
 
         // Add tags
         for tag in tags {
@@ -60,6 +63,9 @@ fn new_solution(title: String, problem_id: String, tags: Vec<String>) -> Result<
 
         println!("Created solution {} ({})", solution.id, solution.title);
         println!("  Addresses: {} - {}", problem.id, problem.title);
+        if let Some(ref sup) = solution.supersedes {
+            println!("  Supersedes: {}", sup);
+        }
 
         Ok(())
     })
@@ -133,6 +139,9 @@ fn show_solution(solution_id: String, json: bool) -> Result<()> {
     println!("Solution: {} - {}", solution.id, solution.title);
     println!("Status: {}", solution.status);
     println!("Addresses: {}", solution.problem_id);
+    if let Some(ref sup) = solution.supersedes {
+        println!("Supersedes: {}", sup);
+    }
 
     if let Some(ref assignee) = solution.assignee {
         println!("Assignee: {}", assignee);

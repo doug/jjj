@@ -1,18 +1,18 @@
 use crate::cli::ProblemAction;
 use crate::error::Result;
 use crate::jj::JjClient;
-use crate::models::{Problem, ProblemStatus};
+use crate::models::{Problem, ProblemStatus, Priority};
 use crate::storage::MetadataStore;
 
 pub fn execute(action: ProblemAction) -> Result<()> {
     match action {
         ProblemAction::New {
             title,
-            priority: _,
+            priority,
             parent,
             milestone,
             tag,
-        } => new_problem(title, parent, milestone, tag),
+        } => new_problem(title, priority, parent, milestone, tag),
         ProblemAction::List {
             status,
             tree,
@@ -24,20 +24,21 @@ pub fn execute(action: ProblemAction) -> Result<()> {
             problem_id,
             title,
             status,
-            priority: _,
+            priority,
             parent,
             add_tag,
             remove_tag,
-        } => edit_problem(problem_id, title, status, parent, add_tag, remove_tag),
+        } => edit_problem(problem_id, title, status, priority, parent, add_tag, remove_tag),
         ProblemAction::Tree { problem_id } => show_tree(problem_id),
         ProblemAction::Solve { problem_id } => solve_problem(problem_id),
-        ProblemAction::Dissolve { problem_id, reason: _ } => dissolve_problem(problem_id),
+        ProblemAction::Dissolve { problem_id, reason } => dissolve_problem(problem_id, reason),
         ProblemAction::Assign { problem_id, to } => assign_problem(problem_id, to),
     }
 }
 
 fn new_problem(
     title: String,
+    priority: String,
     parent: Option<String>,
     milestone: Option<String>,
     tags: Vec<String>,
@@ -58,6 +59,9 @@ fn new_problem(
     store.with_metadata(&format!("Create problem: {}", title), || {
         let problem_id = store.next_problem_id()?;
         let mut problem = Problem::new(problem_id.clone(), title.clone());
+
+        // Set priority
+        problem.priority = priority.parse::<Priority>().map_err(|e| e)?;
 
         // Set parent
         if let Some(ref parent_id) = parent {
@@ -202,6 +206,7 @@ fn show_problem(problem_id: String, json: bool) -> Result<()> {
 
     println!("Problem: {} - {}", problem.id, problem.title);
     println!("Status: {}", problem.status);
+    println!("Priority: {}", problem.priority);
 
     if let Some(ref parent) = problem.parent_id {
         println!("Parent: {}", parent);
@@ -227,6 +232,11 @@ fn show_problem(problem_id: String, json: bool) -> Result<()> {
     // Show context
     if !problem.context.is_empty() {
         println!("\n## Context\n{}", problem.context);
+    }
+
+    // Show dissolved reason
+    if let Some(ref reason) = problem.dissolved_reason {
+        println!("\n## Dissolved Reason\n{}", reason);
     }
 
     // Show solutions
@@ -263,6 +273,7 @@ fn edit_problem(
     problem_id: String,
     title: Option<String>,
     status: Option<String>,
+    priority: Option<String>,
     parent: Option<String>,
     add_tags: Vec<String>,
     remove_tags: Vec<String>,
@@ -280,6 +291,10 @@ fn edit_problem(
         if let Some(status_str) = status {
             let new_status: ProblemStatus = status_str.parse().map_err(|e: String| e)?;
             problem.set_status(new_status);
+        }
+
+        if let Some(p_str) = priority {
+            problem.priority = p_str.parse::<Priority>().map_err(|e| e)?;
         }
 
         if let Some(new_parent) = parent {
@@ -353,13 +368,17 @@ fn solve_problem(problem_id: String) -> Result<()> {
     })
 }
 
-fn dissolve_problem(problem_id: String) -> Result<()> {
+fn dissolve_problem(problem_id: String, reason: Option<String>) -> Result<()> {
     let jj_client = JjClient::new()?;
     let store = MetadataStore::new(jj_client)?;
 
     store.with_metadata(&format!("Dissolve problem {}", problem_id), || {
         let mut problem = store.load_problem(&problem_id)?;
-        problem.set_status(ProblemStatus::Dissolved);
+        if let Some(reason) = reason {
+            problem.dissolve(reason);
+        } else {
+            problem.set_status(ProblemStatus::Dissolved);
+        }
         store.save_problem(&problem)?;
         println!(
             "Problem {} marked as dissolved (based on false premises or became irrelevant).",
