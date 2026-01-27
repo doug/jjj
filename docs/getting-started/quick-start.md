@@ -1,286 +1,165 @@
 # Quick Start
 
-Get up and running with jjj in 5 minutes!
+Get up and running with jjj in 5 minutes. This walkthrough covers the full
+Problem/Solution/Critique workflow.
 
-## Initialize jjj
+## Initialize
 
-First, navigate to your Jujutsu repository and initialize jjj:
+Navigate to an existing Jujutsu repository and initialize jjj:
 
-```bash
-cd /path/to/your/jj/repo
+```bash,test
 jjj init
 ```
 
-This creates the metadata structure in your repository:
+This creates a shadow graph -- an orphaned commit history that stores all
+project metadata separately from your code. The bookmark `jjj/meta` tracks it.
 
+## Create a Problem
+
+Problems describe things that need solving. Create one with a title and
+priority:
+
+```bash,test
+jjj problem new "Search is slow" --priority P1
 ```
-.jj/
-└── jjj-meta/          # Metadata workspace
-    ├── config.toml    # Project configuration
-    ├── tasks/         # Task storage
-    ├── features/      # Feature storage
-    ├── milestones/    # Milestone storage
-    ├── bugs/          # Bug storage
-    └── reviews/       # Code review data
+
+This creates `P-1`. Priorities range from P0 (critical) to P3 (low) and
+affect how `jjj next` orders your work.
+
+## Propose a Solution
+
+Solutions are conjectures -- proposed ways to solve a problem. They start in
+`proposed` status and must survive criticism before acceptance.
+
+```bash,test
+jjj solution new "Add search index" --problem P-1
 ```
 
-> **What just happened?**
->
-> jjj created an orphaned commit history (shadow graph) to store metadata separately from your project code. This bookmark is called `jjj/meta`.
-## Create Your First Task
+This creates `S-1`, linked to problem `P-1`. A single problem can have
+multiple competing solutions.
 
-Let's create a simple task:
+## Start Working
+
+The `start` command creates a new jj change, attaches it to the solution, and
+moves the solution to `testing` status:
 
 ```bash
-# First, create a feature to organize tasks
-jjj feature new "Getting Started"
-
-# This creates F-1, now create a task
-jjj task new "Set up development environment" --feature F-1
+jjj start S-1
 ```
 
-You've created your first task! It's assigned ID `T-1`.
+Your working copy now has a change tracked by jjj. The parent problem
+automatically moves to `in_progress`.
 
-## View Your Board
+## Add a Critique
 
-See all tasks on the Kanban board:
+Critiques are explicit criticism of a solution. They block acceptance until
+every critique is resolved (addressed, validated, or dismissed).
+
+```bash
+jjj critique new S-1 "Missing error handling" --severity medium
+```
+
+This creates `CQ-1` against solution `S-1`. Severities are `low`, `medium`,
+`high`, and `critical`.
+
+## Address the Critique
+
+After modifying the solution to handle the criticism, mark the critique as
+addressed:
+
+```bash
+jjj critique address CQ-1
+```
+
+Other resolution options:
+
+- `jjj critique validate CQ-1` -- the critique is correct and the solution
+  should be refuted
+- `jjj critique dismiss CQ-1` -- the critique is incorrect or irrelevant
+
+## Submit
+
+When your work is ready, submit squashes the change and completes the
+solution:
+
+```bash
+jjj submit
+```
+
+Submit auto-accepts the solution if all critiques are resolved and reviews
+pass. If this is the only solution for the problem, it offers to mark the
+problem as solved too.
+
+## Check What's Next
+
+The `next` command shows a prioritized list of actions you should take:
+
+```bash
+jjj next
+```
+
+Items are grouped by urgency:
+
+| Category  | Meaning                                          |
+|-----------|--------------------------------------------------|
+| BLOCKED   | Solutions blocked by open critiques               |
+| READY     | Solutions ready to accept (critiques resolved)    |
+| REVIEW    | Solutions waiting for your review                 |
+| WAITING   | Solutions in testing, waiting on others            |
+| TODO      | Open problems without solutions yet                |
+
+## View the Board
+
+The board gives you a Kanban-style overview of all solutions grouped by
+status:
 
 ```bash
 jjj board
 ```
 
-You'll see an interactive TUI board with your task in the "TODO" column:
-
-```
-┌─────────┬──────────────┬──────┬──────┐
-│ TODO    │ In Progress  │Review│ Done │
-├─────────┼──────────────┼──────┼──────┤
-│ T-1     │              │      │      │
-│ Set up  │              │      │      │
-│ dev env │              │      │      │
-└─────────┴──────────────┴──────┴──────┘
-```
-
 Press `q` to exit the TUI.
-
-## Work on a Task
-
-### 1. Attach a Change to a Task
-
-Start working on the task by attaching your current change:
-
-```bash
-# Make some code changes
-echo "# My Project" > README.md
-
-# Attach the current change to the task
-jjj task attach T-1
-```
-
-Now your change is associated with T-1!
-
-### 2. Move Task Through Workflow
-
-Move the task to "In Progress":
-
-```bash
-jjj task move T-1 "In Progress"
-```
-
-### 3. Complete the Task
-
-When you're done, move it to "Done":
-
-```bash
-jjj task move T-1 "Done"
-```
-
-## Request a Code Review
-
-Get feedback on your changes:
-
-```bash
-# Request review from teammates
-jjj review request @alice @bob
-
-# Check review status
-jjj review status
-```
-
-## View Dashboard
-
-See everything at a glance:
-
-```bash
-jjj dashboard
-```
-
-Output:
-
-```
-Dashboard
-
-Pending Reviews:
-  kpqxywon... - Add README (You requested - @alice, @bob)
-
-Tasks:
-  TODO: 0 tasks
-  In Progress: 0 tasks
-  Review: 0 tasks
-  Done: 1 task
-
-Recent Activity:
-  T-1 moved to Done
-  Review requested for kpqxywon...
-```
 
 ## Key Concepts
 
-### Work Hierarchy
+**Change IDs** -- jjj uses Jujutsu change IDs (not commit hashes) as stable
+references. They survive rebases and history rewrites, so metadata links never
+break.
 
-jjj uses a three-level hierarchy:
+**Shadow Graph** -- All jjj metadata lives in a separate orphaned commit
+history (`jjj/meta`). It never pollutes your project history and can be
+pushed or fetched independently.
 
-```
-Milestone (M-1)
-  ├── Feature (F-1)
-  │     ├── Task (T-1)
-  │     ├── Task (T-2)
-  │     └── Task (T-3)
-  ├── Feature (F-2)
-  └── Bug (B-1)
-```
+**Critique Blocking** -- A solution cannot be accepted while it has open
+critiques. All criticism must be explicitly addressed, validated, or dismissed.
+This enforces intellectual honesty.
 
-- **Milestones**: Release targets (e.g., "v1.0 Release")
-- **Features**: User-facing capabilities (e.g., "User Authentication")
-- **Tasks**: Individual work items (MUST belong to a feature)
-- **Bugs**: Defects (can be standalone or linked)
-
-### Change IDs vs Commit Hashes
-
-jjj uses Jujutsu's **change IDs** (not commit hashes) because they:
-
-- ✅ Stay stable across rebases
-- ✅ Survive history rewrites
-- ✅ Make metadata tracking robust
-
-This means:
-
-```bash
-# Attach task to current change
-jjj task attach T-1
-
-# Rebase your changes
-jj rebase -d main
-
-# Task is still attached! Change ID hasn't changed.
-```
-
-### Shadow Graph
-
-All jjj metadata lives in a separate commit history:
-
-- **Never pollutes your project history**
-- **Can be pushed/pulled independently**
-- **Easy to reset if needed**
-
-View the shadow graph:
-
-```bash
-jj log -r jjj/meta
-```
-
-## Syncing with Team
-
-To share your tasks and reviews, you need to sync the `jjj/meta` bookmark.
-
-### Pushing Changes
-When you push your code, also push the metadata:
-
-```bash
-jj git push -b jjj/meta
-```
-
-### Fetching Updates
-To see updates from your team:
-
-```bash
-jj git fetch
-```
-
-> **Tip:** Make sure you're tracking the remote bookmark:
-> `jj bookmark track jjj/meta@origin`
+**Priority** -- Problems are prioritized P0 (critical) through P3 (low).
+Priority affects how `jjj next` orders work items, ensuring the most important
+problems surface first.
 
 ## Common Commands
 
-Here are the most frequently used commands:
-
 | Command | Description |
 |---------|-------------|
+| `jjj init` | Initialize jjj in current repository |
+| `jjj problem new "title" --priority P1` | Create a problem |
+| `jjj problem list` | List all problems |
+| `jjj problem show P-1` | Show problem details and solutions |
+| `jjj solution new "title" --problem P-1` | Propose a solution |
+| `jjj solution list` | List all solutions |
+| `jjj start S-1` | Create a change and begin working |
+| `jjj critique new S-1 "title" --severity medium` | Critique a solution |
+| `jjj critique address CQ-1` | Mark critique as addressed |
+| `jjj submit` | Squash, accept solution, solve problem |
+| `jjj next` | Show prioritized next actions |
 | `jjj board` | Show Kanban board |
 | `jjj dashboard` | Show overview dashboard |
-| `jjj task new "title" --feature F-1` | Create a task |
-| `jjj task attach T-1` | Attach current change to task |
-| `jjj task move T-1 "Done"` | Move task to column |
-| `jjj task list` | List all tasks |
-| `jjj feature new "title"` | Create a feature |
-| `jjj feature progress F-1` | Show feature progress |
-| `jjj milestone new "title" --date YYYY-MM-DD` | Create milestone |
-| `jjj milestone roadmap` | Show release roadmap |
-| `jjj bug new "title" --severity high` | Report a bug |
-| `jjj bug triage` | View bug triage |
-| `jjj review request @user` | Request code review |
-| `jjj review status` | Check review status |
-
-## JSON Output
-
-Every command supports `--json` for scripting:
-
-```bash
-# Get tasks as JSON
-jjj task list --json
-
-# Get board data as JSON
-jjj board --json
-
-# Parse with jq
-jjj feature list --json | jq '.[] | select(.status == "InProgress")'
-```
+| `jjj review @alice` | Request review on current solution |
+| `jjj lgtm` | Approve current solution |
+| `jjj milestone new "v1.0" --date 2025-06-01` | Create a milestone |
+| `jjj milestone roadmap` | Show milestone roadmap |
 
 ## Next Steps
 
-You now know the basics! Continue learning:
-
-- [**Your First Project**](first-project.md) - Complete walkthrough of a real workflow
-- [**Work Hierarchy Guide**](../guides/work-hierarchy.md) - Master milestones, features, and tasks
-- [**Code Review Guide**](../guides/code-review.md) - Learn the review workflow
-- [**CLI Reference**](../reference/cli.md) - Complete command documentation
-
-## Quick Tips
-
-> **Use Tags for Organization**
->
-> Use tags to organize and filter your tasks:
->
->     jjj task new "Fix login bug" --feature F-1 --tag backend --tag auth
->     jjj task list --tag backend
-
-> **Filter Your Board**
->
-> Show only tasks in a specific column or feature:
->
->     # Show only tasks in a specific column
->     jjj task list --column "In Progress"
->
->     # Show tasks for a specific feature
->     jjj feature board F-1
-
-> **Export for Reporting**
->
-> Export all data as JSON for external tools:
->
->     jjj board --json > board-snapshot.json
->     jjj milestone list --json > milestones.json
-
-> **Remember: Tasks Require Features**
->
-> Every task must belong to a feature. If you try to create a task without `--feature`, you'll get an error. Create a feature first!
+- [Your First Project](first-project.md) -- Complete walkthrough of a real workflow
+- [CLI Reference](../reference/cli.md) -- Full command documentation
