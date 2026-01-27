@@ -8,6 +8,7 @@ use std::io::{self, Write};
 pub fn execute(action: SolutionAction) -> Result<()> {
     match action {
         SolutionAction::New { title, problem, supersedes, review } => new_solution(title, problem, supersedes, review),
+
         SolutionAction::List {
             problem,
             status,
@@ -34,14 +35,46 @@ pub fn execute(action: SolutionAction) -> Result<()> {
     }
 }
 
-fn new_solution(title: String, problem_id: String, supersedes: Option<String>, reviewers: Vec<String>) -> Result<()> {
+fn new_solution(title: String, problem_id: Option<String>, supersedes: Option<String>, reviewers: Vec<String>) -> Result<()> {
     let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client)?;
+    let store = MetadataStore::new(jj_client.clone())?;
+
+    // Resolve problem ID: use provided value or prompt interactively
+    let problem_id = match problem_id {
+        Some(pid) => pid,
+        None => {
+            // List open problems for interactive selection
+            let problems = store.list_problems()?;
+            let open_problems: Vec<_> = problems.into_iter().filter(|p| p.is_open()).collect();
+
+            if open_problems.is_empty() {
+                return Err("No open problems found. Create a problem first with: jjj problem new \"title\"".into());
+            }
+
+            println!("Select a problem to address:\n");
+            for (i, p) in open_problems.iter().enumerate() {
+                println!("  {}. {} - {} [{}]", i + 1, p.id, p.title, p.priority);
+            }
+            print!("\nChoice [1-{}]: ", open_problems.len());
+            io::stdout().flush()?;
+
+            let mut input = String::new();
+            io::stdin().read_line(&mut input)?;
+            let choice: usize = input.trim().parse()
+                .map_err(|_| crate::error::JjjError::Other("Invalid choice".to_string()))?;
+
+            if choice < 1 || choice > open_problems.len() {
+                return Err("Invalid selection".into());
+            }
+
+            open_problems[choice - 1].id.clone()
+        }
+    };
 
     // Validate problem exists
     let _problem = store.load_problem(&problem_id)?;
 
-    store.with_metadata(&format!("Create solution: {}", title), || {
+    store.with_metadata(&format!("Start solution: {}", title), || {
         let solution_id = store.next_solution_id()?;
         let mut solution = Solution::new(solution_id.clone(), title.clone(), problem_id.clone());
 
@@ -54,11 +87,20 @@ fn new_solution(title: String, problem_id: String, supersedes: Option<String>, r
             solution.add_reviewer(name);
         }
 
+        // Auto-attach: create jj change and link to solution
+        jj_client.new_empty_change(&title)?;
+        let change_id = jj_client.current_change_id()?;
+        solution.attach_change(change_id);
+        solution.start_testing();
+
         store.save_solution(&solution)?;
 
-        // Update problem's solution_ids
+        // Update problem
         let mut problem = store.load_problem(&problem_id)?;
         problem.add_solution(solution_id.clone());
+        if problem.status == ProblemStatus::Open {
+            problem.set_status(ProblemStatus::InProgress);
+        }
         store.save_problem(&problem)?;
 
         println!("Created solution {} ({})", solution.id, solution.title);

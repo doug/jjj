@@ -247,9 +247,9 @@ pub enum SolutionAction {
         /// Solution title
         title: String,
 
-        /// Problem this solution addresses (required)
+        /// Problem this solution addresses (optional - will prompt if not provided)
         #[arg(long)]
-        problem: String,
+        problem: Option<String>,
 
         /// Solution this supersedes (e.g., S-1)
         #[arg(long)]
