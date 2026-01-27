@@ -127,7 +127,7 @@ eval (jjj completion elvish | slurp)
 
 A VSCode extension for jjj provides IDE integration with:
 
-- Sidebar views for tasks, features, milestones, bugs, and reviews
+- Sidebar views for problems, solutions, critiques, and milestones
 - Command palette integration
 - JSON-based communication with jjj CLI
 - Planned: Interactive Kanban board, code review, and more
@@ -139,14 +139,14 @@ See the [VSCode Extension Guide](../guides/vscode-extension.md) for installation
 jjj provides JSON output for all commands via the `--json` flag, making it easy to integrate with any editor:
 
 ```bash
-# Get tasks as JSON
-jjj task list --json
+# Get problems as JSON
+jjj problem list --json
 
 # Get board data as JSON
 jjj board --json
 
-# Get feature progress as JSON
-jjj feature list --json
+# Get solutions as JSON
+jjj solution list --json
 ```
 
 ## Updating jjj
@@ -230,7 +230,6 @@ If jjj complains that `jj` is not found:
 Now that jjj is installed, proceed to:
 
 - [**Quick Start**](quick-start.md) - Get started with your first jjj project
-- [**Your First Project**](first-project.md) - A complete walkthrough
 
 ## Getting Help
 

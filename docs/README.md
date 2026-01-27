@@ -38,24 +38,22 @@ docs/
 ├── index.md                     # Homepage
 ├── getting-started/
 │   ├── installation.md          # How to install jjj
-│   ├── quick-start.md           # 5-minute introduction
-│   └── first-project.md         # Complete walkthrough
+│   └── quick-start.md           # 5-minute introduction
 ├── guides/
-│   ├── work-hierarchy.md        # Milestones, features, tasks, bugs
-│   ├── code-review.md           # Code review workflow
-│   ├── task-management.md       # Task tracking
-│   └── board-dashboard.md       # Board and dashboard views
+│   ├── problem-solving.md       # Creating and managing problems
+│   ├── critique-guidelines.md   # Writing and responding to critiques
+│   ├── code-review.md           # Code review and LGTM workflow
+│   ├── board-dashboard.md       # Board and dashboard views
+│   ├── jujutsu-integration.md   # Jujutsu (jj) integration
+│   └── vscode-extension.md      # VS Code extension guide
 ├── reference/
-│   ├── cli.md                   # Complete CLI reference
-│   ├── cli-task.md              # Task commands
-│   ├── cli-feature.md           # Feature commands
+│   ├── cli-problem.md           # Problem commands
+│   ├── cli-solution.md          # Solution commands
+│   ├── cli-critique.md          # Critique commands
 │   ├── cli-milestone.md         # Milestone commands
-│   ├── cli-bug.md               # Bug commands
-│   ├── cli-review.md            # Review commands
+│   ├── cli-workflow.md          # Workflow commands (init, start, submit, next)
 │   └── configuration.md         # Configuration options
 ├── examples/
-│   ├── feature-workflow.md      # Real-world feature development
-│   ├── bug-triage.md            # Bug tracking workflow
 │   ├── release-planning.md      # Release management
 │   └── code-review-process.md   # Review process examples
 └── architecture/
@@ -100,11 +98,11 @@ Use blockquotes with bold titles:
 
 ```markdown
 ​```bash
-jjj task new "My task" --feature F-1
+jjj problem new "Search is slow" --priority high
 ​```
 
 ​```rust
-pub struct Task {
+pub struct Problem {
     id: String,
     title: String,
 }
@@ -116,8 +114,9 @@ pub struct Task {
 ```markdown
 ​```mermaid
 graph TD
-    A[Milestone] --> B[Feature]
-    B --> C[Task]
+    A[Milestone] --> B[Problem]
+    B --> C[Solution]
+    C --> D[Critique]
 ​```
 ```
 
@@ -127,7 +126,7 @@ Use relative links:
 
 ```markdown
 [Getting Started](../getting-started/quick-start.md)
-[CLI Reference](../reference/cli.md)
+[CLI Reference](../reference/cli-problem.md)
 ```
 
 ## Adding New Pages

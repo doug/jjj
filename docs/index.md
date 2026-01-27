@@ -56,7 +56,10 @@ jjj submit
 
 ## Reference
 
-- [CLI Commands](reference/cli.md) -- full command reference
+- [Problem Commands](reference/cli-problem.md) -- problem management
+- [Solution Commands](reference/cli-solution.md) -- solution lifecycle
+- [Critique Commands](reference/cli-critique.md) -- critique operations
+- [Workflow Commands](reference/cli-workflow.md) -- init, start, submit, next
 - [Configuration](reference/configuration.md) -- project and user settings
 
 ## Architecture Highlights

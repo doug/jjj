@@ -75,30 +75,22 @@ Benefits:
 When you run `jjj init`, it creates this structure:
 
 ```
-.jj/
-└── jjj-meta/                    # Metadata workspace
-    ├── config.toml              # Project configuration
-    ├── milestones/              # Milestone storage
-    │   ├── M-1.json
-    │   └── M-2.json
-    ├── features/                # Feature storage
-    │   ├── F-1.json
-    │   ├── F-2.json
-    │   └── F-3.json
-    ├── tasks/                   # Task storage
-    │   ├── T-1.json
-    │   ├── T-2.json
-    │   └── ...
-    ├── bugs/                    # Bug storage
-    │   ├── B-1.json
-    │   └── B-2.json
-    └── reviews/                 # Review storage
-        ├── kpqxywon.../
-        │   ├── manifest.toml
-        │   └── comments/
-        │       ├── c-1.json
-        │       └── c-2.json
-        └── lmnopqrs.../
+.jjj/
+├── config.toml              # Project configuration
+├── milestones/              # Milestone storage
+│   ├── M-1.toml
+│   └── M-2.toml
+├── problems/                # Problem storage
+│   ├── P-1.toml
+│   ├── P-2.toml
+│   └── P-3.toml
+├── solutions/               # Solution storage
+│   ├── S-1.toml
+│   ├── S-2.toml
+│   └── ...
+└── critiques/               # Critique storage
+    ├── CQ-1.toml
+    └── CQ-2.toml
 ```
 
 ## Storage Layer Implementation
@@ -136,7 +128,7 @@ When you run `jjj init`:
 
 4. **Initialize directories**:
    ```
-   mkdir -p .jj/jjj-meta/{tasks,features,milestones,bugs,reviews}
+   mkdir -p .jjj/{problems,solutions,critiques,milestones}
    ```
 
 5. **Create default config**:
@@ -166,53 +158,26 @@ required_approvals = 1
 auto_approve_owner = false
 ```
 
-#### JSON for Work Items
+#### TOML for Work Items
 
-Tasks, features, milestones, and bugs use JSON:
-
-```json
-// tasks/T-1.json
-{
-  "id": "T-1",
-  "title": "Implement password hashing",
-  "feature_id": "F-1",
-  "column": "In Progress",
-  "tags": ["backend", "security"],
-  "change_ids": ["kpqxywon"],
-  "assignee": "alice@example.com",
-  "version": 3,
-  "created_at": "2025-11-23T10:00:00Z",
-  "updated_at": "2025-11-23T15:30:00Z"
-}
-```
-
-Why JSON?
-- ✅ Easy to parse
-- ✅ Human-readable
-- ✅ Standard tooling (jq, etc.)
-- ✅ Schemaless (can evolve)
-
-#### TOML for Reviews
-
-Review manifests use TOML for better readability:
+Problems, solutions, critiques, and milestones use TOML:
 
 ```toml
-# reviews/kpqxywon.../manifest.toml
-change_id = "kpqxywon"
-author = "alice@example.com"
-reviewers = ["@bob", "@charlie"]
-status = "Pending"
+# problems/P-1.toml
+id = "P-1"
+title = "Search is slow on large datasets"
+status = "open"
+priority = "high"
+tags = ["performance", "search"]
 created_at = "2025-11-23T10:00:00Z"
-
-[[requested_reviewers]]
-name = "@bob"
-status = "Pending"
-
-[[requested_reviewers]]
-name = "@charlie"
-status = "Approved"
-approved_at = "2025-11-23T14:00:00Z"
+updated_at = "2025-11-23T15:30:00Z"
 ```
+
+Why TOML?
+- Human-readable and writable
+- Well-suited for configuration-like metadata
+- Native Rust ecosystem support (serde)
+- Clear structure without excessive syntax
 
 ## Transaction Model
 
@@ -221,10 +186,10 @@ approved_at = "2025-11-23T14:00:00Z"
 jjj uses a simple transaction model:
 
 ```rust
-store.with_metadata("Create task T-1", || {
+store.with_metadata("Create problem P-1", || {
     // 1. Perform operations
-    let task = Task::new(...);
-    store.save_task(&task)?;
+    let problem = Problem::new(...);
+    store.save_problem(&problem)?;
 
     // 2. All operations succeed or all fail
     Ok(())
@@ -232,29 +197,22 @@ store.with_metadata("Create task T-1", || {
 // 3. Metadata committed atomically
 ```
 
-This translates to:
-
-```bash
-# In metadata workspace
-jj new -m "Create task T-1"
-# ... write files ...
-jj bookmark set jjj/meta
-```
+This translates to writing TOML files to the `.jjj/` directory and committing to the shadow graph.
 
 ### Conflict Resolution
 
 If two users modify metadata simultaneously:
 
 ```
-User A                          User B
-──────                          ──────
-jjj task new "Fix bug"          jjj feature new "New feature"
-  ↓                               ↓
-Creates T-42                    Creates F-5
-  ↓                               ↓
-jj git push                     jj git push
-  ↓                               ↓
-  └─────── CONFLICT! ───────────┘
+User A                              User B
+──────                              ──────
+jjj problem new "Fix login"         jjj problem new "Add search"
+  ↓                                   ↓
+Creates P-5                         Creates P-6
+  ↓                                   ↓
+jj git push                         jj git push
+  ↓                                   ↓
+  └──────── CONFLICT! ────────────┘
 ```
 
 Resolution:
@@ -267,8 +225,7 @@ jj bookmark track jjj/meta@origin
 # jj automatically merges file-based changes
 # If both created different files → no conflict!
 
-# If same file modified → use jjj resolve
-jjj resolve T-42 --pick "User A"
+# If same file modified → manual merge may be needed
 ```
 
 ## Sync Model
@@ -305,13 +262,12 @@ jj bookmark track jjj/meta@origin
 jjj is designed for offline-first workflows:
 
 ```bash
-# Create tasks offline
-jjj task new "Fix login" --feature F-1
-jjj task new "Add tests" --feature F-1
+# Create problems offline
+jjj problem new "Fix login flow" --priority high
+jjj problem new "Add test coverage" --tag testing
 
-# Work on tasks
-jjj task attach T-1
-# ... make changes ...
+# Propose solutions
+jjj solution new "Refactor auth handler" --problem P-1
 
 # Later, when online
 jj git push --all
@@ -326,20 +282,20 @@ All metadata is local until you push!
 IDs are sequential within each type:
 
 ```rust
-pub fn next_task_id(&self) -> Result<String> {
-    let tasks = self.list_tasks()?;
-    let max_id = tasks
+pub fn next_problem_id(&self) -> Result<String> {
+    let problems = self.list_problems()?;
+    let max_id = problems
         .iter()
-        .filter_map(|t| t.id.strip_prefix("T-").and_then(|s| s.parse::<u32>().ok()))
+        .filter_map(|p| p.id.strip_prefix("P-").and_then(|s| s.parse::<u32>().ok()))
         .max()
         .unwrap_or(0);
-    Ok(format!("T-{}", max_id + 1))
+    Ok(format!("P-{}", max_id + 1))
 }
 ```
 
-Time complexity: O(n) where n = number of tasks
+Time complexity: O(n) where n = number of items
 
-For large projects (1000s of tasks), this is still fast (~1ms).
+For large projects (1000s of items), this is still fast (~1ms).
 
 ### File System Layout
 
@@ -472,4 +428,4 @@ This is only possible because of Jujutsu's flexible commit graph and workspace m
 
 - [Design Philosophy](design-philosophy.md) - Why these choices were made
 - [Change ID Tracking](change-tracking.md) - How change IDs enable robust metadata
-- [CLI Reference](../reference/cli.md) - Using the storage layer
+- [CLI Reference](../reference/cli-workflow.md) - Using the storage layer

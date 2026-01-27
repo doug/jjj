@@ -6,9 +6,10 @@ This document describes the testing strategy and test suite for **jjj**.
 
 ```
 tests/
-├── task_management.rs      # Task model and workflow tests
-├── review_workflow.rs      # Review and comment tests
-└── config_management.rs    # Configuration tests
+├── config_management.rs       # Configuration tests
+├── integration_storage.rs     # Storage layer integration tests
+├── integration_test.rs        # End-to-end integration tests
+└── workflow_test.rs           # Workflow command tests
 ```
 
 ## Running Tests
@@ -22,15 +23,15 @@ cargo test
 ### Run Specific Test Suite
 
 ```bash
-cargo test --test task_management
-cargo test --test review_workflow
 cargo test --test config_management
+cargo test --test integration_test
+cargo test --test workflow_test
 ```
 
 ### Run a Specific Test
 
 ```bash
-cargo test test_create_task_with_defaults
+cargo test test_default_project_config
 cargo test test_comment_relocation_fuzzy_match
 ```
 
@@ -47,80 +48,6 @@ cargo test -- --test-threads=4
 ```
 
 ## Test Coverage
-
-### Task Management Tests (14 tests)
-
-**Behavior-Driven Scenarios:**
-
-1. **test_create_task_with_defaults**
-   - Given: I want to create a new task
-   - When: I create the task with basic properties
-   - Then: The task should have correct defaults
-
-2. **test_add_tags_to_task**
-   - Given: A task exists
-   - When: I add multiple tags
-   - Then: Tags are added and version increments
-
-3. **test_remove_tag_from_task**
-   - Given: A task with tags
-   - When: I remove a tag
-   - Then: The tag is removed and version increments
-
-4. **test_remove_nonexistent_tag**
-   - Given: A task without a specific tag
-   - When: I try to remove a non-existent tag
-   - Then: Nothing changes
-
-5. **test_attach_change_to_task**
-   - Given: A task and a change ID
-   - When: I attach the change
-   - Then: The change is linked and version increments
-
-6. **test_attach_same_change_twice**
-   - Given: A task with an attached change
-   - When: I try to attach the same change again
-   - Then: It's idempotent (no duplicate, no version increment)
-
-7. **test_detach_change_from_task**
-   - Given: A task with multiple attached changes
-   - When: I detach one change
-   - Then: Only that change is removed
-
-8. **test_detach_nonexistent_change**
-   - Given: A task with a change
-   - When: I try to detach a non-existent change
-   - Then: Nothing changes
-
-9. **test_move_task_to_different_column**
-   - Given: A task in one column
-   - When: I move it to another column
-   - Then: The column updates and version increments
-
-10. **test_filter_tasks_by_column**
-    - Given: Tasks in different columns
-    - When: I filter by a specific column
-    - Then: Only matching tasks are returned
-
-11. **test_filter_tasks_by_tag**
-    - Given: Tasks with different tags
-    - When: I filter by a specific tag
-    - Then: Only tasks with that tag match
-
-12. **test_filter_tasks_by_assignee**
-    - Given: Tasks with different assignees
-    - When: I filter by assignee
-    - Then: Only that user's tasks match
-
-13. **test_filter_tasks_with_multiple_criteria**
-    - Given: Tasks with various properties
-    - When: I apply multiple filters (column + tag + assignee)
-    - Then: Only tasks matching ALL criteria are returned
-
-14. **test_task_serialization**
-    - Given: A fully-configured task
-    - When: I serialize and deserialize via JSON
-    - Then: All properties are preserved
 
 ### Review Workflow Tests (14 tests)
 
@@ -277,18 +204,7 @@ cargo test -- --test-threads=4
 
 ## Test Results
 
-All **43 tests** pass successfully:
-
-```
-running 14 tests (config_management)
-test result: ok. 14 passed; 0 failed; 0 ignored
-
-running 14 tests (review_workflow)
-test result: ok. 14 passed; 0 failed; 0 ignored
-
-running 14 tests (task_management)
-test result: ok. 14 passed; 0 failed; 0 ignored
-```
+Run `cargo test` to see current test results. Tests cover configuration management, storage operations, workflow commands, and integration scenarios.
 
 ## Testing Philosophy
 
@@ -389,42 +305,20 @@ fn test_large_task_list_performance() {
 ### Factory Functions
 
 ```rust
-fn create_test_task(id: &str) -> Task {
-    Task::new(
+fn create_test_problem(id: &str) -> Problem {
+    Problem::new(
         id.to_string(),
-        "Test task".to_string(),
-        "TODO".to_string(),
+        "Test problem".to_string(),
     )
-}
-
-fn create_test_review(change_id: &str) -> ReviewManifest {
-    ReviewManifest {
-        change_id: change_id.to_string(),
-        author: "test@example.com".to_string(),
-        // ... defaults
-    }
 }
 ```
 
 ### Test Builders
 
 ```rust
-struct TaskBuilder {
-    task: Task,
-}
-
-impl TaskBuilder {
-    fn new(id: &str) -> Self { ... }
-    fn with_tag(mut self, tag: &str) -> Self { ... }
-    fn with_assignee(mut self, user: &str) -> Self { ... }
-    fn build(self) -> Task { ... }
-}
-
-// Usage:
-let task = TaskBuilder::new("T-1")
-    .with_tag("backend")
-    .with_assignee("alice")
-    .build();
+// Usage example:
+let problem = Problem::new("P-1".into(), "Test problem".into());
+let solution = Solution::new("S-1".into(), "Test solution".into(), "P-1".into());
 ```
 
 ## Continuous Integration
@@ -481,10 +375,10 @@ When changing behavior:
 ## Coverage Metrics
 
 Current coverage (approximate):
-- **Models**: ~95% (task, review, config)
-- **Storage**: ~0% (requires integration tests)
-- **Commands**: ~0% (requires integration tests)
-- **JJ Integration**: ~0% (requires mocking or real jj)
+- **Models**: Problem, Solution, Critique, Milestone
+- **Storage**: Integration tests cover load/save operations
+- **Commands**: Workflow tests cover CLI command execution
+- **JJ Integration**: Requires mocking or real jj environment
 
 Target coverage: 80%+ overall
 

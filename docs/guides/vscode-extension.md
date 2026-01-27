@@ -1,6 +1,6 @@
 # VSCode Extension
 
-The jjj VSCode extension provides IDE integration for managing tasks, features, milestones, bugs, and code reviews directly within Visual Studio Code.
+The jjj VSCode extension provides IDE integration for managing problems, solutions, critiques, milestones, and code reviews directly within Visual Studio Code.
 
 > **Note**
 >
@@ -11,18 +11,18 @@ The jjj VSCode extension provides IDE integration for managing tasks, features, 
 The extension integrates jjj's project management capabilities into your editor:
 
 **Currently Implemented:**
-- Sidebar views for Tasks, Features, Milestones, Bugs, and Reviews
+- Sidebar views for Problems, Solutions, Critiques, Milestones, and Reviews
 - Command palette integration for jjj commands
 - Welcome view for initializing repositories
 - Refresh functionality for all views
 - Basic command structure
 
 **Planned Features:**
-- Interactive Kanban board webview
-- Drag-and-drop task management
+- Interactive board webview
+- Drag-and-drop solution management
 - Planning and roadmap visualizations
 - Dashboard with project overview
-- Inline code review with comments
+- Inline critique display with comments
 - Status bar integration
 
 ## Installation
@@ -86,9 +86,9 @@ code .
 
 Once initialized, the sidebar shows:
 - **Milestones** - Release targets and sprints
-- **Features** - User-facing functionality
-- **Tasks** - Work items for features
-- **Bugs** - Issues to fix
+- **Problems** - Things that need solving
+- **Solutions** - Conjectures proposed to solve problems
+- **Critiques** - Error elimination on solutions
 - **Reviews** - Code review requests
 
 ## Features
@@ -107,39 +107,39 @@ Shows all milestones in your project with target dates and status.
 - Refresh button to sync with latest data
 - Create new milestone (`+` button)
 
-#### Features View
+#### Problems View
 
-Displays features grouped by status or milestone.
+Displays problems grouped by status or priority.
 
 **Actions:**
-- Expand to see linked tasks
-- Click to open feature details
-- Create new feature (`+` button)
+- Expand to see linked solutions
+- Click to open problem details
+- Create new problem (`+` button)
 - Refresh to update
 
-#### Tasks View
+#### Solutions View
 
-Lists tasks with grouping options (by column, feature, or assignee).
+Lists solutions with grouping options (by status, problem, or assignee).
 
 **Actions:**
-- Click task to view details
+- Click solution to view details
 - Toggle grouping with group-by button
-- Refresh tasks
-- Create new task (`+` button)
+- Refresh solutions
+- Create new solution (`+` button)
 
 **Grouping Options:**
-- By column (TODO, In Progress, Done, etc.)
-- By feature
+- By status (proposed, testing, accepted, refuted)
+- By problem
 - By assignee
 
-#### Bugs View
+#### Critiques View
 
-Shows bugs organized by severity or status.
+Shows critiques organized by severity or status.
 
 **Actions:**
-- View bug details
-- Link bugs to features
-- Create new bug (`+` button)
+- View critique details
+- Link critiques to solutions
+- Create new critique (`+` button)
 - Refresh view
 
 #### Reviews View
@@ -157,38 +157,37 @@ Access jjj commands via Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`):
 
 **Available Commands:**
 - `JJJ: Initialize Repository` - Set up jjj in current repo
-- `JJJ: Open Task` - View task details
-- `JJJ: Open Feature` - View feature details
+- `JJJ: Open Problem` - View problem details
+- `JJJ: Open Solution` - View solution details
+- `JJJ: Open Critique` - View critique details
 - `JJJ: Open Milestone` - View milestone details
-- `JJJ: Open Bug` - View bug details
 - `JJJ: Open Review` - View review details
-- `JJJ: Create Task` - Create a new task
-- `JJJ: Create Feature` - Create a new feature
+- `JJJ: Create Problem` - Create a new problem
+- `JJJ: Create Solution` - Create a new solution
 - `JJJ: Create Milestone` - Create a new milestone
-- `JJJ: Create Bug` - Report a new bug
+- `JJJ: Create Critique` - Raise a new critique
 - `JJJ: Open Dashboard` - Open dashboard view (planned)
-- `JJJ: Open Kanban Board` - Open Kanban board (planned)
+- `JJJ: Open Board` - Open board view (planned)
 - `JJJ: Open Planning View` - Open planning view (planned)
 - `JJJ: Refresh All Views` - Refresh all sidebar views
-- `JJJ: Refresh Tasks` - Refresh tasks view
-- `JJJ: Refresh Features` - Refresh features view
+- `JJJ: Refresh Problems` - Refresh problems view
+- `JJJ: Refresh Solutions` - Refresh solutions view
 - `JJJ: Refresh Milestones` - Refresh milestones view
-- `JJJ: Refresh Bugs` - Refresh bugs view
+- `JJJ: Refresh Critiques` - Refresh critiques view
 - `JJJ: Refresh Reviews` - Refresh reviews view
-- `JJJ: Toggle Task Grouping` - Change task grouping mode
 
 ### Webview Panels (Planned)
 
 The following webview panels are planned for future releases:
 
-#### Kanban Board
-Interactive board showing tasks organized by column with drag-and-drop support.
+#### Board
+Interactive board showing solutions organized by status with drag-and-drop support.
 
 #### Planning View
-Hierarchical view of milestones, features, and tasks with progress tracking.
+Hierarchical view of milestones, problems, and solutions with progress tracking.
 
 #### Dashboard
-Overview panel showing project status, pending reviews, and task summaries.
+Overview panel showing project status, pending critiques, and solution summaries.
 
 ## Configuration
 
@@ -218,45 +217,44 @@ Path to the jjj executable. Set this if jjj is not in your system PATH.
 
 ### Implemented (v0.0.1)
 
-- ✅ Extension scaffolding and activation
-- ✅ Sidebar container with activity bar icon
-- ✅ Welcome view for uninitialized repositories
-- ✅ Tree view providers for:
+- Extension scaffolding and activation
+- Sidebar container with activity bar icon
+- Welcome view for uninitialized repositories
+- Tree view providers for:
   - Milestones
-  - Features
-  - Tasks
-  - Bugs
+  - Problems
+  - Solutions
+  - Critiques
   - Reviews
-- ✅ Command palette integration
-- ✅ Refresh commands for all views
-- ✅ Toggle task grouping
-- ✅ Create commands for all work item types
-- ✅ JJJ CLI wrapper (`jjj.ts`)
-- ✅ Custom document provider for jjj files
-- ✅ Basic testing infrastructure
+- Command palette integration
+- Refresh commands for all views
+- Create commands for all work item types
+- JJJ CLI wrapper (`jjj.ts`)
+- Custom document provider for jjj files
+- Basic testing infrastructure
 
 ### Planned (Future Releases)
 
-- ⏳ **v0.2.0** - Webview Panels
-  - Interactive Kanban board
+- **v0.2.0** - Webview Panels
+  - Interactive board
   - Planning view with hierarchy
   - Dashboard panel
 
-- ⏳ **v0.3.0** - Code Review Integration
-  - Inline comment widgets
+- **v0.3.0** - Code Review Integration
+  - Inline critique display
   - Gutter decorations
   - Diff view integration
-  - Approve/request changes actions
+  - LGTM/critique actions
 
-- ⏳ **v0.4.0** - Advanced Features
+- **v0.4.0** - Advanced Features
   - Status bar integration
   - Context menus with actions
   - Keyboard shortcuts
-  - CodeLens for task IDs
+  - CodeLens for problem/solution IDs
   - Hover tooltips
   - Quick picks for operations
 
-- ⏳ **v1.0.0** - Production Release
+- **v1.0.0** - Production Release
   - Full feature set complete
   - Published to VSCode Marketplace
   - Performance optimizations
@@ -342,11 +340,11 @@ vscode/
 │   ├── extension.ts      # Main entry point
 │   ├── jjj.ts           # CLI wrapper
 │   ├── views/           # Tree view providers
-│   │   ├── taskProvider.ts
-│   │   ├── featureProvider.ts
+│   │   ├── problemProvider.ts
+│   │   ├── solutionProvider.ts
+│   │   ├── critiqueProvider.ts
 │   │   ├── milestoneProvider.ts
-│   │   ├── bugProvider.ts
-│   │   ├── kanbanPanel.ts
+│   │   ├── boardPanel.ts
 │   │   ├── dashboardPanel.ts
 │   │   └── planningPanel.ts
 │   ├── editors/         # Custom editors
@@ -407,7 +405,7 @@ npm run test:integration   # Integration tests
 ## Resources
 
 - **Main Documentation**: [jjj Docs](https://doug.github.io/jjj/)
-- **CLI Reference**: [CLI Commands](../reference/cli.md)
+- **CLI Reference**: [CLI Commands](../reference/cli-workflow.md)
 - **GitHub Repository**: [github.com/doug/jjj](https://github.com/doug/jjj)
 - **Report Issues**: [GitHub Issues](https://github.com/doug/jjj/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/doug/jjj/discussions)

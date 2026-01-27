@@ -28,5 +28,5 @@
 # Architecture
 
 - [Design Philosophy](architecture/design-philosophy.md)
-- [Storage & Metadata](architecture/storage-metadata.md)
-- [Change ID Tracking](architecture/change-id-tracking.md)
+- [Storage & Metadata](architecture/storage.md)
+- [Change ID Tracking](architecture/change-tracking.md)

@@ -161,5 +161,6 @@ problems surface first.
 
 ## Next Steps
 
-- [Your First Project](first-project.md) -- Complete walkthrough of a real workflow
-- [CLI Reference](../reference/cli.md) -- Full command documentation
+- [Problem Solving Guide](../guides/problem-solving.md) -- Deep dive into the problem lifecycle
+- [Critique Guidelines](../guides/critique-guidelines.md) -- Writing and responding to critiques
+- [CLI Reference](../reference/cli-workflow.md) -- Full command documentation
