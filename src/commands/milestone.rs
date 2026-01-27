@@ -1,66 +1,41 @@
 use crate::cli::MilestoneAction;
 use crate::error::Result;
 use crate::jj::JjClient;
-use crate::models::{Milestone, MilestoneStatus};
+use crate::models::{Milestone, MilestoneStatus, ProblemStatus, SolutionStatus};
 use crate::storage::MetadataStore;
-use chrono::{NaiveDate, Utc};
+use chrono::NaiveDate;
 
 pub fn execute(action: MilestoneAction) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client)?;
-
     match action {
-        MilestoneAction::New {
-            title,
-            date,
-            description,
-            tag,
-        } => create_milestone(&store, title, date, description, tag),
+        MilestoneAction::New { title, date, tag } => create_milestone(title, date, tag),
         MilestoneAction::Edit {
             milestone_id,
             title,
             date,
-            description,
             status,
             add_tag,
             remove_tag,
-        } => edit_milestone(
-            &store,
+        } => edit_milestone(milestone_id, title, date, status, add_tag, remove_tag),
+        MilestoneAction::List { json } => list_milestones(json),
+        MilestoneAction::Show { milestone_id, json } => show_milestone(milestone_id, json),
+        MilestoneAction::AddProblem {
             milestone_id,
-            title,
-            date,
-            description,
-            status,
-            add_tag,
-            remove_tag,
-        ),
-        MilestoneAction::List { json } => list_milestones(&store, json),
-        MilestoneAction::Show {
+            problem_id,
+        } => add_problem(milestone_id, problem_id),
+        MilestoneAction::RemoveProblem {
             milestone_id,
-            json,
-        } => show_milestone(&store, milestone_id, json),
-        MilestoneAction::AddFeature {
-            milestone_id,
-            feature_id,
-        } => add_feature(&store, milestone_id, feature_id),
-        MilestoneAction::AddBug {
-            milestone_id,
-            bug_id,
-        } => add_bug(&store, milestone_id, bug_id),
-        MilestoneAction::Roadmap { json } => show_roadmap(&store, json),
-        MilestoneAction::Assign { milestone_id, to } => assign_milestone(&store, milestone_id, to),
+            problem_id,
+        } => remove_problem(milestone_id, problem_id),
+        MilestoneAction::Roadmap { json } => show_roadmap(json),
+        MilestoneAction::Assign { milestone_id, to } => assign_milestone(milestone_id, to),
     }
 }
 
-fn create_milestone(
-    store: &MetadataStore,
-    title: String,
-    date: Option<String>,
-    description: Option<String>,
-    tags: Vec<String>,
-) -> Result<()> {
-    store.with_metadata(&format!("Create milestone {}", title), || {
-        let mut config = store.load_config()?;
+fn create_milestone(title: String, date: Option<String>, tags: Vec<String>) -> Result<()> {
+    let jj_client = JjClient::new()?;
+    let store = MetadataStore::new(jj_client)?;
+
+    store.with_metadata(&format!("Create milestone: {}", title), || {
         let milestone_id = store.next_milestone_id()?;
 
         // Parse date if provided
@@ -72,47 +47,36 @@ fn create_milestone(
             None
         };
 
-        let mut milestone = Milestone {
-            id: milestone_id.clone(),
-            title: title.clone(),
-            description,
-            target_date,
-            status: MilestoneStatus::Planning,
-            feature_ids: Vec::new(),
-            bug_ids: Vec::new(),
-            tag_ids: std::collections::HashSet::new(),
-            version: None,
-            assignee: None,
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
-        };
+        let mut milestone = Milestone::new(milestone_id.clone(), title.clone());
+        milestone.set_target_date(target_date);
 
-        // Resolve and add tags
-        for tag_input in tags {
-            let tag_id = crate::utils::resolve_tag(&mut config, &tag_input);
-            milestone.add_tag(tag_id);
+        // Add tags
+        for tag in tags {
+            milestone.add_tag(tag);
         }
 
-        store.save_config(&config)?;
         store.save_milestone(&milestone)?;
         println!("Created milestone {} ({})", milestone_id, title);
+        if let Some(d) = target_date {
+            println!("  Target date: {}", d.format("%Y-%m-%d"));
+        }
         Ok(())
     })
 }
 
 fn edit_milestone(
-    store: &MetadataStore,
     milestone_id: String,
     title: Option<String>,
     date: Option<String>,
-    description: Option<String>,
     status: Option<String>,
     add_tags: Vec<String>,
     remove_tags: Vec<String>,
 ) -> Result<()> {
+    let jj_client = JjClient::new()?;
+    let store = MetadataStore::new(jj_client)?;
+
     store.with_metadata(&format!("Edit milestone {}", milestone_id), || {
         let mut milestone = store.load_milestone(&milestone_id)?;
-        let mut config = store.load_config()?;
 
         if let Some(t) = title {
             milestone.title = t;
@@ -121,52 +85,33 @@ fn edit_milestone(
         if let Some(d) = date {
             let naive_date = NaiveDate::parse_from_str(&d, "%Y-%m-%d")
                 .map_err(|_| format!("Invalid date format: {}. Use YYYY-MM-DD", d))?;
-            milestone.target_date = Some(naive_date.and_hms_opt(0, 0, 0).unwrap().and_utc());
-        }
-
-        if let Some(desc) = description {
-            milestone.description = Some(desc);
+            milestone.set_target_date(Some(naive_date.and_hms_opt(0, 0, 0).unwrap().and_utc()));
         }
 
         if let Some(s) = status {
-            milestone.status = match s.to_lowercase().as_str() {
-                "planning" => MilestoneStatus::Planning,
-                "active" => MilestoneStatus::Active,
-                "released" => MilestoneStatus::Released,
-                "cancelled" => MilestoneStatus::Cancelled,
-                _ => return Err(format!("Invalid status: {}. Use planning, active, released, or cancelled", s).into()),
-            };
+            let new_status: MilestoneStatus = s.parse().map_err(|e: String| e)?;
+            milestone.set_status(new_status);
         }
 
-        for tag_input in add_tags {
-            let tag_id = crate::utils::resolve_tag(&mut config, &tag_input);
-            milestone.add_tag(tag_id);
+        for tag in add_tags {
+            milestone.add_tag(tag);
         }
 
-        for tag_input in remove_tags {
-            let tag_id = if let Some(tag) = config.get_tag(&tag_input) {
-                Some(tag.id.clone())
-            } else if let Some(tag) = config.get_tag_by_name(&tag_input) {
-                Some(tag.id.clone())
-            } else {
-                Some(tag_input)
-            };
-            
-            if let Some(id) = tag_id {
-                milestone.remove_tag(&id);
-            }
+        for tag in remove_tags {
+            milestone.remove_tag(&tag);
         }
 
-        store.save_config(&config)?;
         store.save_milestone(&milestone)?;
         println!("Updated milestone {}", milestone_id);
         Ok(())
     })
 }
 
-fn list_milestones(store: &MetadataStore, json: bool) -> Result<()> {
+fn list_milestones(json: bool) -> Result<()> {
+    let jj_client = JjClient::new()?;
+    let store = MetadataStore::new(jj_client)?;
+
     let milestones = store.list_milestones()?;
-    let config = store.load_config()?;
 
     if json {
         println!("{}", serde_json::to_string_pretty(&milestones)?);
@@ -178,51 +123,41 @@ fn list_milestones(store: &MetadataStore, json: bool) -> Result<()> {
         return Ok(());
     }
 
-    println!("Milestones:");
-    for milestone in milestones {
-        let date_str = if let Some(date) = milestone.target_date {
-            format!(" ({})", date.format("%Y-%m-%d"))
-        } else {
-            String::new()
-        };
+    println!("{:<8} {:<12} {:<12} {:<6} {}", "ID", "STATUS", "TARGET", "PROBS", "TITLE");
+    println!("{}", "-".repeat(60));
 
-        let status_str = format!("{:?}", milestone.status);
+    for milestone in &milestones {
+        let date_str = milestone
+            .target_date
+            .map(|d| d.format("%Y-%m-%d").to_string())
+            .unwrap_or_else(|| "-".to_string());
 
-        let tag_names: Vec<String> = milestone
-            .tag_ids
-            .iter()
-            .map(|id| {
-                config
-                    .get_tag(id)
-                    .map(|t| t.name.clone())
-                    .unwrap_or_else(|| id.clone())
-            })
-            .collect();
-        
-        let tags_str = if tag_names.is_empty() {
-            String::new()
-        } else {
-            format!(" [{}]", tag_names.join(", "))
+        let status_icon = match milestone.status {
+            MilestoneStatus::Planning => " ",
+            MilestoneStatus::Active => ">",
+            MilestoneStatus::Completed => "+",
+            MilestoneStatus::Cancelled => "x",
         };
 
         println!(
-            "  {} - {} [{}]{}{} ({} features, {} bugs)",
+            "{:<8} {}{:<11} {:<12} {:<6} {}",
             milestone.id,
-            milestone.title,
-            status_str,
+            status_icon,
+            milestone.status,
             date_str,
-            tags_str,
-            milestone.feature_ids.len(),
-            milestone.bug_ids.len()
+            milestone.problem_ids.len(),
+            milestone.title
         );
     }
 
     Ok(())
 }
 
-fn show_milestone(store: &MetadataStore, milestone_id: String, json: bool) -> Result<()> {
+fn show_milestone(milestone_id: String, json: bool) -> Result<()> {
+    let jj_client = JjClient::new()?;
+    let store = MetadataStore::new(jj_client)?;
+
     let milestone = store.load_milestone(&milestone_id)?;
-    let config = store.load_config()?;
 
     if json {
         println!("{}", serde_json::to_string_pretty(&milestone)?);
@@ -230,20 +165,14 @@ fn show_milestone(store: &MetadataStore, milestone_id: String, json: bool) -> Re
     }
 
     println!("Milestone: {} - {}", milestone.id, milestone.title);
-    println!("Status: {:?}", milestone.status);
-
-    if let Some(desc) = &milestone.description {
-        println!("Description: {}", desc);
-    }
+    println!("Status: {}", milestone.status);
 
     if let Some(date) = milestone.target_date {
         println!("Target Date: {}", date.format("%Y-%m-%d"));
-        if milestone.status != MilestoneStatus::Released
-            && milestone.status != MilestoneStatus::Cancelled
-        {
+        if milestone.is_active() {
             if let Some(days) = milestone.days_until_target() {
                 if days < 0 {
-                    println!("  ⚠️  {} days overdue", -days);
+                    println!("  {} days overdue", -days);
                 } else {
                     println!("  {} days remaining", days);
                 }
@@ -251,28 +180,76 @@ fn show_milestone(store: &MetadataStore, milestone_id: String, json: bool) -> Re
         }
     }
 
-    if !milestone.tag_ids.is_empty() {
-        let tag_names: Vec<String> = milestone
-            .tag_ids
-            .iter()
-            .map(|id| {
-                config
-                    .get_tag(id)
-                    .map(|t| t.name.clone())
-                    .unwrap_or_else(|| id.clone())
-            })
-            .collect();
-        println!("Tags: {}", tag_names.join(", "));
+    if let Some(ref assignee) = milestone.assignee {
+        println!("Assignee: {}", assignee);
     }
 
-    println!("\nFeatures ({}):", milestone.feature_ids.len());
-    for feature_id in &milestone.feature_ids {
-        println!("  - {}", feature_id);
+    if !milestone.tags.is_empty() {
+        println!(
+            "Tags: {}",
+            milestone.tags.iter().cloned().collect::<Vec<_>>().join(", ")
+        );
     }
 
-    println!("\nBugs ({}):", milestone.bug_ids.len());
-    for bug_id in &milestone.bug_ids {
-        println!("  - {}", bug_id);
+    // Show goals
+    if !milestone.goals.is_empty() {
+        println!("\n## Goals\n{}", milestone.goals);
+    }
+
+    // Show success criteria
+    if !milestone.success_criteria.is_empty() {
+        println!("\n## Success Criteria\n{}", milestone.success_criteria);
+    }
+
+    // Show problems and their solutions
+    if !milestone.problem_ids.is_empty() {
+        println!("\n## Problems ({})", milestone.problem_ids.len());
+
+        let mut solved = 0;
+        let mut in_progress = 0;
+        let mut open = 0;
+
+        for problem_id in &milestone.problem_ids {
+            if let Ok(problem) = store.load_problem(problem_id) {
+                let solutions = store.get_solutions_for_problem(problem_id).unwrap_or_default();
+                let accepted_solutions = solutions
+                    .iter()
+                    .filter(|s| s.status == SolutionStatus::Accepted)
+                    .count();
+                let testing_solutions = solutions
+                    .iter()
+                    .filter(|s| s.status == SolutionStatus::Testing)
+                    .count();
+
+                let status_icon = match problem.status {
+                    ProblemStatus::Open => "[ ]",
+                    ProblemStatus::InProgress => "[>]",
+                    ProblemStatus::Solved => "[+]",
+                    ProblemStatus::Dissolved => "[~]",
+                };
+
+                match problem.status {
+                    ProblemStatus::Open => open += 1,
+                    ProblemStatus::InProgress => in_progress += 1,
+                    ProblemStatus::Solved | ProblemStatus::Dissolved => solved += 1,
+                }
+
+                println!(
+                    "  {} {} - {} ({} solutions, {} accepted, {} testing)",
+                    status_icon,
+                    problem.id,
+                    problem.title,
+                    solutions.len(),
+                    accepted_solutions,
+                    testing_solutions
+                );
+            }
+        }
+
+        println!(
+            "\n  Progress: {} solved, {} in progress, {} open",
+            solved, in_progress, open
+        );
     }
 
     println!("\nCreated: {}", milestone.created_at.format("%Y-%m-%d %H:%M"));
@@ -281,61 +258,62 @@ fn show_milestone(store: &MetadataStore, milestone_id: String, json: bool) -> Re
     Ok(())
 }
 
-fn add_feature(store: &MetadataStore, milestone_id: String, feature_id: String) -> Result<()> {
+fn add_problem(milestone_id: String, problem_id: String) -> Result<()> {
+    let jj_client = JjClient::new()?;
+    let store = MetadataStore::new(jj_client)?;
+
     store.with_metadata(
-        &format!("Add feature {} to milestone {}", feature_id, milestone_id),
+        &format!("Add problem {} to milestone {}", problem_id, milestone_id),
         || {
             let mut milestone = store.load_milestone(&milestone_id)?;
-            let mut feature = store.load_feature(&feature_id)?;
+            let mut problem = store.load_problem(&problem_id)?;
 
-            // Add feature to milestone
-            if !milestone.feature_ids.contains(&feature_id) {
-                milestone.feature_ids.push(feature_id.clone());
-                milestone.updated_at = Utc::now();
-                store.save_milestone(&milestone)?;
-            }
+            milestone.add_problem(problem_id.clone());
+            store.save_milestone(&milestone)?;
 
-            // Update feature's milestone
-            feature.milestone_id = Some(milestone_id.clone());
-            feature.updated_at = Utc::now();
-            store.save_feature(&feature)?;
+            problem.set_milestone(Some(milestone_id.clone()));
+            store.save_problem(&problem)?;
 
+            println!(
+                "Added problem {} to milestone {}",
+                problem_id, milestone_id
+            );
             Ok(())
         },
-    )?;
-
-    println!("Added feature {} to milestone {}", feature_id, milestone_id);
-    Ok(())
+    )
 }
 
-fn add_bug(store: &MetadataStore, milestone_id: String, bug_id: String) -> Result<()> {
+fn remove_problem(milestone_id: String, problem_id: String) -> Result<()> {
+    let jj_client = JjClient::new()?;
+    let store = MetadataStore::new(jj_client)?;
+
     store.with_metadata(
-        &format!("Add bug {} to milestone {}", bug_id, milestone_id),
+        &format!("Remove problem {} from milestone {}", problem_id, milestone_id),
         || {
             let mut milestone = store.load_milestone(&milestone_id)?;
-            let mut bug = store.load_bug(&bug_id)?;
+            let mut problem = store.load_problem(&problem_id)?;
 
-            // Add bug to milestone
-            if !milestone.bug_ids.contains(&bug_id) {
-                milestone.bug_ids.push(bug_id.clone());
-                milestone.updated_at = Utc::now();
-                store.save_milestone(&milestone)?;
+            milestone.remove_problem(&problem_id);
+            store.save_milestone(&milestone)?;
+
+            if problem.milestone_id.as_deref() == Some(&milestone_id) {
+                problem.set_milestone(None);
+                store.save_problem(&problem)?;
             }
 
-            // Update bug's milestone
-            bug.milestone_id = Some(milestone_id.clone());
-            bug.updated_at = Utc::now();
-            store.save_bug(&bug)?;
-
+            println!(
+                "Removed problem {} from milestone {}",
+                problem_id, milestone_id
+            );
             Ok(())
         },
-    )?;
-
-    println!("Added bug {} to milestone {}", bug_id, milestone_id);
-    Ok(())
+    )
 }
 
-fn show_roadmap(store: &MetadataStore, json: bool) -> Result<()> {
+fn show_roadmap(json: bool) -> Result<()> {
+    let jj_client = JjClient::new()?;
+    let store = MetadataStore::new(jj_client)?;
+
     let mut milestones = store.list_milestones()?;
 
     // Sort by target date (None dates go last)
@@ -359,68 +337,72 @@ fn show_roadmap(store: &MetadataStore, json: bool) -> Result<()> {
     println!("Roadmap:\n");
 
     for milestone in milestones {
-        let date_str = if let Some(date) = milestone.target_date {
-            format!("{}", date.format("%Y-%m-%d"))
-        } else {
-            "No date".to_string()
-        };
+        let date_str = milestone
+            .target_date
+            .map(|d| d.format("%Y-%m-%d").to_string())
+            .unwrap_or_else(|| "No date".to_string());
 
         let status_icon = match milestone.status {
-            MilestoneStatus::Planning => "📋",
-            MilestoneStatus::Active => "🚀",
-            MilestoneStatus::Released => "✅",
-            MilestoneStatus::Cancelled => "❌",
+            MilestoneStatus::Planning => " ",
+            MilestoneStatus::Active => ">",
+            MilestoneStatus::Completed => "+",
+            MilestoneStatus::Cancelled => "x",
+        };
+
+        // Calculate progress
+        let mut solved = 0;
+        let total = milestone.problem_ids.len();
+
+        for problem_id in &milestone.problem_ids {
+            if let Ok(problem) = store.load_problem(problem_id) {
+                if problem.is_resolved() {
+                    solved += 1;
+                }
+            }
+        }
+
+        let progress = if total > 0 {
+            format!("{}/{} problems solved", solved, total)
+        } else {
+            "No problems".to_string()
         };
 
         println!(
             "{} {} - {} [{}]",
-            status_icon,
-            milestone.id,
-            milestone.title,
-            date_str
+            status_icon, milestone.id, milestone.title, date_str
         );
-
-        if let Some(desc) = &milestone.description {
-            println!("   {}", desc);
-        }
+        println!("    {}", progress);
 
         // Show overdue warning
         if milestone.is_overdue() {
             if let Some(days) = milestone.days_until_target() {
-                println!("   ⚠️  {} days overdue", -days);
+                println!("    {} days overdue", -days);
             }
         }
 
-        println!(
-            "   {} features, {} bugs",
-            milestone.feature_ids.len(),
-            milestone.bug_ids.len()
-        );
         println!();
     }
 
     Ok(())
 }
 
-fn assign_milestone(store: &MetadataStore, milestone_id: String, assignee: Option<String>) -> Result<()> {
-    // Determine assignee
-    let assignee_name = if let Some(name) = assignee {
-        name
-    } else {
-        // Default to current user
-        store.jj_client.user_name()?
+fn assign_milestone(milestone_id: String, assignee: Option<String>) -> Result<()> {
+    let jj_client = JjClient::new()?;
+    let store = MetadataStore::new(jj_client)?;
+
+    let assignee_name = match assignee {
+        Some(name) => name,
+        None => store.jj_client.user_identity()?,
     };
-    
-    let assignee_clone = assignee_name.clone();
 
-    store.with_metadata(&format!("Assign milestone {} to {}", milestone_id, assignee_name), || {
-        let mut milestone = store.load_milestone(&milestone_id)?;
-        milestone.assignee = Some(assignee_name.clone());
-        milestone.updated_at = Utc::now();
-        store.save_milestone(&milestone)?;
-        Ok(())
-    })?;
-
-    println!("Assigned milestone {} to {}", milestone_id, assignee_clone);
-    Ok(())
+    store.with_metadata(
+        &format!("Assign milestone {} to {}", milestone_id, assignee_name),
+        || {
+            let mut milestone = store.load_milestone(&milestone_id)?;
+            milestone.assignee = Some(assignee_name.clone());
+            store.save_milestone(&milestone)?;
+            println!("Assigned milestone {} to {}", milestone_id, assignee_name);
+            Ok(())
+        },
+    )
 }

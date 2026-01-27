@@ -7,93 +7,10 @@ fn test_default_project_config() {
     // When: I create a default config
     let config = ProjectConfig::default();
 
-    // Then: It should have standard Kanban columns
-    assert_eq!(config.columns.len(), 4);
-    assert_eq!(config.columns[0], "TODO");
-    assert_eq!(config.columns[1], "In Progress");
-    assert_eq!(config.columns[2], "Review");
-    assert_eq!(config.columns[3], "Done");
-
-    // And: No project-specific settings
+    // Then: It should have sensible defaults
     assert!(config.name.is_none());
     assert!(config.tags.is_empty());
     assert!(config.default_reviewers.is_empty());
-}
-
-/// Behavior: Validating column names
-#[test]
-fn test_validate_column_names() {
-    // Given: A config with specific columns
-    let config = ProjectConfig::default();
-
-    // Then: Valid columns should pass validation
-    assert!(config.is_valid_column("TODO"));
-    assert!(config.is_valid_column("In Progress"));
-    assert!(config.is_valid_column("Review"));
-    assert!(config.is_valid_column("Done"));
-
-    // And: Invalid columns should fail
-    assert!(!config.is_valid_column("Nonexistent"));
-    assert!(!config.is_valid_column("todo")); // Case sensitive
-}
-
-/// Behavior: Adding custom columns
-#[test]
-fn test_add_custom_column() {
-    // Given: A default config
-    let mut config = ProjectConfig::default();
-    let initial_count = config.columns.len();
-
-    // When: I add a custom column
-    config.add_column("Blocked".to_string());
-
-    // Then: The column should be added
-    assert_eq!(config.columns.len(), initial_count + 1);
-    assert!(config.is_valid_column("Blocked"));
-}
-
-/// Behavior: Adding duplicate columns
-#[test]
-fn test_add_duplicate_column() {
-    // Given: A config with existing columns
-    let mut config = ProjectConfig::default();
-    let initial_count = config.columns.len();
-
-    // When: I try to add an existing column
-    config.add_column("TODO".to_string());
-
-    // Then: It should not be duplicated
-    assert_eq!(config.columns.len(), initial_count);
-}
-
-/// Behavior: Removing columns
-#[test]
-fn test_remove_column() {
-    // Given: A config with standard columns
-    let mut config = ProjectConfig::default();
-
-    // When: I remove a column
-    let removed = config.remove_column("Review");
-
-    // Then: The column should be gone
-    assert!(removed);
-    assert!(!config.is_valid_column("Review"));
-    assert_eq!(config.columns.len(), 3);
-}
-
-/// Behavior: Removing non-existent columns
-#[test]
-fn test_remove_nonexistent_column() {
-    // Given: A default config
-    let mut config = ProjectConfig::default();
-    let initial_count = config.columns.len();
-
-    // When: I try to remove a column that doesn't exist
-    let removed = config.remove_column("Nonexistent");
-
-    // Then: Nothing should change
-    assert!(!removed);
-    assert_eq!(config.columns.len(), initial_count);
 }
 
 /// Behavior: Adding tags to config
@@ -186,7 +103,6 @@ fn test_config_serialization_toml() {
     // Given: A fully configured project
     let mut config = ProjectConfig::default();
     config.name = Some("Test Project".to_string());
-    config.add_column("Blocked".to_string());
     config.add_tag("backend".to_string(), None, None);
     config.add_tag("frontend".to_string(), None, None);
     config.default_reviewers = vec!["alice".to_string(), "bob".to_string()];
@@ -205,61 +121,8 @@ fn test_config_serialization_toml() {
 
     // Then: All data should be preserved
     assert_eq!(deserialized.name, config.name);
-    assert_eq!(deserialized.columns.len(), config.columns.len());
     assert_eq!(deserialized.tags.len(), config.tags.len());
     assert_eq!(deserialized.default_reviewers.len(), config.default_reviewers.len());
-}
-
-/// Behavior: Config with custom column workflow
-#[test]
-fn test_custom_workflow_columns() {
-    // Given: A team with a custom workflow
-    let config = ProjectConfig {
-        name: Some("Custom Workflow Project".to_string()),
-        columns: vec![
-            "Backlog".to_string(),
-            "Prioritized".to_string(),
-            "In Development".to_string(),
-            "Code Review".to_string(),
-            "QA Testing".to_string(),
-            "Staging".to_string(),
-            "Production".to_string(),
-            "Production".to_string(),
-        ],
-        tags: vec![
-            jjj::models::Tag { id: "tag-1".to_string(), name: "bug".to_string(), description: None, color: None },
-            jjj::models::Tag { id: "tag-2".to_string(), name: "feature".to_string(), description: None, color: None },
-            jjj::models::Tag { id: "tag-3".to_string(), name: "refactor".to_string(), description: None, color: None },
-        ],
-        default_reviewers: vec![],
-        settings: std::collections::HashMap::new(),
-    };
-
-    // Then: All custom columns should be valid
-    assert!(config.is_valid_column("Backlog"));
-    assert!(config.is_valid_column("QA Testing"));
-    assert!(config.is_valid_column("Production"));
-
-    // And: Standard columns should not be valid
-    assert!(!config.is_valid_column("TODO"));
-}
-
-/// Behavior: Empty config edge cases
-#[test]
-fn test_empty_config_edge_cases() {
-    // Given: A minimal config
-    let config = ProjectConfig {
-        name: None,
-        columns: vec![],
-        tags: vec![],
-        default_reviewers: vec![],
-        settings: std::collections::HashMap::new(),
-    };
-
-    // Then: It should handle empty state gracefully
-    assert!(config.name.is_none());
-    assert_eq!(config.columns.len(), 0);
-    assert!(!config.is_valid_column("anything"));
 }
 
 /// Behavior: Config with extensive settings

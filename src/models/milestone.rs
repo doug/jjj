@@ -1,9 +1,9 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-
 use std::collections::HashSet;
 
-/// A milestone represents a release, sprint, or delivery target
+/// A milestone represents a cycle when we expect to have reasonable solutions
+/// for a set of problems. It's a temporal target for problem resolution.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Milestone {
     /// Unique milestone identifier (e.g., "M-1")
@@ -12,29 +12,19 @@ pub struct Milestone {
     /// Milestone title (e.g., "v1.0 Release")
     pub title: String,
 
-    /// Description of what this milestone delivers
-    pub description: Option<String>,
-
     /// Target completion date
     pub target_date: Option<DateTime<Utc>>,
 
     /// Current status
     pub status: MilestoneStatus,
 
-    /// Features included in this milestone
+    /// Problems we aim to solve this cycle
     #[serde(default)]
-    pub feature_ids: Vec<String>,
-
-    /// Bugs targeted for this milestone
-    #[serde(default)]
-    pub bug_ids: Vec<String>,
+    pub problem_ids: Vec<String>,
 
     /// Tags for categorization
     #[serde(default)]
-    pub tag_ids: HashSet<String>,
-
-    /// Version number (optional, e.g., "1.0.0")
-    pub version: Option<String>,
+    pub tags: HashSet<String>,
 
     /// Assigned owner/lead
     pub assignee: Option<String>,
@@ -44,11 +34,19 @@ pub struct Milestone {
 
     /// Last update timestamp
     pub updated_at: DateTime<Utc>,
+
+    /// Goals - what we hope to achieve (markdown body)
+    #[serde(default)]
+    pub goals: String,
+
+    /// Success criteria - how we'll know it's complete
+    #[serde(default)]
+    pub success_criteria: String,
 }
 
 /// Status of a milestone
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum MilestoneStatus {
     /// Planning phase
     Planning,
@@ -56,11 +54,42 @@ pub enum MilestoneStatus {
     /// Active development
     Active,
 
-    /// Released/completed
-    Released,
+    /// Completed
+    Completed,
 
     /// Cancelled/abandoned
     Cancelled,
+}
+
+impl Default for MilestoneStatus {
+    fn default() -> Self {
+        MilestoneStatus::Planning
+    }
+}
+
+impl std::fmt::Display for MilestoneStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MilestoneStatus::Planning => write!(f, "planning"),
+            MilestoneStatus::Active => write!(f, "active"),
+            MilestoneStatus::Completed => write!(f, "completed"),
+            MilestoneStatus::Cancelled => write!(f, "cancelled"),
+        }
+    }
+}
+
+impl std::str::FromStr for MilestoneStatus {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "planning" => Ok(MilestoneStatus::Planning),
+            "active" => Ok(MilestoneStatus::Active),
+            "completed" => Ok(MilestoneStatus::Completed),
+            "cancelled" => Ok(MilestoneStatus::Cancelled),
+            _ => Err(format!("Unknown milestone status: {}", s)),
+        }
+    }
 }
 
 impl Milestone {
@@ -70,50 +99,30 @@ impl Milestone {
         Self {
             id,
             title,
-            description: None,
             target_date: None,
             status: MilestoneStatus::Planning,
-            feature_ids: Vec::new(),
-            bug_ids: Vec::new(),
-            tag_ids: HashSet::new(),
-            version: None,
+            problem_ids: Vec::new(),
+            tags: HashSet::new(),
             assignee: None,
             created_at: now,
             updated_at: now,
+            goals: String::new(),
+            success_criteria: String::new(),
         }
     }
 
-    /// Add a feature to this milestone
-    pub fn add_feature(&mut self, feature_id: String) {
-        if !self.feature_ids.contains(&feature_id) {
-            self.feature_ids.push(feature_id);
+    /// Add a problem to this milestone
+    pub fn add_problem(&mut self, problem_id: String) {
+        if !self.problem_ids.contains(&problem_id) {
+            self.problem_ids.push(problem_id);
             self.updated_at = Utc::now();
         }
     }
 
-    /// Remove a feature from this milestone
-    pub fn remove_feature(&mut self, feature_id: &str) -> bool {
-        if let Some(pos) = self.feature_ids.iter().position(|id| id == feature_id) {
-            self.feature_ids.remove(pos);
-            self.updated_at = Utc::now();
-            true
-        } else {
-            false
-        }
-    }
-
-    /// Add a bug to this milestone
-    pub fn add_bug(&mut self, bug_id: String) {
-        if !self.bug_ids.contains(&bug_id) {
-            self.bug_ids.push(bug_id);
-            self.updated_at = Utc::now();
-        }
-    }
-
-    /// Remove a bug from this milestone
-    pub fn remove_bug(&mut self, bug_id: &str) -> bool {
-        if let Some(pos) = self.bug_ids.iter().position(|id| id == bug_id) {
-            self.bug_ids.remove(pos);
+    /// Remove a problem from this milestone
+    pub fn remove_problem(&mut self, problem_id: &str) -> bool {
+        if let Some(pos) = self.problem_ids.iter().position(|id| id == problem_id) {
+            self.problem_ids.remove(pos);
             self.updated_at = Utc::now();
             true
         } else {
@@ -122,8 +131,8 @@ impl Milestone {
     }
 
     /// Set the target date
-    pub fn set_target_date(&mut self, date: DateTime<Utc>) {
-        self.target_date = Some(date);
+    pub fn set_target_date(&mut self, date: Option<DateTime<Utc>>) {
+        self.target_date = date;
         self.updated_at = Utc::now();
     }
 
@@ -133,37 +142,73 @@ impl Milestone {
         self.updated_at = Utc::now();
     }
 
-
-    /// Check if milestone is overdue
-    pub fn is_overdue(&self) -> bool {
-        if let Some(target) = self.target_date {
-            target < Utc::now() && self.status != MilestoneStatus::Released
-        } else {
-            false
-        }
-    }
-
-    /// Get days until target date
-    pub fn days_until_target(&self) -> Option<i64> {
-        self.target_date.map(|target| {
-            (target - Utc::now()).num_days()
-        })
-    }
-
     /// Add a tag
-    pub fn add_tag(&mut self, tag_id: String) {
-        if self.tag_ids.insert(tag_id) {
+    pub fn add_tag(&mut self, tag: String) {
+        if self.tags.insert(tag) {
             self.updated_at = Utc::now();
         }
     }
 
     /// Remove a tag
-    pub fn remove_tag(&mut self, tag_id: &str) -> bool {
-        if self.tag_ids.remove(tag_id) {
+    pub fn remove_tag(&mut self, tag: &str) -> bool {
+        if self.tags.remove(tag) {
             self.updated_at = Utc::now();
             true
         } else {
             false
+        }
+    }
+
+    /// Check if milestone is overdue
+    pub fn is_overdue(&self) -> bool {
+        if let Some(target) = self.target_date {
+            target < Utc::now() && self.status != MilestoneStatus::Completed
+        } else {
+            false
+        }
+    }
+
+    /// Get days until target date (negative if overdue)
+    pub fn days_until_target(&self) -> Option<i64> {
+        self.target_date.map(|target| (target - Utc::now()).num_days())
+    }
+
+    /// Check if milestone is active
+    pub fn is_active(&self) -> bool {
+        matches!(self.status, MilestoneStatus::Planning | MilestoneStatus::Active)
+    }
+}
+
+/// YAML frontmatter for Milestone markdown files
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MilestoneFrontmatter {
+    pub id: String,
+    pub title: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_date: Option<DateTime<Utc>>,
+    pub status: MilestoneStatus,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub problem_ids: Vec<String>,
+    #[serde(default, skip_serializing_if = "HashSet::is_empty")]
+    pub tags: HashSet<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub assignee: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl From<&Milestone> for MilestoneFrontmatter {
+    fn from(m: &Milestone) -> Self {
+        Self {
+            id: m.id.clone(),
+            title: m.title.clone(),
+            target_date: m.target_date,
+            status: m.status.clone(),
+            problem_ids: m.problem_ids.clone(),
+            tags: m.tags.clone(),
+            assignee: m.assignee.clone(),
+            created_at: m.created_at,
+            updated_at: m.updated_at,
         }
     }
 }
@@ -178,51 +223,60 @@ mod tests {
         assert_eq!(milestone.id, "M-1");
         assert_eq!(milestone.title, "v1.0 Release");
         assert_eq!(milestone.status, MilestoneStatus::Planning);
-        assert!(milestone.feature_ids.is_empty());
+        assert!(milestone.problem_ids.is_empty());
     }
 
     #[test]
-    fn test_add_feature() {
+    fn test_add_problem() {
         let mut milestone = Milestone::new("M-1".to_string(), "v1.0".to_string());
-        milestone.add_feature("F-1".to_string());
-        milestone.add_feature("F-2".to_string());
+        milestone.add_problem("P-1".to_string());
+        milestone.add_problem("P-2".to_string());
 
-        assert_eq!(milestone.feature_ids.len(), 2);
-        assert!(milestone.feature_ids.contains(&"F-1".to_string()));
+        assert_eq!(milestone.problem_ids.len(), 2);
+        assert!(milestone.problem_ids.contains(&"P-1".to_string()));
     }
 
     #[test]
-    fn test_remove_feature() {
+    fn test_remove_problem() {
         let mut milestone = Milestone::new("M-1".to_string(), "v1.0".to_string());
-        milestone.add_feature("F-1".to_string());
-        milestone.add_feature("F-2".to_string());
+        milestone.add_problem("P-1".to_string());
+        milestone.add_problem("P-2".to_string());
 
-        let removed = milestone.remove_feature("F-1");
+        let removed = milestone.remove_problem("P-1");
         assert!(removed);
-        assert_eq!(milestone.feature_ids.len(), 1);
-        assert!(!milestone.feature_ids.contains(&"F-1".to_string()));
+        assert_eq!(milestone.problem_ids.len(), 1);
+        assert!(!milestone.problem_ids.contains(&"P-1".to_string()));
     }
 
     #[test]
-    fn test_add_duplicate_feature() {
+    fn test_add_duplicate_problem() {
         let mut milestone = Milestone::new("M-1".to_string(), "v1.0".to_string());
-        milestone.add_feature("F-1".to_string());
-        milestone.add_feature("F-1".to_string());
+        milestone.add_problem("P-1".to_string());
+        milestone.add_problem("P-1".to_string());
 
-        assert_eq!(milestone.feature_ids.len(), 1);
+        assert_eq!(milestone.problem_ids.len(), 1);
     }
 
     #[test]
-    fn test_milestone_serialization() {
-        let mut milestone = Milestone::new("M-1".to_string(), "v1.0 Release".to_string());
-        milestone.version = Some("1.0.0".to_string());
-        milestone.add_feature("F-1".to_string());
+    fn test_status_transitions() {
+        let mut milestone = Milestone::new("M-1".to_string(), "v1.0".to_string());
+        assert_eq!(milestone.status, MilestoneStatus::Planning);
+        assert!(milestone.is_active());
 
-        let toml = toml::to_string(&milestone).expect("Failed to serialize");
-        let deserialized: Milestone = toml::from_str(&toml).expect("Failed to deserialize");
+        milestone.set_status(MilestoneStatus::Active);
+        assert_eq!(milestone.status, MilestoneStatus::Active);
+        assert!(milestone.is_active());
 
-        assert_eq!(deserialized.id, milestone.id);
-        assert_eq!(deserialized.version, milestone.version);
-        assert_eq!(deserialized.feature_ids.len(), 1);
+        milestone.set_status(MilestoneStatus::Completed);
+        assert_eq!(milestone.status, MilestoneStatus::Completed);
+        assert!(!milestone.is_active());
+    }
+
+    #[test]
+    fn test_status_parsing() {
+        assert_eq!("planning".parse::<MilestoneStatus>().unwrap(), MilestoneStatus::Planning);
+        assert_eq!("active".parse::<MilestoneStatus>().unwrap(), MilestoneStatus::Active);
+        assert_eq!("completed".parse::<MilestoneStatus>().unwrap(), MilestoneStatus::Completed);
+        assert_eq!("cancelled".parse::<MilestoneStatus>().unwrap(), MilestoneStatus::Cancelled);
     }
 }

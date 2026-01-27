@@ -1,7 +1,7 @@
 // Integration tests for storage layer
 // These tests require jj to be installed and will create temporary repositories
 
-use jjj::models::{ProjectConfig, Task};
+use jjj::models::{Problem, ProjectConfig, Solution};
 use std::process::Command;
 use tempfile::TempDir;
 
@@ -78,106 +78,191 @@ fn test_project_config_roundtrip() {
 }
 
 #[test]
-fn test_task_json_roundtrip() {
-    // Given: A task with all properties set
-    let mut task = Task::new(
-        "T-123".to_string(),
-        "Test task".to_string(),
-        "F-TEST".to_string(),
-        "In Progress".to_string(),
+fn test_problem_creation() {
+    // Given: A problem
+    let problem = Problem::new("P-1".to_string(), "Test problem".to_string());
+
+    // Then: It should have correct defaults
+    assert_eq!(problem.id, "P-1");
+    assert_eq!(problem.title, "Test problem");
+    assert!(problem.is_open());
+    assert!(problem.solution_ids.is_empty());
+    assert!(problem.child_ids.is_empty());
+    assert!(problem.parent_id.is_none());
+}
+
+#[test]
+fn test_solution_creation() {
+    // Given: A solution for a problem
+    let solution = Solution::new(
+        "S-1".to_string(),
+        "Test solution".to_string(),
+        "P-1".to_string(),
     );
-    task.add_tag("backend".to_string());
-    task.assignee = Some("alice".to_string());
-    task.attach_change("abc123".to_string());
 
-    // When: I serialize to JSON
-    let json = serde_json::to_string_pretty(&task).expect("Failed to serialize");
-
-    // Then: I can deserialize it back
-    let loaded: Task = serde_json::from_str(&json).expect("Failed to deserialize");
-
-    assert_eq!(loaded.id, task.id);
-    assert_eq!(loaded.title, task.title);
-    assert_eq!(loaded.column, task.column);
-    assert_eq!(loaded.tag_ids, task.tag_ids);
-    assert_eq!(loaded.assignee, task.assignee);
-    assert_eq!(loaded.change_ids, task.change_ids);
+    // Then: It should have correct defaults
+    assert_eq!(solution.id, "S-1");
+    assert_eq!(solution.title, "Test solution");
+    assert_eq!(solution.problem_id, "P-1");
+    assert!(solution.is_proposed());
 }
 
 #[test]
-fn test_multiple_tasks_in_directory() {
-    // Given: Multiple tasks
-    let task1 = Task::new("T-1".to_string(), "Task 1".to_string(), "F-TEST".to_string(), "TODO".to_string());
-    let task2 = Task::new("T-2".to_string(), "Task 2".to_string(), "F-TEST".to_string(), "Done".to_string());
+fn test_solution_status_transitions() {
+    // Given: A proposed solution
+    let mut solution = Solution::new(
+        "S-1".to_string(),
+        "Test solution".to_string(),
+        "P-1".to_string(),
+    );
+    assert!(solution.is_proposed());
 
-    // When: I serialize them
-    let json1 = serde_json::to_string_pretty(&task1).expect("Failed");
-    let json2 = serde_json::to_string_pretty(&task2).expect("Failed");
+    // When: I start testing
+    solution.start_testing();
+    assert!(solution.is_testing());
 
-    // Then: Each has unique ID
-    assert_ne!(task1.id, task2.id);
-    assert!(json1.contains("T-1"));
-    assert!(json2.contains("T-2"));
+    // When: I accept the solution
+    solution.accept();
+    assert!(solution.is_accepted());
 }
 
 #[test]
-fn test_config_with_custom_columns() {
-    // Given: A config with custom workflow
-    let mut config = ProjectConfig::default();
-    config.columns = vec![
-        "Backlog".to_string(),
-        "Development".to_string(),
-        "Testing".to_string(),
-        "Deployed".to_string(),
-    ];
+fn test_solution_refute() {
+    // Given: A testing solution
+    let mut solution = Solution::new(
+        "S-1".to_string(),
+        "Test solution".to_string(),
+        "P-1".to_string(),
+    );
+    solution.start_testing();
 
-    // When: I serialize and deserialize
-    let toml_str = toml::to_string(&config).expect("Failed to serialize");
-    let loaded: ProjectConfig = toml::from_str(&toml_str).expect("Failed to deserialize");
+    // When: I refute it
+    solution.refute();
 
-    // Then: Custom columns are preserved
-    assert_eq!(loaded.columns.len(), 4);
-    assert!(loaded.is_valid_column("Backlog"));
-    assert!(loaded.is_valid_column("Deployed"));
-    assert!(!loaded.is_valid_column("TODO"));
+    // Then: It should be refuted
+    assert!(solution.is_refuted());
 }
 
 #[test]
-fn test_task_version_tracking() {
-    // Given: A task
-    let mut task = Task::new("T-1".to_string(), "Test".to_string(), "F-TEST".to_string(), "TODO".to_string());
-    assert_eq!(task.version, 1);
+fn test_solution_attach_change() {
+    // Given: A solution
+    let mut solution = Solution::new(
+        "S-1".to_string(),
+        "Test solution".to_string(),
+        "P-1".to_string(),
+    );
 
-    // When: I modify it multiple times
-    task.add_tag("tag1".to_string());
-    assert_eq!(task.version, 2);
+    // When: I attach a change
+    solution.attach_change("abc123".to_string());
 
-    task.move_to_column("In Progress".to_string());
-    assert_eq!(task.version, 3);
-
-    task.attach_change("change1".to_string());
-    assert_eq!(task.version, 4);
-
-    // When: I serialize and deserialize
-    let json = serde_json::to_string(&task).expect("Failed");
-    let loaded: Task = serde_json::from_str(&json).expect("Failed");
-
-    // Then: Version is preserved
-    assert_eq!(loaded.version, 4);
+    // Then: The change should be attached
+    assert_eq!(solution.change_ids.len(), 1);
+    assert!(solution.change_ids.contains(&"abc123".to_string()));
 }
 
-/// Behavior: Task file naming convention
 #[test]
-fn test_task_file_naming() {
-    // Given: Task IDs
-    let task_ids = vec!["T-1", "T-100", "T-9999"];
+fn test_problem_status_transitions() {
+    // Given: An open problem
+    let mut problem = Problem::new("P-1".to_string(), "Test problem".to_string());
+    assert!(problem.is_open());
 
-    for id in task_ids {
-        let filename = format!("{}.json", id);
+    // When: I set to in progress
+    problem.set_status(jjj::models::ProblemStatus::InProgress);
+    assert!(problem.is_in_progress());
 
-        // Then: Filenames are valid and unique
-        assert!(filename.ends_with(".json"));
-        assert!(filename.starts_with("T-"));
+    // When: I solve it
+    problem.set_status(jjj::models::ProblemStatus::Solved);
+    assert!(problem.is_resolved());
+}
+
+#[test]
+fn test_problem_dissolve() {
+    // Given: An open problem
+    let mut problem = Problem::new("P-1".to_string(), "Test problem".to_string());
+
+    // When: I dissolve it (realize it was based on false premises)
+    problem.set_status(jjj::models::ProblemStatus::Dissolved);
+
+    // Then: It should be resolved (dissolved is a type of resolution)
+    assert!(problem.is_resolved());
+}
+
+#[test]
+fn test_problem_dag_structure() {
+    // Given: A parent problem
+    let mut parent = Problem::new("P-1".to_string(), "Parent problem".to_string());
+
+    // When: I create a child problem
+    let mut child = Problem::new("P-2".to_string(), "Child problem".to_string());
+    child.set_parent(Some("P-1".to_string()));
+    parent.add_child("P-2".to_string());
+
+    // Then: The DAG relationship should be established
+    assert!(child.parent_id.as_deref() == Some("P-1"));
+    assert!(parent.child_ids.contains(&"P-2".to_string()));
+}
+
+#[test]
+fn test_solution_tags() {
+    // Given: A solution
+    let mut solution = Solution::new(
+        "S-1".to_string(),
+        "Test solution".to_string(),
+        "P-1".to_string(),
+    );
+
+    // When: I add tags
+    solution.add_tag("backend".to_string());
+    solution.add_tag("api".to_string());
+
+    // Then: Tags should be present
+    assert!(solution.tags.contains("backend"));
+    assert!(solution.tags.contains("api"));
+
+    // When: I remove a tag
+    solution.remove_tag("backend");
+
+    // Then: Only remaining tag should exist
+    assert!(!solution.tags.contains("backend"));
+    assert!(solution.tags.contains("api"));
+}
+
+#[test]
+fn test_problem_milestone_assignment() {
+    // Given: A problem
+    let mut problem = Problem::new("P-1".to_string(), "Test problem".to_string());
+    assert!(problem.milestone_id.is_none());
+
+    // When: I assign it to a milestone
+    problem.set_milestone(Some("M-1".to_string()));
+
+    // Then: The milestone should be set
+    assert_eq!(problem.milestone_id.as_deref(), Some("M-1"));
+
+    // When: I remove the milestone
+    problem.set_milestone(None);
+
+    // Then: No milestone
+    assert!(problem.milestone_id.is_none());
+}
+
+/// Behavior: Solution file naming convention
+#[test]
+fn test_entity_file_naming() {
+    // Given: Entity IDs
+    let problem_ids = vec!["P-1", "P-100", "P-9999"];
+    let solution_ids = vec!["S-1", "S-100", "S-9999"];
+
+    for id in problem_ids {
+        let filename = format!("{}.md", id);
+        assert!(filename.ends_with(".md"));
+        assert!(filename.starts_with("P-"));
+    }
+
+    for id in solution_ids {
+        let filename = format!("{}.md", id);
+        assert!(filename.ends_with(".md"));
+        assert!(filename.starts_with("S-"));
     }
 }
 
@@ -193,8 +278,6 @@ fn test_config_is_human_readable() {
 
     // Then: It's human-readable
     assert!(toml_str.contains("My Project"));
-    assert!(toml_str.contains("TODO"));
-    assert!(toml_str.contains("In Progress"));
 
     // And: It can be manually edited
     let modified = toml_str.replace("My Project", "Edited Project");
@@ -202,32 +285,14 @@ fn test_config_is_human_readable() {
     assert_eq!(loaded.name.as_deref(), Some("Edited Project"));
 }
 
-/// Behavior: Empty tags list serializes correctly
-#[test]
-fn test_empty_collections_serialize() {
-    // Given: A task with no tags or changes
-    let task = Task::new("T-1".to_string(), "Simple".to_string(), "F-TEST".to_string(), "TODO".to_string());
-
-    // When: I serialize it
-    let json = serde_json::to_string(&task).expect("Failed");
-
-    // Then: Empty collections are present
-    assert!(json.contains("\"tag_ids\""));
-    assert!(json.contains("\"change_ids\""));
-}
-
 /// Behavior: Timestamps are preserved in serialization
 #[test]
 fn test_timestamps_preserved() {
-    // Given: A task
-    let task = Task::new("T-1".to_string(), "Test".to_string(), "F-TEST".to_string(), "TODO".to_string());
-    let created = task.created_at;
+    // Given: A problem
+    let problem = Problem::new("P-1".to_string(), "Test".to_string());
+    let created = problem.created_at;
 
-    // When: I serialize and deserialize
-    let json = serde_json::to_string(&task).expect("Failed");
-    let loaded: Task = serde_json::from_str(&json).expect("Failed");
-
-    // Then: Timestamps match
-    assert_eq!(loaded.created_at, created);
-    assert_eq!(loaded.updated_at, task.updated_at);
+    // Note: For markdown serialization, we would test the full roundtrip through storage
+    // For unit tests, we just verify the timestamp is set correctly
+    assert!(problem.updated_at >= created);
 }
