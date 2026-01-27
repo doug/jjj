@@ -1,6 +1,10 @@
 .vscode/**
 src/**
+test/**
+out-test/**
 node_modules/**
 .gitignore
+.mocharc.yml
 tsconfig.json
+tsconfig.test.json
 *.ts

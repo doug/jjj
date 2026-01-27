@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { JjjCli, Problem, Solution, Critique, Milestone, NextResult } from "./cli";
 
-export class DataCache {
+export class DataCache implements vscode.Disposable {
   private cli: JjjCli;
   private _onDidChange = new vscode.EventEmitter<void>();
   readonly onDidChange = this._onDidChange.event;
@@ -15,6 +15,10 @@ export class DataCache {
 
   constructor(cli: JjjCli) {
     this.cli = cli;
+  }
+
+  dispose(): void {
+    this._onDidChange.dispose();
   }
 
   async refresh(): Promise<void> {
@@ -39,10 +43,10 @@ export class DataCache {
     }
   }
 
-  getProblems(): Problem[] { return this.problems; }
-  getSolutions(): Solution[] { return this.solutions; }
-  getCritiques(): Critique[] { return this.critiques; }
-  getMilestones(): Milestone[] { return this.milestones; }
+  getProblems(): readonly Problem[] { return this.problems; }
+  getSolutions(): readonly Solution[] { return this.solutions; }
+  getCritiques(): readonly Critique[] { return this.critiques; }
+  getMilestones(): readonly Milestone[] { return this.milestones; }
   getNext(): NextResult | null { return this.nextResult; }
 
   getProblemsForMilestone(milestoneId: string): Problem[] {

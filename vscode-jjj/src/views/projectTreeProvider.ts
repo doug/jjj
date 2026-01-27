@@ -82,15 +82,21 @@ class CritiqueNode extends vscode.TreeItem {
 
 const MIME_TYPE = "application/vnd.jjj.problem";
 
-export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode>, vscode.TreeDragAndDropController<TreeNode> {
+export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode>, vscode.TreeDragAndDropController<TreeNode>, vscode.Disposable {
   dropMimeTypes = [MIME_TYPE];
   dragMimeTypes = [MIME_TYPE];
 
   private _onDidChangeTreeData = new vscode.EventEmitter<TreeNode | undefined>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
+  private cacheSubscription: vscode.Disposable;
 
   constructor(private cache: DataCache, private cli: JjjCli) {
-    cache.onDidChange(() => this._onDidChangeTreeData.fire(undefined));
+    this.cacheSubscription = cache.onDidChange(() => this._onDidChangeTreeData.fire(undefined));
+  }
+
+  dispose(): void {
+    this._onDidChangeTreeData.dispose();
+    this.cacheSubscription.dispose();
   }
 
   getTreeItem(element: TreeNode): vscode.TreeItem {

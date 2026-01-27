@@ -1,12 +1,13 @@
 import * as vscode from "vscode";
 import { DataCache } from "../cache";
 
-export class EntityDocumentProvider implements vscode.TextDocumentContentProvider {
+export class EntityDocumentProvider implements vscode.TextDocumentContentProvider, vscode.Disposable {
   private _onDidChange = new vscode.EventEmitter<vscode.Uri>();
   readonly onDidChange = this._onDidChange.event;
+  private cacheSubscription: vscode.Disposable;
 
   constructor(private cache: DataCache) {
-    cache.onDidChange(() => {
+    this.cacheSubscription = cache.onDidChange(() => {
       // Refresh all open entity documents
       vscode.workspace.textDocuments.forEach(doc => {
         if (doc.uri.scheme === "jjj") {
@@ -16,8 +17,15 @@ export class EntityDocumentProvider implements vscode.TextDocumentContentProvide
     });
   }
 
+  dispose(): void {
+    this._onDidChange.dispose();
+    this.cacheSubscription.dispose();
+  }
+
   provideTextDocumentContent(uri: vscode.Uri): string {
-    const [type, id] = uri.path.split("/").filter(Boolean);
+    const parts = uri.path.split("/").filter(Boolean);
+    const type = parts[0];
+    const id = (parts[1] || "").replace(/\.md$/, "");
 
     switch (type) {
       case "problem": return this.renderProblem(id);

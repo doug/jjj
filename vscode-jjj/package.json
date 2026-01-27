@@ -45,7 +45,7 @@
         {
           "id": "jjj-sidebar",
           "title": "JJJ",
-          "icon": "$(beaker)"
+          "icon": "media/jjj-icon.svg"
         }
       ]
     },
@@ -84,15 +84,20 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "lint": "eslint src --ext ts",
+    "test": "tsc -p ./tsconfig.test.json && mocha out-test/**/*.test.js",
     "package": "vsce package",
     "install-ext": "vsce package && code --install-extension *.vsix"
   },
   "devDependencies": {
+    "@types/mocha": "^10.0.0",
     "@types/node": "^20.0.0",
+    "@types/sinon": "^17.0.0",
     "@types/vscode": "^1.85.0",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
     "eslint": "^8.56.0",
+    "mocha": "^10.0.0",
+    "sinon": "^17.0.0",
     "typescript": "^5.3.0",
     "@vscode/vsce": "^3.0.0"
   }

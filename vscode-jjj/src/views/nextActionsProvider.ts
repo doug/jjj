@@ -10,12 +10,18 @@ const CATEGORY_ICONS: Record<string, vscode.ThemeIcon> = {
   todo: new vscode.ThemeIcon("circle-outline"),
 };
 
-export class NextActionsProvider implements vscode.TreeDataProvider<NextActionItem> {
+export class NextActionsProvider implements vscode.TreeDataProvider<NextActionItem>, vscode.Disposable {
   private _onDidChangeTreeData = new vscode.EventEmitter<NextActionItem | undefined>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
+  private cacheSubscription: vscode.Disposable;
 
   constructor(private cache: DataCache) {
-    cache.onDidChange(() => this._onDidChangeTreeData.fire(undefined));
+    this.cacheSubscription = cache.onDidChange(() => this._onDidChangeTreeData.fire(undefined));
+  }
+
+  dispose(): void {
+    this._onDidChangeTreeData.dispose();
+    this.cacheSubscription.dispose();
   }
 
   getTreeItem(element: NextActionItem): vscode.TreeItem {
@@ -24,11 +30,13 @@ export class NextActionsProvider implements vscode.TreeDataProvider<NextActionIt
 
   getChildren(element?: NextActionItem): NextActionItem[] {
     if (element) {
+      if (!element.nextItem) { return []; }
+      const parentItem = element.nextItem;
       // Detail children for blocked items
-      return element.nextItem.details.map(d => {
+      return parentItem.details.map(d => {
         const item = new NextActionItem(
           `${d.id}: ${d.text}`,
-          { ...element.nextItem, entity_id: d.id, title: d.text, details: [] },
+          { ...parentItem, entity_id: d.id, title: d.text, details: [] },
           vscode.TreeItemCollapsibleState.None,
         );
         if (d.severity) {
@@ -41,7 +49,9 @@ export class NextActionsProvider implements vscode.TreeDataProvider<NextActionIt
 
     const next = this.cache.getNext();
     if (!next || next.items.length === 0) {
-      return [new NextActionItem("All caught up!", {} as NextItem, vscode.TreeItemCollapsibleState.None)];
+      const item = new NextActionItem("All caught up!", undefined, vscode.TreeItemCollapsibleState.None);
+      item.iconPath = new vscode.ThemeIcon("check", new vscode.ThemeColor("testing.iconPassed"));
+      return [item];
     }
 
     return next.items.map(ni => {
@@ -70,7 +80,7 @@ export class NextActionsProvider implements vscode.TreeDataProvider<NextActionIt
 export class NextActionItem extends vscode.TreeItem {
   constructor(
     label: string,
-    public readonly nextItem: NextItem,
+    public readonly nextItem: NextItem | undefined,
     collapsibleState: vscode.TreeItemCollapsibleState,
   ) {
     super(label, collapsibleState);

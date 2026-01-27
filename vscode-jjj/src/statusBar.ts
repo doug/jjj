@@ -3,11 +3,12 @@ import { DataCache } from "./cache";
 
 export class StatusBar {
   private item: vscode.StatusBarItem;
+  private cacheSubscription: vscode.Disposable;
 
   constructor(private cache: DataCache) {
     this.item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
     this.item.command = "jjj-next-actions.focus";
-    cache.onDidChange(() => this.update());
+    this.cacheSubscription = cache.onDidChange(() => this.update());
     this.item.show();
   }
 
@@ -41,6 +42,7 @@ export class StatusBar {
   }
 
   dispose() {
+    this.cacheSubscription.dispose();
     this.item.dispose();
   }
 }
