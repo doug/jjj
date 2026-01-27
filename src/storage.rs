@@ -227,6 +227,7 @@ impl MetadataStore {
             updated_at: frontmatter.updated_at,
             description: sections.get("Description").cloned().unwrap_or_default(),
             context: sections.get("Context").cloned().unwrap_or_default(),
+            dissolved_reason: frontmatter.dissolved_reason,
         };
 
         Ok(problem)
@@ -824,6 +825,7 @@ mod tests {
 id: P-1
 title: Test Problem
 status: open
+priority: medium
 created_at: 2024-01-15T10:30:00Z
 updated_at: 2024-01-15T10:30:00Z
 ---
@@ -874,6 +876,7 @@ This is the context.
             assignee: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),
+            dissolved_reason: None,
         };
 
         let body = "## Description\n\nTest description";

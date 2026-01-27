@@ -53,6 +53,10 @@ pub struct Problem {
     /// Context - why this is a problem, what makes it hard
     #[serde(default)]
     pub context: String,
+
+    /// Reason the problem was dissolved (if status is Dissolved)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dissolved_reason: Option<String>,
 }
 
 /// Priority level for a problem (P0 = most critical, P3 = lowest)
@@ -166,6 +170,7 @@ impl Problem {
             updated_at: now,
             description: String::new(),
             context: String::new(),
+            dissolved_reason: None,
         }
     }
 
@@ -222,6 +227,13 @@ impl Problem {
     /// Update status
     pub fn set_status(&mut self, status: ProblemStatus) {
         self.status = status;
+        self.updated_at = Utc::now();
+    }
+
+    /// Dissolve the problem with a reason
+    pub fn dissolve(&mut self, reason: String) {
+        self.status = ProblemStatus::Dissolved;
+        self.dissolved_reason = Some(reason);
         self.updated_at = Utc::now();
     }
 
@@ -289,6 +301,8 @@ pub struct ProblemFrontmatter {
     pub assignee: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dissolved_reason: Option<String>,
 }
 
 impl From<&Problem> for ProblemFrontmatter {
@@ -306,6 +320,7 @@ impl From<&Problem> for ProblemFrontmatter {
             assignee: p.assignee.clone(),
             created_at: p.created_at,
             updated_at: p.updated_at,
+            dissolved_reason: p.dissolved_reason.clone(),
         }
     }
 }
@@ -408,5 +423,14 @@ mod tests {
     fn test_problem_priority_default() {
         let p = Problem::new("P-1".to_string(), "Test".to_string());
         assert_eq!(p.priority, Priority::Medium);
+    }
+
+    #[test]
+    fn test_dissolved_reason() {
+        let mut p = Problem::new("P-1".to_string(), "Test".to_string());
+        assert_eq!(p.dissolved_reason, None);
+        p.dissolve("The data was correct; our test was wrong".to_string());
+        assert_eq!(p.status, ProblemStatus::Dissolved);
+        assert_eq!(p.dissolved_reason.as_deref(), Some("The data was correct; our test was wrong"));
     }
 }
