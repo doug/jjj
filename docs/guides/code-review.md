@@ -21,7 +21,7 @@ Every change in Jujutsu has a unique, stable **change ID**:
 ```bash
 $ jj log -r @
 @  kpqxywon alice@example.com 2025-11-23 15:30:00 my-feature kpqxywon
-│  Add user authentication
+|  Add user authentication
 ~
 ```
 
@@ -31,17 +31,11 @@ The change ID `kpqxywon` stays the same even if you:
 - Squash with other changes
 - Split into multiple changes
 
-This stability makes it perfect for attaching review metadata!
+This stability makes it perfect for attaching review metadata.
 
-### Review Manifest
+### Solutions Own the Review
 
-When you request a review, jjj creates a **review manifest** that tracks:
-
-- Change ID being reviewed
-- Requested reviewers
-- Review status (Pending, Approved, ChangesRequested)
-- All comments and their locations
-- Timestamps and metadata
+In jjj, code review is attached to **solutions** (S-1, S-2, etc.), not directly to changes. A solution may have one or more jj changes associated with it. When you request a review, you are asking someone to evaluate the solution's implementation.
 
 ### Comment Relocation
 
@@ -57,26 +51,29 @@ This is powered by **context fingerprinting** using SHA-256 hashing.
 
 ### 1. Request a Review
 
-After making changes:
+After implementing a solution:
 
 ```bash
-# Create a change
-jj new -m "Add user authentication"
-# ... make code changes ...
+# Request review by solution ID
+jjj solution review S-1 @alice @bob
+```
 
-# Request review from teammates
-jjj review request @alice @bob
+If you are currently working on a solution's change, use the shorthand:
+
+```bash
+# Shorthand: detects the solution from your current change
+jjj review @alice @bob
 ```
 
 Output:
 ```
-Review requested for change kpqxywon
+Review requested for S-1: Use JWT tokens
 Reviewers: @alice, @bob
 ```
 
-### 2. Reviewer: Inspect and Run Code
+### 2. Reviewer: Examine the Solution
 
-Alice receives a notification and wants to test the code locally.
+Alice receives a notification and wants to review the code.
 
 #### Fetch and Checkout
 
@@ -85,163 +82,151 @@ Alice receives a notification and wants to test the code locally.
 jj git fetch
 
 # 2. Check out the change to review
-# This creates a new working copy on top of the change without modifying it
 jj new kpqxywon
 ```
 
-#### Rebase if Needed
+#### Review the Solution Context
 
-If the change is based on an old main, Alice can rebase it locally to test against the latest code:
+Before looking at code, Alice can understand the solution's context:
 
 ```bash
-# Rebase the change onto the latest main
-jj rebase -r kpqxywon -d main
+# See what problem this solution addresses
+jjj solution show S-1
 
-# Note: This only affects Alice's local view. The Change ID remains the same.
+# See any existing critiques
+jjj critique list --solution S-1
 ```
 
 #### Run Tests
-
-Now Alice can run the code, run tests, or start the app:
 
 ```bash
 cargo test
 npm start
 ```
 
-#### Start Review Mode
+### 3. Reviewer: Raise Critiques or Approve
 
-Once ready to leave comments:
+After examining the solution, Alice has two paths.
 
-```bash
-jjj review start kpqxywon
-```
+#### If issues are found: raise a critique
 
-### 3. Reviewer: Add Comments
-
-Alice can add two types of comments:
-
-#### Inline Comments (File + Line)
+Critiques are the formal mechanism for identifying problems with a solution. They must be resolved before the solution can be accepted.
 
 ```bash
-jjj review comment kpqxywon \
+# Design-level critique
+jjj critique new S-1 "JWT tokens stored in localStorage are vulnerable to XSS" \
+  --severity high
+
+# Code-level critique with file location
+jjj critique new S-1 "Password comparison is not constant-time" \
+  --severity critical \
   --file src/auth/password.rs \
-  --line 42 \
-  --body "Consider using bcrypt instead of SHA-256 for password hashing"
+  --line 42
 ```
 
-#### General Comments (No Location)
+See the [Critique Guidelines](critique-guidelines.md) for severity levels and how to write effective critiques.
+
+#### If the implementation looks correct: LGTM
 
 ```bash
-jjj review comment kpqxywon \
-  --body "Overall looks good! Just a few security concerns to address."
+# LGTM by solution ID
+jjj solution lgtm S-1
+
+# Shorthand: LGTM from the solution's current change
+jjj lgtm
 ```
 
-### 4. Reviewer: Approve or Request Changes
+An LGTM signals that the reviewer has examined the implementation and found it acceptable. This is a lighter-weight check than a critique -- it says "the code looks right" rather than "the approach is sound."
 
-After reviewing:
+### 4. Author: Respond to Critiques
+
+Check what critiques are open:
 
 ```bash
-# If everything looks good
-jjj review approve kpqxywon
-
-# If changes needed
-jjj review request-changes kpqxywon \
-  --message "Please address the password hashing concern"
+jjj critique list --solution S-1 --status open
 ```
 
-### 5. Author: Address Feedback
-
-You see the review status:
+For each critique, address it, dismiss it, or validate it:
 
 ```bash
-jjj review status kpqxywon
+# Fix the issue and mark as addressed
+jjj critique address CQ-3
+
+# Or dismiss with explanation
+jjj critique reply CQ-4 "The token is stored in an httpOnly cookie, not localStorage. See the approach section of S-1."
+jjj critique dismiss CQ-4
 ```
 
-Output:
-```
-Review Status for kpqxywon - Add user authentication
-
-Status: ChangesRequested
-Reviewers:
-  @alice: ChangesRequested
-  @bob: Pending
-
-Comments (3):
-  [src/auth/password.rs:42] @alice - Consider using bcrypt...
-  [src/auth/login.rs:15] @alice - Add rate limiting...
-  [general] @alice - Overall looks good!...
-```
-
-Make changes by amending:
+After addressing critiques, request re-review if needed:
 
 ```bash
-# Edit the change
-jj edit kpqxywon
-
-# Make fixes
-# ... update code ...
-
-# Amend the change (change ID stays the same!)
-jj commit --amend
-
-# Request re-review
-jjj review request @alice
+jjj review @alice
 ```
 
-### 6. Final Approval
+### 5. Submit
 
-Once Alice approves:
+Once all critiques are resolved and reviews are in, submit the solution:
 
 ```bash
-jjj review approve kpqxywon
+jjj submit
 ```
 
-Now both reviewers have approved, and the change can be merged.
+`jjj submit` checks:
+1. All critiques on the solution are resolved (addressed, dismissed, or validated)
+2. At least one requested reviewer has LGTM'd (if reviews are required)
+3. The problem has no open sub-problems (if accepting would solve the parent problem)
 
-### 7. Landing Changes (The Merge Flow)
+If any check fails, submit will explain what is still needed. Use `--force` to bypass review requirements in emergencies.
 
-Since `jjj` decouples review from the forge (GitHub/GitLab), "merging" is simply updating the main branch.
+## Two Gates to Acceptance
 
-#### Role: Author or Maintainer
+jjj has two independent mechanisms that gate whether a solution can be accepted:
 
-1.  **Rebase onto latest main**:
-    ```bash
-    jj git fetch
-    jj rebase -r kpqxywon -d main
-    ```
+| Gate | What it checks | Who participates | How to resolve |
+|------|---------------|-----------------|----------------|
+| **Critiques** | Is the approach sound? Are there flaws? | Anyone can raise a critique | Address, dismiss, or validate each critique |
+| **Code review (LGTM)** | Does the implementation look correct? | Requested reviewers | Reviewer runs `jjj lgtm` |
 
-2.  **Advance main bookmark**:
-    ```bash
-    jj bookmark set main -r kpqxywon
-    ```
+Both must be satisfied. A solution with an LGTM but an open critique cannot be accepted. A solution with all critiques resolved but no LGTM (when required) also cannot be accepted.
 
-3.  **Push to upstream**:
-    ```bash
-    # Push the new main
-    jj git push -b main
-    
-    # CRITICAL: Push the review metadata
-    # This publishes the "Approved" status that you (or reviewers) added.
-    # Without this, the upstream repo won't know the change was approved.
-    jj git push -b jjj/meta
-    ```
+This separation is intentional. A critique says "there is a flaw in the approach." An LGTM says "I have reviewed the code and it looks right." These are different judgments made by potentially different people.
 
-#### Hybrid Workflow (GitHub/GitLab)
+## Landing Changes
 
-If your team requires Pull Requests for compliance or CI gating:
+Since jjj decouples review from the forge (GitHub/GitLab), "merging" is updating the main branch.
 
-1.  **Push your change as a bookmark**:
-    ```bash
-    jj bookmark set my-feature -r kpqxywon
-    jj git push -b my-feature
-    ```
+### Direct Landing
 
-2.  **Open PR**: Open a PR on GitHub/GitLab targeting `main`.
-3.  **Link jjj**: Paste the `jjj review status` output in the PR description to show it has been reviewed.
-4.  **Merge**: Use the "Squash and Merge" button on GitHub.
+```bash
+# Rebase onto latest main
+jj git fetch
+jj rebase -r kpqxywon -d main
 
-> **Note**: In the hybrid flow, the **review and approval happen in the `jjj` CLI**. The GitHub PR is used primarily for CI checks and the final merge button. You do *not* need to use GitHub's review interface.
+# Advance main bookmark
+jj bookmark set main -r kpqxywon
+
+# Push
+jj git push -b main
+jj git push -b jjj/meta  # Push review metadata
+```
+
+### Hybrid Workflow (GitHub/GitLab)
+
+If your team requires Pull Requests for CI gating or compliance:
+
+1. Push your change as a bookmark:
+   ```bash
+   jj bookmark set my-solution -r kpqxywon
+   jj git push -b my-solution
+   ```
+
+2. Open a PR on GitHub/GitLab targeting `main`.
+
+3. Paste `jjj solution show S-1` output in the PR description to show it has been reviewed and critiques resolved.
+
+4. Merge via the forge's UI.
+
+In the hybrid flow, review and critique happen in jjj. The GitHub PR is used for CI checks and the merge button.
 
 ## Advanced Features
 
@@ -250,44 +235,17 @@ If your team requires Pull Requests for compliance or CI gating:
 Review an entire stack of changes:
 
 ```bash
-# Request review for the entire stack
-jjj review request @alice --stack
+jjj solution review S-1 @alice --stack
 ```
-
-This creates separate review manifests for each change in the stack.
-
-### Mentions in Comments
-
-Reference teammates and other entities:
-
-```bash
-jjj review comment kpqxywon \
-  --file src/api/routes.rs \
-  --line 28 \
-  --body "@bob Should this use the same validation as in T-15?"
-```
-
-Mentions can reference:
-- **Users**: `@alice`, `@bob`
-- **Tasks**: `T-1`, `T-42`
-- **Features**: `F-1`, `F-2`
-- **Bugs**: `B-1`, `B-5`
-- **Changes**: `kpqxywon`
 
 ### Viewing All Reviews
 
 ```bash
-# All reviews
-jjj review list
+# All solutions with pending reviews
+jjj solution list --status testing
 
-# Reviews you requested
-jjj review list --mine
-
-# Reviews waiting for your feedback
-jjj review list --pending
-
-# JSON for scripting
-jjj review list --json
+# Solutions waiting for your LGTM
+jjj dashboard
 ```
 
 ## Comment Relocation Example
@@ -305,13 +263,13 @@ pub fn hash_password(password: &str) -> Result<String> {
 }
 ```
 
-Alice comments:
+Alice raises a critique at line 42:
 
 ```bash
-jjj review comment kpqxywon \
+jjj critique new S-1 "Use bcrypt instead of SHA-256" \
+  --severity high \
   --file src/auth/password.rs \
-  --line 42 \
-  --body "Use bcrypt instead of SHA-256"
+  --line 42
 ```
 
 ### After Rebase
@@ -329,260 +287,89 @@ pub fn hash_password(password: &str) -> Result<String> {
 }
 ```
 
-**Result**: Comment automatically relocates from line 42 → 45!
+**Result**: The critique's location automatically relocates from line 42 to line 45.
 
-jjj detects:
-1. Line 45 has the same content hash as original line 42
-2. Surrounding context matches (fuzzy matching)
-3. Comment stays attached to the correct line
+### After Addressing
 
-### After Amending
-
-You address Alice's feedback:
+You address the critique:
 
 ```rust
-// src/auth/password.rs:43
-use bcrypt::{hash, DEFAULT_COST};
-
 pub fn hash_password(password: &str) -> Result<String> {
-    hash(password, DEFAULT_COST)  // Line 45: Content changed!
+    hash(password, DEFAULT_COST)
         .map_err(|e| AuthError::HashingFailed(e))
 }
 ```
 
-**Result**: Comment marks as "resolved" context changed
-
-jjj detects:
-1. Line 45 content hash doesn't match original
-2. Fuzzy match score < 70%
-3. Comment marked as orphaned (context removed)
-
-This signals to Alice that you've addressed her feedback by changing the implementation.
-
-## Integration with Tasks
-
-Link reviews to tasks for tracking:
-
-```bash
-# Create a task
-jjj task new "Implement user authentication" --feature F-1
-
-# Attach your change to the task
-jjj task attach T-1
-
-# Request review (implicitly linked to T-1)
-jjj review request @alice
-
-# Alice's approval = T-1 can move to Done
-jjj task move T-1 "Done"
-```
-
-## Review Dashboard
-
-See all review activity:
-
-```bash
-jjj dashboard
-```
-
-Output:
-```
-Dashboard
-
-Pending Reviews:
-  kpqxywon... - Add user auth (You requested - @alice, @bob)
-    @alice: ChangesRequested
-    @bob: Pending
-
-  zxcvbnmq... - Fix login bug (You're reviewing - @charlie)
-    Your status: Pending
-
-Tasks:
-  In Progress: 2 tasks
-  Review: 1 task
-
-Recent Activity:
-  kpqxywon... - @alice requested changes
-  T-1 moved to Review
-```
-
-## Workflow Patterns
-
-### Pattern 1: Pre-Commit Review
-
-Review before merging to main:
-
-```bash
-# Author
-jj new -m "Add feature X"
-# ... code ...
-jjj review request @alice @bob
-jjj task attach T-5
-
-# Reviewer
-jjj review approve kpqxywon
-
-# Author (after approval)
-jj bookmark set main
-jjj task move T-5 "Done"
-```
-
-### Pattern 2: Post-Commit Review
-
-Review after merging (for rapid iteration):
-
-```bash
-# Author
-jj new -m "Quick fix"
-# ... code ...
-jj bookmark set main  # Merge immediately
-
-# Request async review
-jjj review request @alice
-
-# Alice reviews later, comments on merged code
-jjj review comment kpqxywon --body "Consider refactoring this"
-```
-
-### Pattern 3: Pair Programming
-
-Real-time review via screen sharing:
-
-```bash
-# During pairing session
-jjj review request @pair-buddy
-
-# Add comments as discussion notes
-jjj review comment kpqxywon \
-  --body "Discussed: Should extract this to a helper function"
-
-# Approve immediately after pairing
-jjj review approve kpqxywon
-```
-
-## Review Checklist
-
-Create consistent review standards:
-
-```markdown
-## Code Review Checklist
-
-### Functionality
-- [ ] Code does what it's supposed to
-- [ ] Edge cases handled
-- [ ] Error handling present
-
-### Tests
-- [ ] Unit tests added/updated
-- [ ] Integration tests if needed
-- [ ] Tests actually pass
-
-### Code Quality
-- [ ] Follows project conventions
-- [ ] No obvious performance issues
-- [ ] Comments where needed
-- [ ] No debugging code left in
-
-### Security
-- [ ] Input validation present
-- [ ] No SQL injection risks
-- [ ] No XSS vulnerabilities
-- [ ] Secrets not hardcoded
-
-### Documentation
-- [ ] API docs updated
-- [ ] README updated if needed
-- [ ] Breaking changes noted
-```
-
-Use in review comments:
-
-```bash
-jjj review comment kpqxywon \
-  --body "$(cat review-checklist.md)"
-```
+The original code context is gone. jjj detects the content change and marks the critique's location as orphaned, signaling that the code was modified (likely in response to the critique).
 
 ## Best Practices
 
 > **Review Early, Review Often**
 >
-> Request reviews for work-in-progress changes to get feedback early.
-> **Keep Changes Small**
->
-> Smaller changes = faster reviews = better feedback. Aim for < 400 lines changed.
-> **Review Your Own Code First**
->
-> Before requesting review, check your own diff:
->
->     jj show  # Review your own diff
->     # Look for debugging code, TODOs, etc.
+> Request reviews for work-in-progress solutions to get feedback before you invest heavily in an approach.
 
-> **Use Feature-Based Bookmarks**
+> **Keep Solutions Focused**
 >
-> To make changes easier to find without memorizing Change IDs, name your bookmarks using the Feature ID:
+> Smaller solutions are faster to review and easier to critique precisely. Aim for solutions that address one problem clearly.
+
+> **Use Solution-Based Bookmarks**
 >
->     jj bookmark set feature/F-1-login
+> Name your jj bookmarks using the solution ID to make changes easy to find:
 >
-> This helps teammates find the code for "Feature F-1" instantly.
+>     jj bookmark set solution/S-1-jwt-auth
+
+> **Respond to All Critiques**
 >
-> Write clear commit messages:
+> Every critique must be resolved before acceptance. Either:
+> - Fix the issue and mark as addressed
+> - Reply with your reasoning and dismiss
+> - Acknowledge the flaw and validate (then refute the solution)
+
+> **Write Clear Descriptions**
+>
+> Include context in your solution's approach field so reviewers understand the "why":
 >
 >     jj describe -m "Add bcrypt password hashing
 >
 >     Replaces SHA-256 with bcrypt for better security.
 >     Uses DEFAULT_COST (12) for work factor.
 >
->     Addresses: B-5 (password security)"
+>     Addresses: P-5 (password security)"
 
-> **Respond to All Comments**
->
-> Either:
-> - Fix the issue and amend
-> - Reply explaining why you disagree
-> - Mark as "won't fix" with reason
-> **Don't Squash Before Review Complete**
->
-> Wait for approval before squashing commits. Comments may be lost!
 ## Troubleshooting
 
-### Comments Not Relocating
+### Critique Locations Not Relocating
 
-If comments don't relocate after rebase:
+If critique locations do not update after rebase:
 
 1. **Check context**: Did you completely rewrite the section?
-2. **Manual relocation**: View orphaned comments and manually update line numbers
-3. **Re-comment**: If needed, ask reviewer to re-comment on new location
+2. **View orphaned critiques**: `jjj critique list --solution S-1`
+3. **Re-create if needed**: Raise a new critique at the correct location
 
-### Review Status Confusion
+### Submit Fails
 
-If reviewers appear out of sync:
+If `jjj submit` reports unresolved critiques or missing reviews:
 
 ```bash
-# Check current status
-jjj review status kpqxywon
-
-# Re-sync metadata
-jj git fetch
-jj bookmark track jjj/meta@origin
+# Check what is blocking
+jjj critique list --solution S-1 --status open
+jjj solution show S-1  # Shows review status
 ```
 
-### Can't Find Change ID
+### Finding the Right Solution
 
-If you forget the change ID:
+If you forget which solution you are working on:
 
 ```bash
-# List recent changes
-jj log -r 'mine()' -r 'recent()'
+# List solutions for a problem
+jjj solution list --problem P-1
 
-# Find by description
-jj log -r 'description(authentication)'
-
-# Show change ID
-jj log -r @ --no-graph -T 'change_id ++ "\n"'
+# The dashboard shows your assigned work
+jjj dashboard
 ```
 
 ## Next Steps
 
-- [**Task Management Guide**](task-management.md) - Integrate reviews with tasks
-- [**CLI Reference: Review Commands**](../reference/cli-review.md) - Complete command docs
-- [**Architecture: Comment Relocation**](../architecture/comment-relocation.md) - Technical deep dive
+- [Critique Guidelines](critique-guidelines.md) -- How to write and respond to critiques
+- [Problem Solving](problem-solving.md) -- The problem lifecycle
+- [Board and Dashboard](board-dashboard.md) -- Visualize review status
