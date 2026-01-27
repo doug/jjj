@@ -381,6 +381,7 @@ impl MetadataStore {
             updated_at: frontmatter.updated_at,
             approach: sections.get("Approach").cloned().unwrap_or_default(),
             tradeoffs: sections.get("Trade-offs").cloned().unwrap_or_default(),
+            supersedes: frontmatter.supersedes,
         };
 
         Ok(solution)

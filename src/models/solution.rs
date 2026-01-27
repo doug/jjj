@@ -58,6 +58,10 @@ pub struct Solution {
     /// Trade-offs - known limitations and trade-offs
     #[serde(default)]
     pub tradeoffs: String,
+
+    /// ID of the solution this one supersedes (for lineage tracking)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub supersedes: Option<String>,
 }
 
 /// Status of a solution (conjecture)
@@ -128,6 +132,7 @@ impl Solution {
             updated_at: now,
             approach: String::new(),
             tradeoffs: String::new(),
+            supersedes: None,
         }
     }
 
@@ -286,6 +291,8 @@ pub struct SolutionFrontmatter {
     pub reviewed_by: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub requires_review: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub supersedes: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -304,6 +311,7 @@ impl From<&Solution> for SolutionFrontmatter {
             requested_reviewers: s.requested_reviewers.clone(),
             reviewed_by: s.reviewed_by.clone(),
             requires_review: s.requires_review,
+            supersedes: s.supersedes.clone(),
             created_at: s.created_at,
             updated_at: s.updated_at,
         }
@@ -444,6 +452,20 @@ mod tests {
 
         assert!(solution.reviewed_by.contains(&"bob".to_string()));
         assert!(!solution.has_lgtm_from_requested_reviewer());
+    }
+
+    #[test]
+    fn test_solution_supersedes() {
+        let s = Solution::new(
+            "S-2".to_string(),
+            "Better approach".to_string(),
+            "P-1".to_string(),
+        );
+        assert_eq!(s.supersedes, None);
+
+        let mut s2 = s.clone();
+        s2.supersedes = Some("S-1".to_string());
+        assert_eq!(s2.supersedes.as_deref(), Some("S-1"));
     }
 
     #[test]
