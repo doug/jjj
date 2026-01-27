@@ -7,14 +7,16 @@ Solutions are conjectures proposed to solve problems. They go through a lifecycl
 Create a new solution.
 
 ```
-jjj solution new <title> --problem <problem_id> [OPTIONS]
+jjj solution new <title> [OPTIONS]
 ```
 
 | Flag | Type | Required | Description |
 |------|------|----------|-------------|
-| `--problem` | string | yes | Problem this solution addresses |
+| `--problem` | string | no | Problem this solution addresses (prompts interactively if not provided) |
 | `--supersedes` | string | no | Solution this supersedes (e.g., S-1) |
 | `--review` | string (repeatable) | no | Assign reviewers at creation (e.g., `@alice`) |
+
+When `--problem` is not provided, lists open problems and prompts you to select one interactively. After creation, automatically creates a jj change, attaches it to the solution, and moves the solution to `testing` status.
 
 ```bash,test
 jjj init
@@ -191,6 +193,18 @@ Reviewers are specified as names (e.g., `@alice`, `@bob`). Adding reviewers make
 
 ```bash
 jjj solution review S-1 @alice @bob
+```
+
+## `jjj solution resume`
+
+Resume working on an existing solution. Switches to the solution's most recent jj change, or creates a new change if none exists.
+
+```
+jjj solution resume <solution_id>
+```
+
+```bash
+jjj solution resume S-1
 ```
 
 ## `jjj solution lgtm`

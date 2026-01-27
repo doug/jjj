@@ -238,7 +238,7 @@ jjj solution new "Add deleted_at filter to search query" --problem P-21
 jjj solution new "Invalidate search cache entry on soft delete" --problem P-22
 
 # 4. Work on solutions (attach changes, face critique, iterate)
-jjj start S-5 --problem P-21
+jjj solution resume S-5
 # ... implement fix, attach change ...
 jjj submit
 

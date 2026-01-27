@@ -1,6 +1,6 @@
 # Board and Dashboard
 
-jjj provides two views for understanding your project's state: the **board** shows solutions organized by status, and the **dashboard** shows your personal work and action items.
+jjj provides two views for understanding your project's state: the **board** shows solutions organized by status, and **status** shows your personal context and prioritized next actions.
 
 ## The Board
 
@@ -42,10 +42,10 @@ Problems: 4 open, 2 solved/dissolved
 jjj solution test S-5
 ```
 
-Or use the workflow shorthand, which creates the solution and moves it to testing in one step:
+Or use `solution new`, which creates the solution, attaches a change, and moves it to testing in one step:
 
 ```bash
-jjj start "Add Redis caching" --problem P-10
+jjj solution new "Add Redis caching" --problem P-10
 ```
 
 **Accepted** -- Solutions that have survived criticism. All critiques have been resolved, assigned reviewers have signed off, and the solution has been accepted as the current best answer to its problem:
@@ -80,51 +80,47 @@ For scripting or integration with other tools:
 jjj board --json
 ```
 
-## The Dashboard
+## Status
 
-The dashboard shows your personal work context: what you are responsible for and what needs your attention.
+The `status` command shows your personal context: the active solution for your current change, prioritized next actions, and a summary of project health.
 
-### Viewing the Dashboard
+### Viewing Status
 
 ```bash
-jjj dashboard
+jjj status
 ```
 
 Output:
 
 ```
-Dashboard for @alice
+Active: S-5 "Add Redis caching" -> P-10 [testing]
+  Awaiting review: @bob
+  Open critiques: 2
+    CQ-8: Cache invalidation not handled [high]
+    CQ-9: Redis single point of failure [medium]
 
-My Problems (2):
-  P-3 - Search results include deleted items [in_progress]
-  P-8 - API rate limiting needed [open]
+Next actions:
 
-My Solutions (1):
-  S-5 - Add Redis caching [testing] (P-10)
+1. [BLOCKED] S-5: Add Redis caching -- 2 open critique(s)
+   CQ-8: Cache invalidation not handled [high]
+   CQ-9: Redis single point of failure [medium]
+   -> jjj critique show CQ-8
 
-Open Critiques on My Solutions (2):
-  CQ-8 - Cache invalidation not handled [high, S-5]
-  CQ-9 - Redis single point of failure [medium, S-5]
+2. [TODO] P-8: API rate limiting needed -- No solutions proposed
+   -> jjj solution new "title" --problem P-8
 
-Summary:
-  Problems: 4 open, 2 in progress
-  Solutions: 3 testing
-  Critiques: 5 open
+Summary: 4 open problems, 3 testing solutions, 5 open critiques
 ```
 
-### Dashboard Sections
+### Status Sections
 
-**My Problems** -- Problems assigned to you that are still open or in progress. These are the problems you are responsible for finding solutions to.
+**Active Solution** -- The solution linked to your current jj change. Shows its problem, status, pending reviewers, and open critiques.
 
-**My Solutions** -- Solutions assigned to you that are in an active state (proposed or testing). These are the solutions you are implementing.
-
-**Open Critiques on My Solutions** -- Critiques that need your response. Each one is blocking your solution from acceptance. Prioritize critical and high severity critiques.
+**Next Actions** -- A prioritized list of items grouped by urgency: BLOCKED (solutions with open critiques), READY (solutions ready to accept), REVIEW (solutions waiting for your review), WAITING (your solutions awaiting others), and TODO (open problems with no solutions).
 
 **Summary** -- Project-wide counts giving you a sense of overall workload and health.
 
-### Acting on the Dashboard
-
-The dashboard tells you what to do next:
+### Acting on Status
 
 1. **Open critiques?** Address them first. They are blocking your solutions.
    ```bash
@@ -143,24 +139,20 @@ The dashboard tells you what to do next:
    jjj solution new "Rate limit with token bucket algorithm" --problem P-8
    ```
 
-4. **Nothing assigned?** Check `jjj next` for suggested work items.
-   ```bash
-   jjj next
-   ```
+4. **Nothing assigned?** Run `jjj status --all` to see all items across the project.
 
-## Combining Board and Dashboard
+## Combining Board and Status
 
-The board gives you the project view. The dashboard gives you the personal view. Use them together:
+The board gives you the project view. Status gives you the personal view. Use them together:
 
 - **Planning**: Check the board to see what is proposed, what is being tested, and where the bottlenecks are.
-- **Daily work**: Check the dashboard to see what needs your attention today.
-- **Standup**: The board shows team progress; the dashboard shows individual status.
+- **Daily work**: Check status to see what needs your attention today.
+- **Standup**: The board shows team progress; status shows individual context.
 
 ```bash
 # Morning routine
-jjj dashboard          # What do I need to do?
+jjj status             # What do I need to do?
 jjj board              # How is the project doing?
-jjj next               # What should I pick up next?
 ```
 
 ## Next Steps

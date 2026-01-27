@@ -259,7 +259,7 @@ jjj solution review S-1 @alice --stack
 jjj solution list --status testing
 
 # Solutions waiting for your sign-off
-jjj dashboard
+jjj status
 ```
 
 ## Comment Relocation Example
@@ -379,7 +379,7 @@ If you forget which solution you are working on:
 jjj solution list --problem P-1
 
 # The dashboard shows your assigned work
-jjj dashboard
+jjj status
 ```
 
 ## Next Steps

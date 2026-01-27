@@ -35,7 +35,7 @@ jjj solution new "Add search index" --problem P-1
 Then work through the critique cycle:
 
 ```bash
-jjj start S-1
+jjj solution resume S-1
 jjj critique new S-1 "Missing error handling" --severity medium
 jjj critique address CQ-1
 jjj submit
@@ -46,7 +46,7 @@ jjj submit
 - **Offline-first** -- metadata lives in the repository, no server required
 - **Change ID stability** -- Jujutsu change IDs survive rebases and history rewrites, so references never break
 - **Critique-driven review** -- solutions are refined through structured criticism, not ad-hoc comments
-- **`jjj next` guided workflow** -- always know what to work on next
+- **`jjj status` guided workflow** -- always know what to work on next
 - **Priority-based triage** -- focus on what matters with P0-P3 priority levels
 
 ## Getting Started
@@ -59,7 +59,7 @@ jjj submit
 - [Problem Commands](reference/cli-problem.md) -- problem management
 - [Solution Commands](reference/cli-solution.md) -- solution lifecycle
 - [Critique Commands](reference/cli-critique.md) -- critique operations
-- [Workflow Commands](reference/cli-workflow.md) -- init, start, submit, next
+- [Workflow Commands](reference/cli-workflow.md) -- init, submit, status, board
 - [Configuration](reference/configuration.md) -- project and user settings
 
 ## Architecture Highlights

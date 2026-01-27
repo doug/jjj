@@ -24,7 +24,7 @@ jjj problem new "Search is slow" --priority P1
 ```
 
 This creates `P-1`. Priorities range from P0 (critical) to P3 (low) and
-affect how `jjj next` orders your work.
+affect how `jjj status` orders your work.
 
 ## Propose a Solution
 
@@ -40,11 +40,12 @@ multiple competing solutions.
 
 ## Start Working
 
-The `start` command creates a new jj change, attaches it to the solution, and
-moves the solution to `testing` status:
+The `solution new` command creates a solution, a new jj change, attaches it,
+and moves the solution to `testing` status. To resume work on an existing
+solution:
 
 ```bash
-jjj start S-1
+jjj solution resume S-1
 ```
 
 Your working copy now has a change tracked by jjj. The parent problem
@@ -92,10 +93,10 @@ problem, it offers to mark the problem as solved too.
 
 ## Check What's Next
 
-The `next` command shows a prioritized list of actions you should take:
+The `status` command shows a prioritized list of actions you should take:
 
 ```bash
-jjj next
+jjj status
 ```
 
 Items are grouped by urgency:
@@ -134,7 +135,7 @@ critiques. All criticism must be explicitly addressed, validated, or dismissed.
 This enforces intellectual honesty.
 
 **Priority** -- Problems are prioritized P0 (critical) through P3 (low).
-Priority affects how `jjj next` orders work items, ensuring the most important
+Priority affects how `jjj status` orders work items, ensuring the most important
 problems surface first.
 
 ## Common Commands
@@ -147,13 +148,12 @@ problems surface first.
 | `jjj problem show P-1` | Show problem details and solutions |
 | `jjj solution new "title" --problem P-1` | Propose a solution |
 | `jjj solution list` | List all solutions |
-| `jjj start S-1` | Create a change and begin working |
+| `jjj solution resume S-1` | Switch to a solution's change |
 | `jjj critique new S-1 "title" --severity medium` | Critique a solution |
 | `jjj critique address CQ-1` | Mark critique as addressed |
 | `jjj submit` | Squash, accept solution, solve problem |
-| `jjj next` | Show prioritized next actions |
+| `jjj status` | Show status and prioritized next actions |
 | `jjj board` | Show Kanban board |
-| `jjj dashboard` | Show overview dashboard |
 | `jjj review @alice` | Assign a reviewer to current solution |
 | `jjj lgtm` | Sign off on current solution |
 | `jjj lgtm --comment "looks good"` | Sign off with a comment |
