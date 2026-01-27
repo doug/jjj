@@ -2,7 +2,7 @@ use crate::error::{JjjError, Result};
 use crate::jj::JjClient;
 use crate::models::{
     Critique, CritiqueFrontmatter, CritiqueStatus, Milestone, MilestoneFrontmatter,
-    Priority, Problem, ProblemFrontmatter, ProblemStatus,
+    Problem, ProblemFrontmatter, ProblemStatus,
     ProjectConfig, Solution, SolutionFrontmatter, SolutionStatus,
 };
 use std::fs;
@@ -817,6 +817,7 @@ impl MetadataStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::Priority;
     use std::collections::HashSet;
     use chrono::Utc;
 
