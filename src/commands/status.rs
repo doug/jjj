@@ -1,6 +1,6 @@
 use crate::error::Result;
 use crate::jj::JjClient;
-use crate::models::{CritiqueStatus, Critique, Priority};
+use crate::models::{CritiqueStatus, Critique, Priority, ProblemStatus, SolutionStatus};
 use crate::storage::MetadataStore;
 
 fn priority_sort_value(priority: &Priority) -> i32 {
@@ -14,15 +14,141 @@ fn priority_sort_value(priority: &Priority) -> i32 {
 
 pub fn execute(all: bool, mine: bool, limit: Option<usize>, json: bool) -> Result<()> {
     let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client)?;
-
+    let store = MetadataStore::new(jj_client.clone())?;
     let user = store.jj_client.user_identity().unwrap_or_default();
+
     let problems = store.list_problems()?;
     let solutions = store.list_solutions()?;
     let critiques = store.list_critiques()?;
 
+    if json {
+        // Build JSON output with active_solution, next_actions, summary
+        let current_change = jj_client.current_change_id().ok();
+        let active_solution = current_change.as_ref().and_then(|change_id| {
+            solutions.iter().find(|s| s.change_ids.contains(change_id))
+        });
+
+        let active_json = active_solution.map(|s| {
+            serde_json::json!({
+                "id": s.id,
+                "title": s.title,
+                "problem_id": s.problem_id,
+                "status": format!("{}", s.status),
+            })
+        });
+
+        let mut items = build_next_actions(&problems, &solutions, &critiques, &user, mine);
+        let total_count = items.len();
+        let effective_limit = if all { usize::MAX } else { limit.unwrap_or(5) };
+        items.truncate(effective_limit);
+
+        let open_problems = problems.iter().filter(|p| p.is_open()).count();
+        let testing_solutions = solutions.iter().filter(|s| s.status == SolutionStatus::Testing).count();
+        let open_critiques = critiques.iter().filter(|c| c.status == CritiqueStatus::Open).count();
+
+        let output = serde_json::json!({
+            "active_solution": active_json,
+            "items": items,
+            "total_count": total_count,
+            "user": user,
+            "summary": {
+                "open_problems": open_problems,
+                "testing_solutions": testing_solutions,
+                "open_critiques": open_critiques,
+            }
+        });
+        println!("{}", serde_json::to_string_pretty(&output)?);
+    } else {
+        // 1. Active Solution section
+        let current_change = jj_client.current_change_id().ok();
+        if let Some(change_id) = &current_change {
+            if let Some(active) = solutions.iter().find(|s| s.change_ids.contains(change_id)) {
+                println!("Active: {} \"{}\" -> {} [{}]", active.id, active.title, active.problem_id, active.status);
+
+                // Show reviewers if any
+                if !active.reviewers.is_empty() {
+                    let pending = active.pending_reviewers();
+                    if pending.is_empty() {
+                        println!("  Reviewers: all signed off");
+                    } else {
+                        println!("  Awaiting review: {}", pending.iter().map(|r| format!("@{}", r)).collect::<Vec<_>>().join(", "));
+                    }
+                }
+
+                // Show open critiques on active solution
+                let active_critiques: Vec<_> = critiques.iter()
+                    .filter(|c| c.solution_id == active.id && c.status == CritiqueStatus::Open)
+                    .collect();
+                if !active_critiques.is_empty() {
+                    println!("  Open critiques: {}", active_critiques.len());
+                    for c in &active_critiques {
+                        println!("    {}: {} [{}]", c.id, c.title, c.severity);
+                    }
+                }
+                println!();
+            }
+        }
+
+        // 2. Next Actions section
+        let mut items = build_next_actions(&problems, &solutions, &critiques, &user, mine);
+        let total_count = items.len();
+        let effective_limit = if all { usize::MAX } else { limit.unwrap_or(5) };
+        items.truncate(effective_limit);
+
+        if items.is_empty() {
+            println!("No pending actions. All caught up!");
+        } else {
+            println!("Next actions:\n");
+            for (i, item) in items.iter().enumerate() {
+                let category = item["category"].as_str().unwrap_or("").to_uppercase();
+                let entity_id = item["entity_id"].as_str().unwrap_or("");
+                let title = item["title"].as_str().unwrap_or("");
+                let summary = item["summary"].as_str().unwrap_or("");
+
+                println!("{}. [{}] {}: {} -- {}", i + 1, category, entity_id, title, summary);
+
+                if let Some(details) = item["details"].as_array() {
+                    for detail in details {
+                        let id = detail["id"].as_str().unwrap_or("");
+                        let text = detail["text"].as_str().unwrap_or("");
+                        let severity = detail["severity"].as_str().unwrap_or("");
+                        println!("   {}: {} [{}]", id, text, severity);
+                    }
+                }
+
+                if let Some(cmd) = item["suggested_command"].as_str() {
+                    if !cmd.is_empty() {
+                        println!("   -> {}", cmd);
+                    }
+                }
+                println!();
+            }
+
+            if !all && total_count > effective_limit {
+                println!("Showing {} of {} items. Use --all to see everything.", effective_limit, total_count);
+            }
+        }
+
+        // 3. Summary section
+        let open_problems = problems.iter().filter(|p| p.status == ProblemStatus::Open || p.status == ProblemStatus::InProgress).count();
+        let testing_solutions = solutions.iter().filter(|s| s.status == SolutionStatus::Testing).count();
+        let open_critiques = critiques.iter().filter(|c| c.status == CritiqueStatus::Open).count();
+
+        println!("\nSummary: {} open problems, {} testing solutions, {} open critiques",
+            open_problems, testing_solutions, open_critiques);
+    }
+
+    Ok(())
+}
+
+fn build_next_actions(
+    problems: &[crate::models::Problem],
+    solutions: &[crate::models::Solution],
+    critiques: &[Critique],
+    user: &str,
+    mine: bool,
+) -> Vec<serde_json::Value> {
     let mut items: Vec<serde_json::Value> = Vec::new();
-    let effective_limit = if all { usize::MAX } else { limit.unwrap_or(5) };
 
     // 1. BLOCKED: Solutions with open critiques
     for solution in solutions.iter().filter(|s| s.is_active()) {
@@ -170,53 +296,5 @@ pub fn execute(all: bool, mine: bool, limit: Option<usize>, json: bool) -> Resul
         b_pri.cmp(&a_pri)
     });
 
-    // Apply limit
-    let total_count = items.len();
-    items.truncate(effective_limit);
-
-    if json {
-        let output = serde_json::json!({
-            "items": items,
-            "total_count": total_count,
-            "user": user,
-        });
-        println!("{}", serde_json::to_string_pretty(&output)?);
-    } else {
-        if items.is_empty() {
-            println!("No pending actions. All caught up!");
-            return Ok(());
-        }
-
-        println!("Next actions:\n");
-        for (i, item) in items.iter().enumerate() {
-            let category = item["category"].as_str().unwrap_or("").to_uppercase();
-            let entity_id = item["entity_id"].as_str().unwrap_or("");
-            let title = item["title"].as_str().unwrap_or("");
-            let summary = item["summary"].as_str().unwrap_or("");
-
-            println!("{}. [{}] {}: {} — {}", i + 1, category, entity_id, title, summary);
-
-            if let Some(details) = item["details"].as_array() {
-                for detail in details {
-                    let id = detail["id"].as_str().unwrap_or("");
-                    let text = detail["text"].as_str().unwrap_or("");
-                    let severity = detail["severity"].as_str().unwrap_or("");
-                    println!("   {}: {} [{}]", id, text, severity);
-                }
-            }
-
-            if let Some(cmd) = item["suggested_command"].as_str() {
-                if !cmd.is_empty() {
-                    println!("   -> {}", cmd);
-                }
-            }
-            println!();
-        }
-
-        if !all && total_count > effective_limit {
-            println!("Showing {} of {} items. Use --all to see everything.", effective_limit, total_count);
-        }
-    }
-
-    Ok(())
+    items
 }

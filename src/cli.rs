@@ -38,13 +38,6 @@ pub enum Commands {
         action: CritiqueAction,
     },
 
-    /// Show dashboard with pending work
-    Dashboard {
-        /// Output in JSON format
-        #[arg(long)]
-        json: bool,
-    },
-
     /// Resolve conflicts
     Resolve {
         /// ID to resolve
@@ -89,8 +82,8 @@ pub enum Commands {
         comment: Option<String>,
     },
 
-    /// Show next actions (what should I work on?)
-    Next {
+    /// Show status and next actions
+    Status {
         /// Show all items (no limit)
         #[arg(long)]
         all: bool,

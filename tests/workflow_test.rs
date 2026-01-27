@@ -124,21 +124,14 @@ fn test_solution_status_workflow() {
     let temp_dir = setup_test_repo();
     let dir = temp_dir.path();
 
-    // Create a solution
+    // Create a solution (auto-attaches change and moves to testing)
     run_jjj(dir, &["solution", "new", "Test Solution", "--problem", "P-1"]);
 
-    // Check initial status is proposed
+    // Check initial status is testing (solution new now auto-attaches)
     let show = run_jjj(dir, &["solution", "show", "S-1"]);
     let stdout = String::from_utf8_lossy(&show.stdout);
-    assert!(stdout.contains("Proposed") || stdout.contains("proposed"));
-
-    // Move to testing
-    let output = run_jjj(dir, &["solution", "test", "S-1"]);
-    assert!(output.status.success());
-
-    let show = run_jjj(dir, &["solution", "show", "S-1"]);
-    let stdout = String::from_utf8_lossy(&show.stdout);
-    assert!(stdout.contains("Testing") || stdout.contains("testing"));
+    assert!(stdout.contains("Testing") || stdout.contains("testing"),
+        "Expected testing status after solution new. Got: {}", stdout);
 
     // Accept the solution
     let output = run_jjj(dir, &["solution", "accept", "S-1"]);

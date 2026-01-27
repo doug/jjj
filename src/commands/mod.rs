@@ -1,13 +1,12 @@
 pub mod board;
 pub mod completion;
 pub mod critique;
-pub mod dashboard;
 pub mod init;
 pub mod milestone;
-pub mod next;
 pub mod problem;
 pub mod resolve;
 pub mod solution;
+pub mod status;
 pub mod workflow;
 
 use crate::cli::{Cli, Commands, SolutionAction};
@@ -20,7 +19,6 @@ pub fn execute(cli: Cli) -> Result<()> {
         Commands::Problem { action } => problem::execute(action),
         Commands::Solution { action } => solution::execute(action),
         Commands::Critique { action } => critique::execute(action),
-        Commands::Dashboard { json } => dashboard::execute(json),
         Commands::Resolve { id, pick } => resolve::execute(id, pick),
         Commands::Milestone { action } => milestone::execute(action),
 
@@ -30,8 +28,8 @@ pub fn execute(cli: Cli) -> Result<()> {
         // Shell completion
         Commands::Completion { shell } => completion::execute(shell),
 
-        // Next actions
-        Commands::Next { all, mine, limit, json } => next::execute(all, mine, limit, json),
+        // Status (replaces dashboard + next)
+        Commands::Status { all, mine, limit, json } => status::execute(all, mine, limit, json),
 
         // Shorthand commands
         Commands::ReviewShorthand { reviewers } => {

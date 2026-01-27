@@ -267,8 +267,8 @@ fn test_next_priority_sorting() {
     run_jjj(dir_path, &["problem", "new", "High priority work", "--priority", "P1"]);
 
     // All should appear as TODO (no solutions)
-    let output = run_jjj(dir_path, &["next", "--json", "--all"]);
-    assert!(output.status.success(), "next failed: {}", String::from_utf8_lossy(&output.stderr));
+    let output = run_jjj(dir_path, &["status", "--json", "--all"]);
+    assert!(output.status.success(), "status failed: {}", String::from_utf8_lossy(&output.stderr));
     let stdout = String::from_utf8_lossy(&output.stdout);
     let json: serde_json::Value = serde_json::from_str(&stdout).expect("Failed to parse JSON");
     let items = json["items"].as_array().expect("items not array");
