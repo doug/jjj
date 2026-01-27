@@ -2,57 +2,31 @@
 
 [Introduction](index.md)
 
----
-
 # Getting Started
 
 - [Installation](getting-started/installation.md)
 - [Quick Start](getting-started/quick-start.md)
-- [Your First Project](getting-started/first-project.md)
-
----
 
 # User Guides
 
-- [Work Hierarchy](guides/work-hierarchy.md)
+- [Problem Solving](guides/problem-solving.md)
+- [Critique Guidelines](guides/critique-guidelines.md)
 - [Code Review Workflow](guides/code-review.md)
-- [Task Management](guides/task-management.md)
 - [Board & Dashboard](guides/board-dashboard.md)
-- [Integration with Jujutsu](guides/jujutsu-integration.md)
-- [VSCode Extension](guides/vscode-extension.md)
-
----
+- [Jujutsu Integration](guides/jujutsu-integration.md)
+- [VS Code Extension](guides/vscode-extension.md)
 
 # CLI Reference
 
-- [Commands Overview](reference/cli.md)
-- [Task Commands](reference/cli-task.md)
-- [Feature Commands](reference/cli-feature.md)
+- [Problem Commands](reference/cli-problem.md)
+- [Solution Commands](reference/cli-solution.md)
+- [Critique Commands](reference/cli-critique.md)
 - [Milestone Commands](reference/cli-milestone.md)
-- [Bug Commands](reference/cli-bug.md)
-- [Review Commands](reference/cli-review.md)
+- [Workflow Commands](reference/cli-workflow.md)
 - [Configuration](reference/configuration.md)
-
----
-
-# Examples
-
-- [Feature Development Workflow](examples/feature-workflow.md)
-- [Bug Triage & Fixing](examples/bug-triage.md)
-- [Release Planning](examples/release-planning.md)
-- [Code Review Process](examples/code-review-process.md)
-
----
 
 # Architecture
 
 - [Design Philosophy](architecture/design-philosophy.md)
-- [Storage & Metadata](architecture/storage.md)
-- [Change ID Tracking](architecture/change-tracking.md)
-- [Comment Relocation](architecture/comment-relocation.md)
-
----
-
-# Contributing
-
-- [Testing](contributing/testing.md)
+- [Storage & Metadata](architecture/storage-metadata.md)
+- [Change ID Tracking](architecture/change-id-tracking.md)
