@@ -5,14 +5,14 @@ import { NextActionsProvider } from "./views/nextActionsProvider";
 import { ProjectTreeProvider } from "./views/projectTreeProvider";
 import { EntityDocumentProvider } from "./documents/entityDocumentProvider";
 import { StatusBar } from "./statusBar";
-import { registerCommands } from "./commands";
 import { CritiqueDecorationManager } from "./editor/critiqueDecorations";
+import { registerCommands } from "./commands";
 
 export function activate(context: vscode.ExtensionContext) {
   const cli = new JjjCli();
   const cache = new DataCache(cli);
 
-  // Views
+  // --- Views ---
   const nextActions = new NextActionsProvider(cache);
   vscode.window.registerTreeDataProvider("jjj-next-actions", nextActions);
 
@@ -24,7 +24,7 @@ export function activate(context: vscode.ExtensionContext) {
   });
   context.subscriptions.push(treeView);
 
-  // Virtual Documents
+  // --- Virtual Documents ---
   const docProvider = new EntityDocumentProvider(cache);
   context.subscriptions.push(
     vscode.workspace.registerTextDocumentContentProvider("jjj", docProvider),
@@ -38,32 +38,31 @@ export function activate(context: vscode.ExtensionContext) {
     }),
   );
 
-  // Status Bar
+  // --- Status Bar ---
   const statusBar = new StatusBar(cache);
   context.subscriptions.push(statusBar);
 
-  // Commands
-  registerCommands(context, cli, cache);
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand("jjj.refreshAll", () => cache.refresh()),
-  );
-
-  // Gutter Decorations
+  // --- Gutter Decorations ---
   const decorations = new CritiqueDecorationManager(cache);
   context.subscriptions.push(decorations);
 
-  // Auto-refresh
+  // --- Commands ---
+  context.subscriptions.push(
+    vscode.commands.registerCommand("jjj.refreshAll", () => cache.refresh()),
+  );
+  registerCommands(context, cli, cache);
+
+  // --- Auto-Refresh ---
   const interval = setInterval(() => cache.refresh(), 30000);
   context.subscriptions.push({ dispose: () => clearInterval(interval) });
-
-  // Refresh on file save
   context.subscriptions.push(
     vscode.workspace.onDidSaveTextDocument(() => cache.refresh()),
   );
 
-  // Initial load
+  // --- Initial Load ---
   cache.refresh();
+
+  console.log("JJJ extension activated");
 }
 
 export function deactivate() {}
