@@ -258,8 +258,8 @@ impl Solution {
         }
     }
 
-    /// Add a sign-off from a reviewer
-    pub fn add_sign_off(&mut self, reviewer: String, comment: Option<String>) {
+    /// Add a sign-off from a reviewer. Returns true if added, false if duplicate.
+    pub fn add_sign_off(&mut self, reviewer: String, comment: Option<String>) -> bool {
         if !self.sign_offs.iter().any(|so| so.reviewer == reviewer) {
             self.sign_offs.push(SignOff {
                 reviewer,
@@ -267,6 +267,9 @@ impl Solution {
                 comment,
             });
             self.updated_at = Utc::now();
+            true
+        } else {
+            false
         }
     }
 

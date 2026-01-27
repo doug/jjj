@@ -17,14 +17,6 @@ pub struct Tag {
     pub color: Option<String>,
 }
 
-/// Review configuration
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct ReviewConfig {
-    /// Whether solutions require LGTM by default
-    #[serde(default)]
-    pub default_required: bool,
-}
-
 /// Project-wide configuration stored in config.toml
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectConfig {
@@ -40,10 +32,6 @@ pub struct ProjectConfig {
     #[serde(default)]
     pub default_reviewers: Vec<String>,
 
-    /// Review settings
-    #[serde(default)]
-    pub review: ReviewConfig,
-
     /// Custom settings
     #[serde(default)]
     pub settings: HashMap<String, String>,
@@ -55,7 +43,6 @@ impl Default for ProjectConfig {
             name: None,
             tags: Vec::new(),
             default_reviewers: Vec::new(),
-            review: ReviewConfig::default(),
             settings: HashMap::new(),
         }
     }

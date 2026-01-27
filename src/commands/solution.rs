@@ -147,6 +147,9 @@ fn show_solution(solution_id: String, json: bool) -> Result<()> {
 
     println!("Solution: {} - {}", solution.id, solution.title);
     println!("Status: {}", solution.status);
+    if solution.force_accepted {
+        println!("Force accepted: yes");
+    }
     println!("Addresses: {}", solution.problem_id);
     if let Some(ref sup) = solution.supersedes {
         println!("Supersedes: {}", sup);
@@ -480,10 +483,20 @@ fn lgtm_solution(solution_id: String, comment: Option<String>) -> Result<()> {
             println!("Only sign-offs from requested reviewers count toward acceptance.");
         }
 
-        solution.add_sign_off(user.clone(), comment);
+        // Find matching reviewer name (if any) to ensure sign-off matches exactly
+        let reviewer_name = solution.reviewers.iter()
+            .find(|r| user.contains(r.as_str()))
+            .cloned()
+            .unwrap_or_else(|| user.clone());
+
+        let added = solution.add_sign_off(reviewer_name, comment);
         store.save_solution(&solution)?;
 
-        println!("LGTM recorded for solution {}", solution_id);
+        if added {
+            println!("Sign-off recorded for solution {}", solution_id);
+        } else {
+            println!("You have already signed off on solution {}", solution_id);
+        }
 
         Ok(())
     })
