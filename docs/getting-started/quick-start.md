@@ -86,9 +86,9 @@ solution:
 jjj submit
 ```
 
-Submit auto-accepts the solution if all critiques are resolved and reviews
-pass. If this is the only solution for the problem, it offers to mark the
-problem as solved too.
+Submit auto-accepts the solution if all critiques are resolved and all
+assigned reviewers have signed off. If this is the only solution for the
+problem, it offers to mark the problem as solved too.
 
 ## Check What's Next
 
@@ -154,8 +154,9 @@ problems surface first.
 | `jjj next` | Show prioritized next actions |
 | `jjj board` | Show Kanban board |
 | `jjj dashboard` | Show overview dashboard |
-| `jjj review @alice` | Request review on current solution |
-| `jjj lgtm` | Approve current solution |
+| `jjj review @alice` | Assign a reviewer to current solution |
+| `jjj lgtm` | Sign off on current solution |
+| `jjj lgtm --comment "looks good"` | Sign off with a comment |
 | `jjj milestone new "v1.0" --date 2025-06-01` | Create a milestone |
 | `jjj milestone roadmap` | Show milestone roadmap |
 

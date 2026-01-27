@@ -48,7 +48,7 @@ Or use the workflow shorthand, which creates the solution and moves it to testin
 jjj start "Add Redis caching" --problem P-10
 ```
 
-**Accepted** -- Solutions that have survived criticism. All critiques have been resolved, reviews are in, and the solution has been accepted as the current best answer to its problem:
+**Accepted** -- Solutions that have survived criticism. All critiques have been resolved, assigned reviewers have signed off, and the solution has been accepted as the current best answer to its problem:
 
 ```bash
 jjj solution accept S-3
@@ -167,4 +167,4 @@ jjj next               # What should I pick up next?
 
 - [Problem Solving](problem-solving.md) -- Creating and managing problems
 - [Critique Guidelines](critique-guidelines.md) -- Working with critiques
-- [Code Review](code-review.md) -- The review and LGTM workflow
+- [Code Review](code-review.md) -- The reviewer sign-off workflow

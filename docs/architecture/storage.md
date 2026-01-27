@@ -153,9 +153,8 @@ columns = ["TODO", "In Progress", "Review", "Done"]
 [tags]
 allowed = ["backend", "frontend", "api", "ui"]
 
-[review]
-required_approvals = 1
-auto_approve_owner = false
+# Review is now per-solution via assigned reviewers.
+# See solution --review flag and jjj solution review.
 ```
 
 #### TOML for Work Items

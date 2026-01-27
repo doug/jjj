@@ -46,14 +46,17 @@ jjj submit [OPTIONS]
 
 | Flag | Type | Description |
 |------|------|-------------|
-| `--force` | bool | Bypass review and critique checks |
+| `--force` | bool | Bypass critique and sign-off checks (sets `force_accepted` flag) |
 
 Submit performs these steps:
 
-1. Checks for open critiques and pending reviews (unless `--force`).
-2. Rebases the current change onto main and squashes.
-3. Auto-accepts the solution if it was in testing or proposed status.
-4. Auto-solves the problem if the accepted solution is the only active one and there are no open sub-problems.
+1. Checks for open critiques (unless `--force`).
+2. Checks that all assigned reviewers have signed off (unless `--force`).
+3. Rebases the current change onto main and squashes.
+4. Auto-accepts the solution if it was in testing or proposed status.
+5. Auto-solves the problem if the accepted solution is the only active one and there are no open sub-problems.
+
+Using `--force` bypasses the critique and sign-off gates and sets the `force_accepted` flag on the solution.
 
 ```bash
 jjj submit
@@ -86,7 +89,9 @@ jjj next --json
 
 ## `jjj review`
 
-Request review on the current change's solution. Shorthand for `jjj solution review`.
+Assign reviewers to the current change's solution. Shorthand for `jjj solution review`.
+
+Assigned reviewers must sign off before the solution can be accepted.
 
 ```
 jjj review <reviewers...>
@@ -98,14 +103,21 @@ jjj review @alice @bob
 
 ## `jjj lgtm`
 
-LGTM the current change's solution. Shorthand for `jjj solution lgtm`.
+Sign off on the current change's solution. Shorthand for `jjj solution lgtm`.
+
+Records a structured sign-off with your name, timestamp, and optional comment.
 
 ```
-jjj lgtm
+jjj lgtm [OPTIONS]
 ```
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `--comment` | string | Optional comment to include with the sign-off |
 
 ```bash
 jjj lgtm
+jjj lgtm --comment "looks good"
 ```
 
 ## `jjj board`

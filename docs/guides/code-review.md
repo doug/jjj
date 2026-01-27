@@ -35,7 +35,7 @@ This stability makes it perfect for attaching review metadata.
 
 ### Solutions Own the Review
 
-In jjj, code review is attached to **solutions** (S-1, S-2, etc.), not directly to changes. A solution may have one or more jj changes associated with it. When you request a review, you are asking someone to evaluate the solution's implementation.
+In jjj, code review is attached to **solutions** (S-1, S-2, etc.), not directly to changes. A solution may have one or more jj changes associated with it. When you assign reviewers, you are requiring them to sign off on the solution's implementation before it can be accepted.
 
 ### Comment Relocation
 
@@ -49,12 +49,20 @@ This is powered by **context fingerprinting** using SHA-256 hashing.
 
 ## Basic Workflow
 
-### 1. Request a Review
+### 1. Assign Reviewers
 
-After implementing a solution:
+You can assign reviewers when creating a solution, or add them later.
+
+At creation:
 
 ```bash
-# Request review by solution ID
+jjj solution new "Use JWT tokens" --problem P-1 --review @alice --review @bob
+```
+
+Or assign reviewers to an existing solution:
+
+```bash
+# Assign reviewers by solution ID
 jjj solution review S-1 @alice @bob
 ```
 
@@ -67,7 +75,7 @@ jjj review @alice @bob
 
 Output:
 ```
-Review requested for S-1: Use JWT tokens
+Reviewers assigned for S-1: Use JWT tokens
 Reviewers: @alice, @bob
 ```
 
@@ -104,7 +112,7 @@ cargo test
 npm start
 ```
 
-### 3. Reviewer: Raise Critiques or Approve
+### 3. Reviewer: Raise Critiques or Sign Off
 
 After examining the solution, Alice has two paths.
 
@@ -126,17 +134,21 @@ jjj critique new S-1 "Password comparison is not constant-time" \
 
 See the [Critique Guidelines](critique-guidelines.md) for severity levels and how to write effective critiques.
 
-#### If the implementation looks correct: LGTM
+#### If the implementation looks correct: sign off (LGTM)
 
 ```bash
-# LGTM by solution ID
+# Sign off by solution ID
 jjj solution lgtm S-1
 
-# Shorthand: LGTM from the solution's current change
+# Sign off with a comment
+jjj solution lgtm S-1 --comment "looks good, clean implementation"
+
+# Shorthand: sign off from the solution's current change
 jjj lgtm
+jjj lgtm --comment "approved"
 ```
 
-An LGTM signals that the reviewer has examined the implementation and found it acceptable. This is a lighter-weight check than a critique -- it says "the code looks right" rather than "the approach is sound."
+A sign-off records the reviewer's name, a timestamp, and an optional comment. If the reviewer is in the solution's assigned `reviewers` list, the sign-off counts toward the acceptance gate. Sign-offs from non-assigned reviewers are recorded but do not affect the gate.
 
 ### 4. Author: Respond to Critiques
 
@@ -173,23 +185,25 @@ jjj submit
 
 `jjj submit` checks:
 1. All critiques on the solution are resolved (addressed, dismissed, or validated)
-2. At least one requested reviewer has LGTM'd (if reviews are required)
+2. All assigned reviewers have signed off (if reviewers are assigned)
 3. The problem has no open sub-problems (if accepting would solve the parent problem)
 
-If any check fails, submit will explain what is still needed. Use `--force` to bypass review requirements in emergencies.
+If any check fails, submit will explain what is still needed. Use `--force` to bypass the gates in emergencies (this sets the `force_accepted` flag on the solution).
 
 ## Two Gates to Acceptance
 
-jjj has two independent mechanisms that gate whether a solution can be accepted:
+jjj has two mechanisms that gate whether a solution can be accepted, both managed through the solution model:
 
 | Gate | What it checks | Who participates | How to resolve |
 |------|---------------|-----------------|----------------|
 | **Critiques** | Is the approach sound? Are there flaws? | Anyone can raise a critique | Address, dismiss, or validate each critique |
-| **Code review (LGTM)** | Does the implementation look correct? | Requested reviewers | Reviewer runs `jjj lgtm` |
+| **Reviewer sign-offs** | Does the implementation look correct? | Assigned reviewers | Reviewer runs `jjj lgtm` (with optional `--comment`) |
 
-Both must be satisfied. A solution with an LGTM but an open critique cannot be accepted. A solution with all critiques resolved but no LGTM (when required) also cannot be accepted.
+Both must be satisfied. A solution with all sign-offs but an open critique cannot be accepted. A solution with all critiques resolved but missing sign-offs from assigned reviewers also cannot be accepted.
 
-This separation is intentional. A critique says "there is a flaw in the approach." An LGTM says "I have reviewed the code and it looks right." These are different judgments made by potentially different people.
+Review is per-solution and derived: a solution requires sign-offs when it has assigned reviewers (`reviewers` list is not empty). Solutions without assigned reviewers skip the sign-off gate entirely.
+
+This separation is intentional. A critique says "there is a flaw in the approach." A sign-off says "I have reviewed the code and it looks right." These are different judgments made by potentially different people.
 
 ## Landing Changes
 
@@ -241,10 +255,10 @@ jjj solution review S-1 @alice --stack
 ### Viewing All Reviews
 
 ```bash
-# All solutions with pending reviews
+# All solutions with pending sign-offs
 jjj solution list --status testing
 
-# Solutions waiting for your LGTM
+# Solutions waiting for your sign-off
 jjj dashboard
 ```
 
@@ -348,12 +362,12 @@ If critique locations do not update after rebase:
 
 ### Submit Fails
 
-If `jjj submit` reports unresolved critiques or missing reviews:
+If `jjj submit` reports unresolved critiques or missing sign-offs:
 
 ```bash
 # Check what is blocking
 jjj critique list --solution S-1 --status open
-jjj solution show S-1  # Shows review status
+jjj solution show S-1  # Shows reviewer and sign-off status
 ```
 
 ### Finding the Right Solution
@@ -372,4 +386,4 @@ jjj dashboard
 
 - [Critique Guidelines](critique-guidelines.md) -- How to write and respond to critiques
 - [Problem Solving](problem-solving.md) -- The problem lifecycle
-- [Board and Dashboard](board-dashboard.md) -- Visualize review status
+- [Board and Dashboard](board-dashboard.md) -- Visualize sign-off and critique status

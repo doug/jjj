@@ -49,79 +49,34 @@ cargo test -- --test-threads=4
 
 ## Test Coverage
 
-### Review Workflow Tests (14 tests)
+### Reviewer and Sign-off Tests
 
 **Behavior-Driven Scenarios:**
 
-1. **test_create_review_request**
-   - Given: A change and reviewers
-   - When: I create a review request
-   - Then: The manifest has correct properties
+1. **test_add_reviewer**
+   - Given: A solution
+   - When: I add reviewers
+   - Then: Reviewers are tracked and deduplicated
 
-2. **test_review_status_transitions**
-   - Given: A pending review
-   - When: Status changes (Pending → Approved → ChangesRequested)
-   - Then: State transitions correctly
+2. **test_add_sign_off**
+   - Given: A solution with reviewers
+   - When: A reviewer signs off with a comment
+   - Then: The sign-off is recorded with reviewer, timestamp, and comment
 
-3. **test_create_general_comment**
-   - Given: Comment metadata
-   - When: I create a general (non-inline) comment
-   - Then: Comment is created without file location
+3. **test_all_reviewers_signed_off**
+   - Given: A solution with assigned reviewers
+   - When: All reviewers sign off
+   - Then: The acceptance gate passes
 
-4. **test_create_inline_comment**
-   - Given: Comment with file and line location
-   - When: I create an inline comment
-   - Then: Location information is attached
+4. **test_pending_reviewers**
+   - Given: A solution with some sign-offs
+   - When: I check pending reviewers
+   - Then: Only unsigned reviewers are returned
 
-5. **test_comment_location_context_hash**
-   - Given: Context lines around a comment
-   - When: I create locations with same/different context
-   - Then: Hash is consistent for same context, different for different context
-
-6. **test_comment_relocation_exact_match**
-   - Given: A comment at a specific line
-   - When: The file hasn't changed
-   - Then: Comment stays at the same line
-
-7. **test_comment_relocation_fuzzy_match**
-   - Given: A comment with specific context
-   - When: Lines are inserted above (shifting code down)
-   - Then: Comment is relocated to the new position via fuzzy matching
-
-8. **test_comment_relocation_fails_when_context_removed**
-   - Given: A comment on deleted code
-   - When: The context is completely removed
-   - Then: Relocation fails or returns low-confidence match
-
-9. **test_review_manifest_serialization**
-   - Given: A review with all fields
-   - When: I serialize/deserialize via TOML
-   - Then: All fields are preserved
-
-10. **test_comment_serialization**
-    - Given: A comment with location
-    - When: I serialize/deserialize via JSON
-    - Then: All fields including location are preserved
-
-11. **test_review_status_equality**
-    - Given: Different review statuses
-    - When: I compare them
-    - Then: Equality works correctly
-
-12. **test_multiple_reviewers**
-    - Given: A review with many reviewers
-    - When: I create the review
-    - Then: All reviewers are tracked
-
-13. **test_comment_resolution**
-    - Given: An unresolved comment
-    - When: I mark it as resolved
-    - Then: The resolved flag is set
-
-14. **test_stack_review_flag**
-    - Given: A review for a stack of changes
-    - When: I set the stack flag
-    - Then: The flag is recorded
+5. **test_requires_review_derived**
+   - Given: A solution
+   - When: It has no reviewers / has reviewers
+   - Then: `requires_review()` returns false / true accordingly
 
 ### Configuration Management Tests (15 tests)
 

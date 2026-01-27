@@ -11,10 +11,6 @@ name = "my-project"
 # Default reviewers for all solutions
 default_reviewers = ["alice", "bob"]
 
-# Review settings
-[review]
-default_required = false
-
 # Custom key-value settings
 [settings]
 key = "value"
@@ -39,9 +35,10 @@ color = "red"
 |-------|------|-------------|
 | `name` | string | Project name |
 | `default_reviewers` | string[] | Reviewers added to all new solutions |
-| `review.default_required` | bool | Whether solutions require LGTM by default |
 | `settings` | map | Arbitrary key-value pairs for custom settings |
 | `tags` | array | Tag definitions with id, name, description, color |
+
+> **Deprecated:** `review.default_required` has been removed. Review is now per-solution: a solution requires review when it has assigned reviewers. Use `--review` on `jjj solution new` or `jjj solution review` to assign reviewers. Solutions without assigned reviewers do not require sign-offs.
 
 ## Tag Management
 

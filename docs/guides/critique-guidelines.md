@@ -200,20 +200,33 @@ jjj critique dismiss CQ-13
 jjj solution accept S-7
 ```
 
-## Critique-Based Review vs. Code Review
+## Critiques and Sign-offs: Two Gates to Acceptance
 
-jjj has two mechanisms that gate solution acceptance:
+jjj has two mechanisms that gate solution acceptance, both unified under the solution model:
 
-1. **Critiques** -- Evaluate the solution's approach, design, and correctness. Anyone can raise a critique at any time. All critiques must be resolved.
+1. **Critiques** -- Evaluate the solution's approach, design, and correctness. Anyone can raise a critique at any time. All critiques must be resolved (addressed, dismissed, or validated).
 
-2. **Code review (LGTM)** -- A lighter-weight approval that the implementation looks correct. Requested from specific reviewers.
+2. **Reviewer sign-offs** -- Assigned reviewers must sign off (LGTM) before the solution can be accepted. Sign-offs are structured records with the reviewer's name, a timestamp, and an optional comment.
 
-Both must be satisfied for `jjj submit` to succeed. Think of critiques as the "is this the right approach?" gate and code review as the "does the code look right?" gate.
+Both gates must be satisfied for `jjj submit` to succeed (unless `--force` is used). The acceptance check runs in order: first critiques, then sign-offs.
 
-See the [Code Review guide](code-review.md) for details on the LGTM flow.
+Review is per-solution: assign reviewers with `--review` when creating a solution, or later with `jjj solution review`. Solutions without assigned reviewers skip the sign-off gate entirely.
+
+```bash
+# Assign reviewers at creation
+jjj solution new "Add caching" --problem P-1 --review @alice --review @bob
+
+# Or assign later
+jjj solution review S-1 @alice
+
+# Sign off with an optional comment
+jjj solution lgtm S-1 --comment "looks good"
+```
+
+See the [Code Review guide](code-review.md) for the full sign-off workflow.
 
 ## Next Steps
 
 - [Problem Solving](problem-solving.md) -- When and how to create problems
-- [Code Review](code-review.md) -- The LGTM review flow
+- [Code Review](code-review.md) -- The reviewer sign-off flow
 - [Board and Dashboard](board-dashboard.md) -- Visualize critiques and solutions
