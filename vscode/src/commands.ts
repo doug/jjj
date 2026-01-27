@@ -116,16 +116,14 @@ export function registerCommands(
     vscode.window.showInformationMessage(result);
   });
 
-  register("jjj.startWorking", async () => {
-    const problems = cache.getProblems().filter(p => p.status === "open" || p.status === "in_progress");
-    const problemPick = await vscode.window.showQuickPick(
-      problems.map(p => ({ label: `${p.id}: ${p.title}`, id: p.id })),
-      { placeHolder: "Which problem to work on?" },
+  register("jjj.resumeSolution", async () => {
+    const solutions = cache.getSolutions().filter(s => s.status === "testing" || s.status === "proposed");
+    const pick = await vscode.window.showQuickPick(
+      solutions.map(s => ({ label: `${s.id}: ${s.title}`, id: s.id })),
+      { placeHolder: "Select solution to resume" },
     );
-    if (!problemPick) { return; }
-    const title = await vscode.window.showInputBox({ prompt: "Solution title" });
-    if (!title) { return; }
-    const result = await cli.startWorking(title, problemPick.id);
+    if (!pick) { return; }
+    const result = await cli.resumeSolution(pick.id);
     vscode.window.showInformationMessage(result);
   });
 

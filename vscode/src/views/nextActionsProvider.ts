@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { DataCache } from "../cache";
-import { NextItem } from "../cli";
+import { StatusItem } from "../cli";
 
 const CATEGORY_ICONS: Record<string, vscode.ThemeIcon> = {
   blocked: new vscode.ThemeIcon("error", new vscode.ThemeColor("errorForeground")),
@@ -47,7 +47,7 @@ export class NextActionsProvider implements vscode.TreeDataProvider<NextActionIt
       });
     }
 
-    const next = this.cache.getNext();
+    const next = this.cache.getStatus();
     if (!next || next.items.length === 0) {
       const item = new NextActionItem("All caught up!", undefined, vscode.TreeItemCollapsibleState.None);
       item.iconPath = new vscode.ThemeIcon("check", new vscode.ThemeColor("testing.iconPassed"));
@@ -80,7 +80,7 @@ export class NextActionsProvider implements vscode.TreeDataProvider<NextActionIt
 export class NextActionItem extends vscode.TreeItem {
   constructor(
     label: string,
-    public readonly nextItem: NextItem | undefined,
+    public readonly nextItem: StatusItem | undefined,
     collapsibleState: vscode.TreeItemCollapsibleState,
   ) {
     super(label, collapsibleState);

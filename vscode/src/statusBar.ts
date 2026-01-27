@@ -13,7 +13,7 @@ export class StatusBar {
   }
 
   private update() {
-    const next = this.cache.getNext();
+    const next = this.cache.getStatus();
     if (!next || next.items.length === 0) {
       this.item.text = "$(beaker) JJJ: all clear";
       this.item.color = undefined;

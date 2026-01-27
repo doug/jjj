@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { JjjCli, Problem, Solution, Critique, Milestone, NextResult } from "./cli";
+import { JjjCli, Problem, Solution, Critique, Milestone, StatusResult } from "./cli";
 
 export class DataCache implements vscode.Disposable {
   private cli: JjjCli;
@@ -10,7 +10,7 @@ export class DataCache implements vscode.Disposable {
   private solutions: Solution[] = [];
   private critiques: Critique[] = [];
   private milestones: Milestone[] = [];
-  private nextResult: NextResult | null = null;
+  private statusResult: StatusResult | null = null;
   private loading = false;
 
   constructor(cli: JjjCli) {
@@ -30,13 +30,13 @@ export class DataCache implements vscode.Disposable {
         this.cli.listSolutions().catch(() => this.solutions),
         this.cli.listCritiques().catch(() => this.critiques),
         this.cli.listMilestones().catch(() => this.milestones),
-        this.cli.next(true).catch(() => this.nextResult),
+        this.cli.status(true).catch(() => this.statusResult),
       ]);
       this.problems = problems;
       this.solutions = solutions;
       this.critiques = critiques;
       this.milestones = milestones;
-      this.nextResult = next;
+      this.statusResult = next;
       this._onDidChange.fire();
     } finally {
       this.loading = false;
@@ -47,7 +47,7 @@ export class DataCache implements vscode.Disposable {
   getSolutions(): readonly Solution[] { return this.solutions; }
   getCritiques(): readonly Critique[] { return this.critiques; }
   getMilestones(): readonly Milestone[] { return this.milestones; }
-  getNext(): NextResult | null { return this.nextResult; }
+  getStatus(): StatusResult | null { return this.statusResult; }
 
   getProblemsForMilestone(milestoneId: string): Problem[] {
     return this.problems.filter(p => p.milestone_id === milestoneId);

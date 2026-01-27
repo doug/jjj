@@ -41,16 +41,16 @@ describe("JjjCli", () => {
       assert.deepStrictEqual(execStub.firstCall.args[0], ["milestone", "list", "--json"]);
     });
 
-    it("next passes --all flag when requested", async () => {
-      execStub.resolves('{"items":[],"total_count":0,"user":"test"}');
-      await cli.next(true);
-      assert.deepStrictEqual(execStub.firstCall.args[0], ["next", "--json", "--all"]);
+    it("status passes --all flag when requested", async () => {
+      execStub.resolves('{"active_solution":null,"items":[],"total_count":0,"user":"test","summary":{"open_problems":0,"testing_solutions":0,"open_critiques":0}}');
+      await cli.status(true);
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["status", "--json", "--all"]);
     });
 
-    it("next omits --all flag by default", async () => {
-      execStub.resolves('{"items":[],"total_count":0,"user":"test"}');
-      await cli.next(false);
-      assert.deepStrictEqual(execStub.firstCall.args[0], ["next", "--json"]);
+    it("status omits --all flag by default", async () => {
+      execStub.resolves('{"active_solution":null,"items":[],"total_count":0,"user":"test","summary":{"open_problems":0,"testing_solutions":0,"open_critiques":0}}');
+      await cli.status(false);
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["status", "--json"]);
     });
 
     it("showProblem passes id with --json", async () => {
@@ -120,16 +120,10 @@ describe("JjjCli", () => {
       assert.deepStrictEqual(execStub.firstCall.args[0], ["solution", "assign", "S-1", "--to", "bob"]);
     });
 
-    it("startWorking with problem", async () => {
+    it("resumeSolution passes solution id", async () => {
       execStub.resolves("ok");
-      await cli.startWorking("New approach", "P-1");
-      assert.deepStrictEqual(execStub.firstCall.args[0], ["start", "New approach", "--problem", "P-1"]);
-    });
-
-    it("startWorking without problem", async () => {
-      execStub.resolves("ok");
-      await cli.startWorking("S-1");
-      assert.deepStrictEqual(execStub.firstCall.args[0], ["start", "S-1"]);
+      await cli.resumeSolution("S-1");
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["solution", "resume", "S-1"]);
     });
 
     it("milestoneAddProblem passes correct ids", async () => {

@@ -76,7 +76,7 @@ export interface Milestone {
   success_criteria: string;
 }
 
-export interface NextItem {
+export interface StatusItem {
   category: "blocked" | "ready" | "review" | "waiting" | "todo";
   entity_type: "solution" | "problem";
   entity_id: string;
@@ -88,16 +88,12 @@ export interface NextItem {
   priority_sort: number;
 }
 
-export interface NextResult {
-  items: NextItem[];
+export interface StatusResult {
+  active_solution: { id: string; title: string; problem_id: string; status: string } | null;
+  items: StatusItem[];
   total_count: number;
   user: string;
-}
-
-export interface DashboardData {
-  my_problems: Problem[];
-  my_solutions: Solution[];
-  open_critiques: Critique[];
+  summary: { open_problems: number; testing_solutions: number; open_critiques: number };
 }
 
 // --- CLI Client ---
@@ -130,11 +126,11 @@ export class JjjCli {
 
   // --- Queries ---
 
-  async next(all = false): Promise<NextResult> {
-    const args = ["next", "--json"];
+  async status(all = false): Promise<StatusResult> {
+    const args = ["status", "--json"];
     if (all) { args.push("--all"); }
     const output = await this.exec(args);
-    return JSON.parse(output) as NextResult;
+    return JSON.parse(output) as StatusResult;
   }
 
   async listProblems(): Promise<Problem[]> {
@@ -167,10 +163,6 @@ export class JjjCli {
 
   async showMilestone(id: string): Promise<Milestone> {
     return this.execJson<Milestone>(["milestone", "show", id]);
-  }
-
-  async dashboard(): Promise<DashboardData> {
-    return this.execJson<DashboardData>(["dashboard"]);
   }
 
   // --- Mutations ---
@@ -242,10 +234,8 @@ export class JjjCli {
     return this.exec(["milestone", "remove-problem", milestoneId, problemId]);
   }
 
-  async startWorking(titleOrId: string, problemId?: string): Promise<string> {
-    const args = ["start", titleOrId];
-    if (problemId) { args.push("--problem", problemId); }
-    return this.exec(args);
+  async resumeSolution(solutionId: string): Promise<string> {
+    return this.exec(["solution", "resume", solutionId]);
   }
 
   async assignProblem(problemId: string, assignee: string): Promise<string> {

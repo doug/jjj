@@ -37,7 +37,7 @@
       { "command": "jjj.addressCritique", "title": "JJJ: Address Critique" },
       { "command": "jjj.dismissCritique", "title": "JJJ: Dismiss Critique" },
       { "command": "jjj.addCritiqueHere", "title": "JJJ: Add Critique Here" },
-      { "command": "jjj.startWorking", "title": "JJJ: Start Working" },
+      { "command": "jjj.resumeSolution", "title": "JJJ: Resume Solution" },
       { "command": "jjj.openEntity", "title": "JJJ: Open Entity" }
     ],
     "viewsContainers": {
@@ -70,7 +70,7 @@
         { "command": "jjj.requestReview", "when": "viewItem == solution", "group": "1_actions@3" },
         { "command": "jjj.lgtm", "when": "viewItem == solution", "group": "1_actions@4" },
         { "command": "jjj.newCritique", "when": "viewItem == solution", "group": "1_actions@5" },
-        { "command": "jjj.startWorking", "when": "viewItem == solution", "group": "1_actions@6" },
+        { "command": "jjj.resumeSolution", "when": "viewItem == solution", "group": "1_actions@6" },
         { "command": "jjj.addressCritique", "when": "viewItem == critique", "group": "1_actions@1" },
         { "command": "jjj.dismissCritique", "when": "viewItem == critique", "group": "1_actions@2" },
         { "command": "jjj.newProblem", "when": "viewItem == milestone || viewItem == backlog", "group": "1_actions@1" }

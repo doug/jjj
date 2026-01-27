@@ -62,7 +62,7 @@ describe("EntityDocumentProvider", () => {
     cli.listSolutions.resolves([makeSolution()]);
     cli.listCritiques.resolves([makeCritique()]);
     cli.listMilestones.resolves([makeMilestone()]);
-    cli.next.resolves({ items: [], total_count: 0, user: "test" });
+    cli.status.resolves({ active_solution: null, items: [], total_count: 0, user: "test", summary: { open_problems: 0, testing_solutions: 0, open_critiques: 0 } });
 
     cache = new DataCache(cli as unknown as JjjCli);
     await cache.refresh();
