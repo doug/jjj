@@ -79,18 +79,30 @@ export class EntityDocumentProvider implements vscode.TextDocumentContentProvide
       }).join("\n")
       : "  (none)";
 
-    const reviewers = s.requested_reviewers.length > 0
-      ? s.requested_reviewers.map(r => {
-        const lgtm = s.reviewed_by.includes(r) ? " (LGTM)" : " (requested)";
-        return `@${r}${lgtm}`;
-      }).join(", ")
-      : "none";
+    const reviewerSection = s.reviewers.length > 0
+      ? s.reviewers.map(r => {
+        const signOff = s.sign_offs.find(so => so.reviewer === r);
+        if (signOff) {
+          const date = new Date(signOff.at).toLocaleDateString();
+          const comment = signOff.comment ? ` \u2014 "${signOff.comment}"` : "";
+          return `  @${r}: signed off (${date})${comment}`;
+        }
+        return `  @${r}: pending`;
+      }).join("\n")
+      : "  none";
+
+    const endorsements = s.sign_offs
+      .filter(so => !s.reviewers.includes(so.reviewer))
+      .map(so => `@${so.reviewer} (${new Date(so.at).toLocaleDateString()})`);
+    const endorsementLine = endorsements.length > 0
+      ? `\nAlso endorsed by: ${endorsements.join(", ")}`
+      : "";
 
     return [
       `${s.title}`,
       "\u2501".repeat(60),
       `Status: ${s.status}  \u2502  Problem: ${s.problem_id}  \u2502  Assignee: ${s.assignee || "unassigned"}`,
-      `Reviewers: ${reviewers}`,
+      s.force_accepted ? "Force accepted: yes" : "",
       s.supersedes ? `Supersedes: ${s.supersedes}` : "",
       `Tags: ${s.tags.length > 0 ? s.tags.join(", ") : "none"}`,
       "",
@@ -99,6 +111,9 @@ export class EntityDocumentProvider implements vscode.TextDocumentContentProvide
       s.approach || "(no approach described)",
       "",
       s.tradeoffs ? `## Tradeoffs\n\n${s.tradeoffs}\n` : "",
+      "## Reviewers",
+      reviewerSection + endorsementLine,
+      "",
       `## Critiques (${openCritiques.length} open)`,
       critiqueList,
       "",

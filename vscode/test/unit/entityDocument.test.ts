@@ -20,8 +20,9 @@ function makeSolution(overrides: Partial<Solution> = {}): Solution {
   return {
     id: "S-1", title: "Add search index", problem_id: "P-1", status: "testing",
     critique_ids: ["CQ-1"], change_ids: ["kxq2p"], tags: [],
-    assignee: "doug", requested_reviewers: ["alice"], reviewed_by: ["alice"],
-    requires_review: null, created_at: "", updated_at: "",
+    assignee: "doug", reviewers: ["alice"],
+    sign_offs: [{ reviewer: "alice", at: "2026-01-27T15:30:00Z", comment: "looks good" }],
+    force_accepted: false, created_at: "", updated_at: "",
     approach: "Add a B-tree index", tradeoffs: "Extra storage",
     supersedes: null,
     ...overrides,
@@ -163,10 +164,11 @@ describe("EntityDocumentProvider", () => {
       assert.ok(content.includes("Status: testing"));
     });
 
-    it("includes reviewers with LGTM status", () => {
+    it("includes reviewer sign-off status", () => {
       const uri = vscode.Uri.parse("jjj:///solution/S-1.md");
       const content = provider.provideTextDocumentContent(uri);
-      assert.ok(content.includes("@alice (LGTM)"));
+      assert.ok(content.includes("@alice: signed off"));
+      assert.ok(content.includes("looks good"));
     });
 
     it("lists critiques", () => {
@@ -191,6 +193,37 @@ describe("EntityDocumentProvider", () => {
       const uri = vscode.Uri.parse("jjj:///solution/S-2.md");
       const content = provider.provideTextDocumentContent(uri);
       assert.ok(content.includes("Supersedes: S-1"));
+    });
+
+    it("shows pending reviewers", async () => {
+      const solution2 = makeSolution({
+        id: "S-2", title: "Pending review", reviewers: ["bob"],
+        sign_offs: [], force_accepted: false,
+      });
+      cli.listSolutions.resolves([makeSolution(), solution2]);
+      await cache.refresh();
+
+      const uri = vscode.Uri.parse("jjj:///solution/S-2.md");
+      const content = provider.provideTextDocumentContent(uri);
+      assert.ok(content.includes("@bob: pending"));
+    });
+
+    it("shows non-assigned endorsements", async () => {
+      const solution3 = makeSolution({
+        id: "S-3", title: "Endorsed", reviewers: ["alice"],
+        sign_offs: [
+          { reviewer: "alice", at: "2026-01-27T15:30:00Z", comment: undefined },
+          { reviewer: "charlie", at: "2026-01-27T16:00:00Z", comment: "nice work" },
+        ],
+        force_accepted: false,
+      });
+      cli.listSolutions.resolves([makeSolution(), solution3]);
+      await cache.refresh();
+
+      const uri = vscode.Uri.parse("jjj:///solution/S-3.md");
+      const content = provider.provideTextDocumentContent(uri);
+      assert.ok(content.includes("Also endorsed by"));
+      assert.ok(content.includes("charlie"));
     });
   });
 

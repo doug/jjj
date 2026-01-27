@@ -43,7 +43,15 @@ class SolutionNode extends vscode.TreeItem {
       : vscode.TreeItemCollapsibleState.None);
     this.contextValue = "solution";
     const critDesc = critiqueCount > 0 ? ` — ${critiqueCount} critiques` : "";
-    this.description = `${solution.id} [${solution.status}]${critDesc}`;
+    const reviewStatus = solution.reviewers.length > 0
+      ? (() => {
+        const signedOff = solution.sign_offs.filter(so => solution.reviewers.includes(so.reviewer)).length;
+        return signedOff === solution.reviewers.length
+          ? ""
+          : ` ${signedOff}/${solution.reviewers.length} reviewed`;
+      })()
+      : "";
+    this.description = `${solution.id} [${solution.status}]${critDesc}${reviewStatus}`;
     this.iconPath = solution.status === "accepted"
       ? new vscode.ThemeIcon("check", new vscode.ThemeColor("testing.iconPassed"))
       : solution.status === "refuted"

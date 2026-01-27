@@ -30,9 +30,9 @@ export interface Solution {
   change_ids: string[];
   tags: string[];
   assignee: string | null;
-  requested_reviewers: string[];
-  reviewed_by: string[];
-  requires_review: boolean | null;
+  reviewers: string[];
+  sign_offs: Array<{ reviewer: string; at: string; comment?: string }>;
+  force_accepted: boolean;
   created_at: string;
   updated_at: string;
   approach: string;
@@ -223,8 +223,10 @@ export class JjjCli {
     return this.exec(["solution", "review", solutionId, ...reviewers]);
   }
 
-  async lgtm(solutionId: string): Promise<string> {
-    return this.exec(["solution", "lgtm", solutionId]);
+  async lgtm(solutionId: string, comment?: string): Promise<string> {
+    const args = ["solution", "lgtm", solutionId];
+    if (comment) { args.push("--comment", comment); }
+    return this.exec(args);
   }
 
   async solveProblem(problemId: string): Promise<string> {

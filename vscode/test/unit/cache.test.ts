@@ -17,7 +17,7 @@ function makeSolution(overrides: Partial<Solution> = {}): Solution {
   return {
     id: "S-1", title: "Test solution", problem_id: "P-1", status: "proposed",
     critique_ids: [], change_ids: [], tags: [], assignee: null,
-    requested_reviewers: [], reviewed_by: [], requires_review: null,
+    reviewers: [], sign_offs: [], force_accepted: false,
     created_at: "", updated_at: "", approach: "", tradeoffs: "",
     supersedes: null,
     ...overrides,
