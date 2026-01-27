@@ -6,6 +6,7 @@ import { ProjectTreeProvider } from "./views/projectTreeProvider";
 import { EntityDocumentProvider } from "./documents/entityDocumentProvider";
 import { StatusBar } from "./statusBar";
 import { registerCommands } from "./commands";
+import { CritiqueDecorationManager } from "./editor/critiqueDecorations";
 
 export function activate(context: vscode.ExtensionContext) {
   const cli = new JjjCli();
@@ -47,6 +48,10 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand("jjj.refreshAll", () => cache.refresh()),
   );
+
+  // Gutter Decorations
+  const decorations = new CritiqueDecorationManager(cache);
+  context.subscriptions.push(decorations);
 
   // Auto-refresh
   const interval = setInterval(() => cache.refresh(), 30000);
