@@ -1,7 +1,16 @@
 use crate::error::Result;
 use crate::jj::JjClient;
-use crate::models::{CritiqueStatus, Critique};
+use crate::models::{CritiqueStatus, Critique, Priority};
 use crate::storage::MetadataStore;
+
+fn priority_sort_value(priority: &Priority) -> i32 {
+    match priority {
+        Priority::Critical => 3,
+        Priority::High => 2,
+        Priority::Medium => 1,
+        Priority::Low => 0,
+    }
+}
 
 pub fn execute(all: bool, mine: bool, limit: Option<usize>, json: bool) -> Result<()> {
     let jj_client = JjClient::new()?;
@@ -27,6 +36,9 @@ pub fn execute(all: bool, mine: bool, limit: Option<usize>, json: bool) -> Resul
                 .max_by_key(|c| c.severity.clone())
                 .unwrap();
 
+            let problem = problems.iter().find(|p| p.id == solution.problem_id);
+            let priority = problem.map(|p| &p.priority).cloned().unwrap_or_default();
+
             items.push(serde_json::json!({
                 "category": "blocked",
                 "entity_type": "solution",
@@ -34,6 +46,8 @@ pub fn execute(all: bool, mine: bool, limit: Option<usize>, json: bool) -> Resul
                 "title": solution.title,
                 "summary": format!("{} open critique(s)", open_critiques.len()),
                 "suggested_command": format!("jjj critique show {}", top_critique.id),
+                "priority": format!("{}", priority),
+                "priority_sort": priority_sort_value(&priority),
                 "details": open_critiques.iter().map(|c| serde_json::json!({
                     "id": c.id,
                     "text": c.title,
@@ -49,6 +63,9 @@ pub fn execute(all: bool, mine: bool, limit: Option<usize>, json: bool) -> Resul
             .any(|c| c.solution_id == solution.id && c.status == CritiqueStatus::Open);
 
         if !has_open && !solution.critique_ids.is_empty() {
+            let problem = problems.iter().find(|p| p.id == solution.problem_id);
+            let priority = problem.map(|p| &p.priority).cloned().unwrap_or_default();
+
             items.push(serde_json::json!({
                 "category": "ready",
                 "entity_type": "solution",
@@ -56,6 +73,8 @@ pub fn execute(all: bool, mine: bool, limit: Option<usize>, json: bool) -> Resul
                 "title": solution.title,
                 "summary": "All critiques resolved",
                 "suggested_command": format!("jjj solution accept {}", solution.id),
+                "priority": format!("{}", priority),
+                "priority_sort": priority_sort_value(&priority),
                 "details": [],
             }));
         }
@@ -67,6 +86,9 @@ pub fn execute(all: bool, mine: bool, limit: Option<usize>, json: bool) -> Resul
             if solution.requested_reviewers.iter().any(|r| user == *r)
                 && !solution.reviewed_by.iter().any(|r| user == *r)
             {
+                let problem = problems.iter().find(|p| p.id == solution.problem_id);
+                let priority = problem.map(|p| &p.priority).cloned().unwrap_or_default();
+
                 items.push(serde_json::json!({
                     "category": "review",
                     "entity_type": "solution",
@@ -74,6 +96,8 @@ pub fn execute(all: bool, mine: bool, limit: Option<usize>, json: bool) -> Resul
                     "title": solution.title,
                     "summary": format!("Review requested by {}", solution.assignee.as_deref().unwrap_or("unknown")),
                     "suggested_command": format!("jjj solution show {}", solution.id),
+                    "priority": format!("{}", priority),
+                    "priority_sort": priority_sort_value(&priority),
                     "details": [],
                 }));
             }
@@ -86,6 +110,9 @@ pub fn execute(all: bool, mine: bool, limit: Option<usize>, json: bool) -> Resul
         if is_mine && !solution.requested_reviewers.is_empty()
             && !solution.has_lgtm_from_requested_reviewer()
         {
+            let problem = problems.iter().find(|p| p.id == solution.problem_id);
+            let priority = problem.map(|p| &p.priority).cloned().unwrap_or_default();
+
             items.push(serde_json::json!({
                 "category": "waiting",
                 "entity_type": "solution",
@@ -93,6 +120,8 @@ pub fn execute(all: bool, mine: bool, limit: Option<usize>, json: bool) -> Resul
                 "title": solution.title,
                 "summary": format!("Awaiting review from {}", solution.requested_reviewers.join(", ")),
                 "suggested_command": "",
+                "priority": format!("{}", priority),
+                "priority_sort": priority_sort_value(&priority),
                 "details": [],
             }));
         }
@@ -111,10 +140,35 @@ pub fn execute(all: bool, mine: bool, limit: Option<usize>, json: bool) -> Resul
                 "title": problem.title,
                 "summary": "No solutions proposed",
                 "suggested_command": format!("jjj start \"solution title\" --problem {}", problem.id),
+                "priority": format!("{}", problem.priority),
+                "priority_sort": priority_sort_value(&problem.priority),
                 "details": [],
             }));
         }
     }
+
+    // Sort: category order first, then priority descending within each category
+    items.sort_by(|a, b| {
+        let cat_order = |cat: &str| -> i32 {
+            match cat {
+                "blocked" => 0,
+                "ready" => 1,
+                "review" => 2,
+                "waiting" => 3,
+                "todo" => 4,
+                _ => 5,
+            }
+        };
+        let a_cat = cat_order(a["category"].as_str().unwrap_or(""));
+        let b_cat = cat_order(b["category"].as_str().unwrap_or(""));
+        if a_cat != b_cat {
+            return a_cat.cmp(&b_cat);
+        }
+        // Within same category, sort by priority descending
+        let a_pri = a["priority_sort"].as_i64().unwrap_or(0);
+        let b_pri = b["priority_sort"].as_i64().unwrap_or(0);
+        b_pri.cmp(&a_pri)
+    });
 
     // Apply limit
     let total_count = items.len();

@@ -221,3 +221,46 @@ fn test_solution_supersedes() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Supersedes") || stdout.contains("S-1"), "Supersedes not shown in show: {}", stdout);
 }
+
+#[test]
+fn test_next_priority_sorting() {
+    if which::which("jj").is_err() {
+        return;
+    }
+
+    let temp_dir = setup_test_repo();
+    let dir_path = temp_dir.path();
+    run_jjj(dir_path, &["init"]);
+
+    // Create problems with different priorities
+    run_jjj(dir_path, &["problem", "new", "Low priority task", "--priority", "P3"]);
+    run_jjj(dir_path, &["problem", "new", "Critical issue", "--priority", "P0"]);
+    run_jjj(dir_path, &["problem", "new", "High priority work", "--priority", "P1"]);
+
+    // All should appear as TODO (no solutions)
+    let output = run_jjj(dir_path, &["next", "--json", "--all"]);
+    assert!(output.status.success(), "next failed: {}", String::from_utf8_lossy(&output.stderr));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let json: serde_json::Value = serde_json::from_str(&stdout).expect("Failed to parse JSON");
+    let items = json["items"].as_array().expect("items not array");
+
+    // Should have at least 3 items
+    assert!(items.len() >= 3, "Expected at least 3 items, got {}", items.len());
+
+    // Find the TODO items and verify Critical is before High is before Low
+    let todo_items: Vec<_> = items.iter()
+        .filter(|i| i["category"].as_str() == Some("todo"))
+        .collect();
+
+    assert!(todo_items.len() >= 3, "Expected at least 3 TODO items");
+
+    // Critical (P-2) should be first
+    assert_eq!(todo_items[0]["entity_id"].as_str(), Some("P-2"),
+        "Expected Critical (P-2) first, got {:?}", todo_items[0]["entity_id"]);
+    // High (P-3) should be second
+    assert_eq!(todo_items[1]["entity_id"].as_str(), Some("P-3"),
+        "Expected High (P-3) second, got {:?}", todo_items[1]["entity_id"]);
+    // Low (P-1) should be last
+    assert_eq!(todo_items[2]["entity_id"].as_str(), Some("P-1"),
+        "Expected Low (P-1) third, got {:?}", todo_items[2]["entity_id"]);
+}
