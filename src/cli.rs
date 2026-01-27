@@ -363,6 +363,12 @@ pub enum SolutionAction {
         #[arg(long)]
         comment: Option<String>,
     },
+
+    /// Resume working on an existing solution
+    Resume {
+        /// Solution ID (e.g., S-1)
+        solution_id: String,
+    },
 }
 
 // =============================================================================

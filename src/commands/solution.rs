@@ -30,6 +30,7 @@ pub fn execute(action: SolutionAction) -> Result<()> {
         SolutionAction::Assign { solution_id, to } => assign_solution(solution_id, to),
         SolutionAction::Review { solution_id, reviewers } => request_review(solution_id, reviewers),
         SolutionAction::Lgtm { solution_id, comment } => lgtm_solution(solution_id, comment),
+        SolutionAction::Resume { solution_id } => resume_solution(solution_id),
     }
 }
 
@@ -443,6 +444,43 @@ fn request_review(solution_id: String, reviewers: Vec<String>) -> Result<()> {
 
         Ok(())
     })
+}
+
+fn resume_solution(solution_id: String) -> Result<()> {
+    let jj_client = JjClient::new()?;
+    let store = MetadataStore::new(jj_client.clone())?;
+
+    let solution = store.load_solution(&solution_id)?;
+    println!("Resuming solution {} ({})", solution.id, solution.title);
+
+    // Check if solution has an active change attached
+    if let Some(change_id) = solution.change_ids.last() {
+        println!("Switching to change {}", change_id);
+        jj_client.edit(change_id)?;
+    } else {
+        println!("No active change for solution. Creating new change.");
+
+        store.with_metadata(&format!("Resume solution: {}", solution.title), || {
+            jj_client.new_empty_change(&solution.title)?;
+            let change_id = jj_client.current_change_id()?;
+
+            let mut solution = store.load_solution(&solution_id)?;
+            solution.attach_change(change_id);
+            solution.start_testing();
+            store.save_solution(&solution)?;
+
+            // Update problem status
+            let mut problem = store.load_problem(&solution.problem_id)?;
+            if problem.status == ProblemStatus::Open {
+                problem.set_status(ProblemStatus::InProgress);
+                store.save_problem(&problem)?;
+            }
+
+            Ok(())
+        })?;
+    }
+
+    Ok(())
 }
 
 fn lgtm_solution(solution_id: String, comment: Option<String>) -> Result<()> {
