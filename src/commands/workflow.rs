@@ -1,6 +1,6 @@
 use crate::error::Result;
 use crate::jj::JjClient;
-use crate::models::{ProblemStatus, Solution, SolutionStatus};
+use crate::models::{CritiqueStatus, ProblemStatus, Solution, SolutionStatus};
 use crate::storage::MetadataStore;
 
 pub fn start(arg: String, problem_id: Option<String>) -> Result<()> {
@@ -89,58 +89,106 @@ pub fn submit(force: bool) -> Result<()> {
 
     let change_id = jj_client.current_change_id()?;
 
-    // 1. Review Check (solution-level)
-    if !force {
-        let solutions = store.list_solutions()?;
-        let solution = solutions.iter().find(|s| s.change_ids.contains(&change_id));
+    // Find solution for current change
+    let solutions = store.list_solutions()?;
+    let solution = solutions
+        .iter()
+        .find(|s| s.change_ids.contains(&change_id));
 
-        if let Some(sol) = solution {
-            if !sol.requested_reviewers.is_empty() && !sol.has_lgtm_from_requested_reviewer() {
-                return Err(format!(
-                    "Solution {} has not been LGTM'd by a requested reviewer. Use --force to bypass.",
-                    sol.id
-                )
-                .into());
+    let solution = match solution {
+        Some(s) => s.clone(),
+        None => {
+            // No solution attached — just squash
+            println!("No solution found for current change. Squashing only.");
+            jj_client.execute(&["rebase", "-d", "main"])?;
+            jj_client.squash()?;
+            println!("Submitted successfully.");
+            return Ok(());
+        }
+    };
+
+    println!("Submitting {}: {}", solution.id, solution.title);
+
+    if !force {
+        let mut blocked = false;
+
+        // Check critiques
+        let critiques = store.list_critiques()?;
+        let open_critiques: Vec<_> = critiques
+            .iter()
+            .filter(|c| c.solution_id == solution.id && c.status == CritiqueStatus::Open)
+            .collect();
+
+        if !open_critiques.is_empty() {
+            eprintln!("\n  * {} open critique(s):", open_critiques.len());
+            for c in &open_critiques {
+                eprintln!("    {}: {} [{}]", c.id, c.title, c.severity);
+                eprintln!("    -> jjj critique address {}", c.id);
             }
+            blocked = true;
+        }
+
+        // Check reviews
+        if !solution.requested_reviewers.is_empty() && !solution.has_lgtm_from_requested_reviewer()
+        {
+            let pending: Vec<_> = solution
+                .requested_reviewers
+                .iter()
+                .filter(|r| !solution.reviewed_by.contains(r))
+                .collect();
+            eprintln!(
+                "\n  * Review pending from {}",
+                pending
+                    .iter()
+                    .map(|r| format!("@{}", r))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            eprintln!("    -> waiting for LGTM");
+            blocked = true;
+        }
+
+        if blocked {
+            eprintln!("\nCannot auto-accept. Use --force to submit without acceptance.");
+            return Err(crate::error::JjjError::CannotAcceptSolution(
+                "Unresolved critiques or pending reviews".to_string(),
+            ));
         }
     }
 
-    // 2. Rebase onto main
-    println!("Rebasing onto main...");
+    // Rebase and squash
     jj_client.execute(&["rebase", "-d", "main"])?;
-
-    // 3. Squash
-    println!("Squashing...");
     jj_client.squash()?;
 
-    // 4. Update Solution Status
-    let solutions = store.list_solutions()?;
-    let mut solutions_to_update = Vec::new();
+    // Auto-accept
+    if solution.status == SolutionStatus::Testing || solution.status == SolutionStatus::Proposed {
+        let mut solution = store.load_solution(&solution.id)?;
+        solution.accept();
+        store.save_solution(&solution)?;
+        println!("  Solution {} accepted", solution.id);
 
-    for solution in solutions {
-        if solution.change_ids.contains(&change_id) {
-            solutions_to_update.push(solution);
+        // Auto-solve problem if conditions met
+        let problem_id = solution.problem_id.clone();
+        let all_solutions = store.list_solutions()?;
+        let active_solutions: Vec<_> = all_solutions
+            .iter()
+            .filter(|s| s.problem_id == problem_id && s.is_active() && s.id != solution.id)
+            .collect();
+        let sub_problems = store.get_subproblems(&problem_id)?;
+        let open_sub_problems: Vec<_> = sub_problems.iter().filter(|p| p.is_open()).collect();
+
+        let problem = store.load_problem(&problem_id)?;
+        if active_solutions.is_empty() && open_sub_problems.is_empty() && problem.is_open() {
+            let mut problem = problem;
+            problem.set_status(ProblemStatus::Solved);
+            store.save_problem(&problem)?;
+            println!(
+                "  Problem {} solved (only solution, no open sub-problems)",
+                problem_id
+            );
         }
     }
 
-    for mut solution in solutions_to_update {
-        // Mark solution as accepted if it was testing
-        if solution.status == SolutionStatus::Testing {
-            solution.accept();
-            store.save_solution(&solution)?;
-            println!("Solution {} accepted.", solution.id);
-
-            // Check if we can solve the problem
-            let (can_solve, _) = store.can_solve_problem(&solution.problem_id)?;
-            if can_solve {
-                let mut problem = store.load_problem(&solution.problem_id)?;
-                problem.set_status(ProblemStatus::Solved);
-                store.save_problem(&problem)?;
-                println!("Problem {} solved.", problem.id);
-            }
-        }
-    }
-
-    println!("Submitted successfully.");
+    println!("\nSquashed changes into trunk.");
     Ok(())
 }

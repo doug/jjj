@@ -174,3 +174,51 @@ fn test_critique_blocks_acceptance() {
         "Expected warning about open critique. Got: {}", combined
     );
 }
+
+#[test]
+fn test_submit_blocked_by_critiques() {
+    if which::which("jj").is_err() { return; }
+    let temp_dir = setup_test_repo();
+    let dir = temp_dir.path();
+
+    // Create a main bookmark so submit has something to rebase onto
+    Command::new("jj").current_dir(dir).args(&["new", "root()", "-m", "initial"]).status().unwrap();
+    Command::new("jj").current_dir(dir).args(&["bookmark", "create", "main"]).status().unwrap();
+
+    // Start solution (creates change, sets to testing)
+    run_jjj(dir, &["start", "Token refresh", "--problem", "P-1"]);
+
+    // Add a critique
+    run_jjj(dir, &["critique", "new", "S-1", "Not thread safe", "--severity", "high"]);
+
+    // Submit without --force should fail
+    let output = run_jjj(dir, &["submit"]);
+    assert!(!output.status.success(), "Expected submit to fail with open critiques");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("critique") || stderr.contains("CQ-1") || stderr.contains("Cannot"),
+        "Expected critique blocking message in stderr: {}", stderr);
+}
+
+#[test]
+fn test_submit_blocked_by_review() {
+    if which::which("jj").is_err() { return; }
+    let temp_dir = setup_test_repo();
+    let dir = temp_dir.path();
+
+    // Create main
+    Command::new("jj").current_dir(dir).args(&["new", "root()", "-m", "initial"]).status().unwrap();
+    Command::new("jj").current_dir(dir).args(&["bookmark", "create", "main"]).status().unwrap();
+
+    // Start solution
+    run_jjj(dir, &["start", "Token refresh", "--problem", "P-1"]);
+
+    // Request review
+    run_jjj(dir, &["solution", "review", "S-1", "@alice"]);
+
+    // Submit without --force should fail
+    let output = run_jjj(dir, &["submit"]);
+    assert!(!output.status.success(), "Expected submit to fail with pending review");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("review") || stderr.contains("alice") || stderr.contains("Cannot") || stderr.contains("LGTM"),
+        "Expected review blocking message in stderr: {}", stderr);
+}
