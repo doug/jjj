@@ -3,6 +3,7 @@ import { JjjCli } from "./cli";
 import { DataCache } from "./cache";
 import { NextActionsProvider } from "./views/nextActionsProvider";
 import { ProjectTreeProvider } from "./views/projectTreeProvider";
+import { EntityDocumentProvider } from "./documents/entityDocumentProvider";
 
 export function activate(context: vscode.ExtensionContext) {
   const cli = new JjjCli();
@@ -19,6 +20,20 @@ export function activate(context: vscode.ExtensionContext) {
     canSelectMany: true,
   });
   context.subscriptions.push(treeView);
+
+  // Virtual Documents
+  const docProvider = new EntityDocumentProvider(cache);
+  context.subscriptions.push(
+    vscode.workspace.registerTextDocumentContentProvider("jjj", docProvider),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("jjj.openEntity", async (type: string, id: string) => {
+      const uri = vscode.Uri.parse(`jjj:///${type}/${id}`);
+      const doc = await vscode.workspace.openTextDocument(uri);
+      await vscode.window.showTextDocument(doc, { preview: false });
+    }),
+  );
 
   // Commands
   context.subscriptions.push(
