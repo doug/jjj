@@ -374,14 +374,14 @@ impl MetadataStore {
             change_ids: frontmatter.change_ids,
             tags: frontmatter.tags,
             assignee: frontmatter.assignee,
-            requested_reviewers: frontmatter.requested_reviewers,
-            reviewed_by: frontmatter.reviewed_by,
-            requires_review: frontmatter.requires_review,
+            reviewers: frontmatter.reviewers,
+            sign_offs: frontmatter.sign_offs,
             created_at: frontmatter.created_at,
             updated_at: frontmatter.updated_at,
             approach: sections.get("Approach").cloned().unwrap_or_default(),
             tradeoffs: sections.get("Trade-offs").cloned().unwrap_or_default(),
             supersedes: frontmatter.supersedes,
+            force_accepted: frontmatter.force_accepted,
         };
 
         Ok(solution)
