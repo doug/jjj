@@ -61,16 +61,6 @@ pub enum Commands {
         action: MilestoneAction,
     },
 
-    /// Start working on a solution
-    Start {
-        /// Solution ID (to resume) or Title (to create new solution)
-        arg: String,
-
-        /// Problem this solution addresses (required for new solutions)
-        #[arg(long)]
-        problem: Option<String>,
-    },
-
     /// Submit current changes (squash and complete solution)
     Submit {
         /// Force submit (bypass review check)

@@ -34,9 +34,9 @@ fn test_workflow_start_new_solution() {
     let temp_dir = setup_test_repo();
     let dir = temp_dir.path();
 
-    // 1. Start a new solution by title
-    let output = run_jjj(dir, &["start", "New Solution", "--problem", "P-1"]);
-    assert!(output.status.success(), "start failed: {}", String::from_utf8_lossy(&output.stderr));
+    // 1. Create a new solution via solution new (replaces start)
+    let output = run_jjj(dir, &["solution", "new", "New Solution", "--problem", "P-1"]);
+    assert!(output.status.success(), "solution new failed: {}", String::from_utf8_lossy(&output.stderr));
 
     // Verify solution created
     let list = run_jjj(dir, &["solution", "list"]);
@@ -59,14 +59,14 @@ fn test_workflow_start_resume_solution() {
     let temp_dir = setup_test_repo();
     let dir = temp_dir.path();
 
-    // 1. Create solution manually first
+    // 1. Create solution via solution new (auto-attaches change)
     run_jjj(dir, &["solution", "new", "Resume Me", "--problem", "P-1"]);
 
-    // 2. Start (resume) by ID (ID should be S-1)
-    let output = run_jjj(dir, &["start", "S-1"]);
-    assert!(output.status.success(), "Start failed: {}", String::from_utf8_lossy(&output.stderr));
+    // 2. Resume by ID using solution resume (replaces start S-1)
+    let output = run_jjj(dir, &["solution", "resume", "S-1"]);
+    assert!(output.status.success(), "Resume failed: {}", String::from_utf8_lossy(&output.stderr));
 
-    // Verify change created for S-1
+    // Verify change is for S-1
     let jj_log = Command::new("jj").current_dir(dir).args(&["log", "--no-graph", "-r", "@", "-T", "description"]).output().unwrap();
     let desc = String::from_utf8_lossy(&jj_log.stdout);
     println!("DEBUG: Resume Description: '{}'", desc);
@@ -79,9 +79,9 @@ fn test_workflow_submit_force() {
     let temp_dir = setup_test_repo();
     let dir = temp_dir.path();
 
-    // 1. Start solution
-    let output = run_jjj(dir, &["start", "Solution to Submit", "--problem", "P-1"]);
-    assert!(output.status.success(), "Start 1 failed: {}", String::from_utf8_lossy(&output.stderr));
+    // 1. Create solution via solution new (replaces start)
+    let output = run_jjj(dir, &["solution", "new", "Solution to Submit", "--problem", "P-1"]);
+    assert!(output.status.success(), "solution new 1 failed: {}", String::from_utf8_lossy(&output.stderr));
 
     std::fs::write(dir.join("file.txt"), "content").unwrap();
 
@@ -95,9 +95,9 @@ fn test_workflow_submit_force() {
     println!("DEBUG: Repo Graph before start 2:\nSTDOUT:{}\nSTDERR:{}",
         String::from_utf8_lossy(&log.stdout), String::from_utf8_lossy(&log.stderr));
 
-    // Start solution 2
-    let output = run_jjj(dir, &["start", "Solution to Submit 2", "--problem", "P-1"]);
-    assert!(output.status.success(), "Start 2 failed: {}", String::from_utf8_lossy(&output.stderr));
+    // Create solution 2
+    let output = run_jjj(dir, &["solution", "new", "Solution to Submit 2", "--problem", "P-1"]);
+    assert!(output.status.success(), "solution new 2 failed: {}", String::from_utf8_lossy(&output.stderr));
 
     std::fs::write(dir.join("file2.txt"), "content").unwrap();
 
@@ -185,8 +185,8 @@ fn test_submit_blocked_by_critiques() {
     Command::new("jj").current_dir(dir).args(&["new", "root()", "-m", "initial"]).status().unwrap();
     Command::new("jj").current_dir(dir).args(&["bookmark", "create", "main"]).status().unwrap();
 
-    // Start solution (creates change, sets to testing)
-    run_jjj(dir, &["start", "Token refresh", "--problem", "P-1"]);
+    // Create solution (creates change, sets to testing via auto-attach)
+    run_jjj(dir, &["solution", "new", "Token refresh", "--problem", "P-1"]);
 
     // Add a critique
     run_jjj(dir, &["critique", "new", "S-1", "Not thread safe", "--severity", "high"]);
@@ -209,8 +209,8 @@ fn test_submit_blocked_by_review() {
     Command::new("jj").current_dir(dir).args(&["new", "root()", "-m", "initial"]).status().unwrap();
     Command::new("jj").current_dir(dir).args(&["bookmark", "create", "main"]).status().unwrap();
 
-    // Start solution
-    run_jjj(dir, &["start", "Token refresh", "--problem", "P-1"]);
+    // Create solution via solution new (replaces start)
+    run_jjj(dir, &["solution", "new", "Token refresh", "--problem", "P-1"]);
 
     // Request review
     run_jjj(dir, &["solution", "review", "S-1", "@alice"]);

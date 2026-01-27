@@ -139,7 +139,7 @@ pub fn execute(all: bool, mine: bool, limit: Option<usize>, json: bool) -> Resul
                 "entity_id": problem.id,
                 "title": problem.title,
                 "summary": "No solutions proposed",
-                "suggested_command": format!("jjj start \"solution title\" --problem {}", problem.id),
+                "suggested_command": format!("jjj solution new \"title\" --problem {}", problem.id),
                 "priority": format!("{}", problem.priority),
                 "priority_sort": priority_sort_value(&problem.priority),
                 "details": [],

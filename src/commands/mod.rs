@@ -25,7 +25,6 @@ pub fn execute(cli: Cli) -> Result<()> {
         Commands::Milestone { action } => milestone::execute(action),
 
         // Workflow Commands
-        Commands::Start { arg, problem } => workflow::start(arg, problem),
         Commands::Submit { force } => workflow::submit(force),
 
         // Shell completion
