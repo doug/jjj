@@ -2,6 +2,14 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SignOff {
+    pub reviewer: String,
+    pub at: DateTime<Utc>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub comment: Option<String>,
+}
+
 /// A solution is a conjecture - a tentative attempt to solve a problem.
 /// Solutions must face explicit criticism to survive or be refuted.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,17 +41,17 @@ pub struct Solution {
     /// Assigned owner
     pub assignee: Option<String>,
 
-    /// Requested reviewers
-    #[serde(default)]
-    pub requested_reviewers: Vec<String>,
+    /// Reviewers
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub reviewers: Vec<String>,
 
-    /// People who have LGTM'd
-    #[serde(default)]
-    pub reviewed_by: Vec<String>,
+    /// Sign-offs from reviewers
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sign_offs: Vec<SignOff>,
 
-    /// Override project default for review requirement
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub requires_review: Option<bool>,
+    /// Force-accepted without full sign-off
+    #[serde(default)]
+    pub force_accepted: bool,
 
     /// Creation timestamp
     pub created_at: DateTime<Utc>,
@@ -125,9 +133,9 @@ impl Solution {
             change_ids: Vec::new(),
             tags: HashSet::new(),
             assignee: None,
-            requested_reviewers: Vec::new(),
-            reviewed_by: Vec::new(),
-            requires_review: None,
+            reviewers: Vec::new(),
+            sign_offs: Vec::new(),
+            force_accepted: false,
             created_at: now,
             updated_at: now,
             approach: String::new(),
@@ -242,31 +250,45 @@ impl Solution {
         self.set_status(SolutionStatus::Refuted);
     }
 
-    /// Request review from someone
-    pub fn request_review(&mut self, reviewer: String) {
-        if !self.requested_reviewers.contains(&reviewer) {
-            self.requested_reviewers.push(reviewer);
+    /// Add a reviewer
+    pub fn add_reviewer(&mut self, reviewer: String) {
+        if !self.reviewers.contains(&reviewer) {
+            self.reviewers.push(reviewer);
             self.updated_at = Utc::now();
         }
     }
 
-    /// Record an LGTM from someone
-    pub fn add_lgtm(&mut self, reviewer: String) {
-        if !self.reviewed_by.contains(&reviewer) {
-            self.reviewed_by.push(reviewer);
+    /// Add a sign-off from a reviewer
+    pub fn add_sign_off(&mut self, reviewer: String, comment: Option<String>) {
+        if !self.sign_offs.iter().any(|so| so.reviewer == reviewer) {
+            self.sign_offs.push(SignOff {
+                reviewer,
+                at: Utc::now(),
+                comment,
+            });
             self.updated_at = Utc::now();
         }
     }
 
-    /// Check if any requested reviewer has LGTM'd
-    pub fn has_lgtm_from_requested_reviewer(&self) -> bool {
-        self.reviewed_by.iter().any(|r| self.requested_reviewers.contains(r))
+    /// Check if all requested reviewers have signed off
+    pub fn all_reviewers_signed_off(&self) -> bool {
+        if self.reviewers.is_empty() {
+            return true;
+        }
+        self.reviewers.iter().all(|r| self.sign_offs.iter().any(|so| &so.reviewer == r))
     }
 
-    /// Set the requires_review override
-    pub fn set_requires_review(&mut self, requires: Option<bool>) {
-        self.requires_review = requires;
-        self.updated_at = Utc::now();
+    /// Get reviewers who haven't signed off yet
+    pub fn pending_reviewers(&self) -> Vec<&str> {
+        self.reviewers.iter()
+            .filter(|r| !self.sign_offs.iter().any(|so| &so.reviewer == *r))
+            .map(|r| r.as_str())
+            .collect()
+    }
+
+    /// Check if this solution requires review (derived from having reviewers)
+    pub fn requires_review(&self) -> bool {
+        !self.reviewers.is_empty()
     }
 }
 
@@ -286,11 +308,11 @@ pub struct SolutionFrontmatter {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub assignee: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub requested_reviewers: Vec<String>,
+    pub reviewers: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub reviewed_by: Vec<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub requires_review: Option<bool>,
+    pub sign_offs: Vec<SignOff>,
+    #[serde(default)]
+    pub force_accepted: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub supersedes: Option<String>,
     pub created_at: DateTime<Utc>,
@@ -308,9 +330,9 @@ impl From<&Solution> for SolutionFrontmatter {
             change_ids: s.change_ids.clone(),
             tags: s.tags.clone(),
             assignee: s.assignee.clone(),
-            requested_reviewers: s.requested_reviewers.clone(),
-            reviewed_by: s.reviewed_by.clone(),
-            requires_review: s.requires_review,
+            reviewers: s.reviewers.clone(),
+            sign_offs: s.sign_offs.clone(),
+            force_accepted: s.force_accepted,
             supersedes: s.supersedes.clone(),
             created_at: s.created_at,
             updated_at: s.updated_at,
@@ -410,48 +432,53 @@ mod tests {
     }
 
     #[test]
-    fn test_request_reviewers() {
-        let mut solution = Solution::new(
-            "S-1".to_string(),
-            "Test".to_string(),
-            "P-1".to_string(),
-        );
-
-        solution.request_review("alice".to_string());
-        solution.request_review("bob".to_string());
-
-        assert_eq!(solution.requested_reviewers.len(), 2);
-        assert!(solution.requested_reviewers.contains(&"alice".to_string()));
+    fn test_add_reviewer() {
+        let mut solution = Solution::new("S-1".to_string(), "Test".to_string(), "P-1".to_string());
+        solution.add_reviewer("alice".to_string());
+        solution.add_reviewer("bob".to_string());
+        solution.add_reviewer("alice".to_string()); // duplicate
+        assert_eq!(solution.reviewers.len(), 2);
+        assert!(solution.reviewers.contains(&"alice".to_string()));
     }
 
     #[test]
-    fn test_lgtm() {
-        let mut solution = Solution::new(
-            "S-1".to_string(),
-            "Test".to_string(),
-            "P-1".to_string(),
-        );
-
-        solution.request_review("alice".to_string());
-        solution.add_lgtm("alice".to_string());
-
-        assert!(solution.reviewed_by.contains(&"alice".to_string()));
-        assert!(solution.has_lgtm_from_requested_reviewer());
+    fn test_add_sign_off() {
+        let mut solution = Solution::new("S-1".to_string(), "Test".to_string(), "P-1".to_string());
+        solution.add_sign_off("alice".to_string(), Some("looks good".to_string()));
+        assert_eq!(solution.sign_offs.len(), 1);
+        assert_eq!(solution.sign_offs[0].reviewer, "alice");
+        assert_eq!(solution.sign_offs[0].comment.as_deref(), Some("looks good"));
     }
 
     #[test]
-    fn test_lgtm_from_non_requested() {
-        let mut solution = Solution::new(
-            "S-1".to_string(),
-            "Test".to_string(),
-            "P-1".to_string(),
-        );
+    fn test_all_reviewers_signed_off() {
+        let mut solution = Solution::new("S-1".to_string(), "Test".to_string(), "P-1".to_string());
+        solution.add_reviewer("alice".to_string());
+        solution.add_reviewer("bob".to_string());
+        assert!(!solution.all_reviewers_signed_off());
+        solution.add_sign_off("alice".to_string(), None);
+        assert!(!solution.all_reviewers_signed_off());
+        solution.add_sign_off("bob".to_string(), None);
+        assert!(solution.all_reviewers_signed_off());
+    }
 
-        solution.request_review("alice".to_string());
-        solution.add_lgtm("bob".to_string()); // Bob wasn't requested
+    #[test]
+    fn test_pending_reviewers() {
+        let mut solution = Solution::new("S-1".to_string(), "Test".to_string(), "P-1".to_string());
+        solution.add_reviewer("alice".to_string());
+        solution.add_reviewer("bob".to_string());
+        solution.add_sign_off("alice".to_string(), None);
+        let pending = solution.pending_reviewers();
+        assert_eq!(pending, vec!["bob"]);
+    }
 
-        assert!(solution.reviewed_by.contains(&"bob".to_string()));
-        assert!(!solution.has_lgtm_from_requested_reviewer());
+    #[test]
+    fn test_requires_review_derived() {
+        let solution = Solution::new("S-1".to_string(), "Test".to_string(), "P-1".to_string());
+        assert!(!solution.requires_review());
+        let mut solution2 = solution.clone();
+        solution2.add_reviewer("alice".to_string());
+        assert!(solution2.requires_review());
     }
 
     #[test]
@@ -468,20 +495,4 @@ mod tests {
         assert_eq!(s2.supersedes.as_deref(), Some("S-1"));
     }
 
-    #[test]
-    fn test_requires_review_override() {
-        let mut solution = Solution::new(
-            "S-1".to_string(),
-            "Test".to_string(),
-            "P-1".to_string(),
-        );
-
-        assert!(solution.requires_review.is_none());
-
-        solution.set_requires_review(Some(true));
-        assert_eq!(solution.requires_review, Some(true));
-
-        solution.set_requires_review(Some(false));
-        assert_eq!(solution.requires_review, Some(false));
-    }
 }
