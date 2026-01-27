@@ -5,6 +5,7 @@ import { NextActionsProvider } from "./views/nextActionsProvider";
 import { ProjectTreeProvider } from "./views/projectTreeProvider";
 import { EntityDocumentProvider } from "./documents/entityDocumentProvider";
 import { StatusBar } from "./statusBar";
+import { registerCommands } from "./commands";
 
 export function activate(context: vscode.ExtensionContext) {
   const cli = new JjjCli();
@@ -41,6 +42,8 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(statusBar);
 
   // Commands
+  registerCommands(context, cli, cache);
+
   context.subscriptions.push(
     vscode.commands.registerCommand("jjj.refreshAll", () => cache.refresh()),
   );
