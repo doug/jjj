@@ -100,6 +100,25 @@ pub enum Commands {
     /// LGTM current change's solution (shorthand for solution lgtm)
     #[command(name = "lgtm")]
     LgtmShorthand,
+
+    /// Show next actions (what should I work on?)
+    Next {
+        /// Show all items (no limit)
+        #[arg(long)]
+        all: bool,
+
+        /// Only my authored work
+        #[arg(long)]
+        mine: bool,
+
+        /// Show top N items (default: 5)
+        #[arg(long)]
+        limit: Option<usize>,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[derive(ValueEnum, Clone, Debug)]

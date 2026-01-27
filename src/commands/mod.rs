@@ -4,6 +4,7 @@ pub mod critique;
 pub mod dashboard;
 pub mod init;
 pub mod milestone;
+pub mod next;
 pub mod problem;
 pub mod resolve;
 pub mod solution;
@@ -31,6 +32,9 @@ pub fn execute(cli: Cli) -> Result<()> {
 
         // Shell completion
         Commands::Completion { shell } => completion::execute(shell),
+
+        // Next actions
+        Commands::Next { all, mine, limit, json } => next::execute(all, mine, limit, json),
 
         // Shorthand commands
         Commands::ReviewShorthand { reviewers } => {
