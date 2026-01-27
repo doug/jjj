@@ -19,6 +19,9 @@ pub struct Problem {
     /// Current status
     pub status: ProblemStatus,
 
+    /// Priority level
+    pub priority: Priority,
+
     /// Solution IDs attempting to address this problem
     #[serde(default)]
     pub solution_ids: Vec<String>,
@@ -50,6 +53,50 @@ pub struct Problem {
     /// Context - why this is a problem, what makes it hard
     #[serde(default)]
     pub context: String,
+}
+
+/// Priority level for a problem (P0 = most critical, P3 = lowest)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
+#[serde(rename_all = "snake_case")]
+pub enum Priority {
+    Low,
+    Medium,
+    High,
+    Critical,
+}
+
+impl Default for Priority {
+    fn default() -> Self {
+        Priority::Medium
+    }
+}
+
+impl std::fmt::Display for Priority {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Priority::Low => write!(f, "P3/low"),
+            Priority::Medium => write!(f, "P2/medium"),
+            Priority::High => write!(f, "P1/high"),
+            Priority::Critical => write!(f, "P0/critical"),
+        }
+    }
+}
+
+impl std::str::FromStr for Priority {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "p0" | "critical" => Ok(Priority::Critical),
+            "p1" | "high" => Ok(Priority::High),
+            "p2" | "medium" => Ok(Priority::Medium),
+            "p3" | "low" => Ok(Priority::Low),
+            _ => Err(format!(
+                "Invalid priority: {}. Use P0/critical, P1/high, P2/medium, or P3/low",
+                s
+            )),
+        }
+    }
 }
 
 /// Status of a problem
@@ -109,6 +156,7 @@ impl Problem {
             title,
             parent_id: None,
             status: ProblemStatus::Open,
+            priority: Priority::default(),
             solution_ids: Vec::new(),
             child_ids: Vec::new(),
             milestone_id: None,
@@ -228,6 +276,7 @@ pub struct ProblemFrontmatter {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parent_id: Option<String>,
     pub status: ProblemStatus,
+    pub priority: Priority,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub solution_ids: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -249,6 +298,7 @@ impl From<&Problem> for ProblemFrontmatter {
             title: p.title.clone(),
             parent_id: p.parent_id.clone(),
             status: p.status.clone(),
+            priority: p.priority.clone(),
             solution_ids: p.solution_ids.clone(),
             child_ids: p.child_ids.clone(),
             milestone_id: p.milestone_id.clone(),
@@ -325,5 +375,38 @@ mod tests {
         assert_eq!("in_progress".parse::<ProblemStatus>().unwrap(), ProblemStatus::InProgress);
         assert_eq!("solved".parse::<ProblemStatus>().unwrap(), ProblemStatus::Solved);
         assert_eq!("dissolved".parse::<ProblemStatus>().unwrap(), ProblemStatus::Dissolved);
+    }
+
+    #[test]
+    fn test_priority_from_str() {
+        assert_eq!("P0".parse::<Priority>().unwrap(), Priority::Critical);
+        assert_eq!("critical".parse::<Priority>().unwrap(), Priority::Critical);
+        assert_eq!("P1".parse::<Priority>().unwrap(), Priority::High);
+        assert_eq!("high".parse::<Priority>().unwrap(), Priority::High);
+        assert_eq!("P2".parse::<Priority>().unwrap(), Priority::Medium);
+        assert_eq!("medium".parse::<Priority>().unwrap(), Priority::Medium);
+        assert_eq!("P3".parse::<Priority>().unwrap(), Priority::Low);
+        assert_eq!("low".parse::<Priority>().unwrap(), Priority::Low);
+    }
+
+    #[test]
+    fn test_priority_display() {
+        assert_eq!(format!("{}", Priority::Critical), "P0/critical");
+        assert_eq!(format!("{}", Priority::High), "P1/high");
+        assert_eq!(format!("{}", Priority::Medium), "P2/medium");
+        assert_eq!(format!("{}", Priority::Low), "P3/low");
+    }
+
+    #[test]
+    fn test_priority_ordering() {
+        assert!(Priority::Critical > Priority::High);
+        assert!(Priority::High > Priority::Medium);
+        assert!(Priority::Medium > Priority::Low);
+    }
+
+    #[test]
+    fn test_problem_priority_default() {
+        let p = Problem::new("P-1".to_string(), "Test".to_string());
+        assert_eq!(p.priority, Priority::Medium);
     }
 }

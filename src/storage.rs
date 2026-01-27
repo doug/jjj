@@ -2,7 +2,7 @@ use crate::error::{JjjError, Result};
 use crate::jj::JjClient;
 use crate::models::{
     Critique, CritiqueFrontmatter, CritiqueStatus, Milestone, MilestoneFrontmatter,
-    Problem, ProblemFrontmatter, ProblemStatus,
+    Priority, Problem, ProblemFrontmatter, ProblemStatus,
     ProjectConfig, Solution, SolutionFrontmatter, SolutionStatus,
 };
 use std::fs;
@@ -217,6 +217,7 @@ impl MetadataStore {
             title: frontmatter.title,
             parent_id: frontmatter.parent_id,
             status: frontmatter.status,
+            priority: frontmatter.priority,
             solution_ids: frontmatter.solution_ids,
             child_ids: frontmatter.child_ids,
             milestone_id: frontmatter.milestone_id,
@@ -865,6 +866,7 @@ This is the context.
             title: "Test".to_string(),
             parent_id: None,
             status: ProblemStatus::Open,
+            priority: Priority::default(),
             solution_ids: vec![],
             child_ids: vec![],
             milestone_id: None,
