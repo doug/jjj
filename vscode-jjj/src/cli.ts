@@ -101,19 +101,17 @@ export interface DashboardData {
 // --- CLI Client ---
 
 export class JjjCli {
-  private bin: string;
-  private cwd: string;
+  private get bin(): string {
+    return vscode.workspace.getConfiguration("jjj").get<string>("path") || "jjj";
+  }
 
-  constructor() {
-    this.bin =
-      vscode.workspace.getConfiguration("jjj").get<string>("path") || "jjj";
-    this.cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || ".";
+  private get cwd(): string {
+    return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || ".";
   }
 
   private exec(args: string[]): Promise<string> {
     return new Promise((resolve, reject) => {
-      const cmd = [this.bin, ...args].join(" ");
-      cp.exec(cmd, { cwd: this.cwd, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
+      cp.execFile(this.bin, args, { cwd: this.cwd, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
         if (err) {
           reject(new Error(stderr || err.message));
         } else {
@@ -180,22 +178,22 @@ export class JjjCli {
   // --- Mutations ---
 
   async newProblem(title: string): Promise<string> {
-    return this.exec(["problem", "new", JSON.stringify(title)]);
+    return this.exec(["problem", "new", title]);
   }
 
   async newSolution(title: string, problemId: string): Promise<string> {
-    return this.exec(["solution", "new", JSON.stringify(title), "--problem", problemId]);
+    return this.exec(["solution", "new", title, "--problem", problemId]);
   }
 
   async newCritique(solutionId: string, title: string, severity: string, file?: string, line?: number): Promise<string> {
-    const args = ["critique", "new", solutionId, JSON.stringify(title), "--severity", severity];
+    const args = ["critique", "new", solutionId, title, "--severity", severity];
     if (file) { args.push("--file", file); }
     if (line !== undefined) { args.push("--line", String(line)); }
     return this.exec(args);
   }
 
   async replyCritique(critiqueId: string, body: string): Promise<string> {
-    return this.exec(["critique", "reply", critiqueId, JSON.stringify(body)]);
+    return this.exec(["critique", "reply", critiqueId, body]);
   }
 
   async addressCritique(critiqueId: string): Promise<string> {
@@ -233,7 +231,7 @@ export class JjjCli {
   }
 
   async newMilestone(title: string): Promise<string> {
-    return this.exec(["milestone", "new", JSON.stringify(title)]);
+    return this.exec(["milestone", "new", title]);
   }
 
   async milestoneAddProblem(milestoneId: string, problemId: string): Promise<string> {
@@ -251,10 +249,10 @@ export class JjjCli {
   }
 
   async assignProblem(problemId: string, assignee: string): Promise<string> {
-    return this.exec(["problem", "assign", problemId, assignee]);
+    return this.exec(["problem", "assign", problemId, "--to", assignee]);
   }
 
   async assignSolution(solutionId: string, assignee: string): Promise<string> {
-    return this.exec(["solution", "assign", solutionId, assignee]);
+    return this.exec(["solution", "assign", solutionId, "--to", assignee]);
   }
 }
