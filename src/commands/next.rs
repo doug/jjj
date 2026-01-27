@@ -80,11 +80,11 @@ pub fn execute(all: bool, mine: bool, limit: Option<usize>, json: bool) -> Resul
         }
     }
 
-    // 3. REVIEW: Solutions where user is a requested reviewer but hasn't LGTM'd
+    // 3. REVIEW: Solutions where user is a requested reviewer but hasn't signed off
     if !mine {
         for solution in solutions.iter().filter(|s| s.is_active()) {
-            if solution.requested_reviewers.iter().any(|r| user == *r)
-                && !solution.reviewed_by.iter().any(|r| user == *r)
+            if solution.reviewers.iter().any(|r| user == *r)
+                && !solution.sign_offs.iter().any(|so| user == so.reviewer)
             {
                 let problem = problems.iter().find(|p| p.id == solution.problem_id);
                 let priority = problem.map(|p| &p.priority).cloned().unwrap_or_default();
@@ -94,7 +94,7 @@ pub fn execute(all: bool, mine: bool, limit: Option<usize>, json: bool) -> Resul
                     "entity_type": "solution",
                     "entity_id": solution.id,
                     "title": solution.title,
-                    "summary": format!("Review requested by {}", solution.assignee.as_deref().unwrap_or("unknown")),
+                    "summary": format!("Review requested by {}", solution.assignee.as_deref().unwrap_or("author")),
                     "suggested_command": format!("jjj solution show {}", solution.id),
                     "priority": format!("{}", priority),
                     "priority_sort": priority_sort_value(&priority),
@@ -107,8 +107,8 @@ pub fn execute(all: bool, mine: bool, limit: Option<usize>, json: bool) -> Resul
     // 4. WAITING: User's solutions awaiting review
     for solution in solutions.iter().filter(|s| s.is_active()) {
         let is_mine = solution.assignee.as_ref().map(|a| user == *a).unwrap_or(false);
-        if is_mine && !solution.requested_reviewers.is_empty()
-            && !solution.has_lgtm_from_requested_reviewer()
+        if is_mine && solution.requires_review()
+            && !solution.all_reviewers_signed_off()
         {
             let problem = problems.iter().find(|p| p.id == solution.problem_id);
             let priority = problem.map(|p| &p.priority).cloned().unwrap_or_default();
@@ -118,7 +118,7 @@ pub fn execute(all: bool, mine: bool, limit: Option<usize>, json: bool) -> Resul
                 "entity_type": "solution",
                 "entity_id": solution.id,
                 "title": solution.title,
-                "summary": format!("Awaiting review from {}", solution.requested_reviewers.join(", ")),
+                "summary": format!("Awaiting review from {}", solution.pending_reviewers().join(", ")),
                 "suggested_command": "",
                 "priority": format!("{}", priority),
                 "priority_sort": priority_sort_value(&priority),

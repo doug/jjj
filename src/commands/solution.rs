@@ -7,7 +7,7 @@ use std::io::{self, Write};
 
 pub fn execute(action: SolutionAction) -> Result<()> {
     match action {
-        SolutionAction::New { title, problem, supersedes, tag } => new_solution(title, problem, supersedes, tag),
+        SolutionAction::New { title, problem, supersedes, tag, review } => new_solution(title, problem, supersedes, tag, review),
         SolutionAction::List {
             problem,
             status,
@@ -31,11 +31,11 @@ pub fn execute(action: SolutionAction) -> Result<()> {
         SolutionAction::Refute { solution_id } => refute_solution(solution_id),
         SolutionAction::Assign { solution_id, to } => assign_solution(solution_id, to),
         SolutionAction::Review { solution_id, reviewers } => request_review(solution_id, reviewers),
-        SolutionAction::Lgtm { solution_id } => lgtm_solution(solution_id),
+        SolutionAction::Lgtm { solution_id, comment } => lgtm_solution(solution_id, comment),
     }
 }
 
-fn new_solution(title: String, problem_id: String, supersedes: Option<String>, tags: Vec<String>) -> Result<()> {
+fn new_solution(title: String, problem_id: String, supersedes: Option<String>, tags: Vec<String>, reviewers: Vec<String>) -> Result<()> {
     let jj_client = JjClient::new()?;
     let store = MetadataStore::new(jj_client)?;
 
@@ -54,6 +54,12 @@ fn new_solution(title: String, problem_id: String, supersedes: Option<String>, t
             solution.add_tag(tag);
         }
 
+        // Add reviewers
+        for reviewer in &reviewers {
+            let name = reviewer.trim_start_matches('@').to_string();
+            solution.add_reviewer(name);
+        }
+
         store.save_solution(&solution)?;
 
         // Update problem's solution_ids
@@ -65,6 +71,9 @@ fn new_solution(title: String, problem_id: String, supersedes: Option<String>, t
         println!("  Addresses: {} - {}", problem.id, problem.title);
         if let Some(ref sup) = solution.supersedes {
             println!("  Supersedes: {}", sup);
+        }
+        if !solution.reviewers.is_empty() {
+            println!("  Reviewers: {}", solution.reviewers.iter().map(|r| format!("@{}", r)).collect::<Vec<_>>().join(", "));
         }
 
         Ok(())
@@ -170,6 +179,26 @@ fn show_solution(solution_id: String, json: bool) -> Result<()> {
     // Show trade-offs
     if !solution.tradeoffs.is_empty() {
         println!("\n## Trade-offs\n{}", solution.tradeoffs);
+    }
+
+    // Show reviewers and sign-offs
+    if !solution.reviewers.is_empty() {
+        println!("\n## Reviewers");
+        for reviewer in &solution.reviewers {
+            if let Some(so) = solution.sign_offs.iter().find(|so| &so.reviewer == reviewer) {
+                let comment_str = so.comment.as_ref().map(|c| format!(" — {}", c)).unwrap_or_default();
+                println!("  @{}: signed off {}{}", reviewer, so.at.format("%Y-%m-%d"), comment_str);
+            } else {
+                println!("  @{}: pending", reviewer);
+            }
+        }
+        // Show non-reviewer sign-offs
+        let non_reviewer_sign_offs: Vec<_> = solution.sign_offs.iter()
+            .filter(|so| !solution.reviewers.contains(&so.reviewer))
+            .collect();
+        if !non_reviewer_sign_offs.is_empty() {
+            println!("  Also endorsed by: {}", non_reviewer_sign_offs.iter().map(|so| format!("@{}", so.reviewer)).collect::<Vec<_>>().join(", "));
+        }
     }
 
     // Show critiques
@@ -294,7 +323,6 @@ fn test_solution(solution_id: String) -> Result<()> {
 fn accept_solution(solution_id: String, force: bool) -> Result<()> {
     let jj_client = JjClient::new()?;
     let store = MetadataStore::new(jj_client)?;
-    let config = store.load_config()?;
 
     let solution = store.load_solution(&solution_id)?;
     let critiques = store.list_critiques()?;
@@ -328,34 +356,30 @@ fn accept_solution(solution_id: String, force: bool) -> Result<()> {
     }
 
     // Check review requirement
-    let requires_review = solution.requires_review.unwrap_or(config.review.default_required);
+    let requires_review = solution.requires_review();
     if requires_review {
-        if solution.requested_reviewers.is_empty() {
+        if !solution.all_reviewers_signed_off() {
             if !force {
-                eprintln!("Error: Solution requires review but no reviewers requested.");
-                eprintln!("Request review: jjj solution review {} @reviewer", solution_id);
-                eprintln!("Or force:       jjj solution accept {} --force", solution_id);
-                return Err(crate::error::JjjError::CannotAcceptSolution("No reviewers requested".to_string()));
-            }
-            eprintln!("Warning: Accepting without requested reviewers.");
-        } else if !solution.has_lgtm_from_requested_reviewer() {
-            if !force {
-                eprintln!("Error: Solution requires LGTM from a requested reviewer.");
-                eprintln!("Requested: {}", solution.requested_reviewers.join(", "));
-                eprintln!("LGTM'd:    {}", if solution.reviewed_by.is_empty() { "none".to_string() } else { solution.reviewed_by.join(", ") });
+                eprintln!("Error: Solution requires sign-off from all reviewers.");
+                eprintln!("Reviewers: {}", solution.reviewers.join(", "));
+                let signed: Vec<_> = solution.sign_offs.iter().map(|so| so.reviewer.as_str()).collect();
+                eprintln!("Signed off: {}", if signed.is_empty() { "none".to_string() } else { signed.join(", ") });
                 eprintln!("Or force:  jjj solution accept {} --force", solution_id);
-                return Err(crate::error::JjjError::CannotAcceptSolution("No LGTM from requested reviewer".to_string()));
+                return Err(crate::error::JjjError::CannotAcceptSolution("Not all reviewers signed off".to_string()));
             }
-            eprintln!("Warning: Accepting without LGTM from requested reviewer.");
+            eprintln!("Warning: Accepting without full reviewer sign-off.");
         }
     }
 
     store.with_metadata(&format!("Accept solution {}", solution_id), || {
         let mut solution = store.load_solution(&solution_id)?;
+        if force {
+            solution.force_accepted = true;
+        }
         solution.accept();
         store.save_solution(&solution)?;
 
-        let status = if force && !open_critiques.is_empty() {
+        let status = if force && (!open_critiques.is_empty() || requires_review) {
             "accepted (forced)"
         } else {
             "accepted"
@@ -430,19 +454,19 @@ fn request_review(solution_id: String, reviewers: Vec<String>) -> Result<()> {
         let mut solution = store.load_solution(&solution_id)?;
 
         for reviewer in &reviewers {
-            solution.request_review(reviewer.clone());
+            solution.add_reviewer(reviewer.clone());
         }
 
         store.save_solution(&solution)?;
 
-        println!("✓ Review requested for solution {}", solution_id);
-        println!("  Reviewers: {}", reviewers.iter().map(|r| format!("@{}", r)).collect::<Vec<_>>().join(", "));
+        println!("Review requested for solution {}", solution_id);
+        println!("  reviewers: {}", reviewers.iter().map(|r| format!("@{}", r)).collect::<Vec<_>>().join(", "));
 
         Ok(())
     })
 }
 
-fn lgtm_solution(solution_id: String) -> Result<()> {
+fn lgtm_solution(solution_id: String, comment: Option<String>) -> Result<()> {
     let jj_client = JjClient::new()?;
     let store = MetadataStore::new(jj_client)?;
 
@@ -451,15 +475,15 @@ fn lgtm_solution(solution_id: String) -> Result<()> {
         let user = store.jj_client.user_identity()?;
 
         // Check if user is a requested reviewer
-        if !solution.requested_reviewers.iter().any(|r| user.contains(r)) {
+        if !solution.reviewers.iter().any(|r| user.contains(r)) {
             println!("Warning: You were not a requested reviewer for this solution.");
-            println!("Only LGTMs from requested reviewers count toward acceptance.");
+            println!("Only sign-offs from requested reviewers count toward acceptance.");
         }
 
-        solution.add_lgtm(user.clone());
+        solution.add_sign_off(user.clone(), comment);
         store.save_solution(&solution)?;
 
-        println!("✓ LGTM recorded for solution {}", solution_id);
+        println!("LGTM recorded for solution {}", solution_id);
 
         Ok(())
     })

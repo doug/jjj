@@ -99,7 +99,11 @@ pub enum Commands {
 
     /// LGTM current change's solution (shorthand for solution lgtm)
     #[command(name = "lgtm")]
-    LgtmShorthand,
+    LgtmShorthand {
+        /// Comment with sign-off
+        #[arg(long)]
+        comment: Option<String>,
+    },
 
     /// Show next actions (what should I work on?)
     Next {
@@ -272,6 +276,10 @@ pub enum SolutionAction {
         /// Tags to apply
         #[arg(long)]
         tag: Vec<String>,
+
+        /// Assign reviewers (e.g., @alice, @bob)
+        #[arg(long)]
+        review: Vec<String>,
     },
 
     /// List all solutions
@@ -381,6 +389,9 @@ pub enum SolutionAction {
     Lgtm {
         /// Solution ID (e.g., S-1)
         solution_id: String,
+        /// Comment with sign-off
+        #[arg(long)]
+        comment: Option<String>,
     },
 }
 

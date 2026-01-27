@@ -54,7 +54,7 @@ pub fn execute(cli: Cli) -> Result<()> {
                 reviewers,
             })
         }
-        Commands::LgtmShorthand => {
+        Commands::LgtmShorthand { comment } => {
             let jj_client = crate::jj::JjClient::new()?;
             let store = crate::storage::MetadataStore::new(jj_client.clone())?;
             let change_id = jj_client.current_change_id()?;
@@ -68,6 +68,7 @@ pub fn execute(cli: Cli) -> Result<()> {
 
             solution::execute(SolutionAction::Lgtm {
                 solution_id: sol.id.clone(),
+                comment,
             })
         }
     }

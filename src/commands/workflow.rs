@@ -129,13 +129,9 @@ pub fn submit(force: bool) -> Result<()> {
         }
 
         // Check reviews
-        if !solution.requested_reviewers.is_empty() && !solution.has_lgtm_from_requested_reviewer()
+        if solution.requires_review() && !solution.all_reviewers_signed_off()
         {
-            let pending: Vec<_> = solution
-                .requested_reviewers
-                .iter()
-                .filter(|r| !solution.reviewed_by.contains(r))
-                .collect();
+            let pending = solution.pending_reviewers();
             eprintln!(
                 "\n  * Review pending from {}",
                 pending
@@ -163,6 +159,9 @@ pub fn submit(force: bool) -> Result<()> {
     // Auto-accept
     if solution.status == SolutionStatus::Testing || solution.status == SolutionStatus::Proposed {
         let mut solution = store.load_solution(&solution.id)?;
+        if force {
+            solution.force_accepted = true;
+        }
         solution.accept();
         store.save_solution(&solution)?;
         println!("  Solution {} accepted", solution.id);
