@@ -4,6 +4,7 @@ import { DataCache } from "./cache";
 import { NextActionsProvider } from "./views/nextActionsProvider";
 import { ProjectTreeProvider } from "./views/projectTreeProvider";
 import { EntityDocumentProvider } from "./documents/entityDocumentProvider";
+import { StatusBar } from "./statusBar";
 
 export function activate(context: vscode.ExtensionContext) {
   const cli = new JjjCli();
@@ -34,6 +35,10 @@ export function activate(context: vscode.ExtensionContext) {
       await vscode.window.showTextDocument(doc, { preview: false });
     }),
   );
+
+  // Status Bar
+  const statusBar = new StatusBar(cache);
+  context.subscriptions.push(statusBar);
 
   // Commands
   context.subscriptions.push(
