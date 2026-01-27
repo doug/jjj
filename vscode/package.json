@@ -1,24 +1,16 @@
 {
-  "name": "jjj-vscode-extension",
-  "displayName": "JJJ VS Code Extension",
-  "description": "VS Code extension for task management and code review, powered by the jjj command-line tool.",
-  "version": "0.0.1",
+  "name": "jjj-vscode",
+  "displayName": "JJJ — Popperian Project Management",
+  "description": "Problems, Solutions, Critiques — managed visually in VS Code",
+  "version": "0.1.0",
   "publisher": "jjj",
   "license": "Apache-2.0",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/doug/jjj"
-  },
   "engines": {
-    "vscode": "^1.70.0"
+    "vscode": "^1.85.0"
   },
-  "categories": [
-    "Other"
-  ],
+  "categories": ["Other"],
   "main": "./out/extension.js",
-  "activationEvents": [
-    "onView:jjj-tasks"
-  ],
+  "activationEvents": [],
   "contributes": {
     "configuration": {
       "title": "JJJ",
@@ -31,233 +23,82 @@
       }
     },
     "commands": [
-      {
-        "command": "jjj.init",
-        "title": "JJJ: Initialize Repository"
-      },
-      {
-        "command": "jjj.openTask",
-        "title": "JJJ: Open Task"
-      },
-      {
-        "command": "jjj.openReview",
-        "title": "JJJ: Open Review"
-      },
-      {
-        "command": "jjj.openFeature",
-        "title": "JJJ: Open Feature"
-      },
-      {
-        "command": "jjj.openMilestone",
-        "title": "JJJ: Open Milestone"
-      },
-      {
-        "command": "jjj.openBug",
-        "title": "JJJ: Open Bug"
-      },
-      {
-        "command": "jjj.openDashboard",
-        "title": "JJJ: Open Dashboard"
-      },
-      {
-        "command": "jjj.openKanban",
-        "title": "JJJ: Open Kanban Board",
-        "icon": "$(project)"
-      },
-      {
-        "command": "jjj.openPlanning",
-        "title": "JJJ: Open Planning View",
-        "icon": "$(list-tree)"
-      },
-      {
-        "command": "jjj.refreshTasks",
-        "title": "JJJ: Refresh Tasks",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "jjj.refreshReviews",
-        "title": "JJJ: Refresh Reviews",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "jjj.refreshFeatures",
-        "title": "JJJ: Refresh Features",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "jjj.refreshMilestones",
-        "title": "JJJ: Refresh Milestones",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "jjj.refreshBugs",
-        "title": "JJJ: Refresh Bugs",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "jjj.refreshAll",
-        "title": "JJJ: Refresh All Views"
-      },
-      {
-        "command": "jjj.toggleTaskGrouping",
-        "title": "JJJ: Toggle Task Grouping",
-        "icon": "$(group-by-ref-type)"
-      },
-      {
-        "command": "jjj.createTask",
-        "title": "JJJ: Create Task",
-        "icon": "$(plus)"
-      },
-      {
-        "command": "jjj.createFeature",
-        "title": "JJJ: Create Feature",
-        "icon": "$(plus)"
-      },
-      {
-        "command": "jjj.createBug",
-        "title": "JJJ: Create Bug",
-        "icon": "$(plus)"
-      },
-      {
-        "command": "jjj.createMilestone",
-        "title": "JJJ: Create Milestone",
-        "icon": "$(plus)"
-      }
+      { "command": "jjj.refreshAll", "title": "JJJ: Refresh All", "icon": "$(refresh)" },
+      { "command": "jjj.newProblem", "title": "JJJ: New Problem", "icon": "$(plus)" },
+      { "command": "jjj.newSolution", "title": "JJJ: New Solution", "icon": "$(plus)" },
+      { "command": "jjj.newCritique", "title": "JJJ: New Critique" },
+      { "command": "jjj.newMilestone", "title": "JJJ: New Milestone", "icon": "$(plus)" },
+      { "command": "jjj.acceptSolution", "title": "JJJ: Accept Solution" },
+      { "command": "jjj.refuteSolution", "title": "JJJ: Refute Solution" },
+      { "command": "jjj.requestReview", "title": "JJJ: Request Review" },
+      { "command": "jjj.lgtm", "title": "JJJ: LGTM" },
+      { "command": "jjj.solveProblem", "title": "JJJ: Solve Problem" },
+      { "command": "jjj.dissolveProblem", "title": "JJJ: Dissolve Problem" },
+      { "command": "jjj.addressCritique", "title": "JJJ: Address Critique" },
+      { "command": "jjj.dismissCritique", "title": "JJJ: Dismiss Critique" },
+      { "command": "jjj.addCritiqueHere", "title": "JJJ: Add Critique Here" },
+      { "command": "jjj.startWorking", "title": "JJJ: Start Working" },
+      { "command": "jjj.openEntity", "title": "JJJ: Open Entity" }
     ],
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "jjj-sidebar-view",
+          "id": "jjj-sidebar",
           "title": "JJJ",
-          "icon": "$(beaker)"
+          "icon": "media/jjj-icon.svg"
         }
       ]
     },
     "views": {
-      "jjj-sidebar-view": [
-        {
-          "id": "jjj-welcome",
-          "name": "Welcome",
-          "when": "!jjj.initialized"
-        },
-        {
-          "id": "jjj-milestones",
-          "name": "Milestones",
-          "when": "jjj.initialized"
-        },
-        {
-          "id": "jjj-features",
-          "name": "Features",
-          "when": "jjj.initialized"
-        },
-        {
-          "id": "jjj-tasks",
-          "name": "Tasks",
-          "when": "jjj.initialized"
-        },
-        {
-          "id": "jjj-bugs",
-          "name": "Bugs",
-          "when": "jjj.initialized"
-        },
-        {
-          "id": "jjj-reviews",
-          "name": "Reviews",
-          "when": "jjj.initialized"
-        }
+      "jjj-sidebar": [
+        { "id": "jjj-next-actions", "name": "Next Actions" },
+        { "id": "jjj-project-tree", "name": "Project Tree" }
       ]
     },
     "menus": {
       "view/title": [
-        {
-          "command": "jjj.init",
-          "when": "view == jjj-welcome",
-          "group": "navigation"
-        },
-        {
-          "command": "jjj.refreshTasks",
-          "when": "view == jjj-tasks",
-          "group": "navigation@1"
-        },
-        {
-          "command": "jjj.toggleTaskGrouping",
-          "when": "view == jjj-tasks",
-          "group": "navigation@2"
-        },
-        {
-          "command": "jjj.refreshReviews",
-          "when": "view == jjj-reviews",
-          "group": "navigation"
-        },
-        {
-          "command": "jjj.refreshFeatures",
-          "when": "view == jjj-features",
-          "group": "navigation"
-        },
-        {
-          "command": "jjj.refreshMilestones",
-          "when": "view == jjj-milestones",
-          "group": "navigation"
-        },
-        {
-          "command": "jjj.refreshBugs",
-          "when": "view == jjj-bugs",
-          "group": "navigation"
-        },
-        {
-          "command": "jjj.createTask",
-          "when": "view == jjj-tasks",
-          "group": "inline"
-        },
-        {
-          "command": "jjj.createFeature",
-          "when": "view == jjj-features",
-          "group": "inline"
-        },
-        {
-          "command": "jjj.createMilestone",
-          "when": "view == jjj-milestones",
-          "group": "inline"
-        },
-        {
-          "command": "jjj.createBug",
-          "when": "view == jjj-bugs",
-          "group": "inline"
-        }
+        { "command": "jjj.refreshAll", "when": "view == jjj-next-actions", "group": "navigation" },
+        { "command": "jjj.newProblem", "when": "view == jjj-project-tree", "group": "navigation" },
+        { "command": "jjj.newMilestone", "when": "view == jjj-project-tree", "group": "navigation" }
+      ],
+      "view/item/context": [
+        { "command": "jjj.newSolution", "when": "viewItem == problem", "group": "1_actions@1" },
+        { "command": "jjj.solveProblem", "when": "viewItem == problem", "group": "1_actions@2" },
+        { "command": "jjj.dissolveProblem", "when": "viewItem == problem", "group": "1_actions@3" },
+        { "command": "jjj.acceptSolution", "when": "viewItem == solution", "group": "1_actions@1" },
+        { "command": "jjj.refuteSolution", "when": "viewItem == solution", "group": "1_actions@2" },
+        { "command": "jjj.requestReview", "when": "viewItem == solution", "group": "1_actions@3" },
+        { "command": "jjj.lgtm", "when": "viewItem == solution", "group": "1_actions@4" },
+        { "command": "jjj.newCritique", "when": "viewItem == solution", "group": "1_actions@5" },
+        { "command": "jjj.startWorking", "when": "viewItem == solution", "group": "1_actions@6" },
+        { "command": "jjj.addressCritique", "when": "viewItem == critique", "group": "1_actions@1" },
+        { "command": "jjj.dismissCritique", "when": "viewItem == critique", "group": "1_actions@2" },
+        { "command": "jjj.newProblem", "when": "viewItem == milestone || viewItem == backlog", "group": "1_actions@1" }
+      ],
+      "editor/context": [
+        { "command": "jjj.addCritiqueHere", "group": "jjj@1" }
       ]
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
-    "format": "prettier --write \"src/**/*.{ts,js,json,md}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,js,json,md}\"",
-    "test": "npm run compile && node ./out/test/runTests.js",
-    "test:unit": "npm run test",
-    "generate-goldens": "UPDATE_GOLDENS=true npm run test",
+    "test": "tsc -p ./tsconfig.test.json && mocha out-test/**/*.test.js",
     "package": "vsce package",
-    "package:install": "vsce package && code --install-extension *.vsix"
-  },
-  "dependencies": {
-    "js-yaml": "^4.1.0"
+    "install-ext": "vsce package && code --install-extension *.vsix"
   },
   "devDependencies": {
-    "@types/glob": "^8.0.0",
-    "@types/js-yaml": "^4.0.5",
     "@types/mocha": "^10.0.0",
-    "@types/node": "16.x",
-    "@types/vscode": "^1.70.0",
-    "@typescript-eslint/eslint-plugin": "^5.42.0",
-    "@typescript-eslint/parser": "^5.42.0",
-    "@vscode/test-electron": "^2.2.0",
-    "@vscode/vsce": "^2.32.0",
-    "eslint": "^8.24.0",
-    "glob": "^8.0.3",
-    "mocha": "^10.1.0",
-    "prettier": "^3.6.2",
-    "typescript": "^4.9.4"
+    "@types/node": "^20.0.0",
+    "@types/sinon": "^17.0.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.56.0",
+    "mocha": "^10.0.0",
+    "sinon": "^17.0.0",
+    "typescript": "^5.3.0",
+    "@vscode/vsce": "^3.0.0"
   }
 }

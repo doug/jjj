@@ -9,6 +9,7 @@ mdbook-admonish.css
 # VSCode extension
 node_modules/
 out/
+out-test/
 
 # IDE
 .idea/
