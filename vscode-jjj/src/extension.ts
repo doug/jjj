@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { JjjCli } from "./cli";
 import { DataCache } from "./cache";
 import { NextActionsProvider } from "./views/nextActionsProvider";
+import { ProjectTreeProvider } from "./views/projectTreeProvider";
 
 export function activate(context: vscode.ExtensionContext) {
   const cli = new JjjCli();
@@ -10,6 +11,14 @@ export function activate(context: vscode.ExtensionContext) {
   // Views
   const nextActions = new NextActionsProvider(cache);
   vscode.window.registerTreeDataProvider("jjj-next-actions", nextActions);
+
+  const projectTree = new ProjectTreeProvider(cache, cli);
+  const treeView = vscode.window.createTreeView("jjj-project-tree", {
+    treeDataProvider: projectTree,
+    dragAndDropController: projectTree,
+    canSelectMany: true,
+  });
+  context.subscriptions.push(treeView);
 
   // Commands
   context.subscriptions.push(
