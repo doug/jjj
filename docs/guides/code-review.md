@@ -35,7 +35,7 @@ This stability makes it perfect for attaching review metadata.
 
 ### Solutions Own the Review
 
-In jjj, code review is attached to **solutions** (S-1, S-2, etc.), not directly to changes. A solution may have one or more jj changes associated with it. When you assign reviewers, you are requiring them to sign off on the solution's implementation before it can be accepted.
+In jjj, code review is attached to **solutions** (s1, s2, etc.), not directly to changes. A solution may have one or more jj changes associated with it. When you assign reviewers, you are requiring them to sign off on the solution's implementation before it can be accepted.
 
 ### Comment Relocation
 
@@ -56,14 +56,14 @@ You can assign reviewers when creating a solution, or add them later.
 At creation:
 
 ```bash
-jjj solution new "Use JWT tokens" --problem P-1 --review @alice --review @bob
+jjj solution new "Use JWT tokens" --problem p1 --review @alice --review @bob
 ```
 
 Or assign reviewers to an existing solution:
 
 ```bash
 # Assign reviewers by solution ID
-jjj solution review S-1 @alice @bob
+jjj solution review s1 @alice @bob
 ```
 
 If you are currently working on a solution's change, use the shorthand:
@@ -75,7 +75,7 @@ jjj review @alice @bob
 
 Output:
 ```
-Reviewers assigned for S-1: Use JWT tokens
+Reviewers assigned for s1: Use JWT tokens
 Reviewers: @alice, @bob
 ```
 
@@ -99,10 +99,10 @@ Before looking at code, Alice can understand the solution's context:
 
 ```bash
 # See what problem this solution addresses
-jjj solution show S-1
+jjj solution show s1
 
 # See any existing critiques
-jjj critique list --solution S-1
+jjj critique list --solution s1
 ```
 
 #### Run Tests
@@ -122,11 +122,11 @@ Critiques are the formal mechanism for identifying problems with a solution. The
 
 ```bash
 # Design-level critique
-jjj critique new S-1 "JWT tokens stored in localStorage are vulnerable to XSS" \
+jjj critique new s1 "JWT tokens stored in localStorage are vulnerable to XSS" \
   --severity high
 
 # Code-level critique with file location
-jjj critique new S-1 "Password comparison is not constant-time" \
+jjj critique new s1 "Password comparison is not constant-time" \
   --severity critical \
   --file src/auth/password.rs \
   --line 42
@@ -138,10 +138,10 @@ See the [Critique Guidelines](critique-guidelines.md) for severity levels and ho
 
 ```bash
 # Sign off by solution ID
-jjj solution lgtm S-1
+jjj solution lgtm s1
 
 # Sign off with a comment
-jjj solution lgtm S-1 --comment "looks good, clean implementation"
+jjj solution lgtm s1 --comment "looks good, clean implementation"
 
 # Shorthand: sign off from the solution's current change
 jjj lgtm
@@ -155,18 +155,18 @@ A sign-off records the reviewer's name, a timestamp, and an optional comment. If
 Check what critiques are open:
 
 ```bash
-jjj critique list --solution S-1 --status open
+jjj critique list --solution s1 --status open
 ```
 
 For each critique, address it, dismiss it, or validate it:
 
 ```bash
 # Fix the issue and mark as addressed
-jjj critique address CQ-3
+jjj critique address c3
 
 # Or dismiss with explanation
-jjj critique reply CQ-4 "The token is stored in an httpOnly cookie, not localStorage. See the approach section of S-1."
-jjj critique dismiss CQ-4
+jjj critique reply c4 "The token is stored in an httpOnly cookie, not localStorage. See the approach section of s1."
+jjj critique dismiss c4
 ```
 
 After addressing critiques, request re-review if needed:
@@ -236,7 +236,7 @@ If your team requires Pull Requests for CI gating or compliance:
 
 2. Open a PR on GitHub/GitLab targeting `main`.
 
-3. Paste `jjj solution show S-1` output in the PR description to show it has been reviewed and critiques resolved.
+3. Paste `jjj solution show s1` output in the PR description to show it has been reviewed and critiques resolved.
 
 4. Merge via the forge's UI.
 
@@ -249,7 +249,7 @@ In the hybrid flow, review and critique happen in jjj. The GitHub PR is used for
 Review an entire stack of changes:
 
 ```bash
-jjj solution review S-1 @alice --stack
+jjj solution review s1 @alice --stack
 ```
 
 ### Viewing All Reviews
@@ -280,7 +280,7 @@ pub fn hash_password(password: &str) -> Result<String> {
 Alice raises a critique at line 42:
 
 ```bash
-jjj critique new S-1 "Use bcrypt instead of SHA-256" \
+jjj critique new s1 "Use bcrypt instead of SHA-256" \
   --severity high \
   --file src/auth/password.rs \
   --line 42
@@ -330,7 +330,7 @@ The original code context is gone. jjj detects the content change and marks the 
 >
 > Name your jj bookmarks using the solution ID to make changes easy to find:
 >
->     jj bookmark set solution/S-1-jwt-auth
+>     jj bookmark set solution/s1-jwt-auth
 
 > **Respond to All Critiques**
 >
@@ -348,7 +348,7 @@ The original code context is gone. jjj detects the content change and marks the 
 >     Replaces SHA-256 with bcrypt for better security.
 >     Uses DEFAULT_COST (12) for work factor.
 >
->     Addresses: P-5 (password security)"
+>     Addresses: p5 (password security)"
 
 ## Troubleshooting
 
@@ -357,7 +357,7 @@ The original code context is gone. jjj detects the content change and marks the 
 If critique locations do not update after rebase:
 
 1. **Check context**: Did you completely rewrite the section?
-2. **View orphaned critiques**: `jjj critique list --solution S-1`
+2. **View orphaned critiques**: `jjj critique list --solution s1`
 3. **Re-create if needed**: Raise a new critique at the correct location
 
 ### Submit Fails
@@ -366,8 +366,8 @@ If `jjj submit` reports unresolved critiques or missing sign-offs:
 
 ```bash
 # Check what is blocking
-jjj critique list --solution S-1 --status open
-jjj solution show S-1  # Shows reviewer and sign-off status
+jjj critique list --solution s1 --status open
+jjj solution show s1  # Shows reviewer and sign-off status
 ```
 
 ### Finding the Right Solution
@@ -376,7 +376,7 @@ If you forget which solution you are working on:
 
 ```bash
 # List solutions for a problem
-jjj solution list --problem P-1
+jjj solution list --problem p1
 
 # The dashboard shows your assigned work
 jjj status

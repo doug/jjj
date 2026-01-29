@@ -13,7 +13,7 @@ jjj solution new <title> [OPTIONS]
 | Flag | Type | Required | Description |
 |------|------|----------|-------------|
 | `--problem` | string | no | Problem this solution addresses (prompts interactively if not provided) |
-| `--supersedes` | string | no | Solution this supersedes (e.g., S-1) |
+| `--supersedes` | string | no | Solution this supersedes (e.g., s1) |
 | `--review` | string (repeatable) | no | Assign reviewers at creation (e.g., `@alice`) |
 
 When `--problem` is not provided, lists open problems and prompts you to select one interactively. After creation, automatically creates a jj change, attaches it to the solution, and moves the solution to `testing` status.
@@ -21,15 +21,15 @@ When `--problem` is not provided, lists open problems and prompts you to select 
 ```bash,test
 jjj init
 jjj problem new "Login is too slow"
-jjj solution new "Add connection pooling" --problem P-1
-jjj solution new "Use async auth" --problem P-1 --supersedes S-1
+jjj solution new "Add connection pooling" --problem p1
+jjj solution new "Use async auth" --problem p1 --supersedes s1
 jjj solution list
 ```
 
 Assign reviewers at creation:
 
 ```bash
-jjj solution new "Add caching" --problem P-1 --review @alice --review @bob
+jjj solution new "Add caching" --problem p1 --review @alice --review @bob
 ```
 
 When reviewers are assigned, the solution requires all of them to sign off before it can be accepted. Review is not required by default -- it is enabled per-solution by assigning reviewers.
@@ -49,7 +49,7 @@ jjj solution list [OPTIONS]
 | `--json` | bool | Output in JSON format |
 
 ```bash,test
-jjj solution list --problem P-1
+jjj solution list --problem p1
 jjj solution list --status testing
 jjj solution list --json
 ```
@@ -67,8 +67,8 @@ jjj solution show <solution_id> [OPTIONS]
 | `--json` | bool | Output in JSON format |
 
 ```bash,test
-jjj solution show S-1
-jjj solution show S-1 --json
+jjj solution show s1
+jjj solution show s1 --json
 ```
 
 ## `jjj solution edit`
@@ -85,7 +85,7 @@ jjj solution edit <solution_id> [OPTIONS]
 | `--status` | string | New status |
 
 ```bash
-jjj solution edit S-1 --title "Add connection pooling with retry"
+jjj solution edit s1 --title "Add connection pooling with retry"
 ```
 
 ## `jjj solution attach`
@@ -97,7 +97,7 @@ jjj solution attach <solution_id>
 ```
 
 ```bash
-jjj solution attach S-1
+jjj solution attach s1
 ```
 
 ## `jjj solution detach`
@@ -111,8 +111,8 @@ jjj solution detach <solution_id> [change_id]
 If no change ID is given, detaches the current change.
 
 ```bash
-jjj solution detach S-1
-jjj solution detach S-1 abc123
+jjj solution detach s1
+jjj solution detach s1 abc123
 ```
 
 ## `jjj solution test`
@@ -124,7 +124,7 @@ jjj solution test <solution_id>
 ```
 
 ```bash
-jjj solution test S-1
+jjj solution test s1
 ```
 
 ## `jjj solution accept`
@@ -149,8 +149,8 @@ Non-assigned sign-offs (from people not in the `reviewers` list) are recorded bu
 Using `--force` bypasses both checks and sets the `force_accepted` flag on the solution.
 
 ```bash
-jjj solution accept S-1
-jjj solution accept S-1 --force
+jjj solution accept s1
+jjj solution accept s1 --force
 ```
 
 ## `jjj solution refute`
@@ -162,7 +162,7 @@ jjj solution refute <solution_id>
 ```
 
 ```bash
-jjj solution refute S-1
+jjj solution refute s1
 ```
 
 ## `jjj solution assign`
@@ -178,7 +178,7 @@ jjj solution assign <solution_id> [OPTIONS]
 | `--to` | string | Assignee name (defaults to self) |
 
 ```bash
-jjj solution assign S-1 --to bob
+jjj solution assign s1 --to bob
 ```
 
 ## `jjj solution review`
@@ -192,7 +192,7 @@ jjj solution review <solution_id> <reviewers...>
 Reviewers are specified as names (e.g., `@alice`, `@bob`). Adding reviewers makes the solution require sign-offs from all assigned reviewers.
 
 ```bash
-jjj solution review S-1 @alice @bob
+jjj solution review s1 @alice @bob
 ```
 
 ## `jjj solution resume`
@@ -204,7 +204,7 @@ jjj solution resume <solution_id>
 ```
 
 ```bash
-jjj solution resume S-1
+jjj solution resume s1
 ```
 
 ## `jjj solution lgtm`
@@ -222,6 +222,6 @@ jjj solution lgtm <solution_id> [OPTIONS]
 If the reviewer is in the solution's `reviewers` list, the sign-off counts toward the acceptance gate. Sign-offs from non-assigned reviewers are recorded but do not affect the gate.
 
 ```bash
-jjj solution lgtm S-1
-jjj solution lgtm S-1 --comment "looks good"
+jjj solution lgtm s1
+jjj solution lgtm s1 --comment "looks good"
 ```

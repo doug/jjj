@@ -19,9 +19,9 @@ jjj critique new <solution_id> <title> [OPTIONS]
 ```bash,test
 jjj init
 jjj problem new "Fix login flow"
-jjj solution new "Refactor auth handler" --problem P-1
-jjj critique new S-1 "Missing error handling" --severity high
-jjj critique new S-1 "Unused import" --severity low --file src/auth.rs --line 3
+jjj solution new "Refactor auth handler" --problem p1
+jjj critique new s1 "Missing error handling" --severity high
+jjj critique new s1 "Unused import" --severity low --file src/auth.rs --line 3
 jjj critique list
 ```
 
@@ -40,7 +40,7 @@ jjj critique list [OPTIONS]
 | `--json` | bool | Output in JSON format |
 
 ```bash,test
-jjj critique list --solution S-1
+jjj critique list --solution s1
 jjj critique list --status open
 jjj critique list --json
 ```
@@ -58,8 +58,8 @@ jjj critique show <critique_id> [OPTIONS]
 | `--json` | bool | Output in JSON format |
 
 ```bash,test
-jjj critique show CQ-1
-jjj critique show CQ-1 --json
+jjj critique show c1
+jjj critique show c1 --json
 ```
 
 ## `jjj critique edit`
@@ -77,7 +77,7 @@ jjj critique edit <critique_id> [OPTIONS]
 | `--status` | string | New status (open, addressed, valid, dismissed) |
 
 ```bash
-jjj critique edit CQ-1 --severity critical --title "Missing error handling in auth"
+jjj critique edit c1 --severity critical --title "Missing error handling in auth"
 ```
 
 ## `jjj critique address`
@@ -89,7 +89,7 @@ jjj critique address <critique_id>
 ```
 
 ```bash,test
-jjj critique address CQ-1
+jjj critique address c1
 ```
 
 ## `jjj critique validate`
@@ -101,7 +101,7 @@ jjj critique validate <critique_id>
 ```
 
 ```bash
-jjj critique validate CQ-1
+jjj critique validate c1
 ```
 
 ## `jjj critique dismiss`
@@ -113,7 +113,7 @@ jjj critique dismiss <critique_id>
 ```
 
 ```bash
-jjj critique dismiss CQ-2
+jjj critique dismiss c2
 ```
 
 ## `jjj critique reply`
@@ -125,5 +125,5 @@ jjj critique reply <critique_id> <body>
 ```
 
 ```bash
-jjj critique reply CQ-1 "Fixed in latest change, added error handling for all auth paths"
+jjj critique reply c1 "Fixed in latest change, added error handling for all auth paths"
 ```

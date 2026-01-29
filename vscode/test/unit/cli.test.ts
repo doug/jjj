@@ -54,97 +54,97 @@ describe("JjjCli", () => {
     });
 
     it("showProblem passes id with --json", async () => {
-      execStub.resolves('{"id":"P-1"}');
-      await cli.showProblem("P-1");
-      assert.deepStrictEqual(execStub.firstCall.args[0], ["problem", "show", "P-1", "--json"]);
+      execStub.resolves('{"id":"p1"}');
+      await cli.showProblem("p1");
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["problem", "show", "p1", "--json"]);
     });
   });
 
   describe("mutations", () => {
     it("newProblem passes title", async () => {
-      execStub.resolves("P-1");
+      execStub.resolves("p1");
       await cli.newProblem("Fix the bug");
       assert.deepStrictEqual(execStub.firstCall.args[0], ["problem", "new", "Fix the bug"]);
     });
 
     it("newSolution passes title and --problem flag", async () => {
-      execStub.resolves("S-1");
-      await cli.newSolution("Add index", "P-1");
-      assert.deepStrictEqual(execStub.firstCall.args[0], ["solution", "new", "Add index", "--problem", "P-1"]);
+      execStub.resolves("s1");
+      await cli.newSolution("Add index", "p1");
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["solution", "new", "Add index", "--problem", "p1"]);
     });
 
     it("newCritique includes severity, file, and line", async () => {
-      execStub.resolves("CQ-1");
-      await cli.newCritique("S-1", "SQL injection", "high", "src/db.rs", 42);
+      execStub.resolves("c1");
+      await cli.newCritique("s1", "SQL injection", "high", "src/db.rs", 42);
       assert.deepStrictEqual(execStub.firstCall.args[0], [
-        "critique", "new", "S-1", "SQL injection",
+        "critique", "new", "s1", "SQL injection",
         "--severity", "high", "--file", "src/db.rs", "--line", "42",
       ]);
     });
 
     it("newCritique without optional file/line", async () => {
-      execStub.resolves("CQ-1");
-      await cli.newCritique("S-1", "Missing tests", "medium");
+      execStub.resolves("c1");
+      await cli.newCritique("s1", "Missing tests", "medium");
       assert.deepStrictEqual(execStub.firstCall.args[0], [
-        "critique", "new", "S-1", "Missing tests", "--severity", "medium",
+        "critique", "new", "s1", "Missing tests", "--severity", "medium",
       ]);
     });
 
     it("acceptSolution with force flag", async () => {
       execStub.resolves("ok");
-      await cli.acceptSolution("S-1", true);
-      assert.deepStrictEqual(execStub.firstCall.args[0], ["solution", "accept", "S-1", "--force"]);
+      await cli.acceptSolution("s1", true);
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["solution", "accept", "s1", "--force"]);
     });
 
     it("acceptSolution without force", async () => {
       execStub.resolves("ok");
-      await cli.acceptSolution("S-1");
-      assert.deepStrictEqual(execStub.firstCall.args[0], ["solution", "accept", "S-1"]);
+      await cli.acceptSolution("s1");
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["solution", "accept", "s1"]);
     });
 
     it("requestReview passes reviewers", async () => {
       execStub.resolves("ok");
-      await cli.requestReview("S-1", ["@alice", "@bob"]);
-      assert.deepStrictEqual(execStub.firstCall.args[0], ["solution", "review", "S-1", "@alice", "@bob"]);
+      await cli.requestReview("s1", ["@alice", "@bob"]);
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["solution", "review", "s1", "@alice", "@bob"]);
     });
 
     it("assignProblem uses --to flag", async () => {
       execStub.resolves("ok");
-      await cli.assignProblem("P-1", "alice");
-      assert.deepStrictEqual(execStub.firstCall.args[0], ["problem", "assign", "P-1", "--to", "alice"]);
+      await cli.assignProblem("p1", "alice");
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["problem", "assign", "p1", "--to", "alice"]);
     });
 
     it("assignSolution uses --to flag", async () => {
       execStub.resolves("ok");
-      await cli.assignSolution("S-1", "bob");
-      assert.deepStrictEqual(execStub.firstCall.args[0], ["solution", "assign", "S-1", "--to", "bob"]);
+      await cli.assignSolution("s1", "bob");
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["solution", "assign", "s1", "--to", "bob"]);
     });
 
     it("resumeSolution passes solution id", async () => {
       execStub.resolves("ok");
-      await cli.resumeSolution("S-1");
-      assert.deepStrictEqual(execStub.firstCall.args[0], ["solution", "resume", "S-1"]);
+      await cli.resumeSolution("s1");
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["solution", "resume", "s1"]);
     });
 
     it("milestoneAddProblem passes correct ids", async () => {
       execStub.resolves("ok");
-      await cli.milestoneAddProblem("M-1", "P-3");
-      assert.deepStrictEqual(execStub.firstCall.args[0], ["milestone", "add-problem", "M-1", "P-3"]);
+      await cli.milestoneAddProblem("m1", "p3");
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["milestone", "add-problem", "m1", "p3"]);
     });
 
     it("milestoneRemoveProblem passes correct ids", async () => {
       execStub.resolves("ok");
-      await cli.milestoneRemoveProblem("M-2", "P-5");
-      assert.deepStrictEqual(execStub.firstCall.args[0], ["milestone", "remove-problem", "M-2", "P-5"]);
+      await cli.milestoneRemoveProblem("m2", "p5");
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["milestone", "remove-problem", "m2", "p5"]);
     });
   });
 
   describe("JSON parsing", () => {
     it("parses JSON response from execJson", async () => {
-      execStub.resolves('[{"id":"P-1","title":"Test"}]');
+      execStub.resolves('[{"id":"p1","title":"Test"}]');
       const result = await cli.listProblems();
       assert.strictEqual(result.length, 1);
-      assert.strictEqual(result[0].id, "P-1");
+      assert.strictEqual(result[0].id, "p1");
     });
 
     it("rejects on invalid JSON", async () => {

@@ -272,8 +272,8 @@ fn create_test_problem(id: &str) -> Problem {
 
 ```rust
 // Usage example:
-let problem = Problem::new("P-1".into(), "Test problem".into());
-let solution = Solution::new("S-1".into(), "Test solution".into(), "P-1".into());
+let problem = Problem::new("p1".into(), "Test problem".into());
+let solution = Solution::new("s1".into(), "Test solution".into(), "p1".into());
 ```
 
 ## Continuous Integration

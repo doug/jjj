@@ -23,9 +23,9 @@ Output:
 +--------------------------------+--------------------------------+--------------------------------+--------------------------------+
 | PROPOSED (3)                   | TESTING (2)                    | ACCEPTED (1)                   | REFUTED (1)                    |
 +--------------------------------+--------------------------------+--------------------------------+--------------------------------+
-| S-5 Add Redis caching          | S-1 Use JWT tokens [1!]        | S-3 Batch query API            | S-2 Session cookies            |
-| S-6 Streaming search           | S-4 Parameterized queries      |                                |                                |
-| S-7 Lazy loading for images    |                                |                                |                                |
+| s5 Add Redis caching          | s1 Use JWT tokens [1!]        | s3 Batch query API            | s2 Session cookies            |
+| s6 Streaming search           | s4 Parameterized queries      |                                |                                |
+| s7 Lazy loading for images    |                                |                                |                                |
 +--------------------------------+--------------------------------+--------------------------------+--------------------------------+
 
 Total: 7 solutions
@@ -39,25 +39,25 @@ Problems: 4 open, 2 solved/dissolved
 **Testing** -- Solutions that are actively being implemented and tested. Move a solution here when work begins:
 
 ```bash
-jjj solution test S-5
+jjj solution test s5
 ```
 
 Or use `solution new`, which creates the solution, attaches a change, and moves it to testing in one step:
 
 ```bash
-jjj solution new "Add Redis caching" --problem P-10
+jjj solution new "Add Redis caching" --problem p10
 ```
 
 **Accepted** -- Solutions that have survived criticism. All critiques have been resolved, assigned reviewers have signed off, and the solution has been accepted as the current best answer to its problem:
 
 ```bash
-jjj solution accept S-3
+jjj solution accept s3
 ```
 
 **Refuted** -- Solutions that criticism has shown will not work. A refuted solution is not a failure -- it is knowledge. The team now knows that approach does not solve the problem, and future solutions can build on that understanding:
 
 ```bash
-jjj solution refute S-2
+jjj solution refute s2
 ```
 
 ### Reading the Board
@@ -93,21 +93,21 @@ jjj status
 Output:
 
 ```
-Active: S-5 "Add Redis caching" -> P-10 [testing]
+Active: s5 "Add Redis caching" -> p10 [testing]
   Awaiting review: @bob
   Open critiques: 2
-    CQ-8: Cache invalidation not handled [high]
-    CQ-9: Redis single point of failure [medium]
+    c8: Cache invalidation not handled [high]
+    c9: Redis single point of failure [medium]
 
 Next actions:
 
-1. [BLOCKED] S-5: Add Redis caching -- 2 open critique(s)
-   CQ-8: Cache invalidation not handled [high]
-   CQ-9: Redis single point of failure [medium]
-   -> jjj critique show CQ-8
+1. [BLOCKED] s5: Add Redis caching -- 2 open critique(s)
+   c8: Cache invalidation not handled [high]
+   c9: Redis single point of failure [medium]
+   -> jjj critique show c8
 
-2. [TODO] P-8: API rate limiting needed -- No solutions proposed
-   -> jjj solution new "title" --problem P-8
+2. [TODO] p8: API rate limiting needed -- No solutions proposed
+   -> jjj solution new "title" --problem p8
 
 Summary: 4 open problems, 3 testing solutions, 5 open critiques
 ```
@@ -124,9 +124,9 @@ Summary: 4 open problems, 3 testing solutions, 5 open critiques
 
 1. **Open critiques?** Address them first. They are blocking your solutions.
    ```bash
-   jjj critique show CQ-8
+   jjj critique show c8
    # Understand the concern, then address, dismiss, or validate
-   jjj critique address CQ-8
+   jjj critique address c8
    ```
 
 2. **Solutions in testing?** Continue implementation, request reviews when ready.
@@ -136,7 +136,7 @@ Summary: 4 open problems, 3 testing solutions, 5 open critiques
 
 3. **Problems assigned but no solutions?** Propose a solution.
    ```bash
-   jjj solution new "Rate limit with token bucket algorithm" --problem P-8
+   jjj solution new "Rate limit with token bucket algorithm" --problem p8
    ```
 
 4. **Nothing assigned?** Run `jjj status --all` to see all items across the project.

@@ -35,13 +35,13 @@ fn test_workflow_start_new_solution() {
     let dir = temp_dir.path();
 
     // 1. Create a new solution via solution new (replaces start)
-    let output = run_jjj(dir, &["solution", "new", "New Solution", "--problem", "P-1"]);
+    let output = run_jjj(dir, &["solution", "new", "New Solution", "--problem", "p1"]);
     assert!(output.status.success(), "solution new failed: {}", String::from_utf8_lossy(&output.stderr));
 
     // Verify solution created
     let list = run_jjj(dir, &["solution", "list"]);
     let stdout = String::from_utf8_lossy(&list.stdout);
-    assert!(stdout.contains("New Solution") || stdout.contains("S-1"));
+    assert!(stdout.contains("New Solution") || stdout.contains("s1"));
 
     // Verify current change has description
     let jj_log = Command::new("jj").current_dir(dir).args(&["log", "--no-graph", "-r", "@", "-T", "description"]).output().unwrap();
@@ -60,13 +60,13 @@ fn test_workflow_start_resume_solution() {
     let dir = temp_dir.path();
 
     // 1. Create solution via solution new (auto-attaches change)
-    run_jjj(dir, &["solution", "new", "Resume Me", "--problem", "P-1"]);
+    run_jjj(dir, &["solution", "new", "Resume Me", "--problem", "p1"]);
 
-    // 2. Resume by ID using solution resume (replaces start S-1)
-    let output = run_jjj(dir, &["solution", "resume", "S-1"]);
+    // 2. Resume by ID using solution resume (replaces start s1)
+    let output = run_jjj(dir, &["solution", "resume", "s1"]);
     assert!(output.status.success(), "Resume failed: {}", String::from_utf8_lossy(&output.stderr));
 
-    // Verify change is for S-1
+    // Verify change is for s1
     let jj_log = Command::new("jj").current_dir(dir).args(&["log", "--no-graph", "-r", "@", "-T", "description"]).output().unwrap();
     let desc = String::from_utf8_lossy(&jj_log.stdout);
     println!("DEBUG: Resume Description: '{}'", desc);
@@ -80,7 +80,7 @@ fn test_workflow_submit_force() {
     let dir = temp_dir.path();
 
     // 1. Create solution via solution new (replaces start)
-    let output = run_jjj(dir, &["solution", "new", "Solution to Submit", "--problem", "P-1"]);
+    let output = run_jjj(dir, &["solution", "new", "Solution to Submit", "--problem", "p1"]);
     assert!(output.status.success(), "solution new 1 failed: {}", String::from_utf8_lossy(&output.stderr));
 
     std::fs::write(dir.join("file.txt"), "content").unwrap();
@@ -96,7 +96,7 @@ fn test_workflow_submit_force() {
         String::from_utf8_lossy(&log.stdout), String::from_utf8_lossy(&log.stderr));
 
     // Create solution 2
-    let output = run_jjj(dir, &["solution", "new", "Solution to Submit 2", "--problem", "P-1"]);
+    let output = run_jjj(dir, &["solution", "new", "Solution to Submit 2", "--problem", "p1"]);
     assert!(output.status.success(), "solution new 2 failed: {}", String::from_utf8_lossy(&output.stderr));
 
     std::fs::write(dir.join("file2.txt"), "content").unwrap();
@@ -125,19 +125,19 @@ fn test_solution_status_workflow() {
     let dir = temp_dir.path();
 
     // Create a solution (auto-attaches change and moves to testing)
-    run_jjj(dir, &["solution", "new", "Test Solution", "--problem", "P-1"]);
+    run_jjj(dir, &["solution", "new", "Test Solution", "--problem", "p1"]);
 
     // Check initial status is testing (solution new now auto-attaches)
-    let show = run_jjj(dir, &["solution", "show", "S-1"]);
+    let show = run_jjj(dir, &["solution", "show", "s1"]);
     let stdout = String::from_utf8_lossy(&show.stdout);
     assert!(stdout.contains("Testing") || stdout.contains("testing"),
         "Expected testing status after solution new. Got: {}", stdout);
 
     // Accept the solution
-    let output = run_jjj(dir, &["solution", "accept", "S-1"]);
+    let output = run_jjj(dir, &["solution", "accept", "s1"]);
     assert!(output.status.success());
 
-    let show = run_jjj(dir, &["solution", "show", "S-1"]);
+    let show = run_jjj(dir, &["solution", "show", "s1"]);
     let stdout = String::from_utf8_lossy(&show.stdout);
     assert!(stdout.contains("Accepted") || stdout.contains("accepted"));
 }
@@ -149,14 +149,14 @@ fn test_critique_blocks_acceptance() {
     let dir = temp_dir.path();
 
     // Create a solution and move to testing
-    run_jjj(dir, &["solution", "new", "Test Solution", "--problem", "P-1"]);
-    run_jjj(dir, &["solution", "test", "S-1"]);
+    run_jjj(dir, &["solution", "new", "Test Solution", "--problem", "p1"]);
+    run_jjj(dir, &["solution", "test", "s1"]);
 
     // Add a critique
-    run_jjj(dir, &["critique", "new", "S-1", "Major flaw in approach", "--severity", "high"]);
+    run_jjj(dir, &["critique", "new", "s1", "Major flaw in approach", "--severity", "high"]);
 
     // Try to accept - should fail or warn due to open critique
-    let output = run_jjj(dir, &["solution", "accept", "S-1"]);
+    let output = run_jjj(dir, &["solution", "accept", "s1"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
@@ -179,16 +179,16 @@ fn test_submit_blocked_by_critiques() {
     Command::new("jj").current_dir(dir).args(&["bookmark", "create", "main"]).status().unwrap();
 
     // Create solution (creates change, sets to testing via auto-attach)
-    run_jjj(dir, &["solution", "new", "Token refresh", "--problem", "P-1"]);
+    run_jjj(dir, &["solution", "new", "Token refresh", "--problem", "p1"]);
 
     // Add a critique
-    run_jjj(dir, &["critique", "new", "S-1", "Not thread safe", "--severity", "high"]);
+    run_jjj(dir, &["critique", "new", "s1", "Not thread safe", "--severity", "high"]);
 
     // Submit without --force should fail
     let output = run_jjj(dir, &["submit"]);
     assert!(!output.status.success(), "Expected submit to fail with open critiques");
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("critique") || stderr.contains("CQ-1") || stderr.contains("Cannot"),
+    assert!(stderr.contains("critique") || stderr.contains("c1") || stderr.contains("Cannot"),
         "Expected critique blocking message in stderr: {}", stderr);
 }
 
@@ -203,10 +203,10 @@ fn test_submit_blocked_by_review() {
     Command::new("jj").current_dir(dir).args(&["bookmark", "create", "main"]).status().unwrap();
 
     // Create solution via solution new (replaces start)
-    run_jjj(dir, &["solution", "new", "Token refresh", "--problem", "P-1"]);
+    run_jjj(dir, &["solution", "new", "Token refresh", "--problem", "p1"]);
 
     // Request review
-    run_jjj(dir, &["solution", "review", "S-1", "@alice"]);
+    run_jjj(dir, &["solution", "review", "s1", "@alice"]);
 
     // Submit without --force should fail
     let output = run_jjj(dir, &["submit"]);

@@ -233,7 +233,7 @@ impl Critique {
     pub fn add_reply(&mut self, author: String, body: String) {
         let reply_num = self.replies.len() + 1;
         let reply = Reply {
-            id: format!("{}-R{}", self.id, reply_num),
+            id: format!("{}-r{}", self.id, reply_num),
             author,
             body,
             created_at: Utc::now(),
@@ -308,13 +308,13 @@ mod tests {
     #[test]
     fn test_create_critique() {
         let critique = Critique::new(
-            "CQ-1".to_string(),
+            "c1".to_string(),
             "JWT vulnerable to XSS".to_string(),
-            "S-1".to_string(),
+            "s1".to_string(),
         );
-        assert_eq!(critique.id, "CQ-1");
+        assert_eq!(critique.id, "c1");
         assert_eq!(critique.title, "JWT vulnerable to XSS");
-        assert_eq!(critique.solution_id, "S-1");
+        assert_eq!(critique.solution_id, "s1");
         assert_eq!(critique.status, CritiqueStatus::Open);
         assert_eq!(critique.severity, CritiqueSeverity::Medium);
         assert!(critique.is_active());
@@ -323,9 +323,9 @@ mod tests {
     #[test]
     fn test_status_transitions() {
         let mut critique = Critique::new(
-            "CQ-1".to_string(),
+            "c1".to_string(),
             "Test".to_string(),
-            "S-1".to_string(),
+            "s1".to_string(),
         );
 
         assert_eq!(critique.status, CritiqueStatus::Open);
@@ -340,9 +340,9 @@ mod tests {
     #[test]
     fn test_valid_critique() {
         let mut critique = Critique::new(
-            "CQ-1".to_string(),
+            "c1".to_string(),
             "Critical flaw".to_string(),
-            "S-1".to_string(),
+            "s1".to_string(),
         );
 
         critique.validate();
@@ -354,9 +354,9 @@ mod tests {
     #[test]
     fn test_dismissed_critique() {
         let mut critique = Critique::new(
-            "CQ-1".to_string(),
+            "c1".to_string(),
             "Not actually a problem".to_string(),
-            "S-1".to_string(),
+            "s1".to_string(),
         );
 
         critique.dismiss();
@@ -391,9 +391,9 @@ mod tests {
     #[test]
     fn test_add_reply() {
         let mut critique = Critique::new(
-            "CQ-1".to_string(),
+            "c1".to_string(),
             "Test critique".to_string(),
-            "S-1".to_string(),
+            "s1".to_string(),
         );
 
         critique.add_reply("alice".to_string(), "I disagree".to_string());
@@ -401,15 +401,15 @@ mod tests {
         assert_eq!(critique.replies.len(), 1);
         assert_eq!(critique.replies[0].author, "alice");
         assert_eq!(critique.replies[0].body, "I disagree");
-        assert!(critique.replies[0].id.starts_with("CQ-1-R"));
+        assert!(critique.replies[0].id.starts_with("c1-r"));
     }
 
     #[test]
     fn test_critique_with_location() {
         let mut critique = Critique::new(
-            "CQ-1".to_string(),
+            "c1".to_string(),
             "SQL injection".to_string(),
-            "S-1".to_string(),
+            "s1".to_string(),
         );
 
         critique.set_location(
@@ -428,9 +428,9 @@ mod tests {
     #[test]
     fn test_critique_without_location() {
         let critique = Critique::new(
-            "CQ-1".to_string(),
+            "c1".to_string(),
             "Conceptual critique".to_string(),
-            "S-1".to_string(),
+            "s1".to_string(),
         );
 
         assert!(!critique.has_location());

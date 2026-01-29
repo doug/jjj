@@ -301,11 +301,11 @@ impl MetadataStore {
 
         let max_id = problems
             .iter()
-            .filter_map(|p| p.id.strip_prefix("P-").and_then(|s| s.parse::<u32>().ok()))
+            .filter_map(|p| p.id.strip_prefix("p").and_then(|s| s.parse::<u32>().ok()))
             .max()
             .unwrap_or(0);
 
-        Ok(format!("P-{}", max_id + 1))
+        Ok(format!("p{}", max_id + 1))
     }
 
     /// Get subproblems of a problem
@@ -454,11 +454,11 @@ impl MetadataStore {
 
         let max_id = solutions
             .iter()
-            .filter_map(|s| s.id.strip_prefix("S-").and_then(|s| s.parse::<u32>().ok()))
+            .filter_map(|s| s.id.strip_prefix("s").and_then(|s| s.parse::<u32>().ok()))
             .max()
             .unwrap_or(0);
 
-        Ok(format!("S-{}", max_id + 1))
+        Ok(format!("s{}", max_id + 1))
     }
 
     /// Get solutions for a problem
@@ -582,11 +582,11 @@ impl MetadataStore {
 
         let max_id = critiques
             .iter()
-            .filter_map(|c| c.id.strip_prefix("CQ-").and_then(|s| s.parse::<u32>().ok()))
+            .filter_map(|c| c.id.strip_prefix("c").and_then(|s| s.parse::<u32>().ok()))
             .max()
             .unwrap_or(0);
 
-        Ok(format!("CQ-{}", max_id + 1))
+        Ok(format!("c{}", max_id + 1))
     }
 
     /// Get critiques for a solution
@@ -703,11 +703,11 @@ impl MetadataStore {
 
         let max_id = milestones
             .iter()
-            .filter_map(|m| m.id.strip_prefix("M-").and_then(|s| s.parse::<u32>().ok()))
+            .filter_map(|m| m.id.strip_prefix("m").and_then(|s| s.parse::<u32>().ok()))
             .max()
             .unwrap_or(0);
 
-        Ok(format!("M-{}", max_id + 1))
+        Ok(format!("m{}", max_id + 1))
     }
 
     // =========================================================================
@@ -820,7 +820,7 @@ mod tests {
     #[test]
     fn test_parse_frontmatter() {
         let content = r#"---
-id: P-1
+id: p1
 title: Test Problem
 status: open
 priority: medium
@@ -838,7 +838,7 @@ Some context here.
 "#;
 
         let (frontmatter, body): (ProblemFrontmatter, String) = parse_frontmatter(content).unwrap();
-        assert_eq!(frontmatter.id, "P-1");
+        assert_eq!(frontmatter.id, "p1");
         assert_eq!(frontmatter.title, "Test Problem");
         assert!(body.contains("## Description"));
     }
@@ -862,7 +862,7 @@ This is the context.
     #[test]
     fn test_to_markdown() {
         let frontmatter = ProblemFrontmatter {
-            id: "P-1".to_string(),
+            id: "p1".to_string(),
             title: "Test".to_string(),
             parent_id: None,
             status: ProblemStatus::Open,
@@ -880,7 +880,7 @@ This is the context.
         let result = to_markdown(&frontmatter, body).unwrap();
 
         assert!(result.starts_with("---\n"));
-        assert!(result.contains("id: P-1"));
+        assert!(result.contains("id: p1"));
         assert!(result.contains("## Description"));
     }
 

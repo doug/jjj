@@ -25,7 +25,7 @@ When raising a critique, assign a severity that reflects the impact of the issue
 The critique identifies a flaw that definitively invalidates the solution. If this critique stands, the solution must be refuted.
 
 ```bash
-jjj critique new S-3 "SQL injection in user input handling" --severity critical
+jjj critique new s3 "SQL injection in user input handling" --severity critical
 ```
 
 Examples:
@@ -39,7 +39,7 @@ Examples:
 A significant problem that may invalidate the solution. The solution cannot be accepted without addressing this.
 
 ```bash
-jjj critique new S-3 "Race condition in concurrent write path" --severity high
+jjj critique new s3 "Race condition in concurrent write path" --severity high
 ```
 
 Examples:
@@ -53,7 +53,7 @@ Examples:
 A legitimate concern that should be addressed but does not necessarily invalidate the approach. Most critiques fall here.
 
 ```bash
-jjj critique new S-3 "No tests for the error handling path"
+jjj critique new s3 "No tests for the error handling path"
 # Severity defaults to medium
 ```
 
@@ -68,7 +68,7 @@ Examples:
 A minor observation. Worth noting but not a blocker.
 
 ```bash
-jjj critique new S-3 "Variable name 'x' could be more descriptive" --severity low
+jjj critique new s3 "Variable name 'x' could be more descriptive" --severity low
 ```
 
 Examples:
@@ -86,7 +86,7 @@ When you receive a critique on your solution, you have three options. Each one r
 Use this when the critique identifies a real issue and you have modified the solution to fix it. This is the most common response.
 
 ```bash
-jjj critique address CQ-5
+jjj critique address c5
 ```
 
 What it means: "You were right. I have changed the solution to handle this."
@@ -98,7 +98,7 @@ After addressing, the solution can proceed toward acceptance (assuming no other 
 Use this when the critique does not apply to this solution, is based on a misunderstanding, or identifies something that is not actually a problem.
 
 ```bash
-jjj critique dismiss CQ-5
+jjj critique dismiss c5
 ```
 
 What it means: "I have considered this criticism and it does not apply. Here is why."
@@ -106,7 +106,7 @@ What it means: "I have considered this criticism and it does not apply. Here is 
 You should explain your reasoning. Use the reply mechanism:
 
 ```bash
-jjj critique reply CQ-5 "This path is only reachable from the admin API, which already validates input upstream. See S-3's approach section for the trust model."
+jjj critique reply c5 "This path is only reachable from the admin API, which already validates input upstream. See s3's approach section for the trust model."
 ```
 
 Dismissing without explanation is technically valid but makes it harder for others to understand your reasoning.
@@ -116,7 +116,7 @@ Dismissing without explanation is technically valid but makes it harder for othe
 Use this when the critique is correct and the flaw it identifies is fundamental enough that the solution should be refuted. This is the honest thing to do when a critique reveals that your approach will not work.
 
 ```bash
-jjj critique validate CQ-5
+jjj critique validate c5
 ```
 
 What it means: "This criticism is correct. The solution is fundamentally flawed."
@@ -124,8 +124,8 @@ What it means: "This criticism is correct. The solution is fundamentally flawed.
 After validation, the typical next step is to refute the solution and propose a new one (potentially noting what was learned):
 
 ```bash
-jjj solution refute S-3
-jjj solution new "Use parameterized queries for all DB access" --problem P-8 --supersedes S-3
+jjj solution refute s3
+jjj solution new "Use parameterized queries for all DB access" --problem p8 --supersedes s3
 ```
 
 ## Writing Effective Critiques
@@ -147,7 +147,7 @@ Good: "This performs N+1 queries -- one per user in the result set. For the typi
 For code-level critiques, reference the specific location:
 
 ```bash
-jjj critique new S-3 "Unbounded memory growth from accumulating results" \
+jjj critique new s3 "Unbounded memory growth from accumulating results" \
   --severity high \
   --file src/search/engine.rs \
   --line 142
@@ -160,7 +160,7 @@ This makes it easy for the solution author to find and evaluate the concern.
 A critique identifies what is wrong. If you have an idea for how to fix it, mention it, but recognize that the solution author may find a better approach:
 
 ```bash
-jjj critique reply CQ-7 "One approach would be to use a streaming iterator here instead of collecting into a Vec, but there may be other ways to bound the memory usage."
+jjj critique reply c7 "One approach would be to use a streaming iterator here instead of collecting into a Vec, but there may be other ways to bound the memory usage."
 ```
 
 ### One issue per critique
@@ -173,31 +173,31 @@ Here is a complete critique lifecycle, from raising a critique through resolutio
 
 ```bash
 # Alice proposes a solution
-jjj solution new "Cache search results in Redis" --problem P-10
-# Created S-7
+jjj solution new "Cache search results in Redis" --problem p10
+# Created s7
 
 # Bob reviews and raises a critique
-jjj critique new S-7 "Cache invalidation not handled on data updates" --severity high
-# Created CQ-12
+jjj critique new s7 "Cache invalidation not handled on data updates" --severity high
+# Created c12
 
 # Alice and Bob discuss
-jjj critique reply CQ-12 "Good point. What about TTL-based expiration?"
-jjj critique reply CQ-12 "TTL alone is insufficient -- stale data is visible for the TTL window. We need event-driven invalidation for writes."
+jjj critique reply c12 "Good point. What about TTL-based expiration?"
+jjj critique reply c12 "TTL alone is insufficient -- stale data is visible for the TTL window. We need event-driven invalidation for writes."
 
 # Alice addresses the critique by modifying the solution
 # ... updates the approach to include write-through invalidation ...
-jjj critique address CQ-12
+jjj critique address c12
 
 # Carol raises a low-severity critique
-jjj critique new S-7 "Redis client library is unmaintained" --severity low
-# Created CQ-13
+jjj critique new s7 "Redis client library is unmaintained" --severity low
+# Created c13
 
 # Alice dismisses with explanation
-jjj critique reply CQ-13 "The library had a release last month and has active maintainers. The GitHub issue that flagged it as unmaintained was from 2023 and has since been closed."
-jjj critique dismiss CQ-13
+jjj critique reply c13 "The library had a release last month and has active maintainers. The GitHub issue that flagged it as unmaintained was from 2023 and has since been closed."
+jjj critique dismiss c13
 
 # All critiques resolved -- solution can now be accepted
-jjj solution accept S-7
+jjj solution accept s7
 ```
 
 ## Critiques and Sign-offs: Two Gates to Acceptance
@@ -214,13 +214,13 @@ Review is per-solution: assign reviewers with `--review` when creating a solutio
 
 ```bash
 # Assign reviewers at creation
-jjj solution new "Add caching" --problem P-1 --review @alice --review @bob
+jjj solution new "Add caching" --problem p1 --review @alice --review @bob
 
 # Or assign later
-jjj solution review S-1 @alice
+jjj solution review s1 @alice
 
 # Sign off with an optional comment
-jjj solution lgtm S-1 --comment "looks good"
+jjj solution lgtm s1 --comment "looks good"
 ```
 
 See the [Code Review guide](code-review.md) for the full sign-off workflow.

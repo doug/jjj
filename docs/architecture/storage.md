@@ -78,19 +78,19 @@ When you run `jjj init`, it creates this structure:
 .jjj/
 ├── config.toml              # Project configuration
 ├── milestones/              # Milestone storage
-│   ├── M-1.toml
-│   └── M-2.toml
+│   ├── m1.toml
+│   └── m2.toml
 ├── problems/                # Problem storage
-│   ├── P-1.toml
-│   ├── P-2.toml
-│   └── P-3.toml
+│   ├── p1.toml
+│   ├── p2.toml
+│   └── p3.toml
 ├── solutions/               # Solution storage
-│   ├── S-1.toml
-│   ├── S-2.toml
+│   ├── s1.toml
+│   ├── s2.toml
 │   └── ...
 └── critiques/               # Critique storage
-    ├── CQ-1.toml
-    └── CQ-2.toml
+    ├── c1.toml
+    └── c2.toml
 ```
 
 ## Storage Layer Implementation
@@ -162,8 +162,8 @@ allowed = ["backend", "frontend", "api", "ui"]
 Problems, solutions, critiques, and milestones use TOML:
 
 ```toml
-# problems/P-1.toml
-id = "P-1"
+# problems/p1.toml
+id = "p1"
 title = "Search is slow on large datasets"
 status = "open"
 priority = "high"
@@ -185,7 +185,7 @@ Why TOML?
 jjj uses a simple transaction model:
 
 ```rust
-store.with_metadata("Create problem P-1", || {
+store.with_metadata("Create problem p1", || {
     // 1. Perform operations
     let problem = Problem::new(...);
     store.save_problem(&problem)?;
@@ -207,7 +207,7 @@ User A                              User B
 ──────                              ──────
 jjj problem new "Fix login"         jjj problem new "Add search"
   ↓                                   ↓
-Creates P-5                         Creates P-6
+Creates p5                         Creates p6
   ↓                                   ↓
 jj git push                         jj git push
   ↓                                   ↓
@@ -266,7 +266,7 @@ jjj problem new "Fix login flow" --priority high
 jjj problem new "Add test coverage"
 
 # Propose solutions
-jjj solution new "Refactor auth handler" --problem P-1
+jjj solution new "Refactor auth handler" --problem p1
 
 # Later, when online
 jj git push --all

@@ -29,15 +29,15 @@ Initialize a project and define a problem with a proposed solution:
 ```bash,test
 jjj init
 jjj problem new "Search is slow" --priority P1
-jjj solution new "Add search index" --problem P-1
+jjj solution new "Add search index" --problem p1
 ```
 
 Then work through the critique cycle:
 
 ```bash
-jjj solution resume S-1
-jjj critique new S-1 "Missing error handling" --severity medium
-jjj critique address CQ-1
+jjj solution resume s1
+jjj critique new s1 "Missing error handling" --severity medium
+jjj critique address c1
 jjj submit
 ```
 

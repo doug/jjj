@@ -77,10 +77,10 @@ fn test_project_config_roundtrip() {
 #[test]
 fn test_problem_creation() {
     // Given: A problem
-    let problem = Problem::new("P-1".to_string(), "Test problem".to_string());
+    let problem = Problem::new("p1".to_string(), "Test problem".to_string());
 
     // Then: It should have correct defaults
-    assert_eq!(problem.id, "P-1");
+    assert_eq!(problem.id, "p1");
     assert_eq!(problem.title, "Test problem");
     assert!(problem.is_open());
     assert!(problem.solution_ids.is_empty());
@@ -92,15 +92,15 @@ fn test_problem_creation() {
 fn test_solution_creation() {
     // Given: A solution for a problem
     let solution = Solution::new(
-        "S-1".to_string(),
+        "s1".to_string(),
         "Test solution".to_string(),
-        "P-1".to_string(),
+        "p1".to_string(),
     );
 
     // Then: It should have correct defaults
-    assert_eq!(solution.id, "S-1");
+    assert_eq!(solution.id, "s1");
     assert_eq!(solution.title, "Test solution");
-    assert_eq!(solution.problem_id, "P-1");
+    assert_eq!(solution.problem_id, "p1");
     assert!(solution.is_proposed());
 }
 
@@ -108,9 +108,9 @@ fn test_solution_creation() {
 fn test_solution_status_transitions() {
     // Given: A proposed solution
     let mut solution = Solution::new(
-        "S-1".to_string(),
+        "s1".to_string(),
         "Test solution".to_string(),
-        "P-1".to_string(),
+        "p1".to_string(),
     );
     assert!(solution.is_proposed());
 
@@ -127,9 +127,9 @@ fn test_solution_status_transitions() {
 fn test_solution_refute() {
     // Given: A testing solution
     let mut solution = Solution::new(
-        "S-1".to_string(),
+        "s1".to_string(),
         "Test solution".to_string(),
-        "P-1".to_string(),
+        "p1".to_string(),
     );
     solution.start_testing();
 
@@ -144,9 +144,9 @@ fn test_solution_refute() {
 fn test_solution_attach_change() {
     // Given: A solution
     let mut solution = Solution::new(
-        "S-1".to_string(),
+        "s1".to_string(),
         "Test solution".to_string(),
-        "P-1".to_string(),
+        "p1".to_string(),
     );
 
     // When: I attach a change
@@ -160,7 +160,7 @@ fn test_solution_attach_change() {
 #[test]
 fn test_problem_status_transitions() {
     // Given: An open problem
-    let mut problem = Problem::new("P-1".to_string(), "Test problem".to_string());
+    let mut problem = Problem::new("p1".to_string(), "Test problem".to_string());
     assert!(problem.is_open());
 
     // When: I set to in progress
@@ -175,7 +175,7 @@ fn test_problem_status_transitions() {
 #[test]
 fn test_problem_dissolve() {
     // Given: An open problem
-    let mut problem = Problem::new("P-1".to_string(), "Test problem".to_string());
+    let mut problem = Problem::new("p1".to_string(), "Test problem".to_string());
 
     // When: I dissolve it (realize it was based on false premises)
     problem.set_status(jjj::models::ProblemStatus::Dissolved);
@@ -187,29 +187,29 @@ fn test_problem_dissolve() {
 #[test]
 fn test_problem_dag_structure() {
     // Given: A parent problem
-    let mut parent = Problem::new("P-1".to_string(), "Parent problem".to_string());
+    let mut parent = Problem::new("p1".to_string(), "Parent problem".to_string());
 
     // When: I create a child problem
-    let mut child = Problem::new("P-2".to_string(), "Child problem".to_string());
-    child.set_parent(Some("P-1".to_string()));
-    parent.add_child("P-2".to_string());
+    let mut child = Problem::new("p2".to_string(), "Child problem".to_string());
+    child.set_parent(Some("p1".to_string()));
+    parent.add_child("p2".to_string());
 
     // Then: The DAG relationship should be established
-    assert!(child.parent_id.as_deref() == Some("P-1"));
-    assert!(parent.child_ids.contains(&"P-2".to_string()));
+    assert!(child.parent_id.as_deref() == Some("p1"));
+    assert!(parent.child_ids.contains(&"p2".to_string()));
 }
 
 #[test]
 fn test_problem_milestone_assignment() {
     // Given: A problem
-    let mut problem = Problem::new("P-1".to_string(), "Test problem".to_string());
+    let mut problem = Problem::new("p1".to_string(), "Test problem".to_string());
     assert!(problem.milestone_id.is_none());
 
     // When: I assign it to a milestone
-    problem.set_milestone(Some("M-1".to_string()));
+    problem.set_milestone(Some("m1".to_string()));
 
     // Then: The milestone should be set
-    assert_eq!(problem.milestone_id.as_deref(), Some("M-1"));
+    assert_eq!(problem.milestone_id.as_deref(), Some("m1"));
 
     // When: I remove the milestone
     problem.set_milestone(None);
@@ -222,19 +222,19 @@ fn test_problem_milestone_assignment() {
 #[test]
 fn test_entity_file_naming() {
     // Given: Entity IDs
-    let problem_ids = vec!["P-1", "P-100", "P-9999"];
-    let solution_ids = vec!["S-1", "S-100", "S-9999"];
+    let problem_ids = vec!["p1", "p100", "p9999"];
+    let solution_ids = vec!["s1", "s100", "s9999"];
 
     for id in problem_ids {
         let filename = format!("{}.md", id);
         assert!(filename.ends_with(".md"));
-        assert!(filename.starts_with("P-"));
+        assert!(filename.starts_with("p"));
     }
 
     for id in solution_ids {
         let filename = format!("{}.md", id);
         assert!(filename.ends_with(".md"));
-        assert!(filename.starts_with("S-"));
+        assert!(filename.starts_with("s"));
     }
 }
 
@@ -261,7 +261,7 @@ fn test_config_is_human_readable() {
 #[test]
 fn test_timestamps_preserved() {
     // Given: A problem
-    let problem = Problem::new("P-1".to_string(), "Test".to_string());
+    let problem = Problem::new("p1".to_string(), "Test".to_string());
     let created = problem.created_at;
 
     // Note: For markdown serialization, we would test the full roundtrip through storage

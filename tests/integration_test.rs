@@ -71,24 +71,24 @@ fn test_init_and_create_problem_solution() {
     let output = run_jjj(dir_path, &["problem", "new", "Integration Problem"]);
     assert!(output.status.success(), "problem new failed: {}", String::from_utf8_lossy(&output.stderr));
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("P-1") || stdout.contains("Integration Problem"));
+    assert!(stdout.contains("p1") || stdout.contains("Integration Problem"));
 
     // 3. Create a solution associated with the problem
-    let output = run_jjj(dir_path, &["solution", "new", "Test Solution", "--problem", "P-1"]);
+    let output = run_jjj(dir_path, &["solution", "new", "Test Solution", "--problem", "p1"]);
     assert!(output.status.success(), "solution new failed: {}", String::from_utf8_lossy(&output.stderr));
 
     // 4. List solutions and verify
     let output = run_jjj(dir_path, &["solution", "list"]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Test Solution") || stdout.contains("S-1"));
+    assert!(stdout.contains("Test Solution") || stdout.contains("s1"));
 
     // 5. Show solution details to verify problem link
-    let output = run_jjj(dir_path, &["solution", "show", "S-1"]);
+    let output = run_jjj(dir_path, &["solution", "show", "s1"]);
     assert!(output.status.success(), "solution show failed");
     let stdout = String::from_utf8_lossy(&output.stdout);
     // Problem ID should be present
-    assert!(stdout.contains("P-1"));
+    assert!(stdout.contains("p1"));
 }
 
 #[test]
@@ -107,17 +107,17 @@ fn test_critique_workflow() {
 
     // 2. Create problem and solution
     run_jjj(dir_path, &["problem", "new", "Test Problem"]);
-    run_jjj(dir_path, &["solution", "new", "Test Solution", "--problem", "P-1"]);
+    run_jjj(dir_path, &["solution", "new", "Test Solution", "--problem", "p1"]);
 
     // 3. Add a critique
-    let output = run_jjj(dir_path, &["critique", "new", "S-1", "This has a flaw", "--severity", "high"]);
+    let output = run_jjj(dir_path, &["critique", "new", "s1", "This has a flaw", "--severity", "high"]);
     assert!(output.status.success(), "critique new failed: {}", String::from_utf8_lossy(&output.stderr));
 
     // 4. List critiques
     let output = run_jjj(dir_path, &["critique", "list"]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("flaw") || stdout.contains("CQ-1"));
+    assert!(stdout.contains("flaw") || stdout.contains("c1"));
 }
 
 #[test]
@@ -138,14 +138,14 @@ fn test_problem_hierarchy() {
     assert!(output.status.success());
 
     // 3. Create child problem
-    let output = run_jjj(dir_path, &["problem", "new", "Child Problem", "--parent", "P-1"]);
+    let output = run_jjj(dir_path, &["problem", "new", "Child Problem", "--parent", "p1"]);
     assert!(output.status.success(), "child problem failed: {}", String::from_utf8_lossy(&output.stderr));
 
     // 4. Show parent should reference child
-    let output = run_jjj(dir_path, &["problem", "show", "P-1"]);
+    let output = run_jjj(dir_path, &["problem", "show", "p1"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
     // Should mention it has sub-problems
-    assert!(stdout.contains("P-2") || stdout.contains("Sub-problems") || stdout.contains("Child"));
+    assert!(stdout.contains("p2") || stdout.contains("Sub-problems") || stdout.contains("Child"));
 }
 
 #[test]
@@ -163,7 +163,7 @@ fn test_problem_priority() {
     assert!(output.status.success(), "problem new with priority failed: {}", String::from_utf8_lossy(&output.stderr));
 
     // Verify in show output (text mode should show priority)
-    let output = run_jjj(dir_path, &["problem", "show", "P-1"]);
+    let output = run_jjj(dir_path, &["problem", "show", "p1"]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("P0/critical") || stdout.contains("Critical"), "Priority not shown in output: {}", stdout);
@@ -171,7 +171,7 @@ fn test_problem_priority() {
     // Create with default priority
     let output = run_jjj(dir_path, &["problem", "new", "Normal bug"]);
     assert!(output.status.success());
-    let output = run_jjj(dir_path, &["problem", "show", "P-2"]);
+    let output = run_jjj(dir_path, &["problem", "show", "p2"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("P2/medium") || stdout.contains("Medium"), "Default priority not shown: {}", stdout);
 }
@@ -189,10 +189,10 @@ fn test_problem_dissolve_reason() {
     let output = run_jjj(dir_path, &["problem", "new", "Ghost bug"]);
     assert!(output.status.success());
 
-    let output = run_jjj(dir_path, &["problem", "dissolve", "P-1", "--reason", "Test data was stale"]);
+    let output = run_jjj(dir_path, &["problem", "dissolve", "p1", "--reason", "Test data was stale"]);
     assert!(output.status.success(), "dissolve with reason failed: {}", String::from_utf8_lossy(&output.stderr));
 
-    let output = run_jjj(dir_path, &["problem", "show", "P-1"]);
+    let output = run_jjj(dir_path, &["problem", "show", "p1"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("dissolved"), "Status not dissolved: {}", stdout);
     assert!(stdout.contains("Test data was stale"), "Dissolved reason not shown: {}", stdout);
@@ -209,17 +209,17 @@ fn test_solution_supersedes() {
     run_jjj(dir_path, &["init"]);
 
     run_jjj(dir_path, &["problem", "new", "Slow queries"]);
-    run_jjj(dir_path, &["solution", "new", "Add index", "--problem", "P-1"]);
-    run_jjj(dir_path, &["solution", "refute", "S-1"]);
+    run_jjj(dir_path, &["solution", "new", "Add index", "--problem", "p1"]);
+    run_jjj(dir_path, &["solution", "refute", "s1"]);
 
-    let output = run_jjj(dir_path, &["solution", "new", "Use connection pool", "--problem", "P-1", "--supersedes", "S-1"]);
+    let output = run_jjj(dir_path, &["solution", "new", "Use connection pool", "--problem", "p1", "--supersedes", "s1"]);
     assert!(output.status.success(), "solution new with supersedes failed: {}", String::from_utf8_lossy(&output.stderr));
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Supersedes") || stdout.contains("S-1"), "Supersedes not shown in creation output: {}", stdout);
+    assert!(stdout.contains("Supersedes") || stdout.contains("s1"), "Supersedes not shown in creation output: {}", stdout);
 
-    let output = run_jjj(dir_path, &["solution", "show", "S-2"]);
+    let output = run_jjj(dir_path, &["solution", "show", "s2"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Supersedes") || stdout.contains("S-1"), "Supersedes not shown in show: {}", stdout);
+    assert!(stdout.contains("Supersedes") || stdout.contains("s1"), "Supersedes not shown in show: {}", stdout);
 }
 
 #[test]
@@ -233,11 +233,11 @@ fn test_solve_warns_active_solutions() {
     run_jjj(dir_path, &["init"]);
 
     run_jjj(dir_path, &["problem", "new", "Fix auth"]);
-    run_jjj(dir_path, &["solution", "new", "Approach A", "--problem", "P-1"]);
-    run_jjj(dir_path, &["solution", "test", "S-1"]);
+    run_jjj(dir_path, &["solution", "new", "Approach A", "--problem", "p1"]);
+    run_jjj(dir_path, &["solution", "test", "s1"]);
 
     // Solving with active testing solution should still succeed but warn
-    let output = run_jjj(dir_path, &["problem", "solve", "P-1"]);
+    let output = run_jjj(dir_path, &["problem", "solve", "p1"]);
     // Note: solve may or may not succeed depending on can_solve_problem logic.
     // The key thing is: if it runs far enough to check, it should warn.
     // Let's verify the warning appears in stderr.
@@ -283,15 +283,15 @@ fn test_next_priority_sorting() {
 
     assert!(todo_items.len() >= 3, "Expected at least 3 TODO items");
 
-    // Critical (P-2) should be first
-    assert_eq!(todo_items[0]["entity_id"].as_str(), Some("P-2"),
-        "Expected Critical (P-2) first, got {:?}", todo_items[0]["entity_id"]);
-    // High (P-3) should be second
-    assert_eq!(todo_items[1]["entity_id"].as_str(), Some("P-3"),
-        "Expected High (P-3) second, got {:?}", todo_items[1]["entity_id"]);
-    // Low (P-1) should be last
-    assert_eq!(todo_items[2]["entity_id"].as_str(), Some("P-1"),
-        "Expected Low (P-1) third, got {:?}", todo_items[2]["entity_id"]);
+    // Critical (p2) should be first
+    assert_eq!(todo_items[0]["entity_id"].as_str(), Some("p2"),
+        "Expected Critical (p2) first, got {:?}", todo_items[0]["entity_id"]);
+    // High (p3) should be second
+    assert_eq!(todo_items[1]["entity_id"].as_str(), Some("p3"),
+        "Expected High (p3) second, got {:?}", todo_items[1]["entity_id"]);
+    // Low (p1) should be last
+    assert_eq!(todo_items[2]["entity_id"].as_str(), Some("p1"),
+        "Expected Low (p1) third, got {:?}", todo_items[2]["entity_id"]);
 }
 
 #[test]
@@ -302,13 +302,13 @@ fn test_solution_lgtm_with_comment() {
 
     run_jjj(dir, &["init"]);
     run_jjj(dir, &["problem", "new", "Review Problem"]);
-    run_jjj(dir, &["solution", "new", "Test Solution", "--problem", "P-1"]);
-    run_jjj(dir, &["solution", "review", "S-1", "@alice"]);
+    run_jjj(dir, &["solution", "new", "Test Solution", "--problem", "p1"]);
+    run_jjj(dir, &["solution", "review", "s1", "@alice"]);
 
-    let output = run_jjj(dir, &["solution", "lgtm", "S-1", "--comment", "looks good"]);
+    let output = run_jjj(dir, &["solution", "lgtm", "s1", "--comment", "looks good"]);
     assert!(output.status.success(), "lgtm failed: {}", String::from_utf8_lossy(&output.stderr));
 
-    let show = run_jjj(dir, &["solution", "show", "S-1", "--json"]);
+    let show = run_jjj(dir, &["solution", "show", "s1", "--json"]);
     assert!(show.status.success(), "solution show --json failed: {}", String::from_utf8_lossy(&show.stderr));
     let stdout = String::from_utf8_lossy(&show.stdout);
     assert!(stdout.contains("sign_offs") || stdout.contains("looks good"),
@@ -324,10 +324,10 @@ fn test_solution_new_with_review() {
     run_jjj(dir, &["init"]);
     run_jjj(dir, &["problem", "new", "Review Problem"]);
 
-    let output = run_jjj(dir, &["solution", "new", "With Review", "--problem", "P-1", "--review", "@alice", "--review", "@bob"]);
+    let output = run_jjj(dir, &["solution", "new", "With Review", "--problem", "p1", "--review", "@alice", "--review", "@bob"]);
     assert!(output.status.success(), "new with review failed: {}", String::from_utf8_lossy(&output.stderr));
 
-    let show = run_jjj(dir, &["solution", "show", "S-1", "--json"]);
+    let show = run_jjj(dir, &["solution", "show", "s1", "--json"]);
     assert!(show.status.success(), "solution show --json failed: {}", String::from_utf8_lossy(&show.stderr));
     let stdout = String::from_utf8_lossy(&show.stdout);
     assert!(stdout.contains("alice"), "Expected alice in output: {}", stdout);

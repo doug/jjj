@@ -5,7 +5,7 @@ import { JjjCli, Problem, Solution, Critique, Milestone } from "../../src/cli";
 
 function makeProblem(overrides: Partial<Problem> = {}): Problem {
   return {
-    id: "P-1", title: "Test problem", parent_id: null, status: "open",
+    id: "p1", title: "Test problem", parent_id: null, status: "open",
     solution_ids: [], child_ids: [], milestone_id: null,
     assignee: null, created_at: "", updated_at: "", description: "", context: "",
     priority: "medium", dissolved_reason: null,
@@ -15,7 +15,7 @@ function makeProblem(overrides: Partial<Problem> = {}): Problem {
 
 function makeSolution(overrides: Partial<Solution> = {}): Solution {
   return {
-    id: "S-1", title: "Test solution", problem_id: "P-1", status: "proposed",
+    id: "s1", title: "Test solution", problem_id: "p1", status: "proposed",
     critique_ids: [], change_ids: [], assignee: null,
     reviewers: [], sign_offs: [], force_accepted: false,
     created_at: "", updated_at: "", approach: "", tradeoffs: "",
@@ -26,7 +26,7 @@ function makeSolution(overrides: Partial<Solution> = {}): Solution {
 
 function makeCritique(overrides: Partial<Critique> = {}): Critique {
   return {
-    id: "CQ-1", title: "Test critique", solution_id: "S-1", status: "open",
+    id: "c1", title: "Test critique", solution_id: "s1", status: "open",
     severity: "medium", author: null, created_at: "", updated_at: "",
     argument: "", evidence: "", file_path: null, line_start: null,
     line_end: null, code_context: [], replies: [],
@@ -36,7 +36,7 @@ function makeCritique(overrides: Partial<Critique> = {}): Critique {
 
 function makeMilestone(overrides: Partial<Milestone> = {}): Milestone {
   return {
-    id: "M-1", title: "Test milestone", target_date: null, status: "active",
+    id: "m1", title: "Test milestone", target_date: null, status: "active",
     problem_ids: [], assignee: null, created_at: "", updated_at: "",
     goals: "", success_criteria: "",
     ...overrides,
@@ -50,22 +50,22 @@ describe("DataCache", () => {
   beforeEach(async () => {
     cli = sinon.createStubInstance(JjjCli);
     cli.listProblems.resolves([
-      makeProblem({ id: "P-1", milestone_id: "M-1" }),
-      makeProblem({ id: "P-2", milestone_id: "M-1" }),
-      makeProblem({ id: "P-3", milestone_id: null }),
-      makeProblem({ id: "P-4", milestone_id: null }),
+      makeProblem({ id: "p1", milestone_id: "m1" }),
+      makeProblem({ id: "p2", milestone_id: "m1" }),
+      makeProblem({ id: "p3", milestone_id: null }),
+      makeProblem({ id: "p4", milestone_id: null }),
     ]);
     cli.listSolutions.resolves([
-      makeSolution({ id: "S-1", problem_id: "P-1" }),
-      makeSolution({ id: "S-2", problem_id: "P-1" }),
-      makeSolution({ id: "S-3", problem_id: "P-2" }),
+      makeSolution({ id: "s1", problem_id: "p1" }),
+      makeSolution({ id: "s2", problem_id: "p1" }),
+      makeSolution({ id: "s3", problem_id: "p2" }),
     ]);
     cli.listCritiques.resolves([
-      makeCritique({ id: "CQ-1", solution_id: "S-1", file_path: "src/db.rs", line_start: 42 }),
-      makeCritique({ id: "CQ-2", solution_id: "S-1", file_path: null, line_start: null }),
-      makeCritique({ id: "CQ-3", solution_id: "S-3" }),
+      makeCritique({ id: "c1", solution_id: "s1", file_path: "src/db.rs", line_start: 42 }),
+      makeCritique({ id: "c2", solution_id: "s1", file_path: null, line_start: null }),
+      makeCritique({ id: "c3", solution_id: "s3" }),
     ]);
-    cli.listMilestones.resolves([makeMilestone({ id: "M-1" })]);
+    cli.listMilestones.resolves([makeMilestone({ id: "m1" })]);
     cli.status.resolves({ active_solution: null, items: [], total_count: 0, user: "test", summary: { open_problems: 0, testing_solutions: 0, open_critiques: 0 } });
 
     cache = new DataCache(cli as unknown as JjjCli);
@@ -97,52 +97,52 @@ describe("DataCache", () => {
 
   describe("helper queries", () => {
     it("getProblemsForMilestone returns filtered problems", () => {
-      const result = cache.getProblemsForMilestone("M-1");
+      const result = cache.getProblemsForMilestone("m1");
       assert.strictEqual(result.length, 2);
-      assert.deepStrictEqual(result.map(p => p.id), ["P-1", "P-2"]);
+      assert.deepStrictEqual(result.map(p => p.id), ["p1", "p2"]);
     });
 
     it("getBacklogProblems returns problems without milestone", () => {
       const result = cache.getBacklogProblems();
       assert.strictEqual(result.length, 2);
-      assert.deepStrictEqual(result.map(p => p.id), ["P-3", "P-4"]);
+      assert.deepStrictEqual(result.map(p => p.id), ["p3", "p4"]);
     });
 
     it("getSolutionsForProblem returns filtered solutions", () => {
-      const result = cache.getSolutionsForProblem("P-1");
+      const result = cache.getSolutionsForProblem("p1");
       assert.strictEqual(result.length, 2);
-      assert.deepStrictEqual(result.map(s => s.id), ["S-1", "S-2"]);
+      assert.deepStrictEqual(result.map(s => s.id), ["s1", "s2"]);
     });
 
     it("getCritiquesForSolution returns filtered critiques", () => {
-      const result = cache.getCritiquesForSolution("S-1");
+      const result = cache.getCritiquesForSolution("s1");
       assert.strictEqual(result.length, 2);
     });
 
     it("getCritiquesWithLocations returns only critiques with file_path and line_start", () => {
       const result = cache.getCritiquesWithLocations();
       assert.strictEqual(result.length, 1);
-      assert.strictEqual(result[0].id, "CQ-1");
+      assert.strictEqual(result[0].id, "c1");
     });
 
     it("getProblem returns by id", () => {
-      assert.strictEqual(cache.getProblem("P-2")?.id, "P-2");
+      assert.strictEqual(cache.getProblem("p2")?.id, "p2");
     });
 
     it("getProblem returns undefined for unknown id", () => {
-      assert.strictEqual(cache.getProblem("P-99"), undefined);
+      assert.strictEqual(cache.getProblem("p99"), undefined);
     });
 
     it("getSolution returns by id", () => {
-      assert.strictEqual(cache.getSolution("S-3")?.id, "S-3");
+      assert.strictEqual(cache.getSolution("s3")?.id, "s3");
     });
 
     it("getCritique returns by id", () => {
-      assert.strictEqual(cache.getCritique("CQ-2")?.id, "CQ-2");
+      assert.strictEqual(cache.getCritique("c2")?.id, "c2");
     });
 
     it("getMilestone returns by id", () => {
-      assert.strictEqual(cache.getMilestone("M-1")?.id, "M-1");
+      assert.strictEqual(cache.getMilestone("m1")?.id, "m1");
     });
   });
 

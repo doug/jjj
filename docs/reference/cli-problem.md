@@ -19,7 +19,7 @@ jjj problem new <title> [OPTIONS]
 ```bash,test
 jjj init
 jjj problem new "App crashes on startup" --priority high
-jjj problem new "Null pointer in auth module" --parent P-1
+jjj problem new "Null pointer in auth module" --parent p1
 jjj problem new "Improve test coverage"
 ```
 
@@ -58,8 +58,8 @@ jjj problem show <problem_id> [OPTIONS]
 | `--json` | bool | Output in JSON format |
 
 ```bash,test
-jjj problem show P-1
-jjj problem show P-1 --json
+jjj problem show p1
+jjj problem show p1 --json
 ```
 
 ## `jjj problem edit`
@@ -78,7 +78,7 @@ jjj problem edit <problem_id> [OPTIONS]
 | `--parent` | string | Set parent problem |
 
 ```bash,test
-jjj problem edit P-1 --title "App crashes on cold startup" --priority critical
+jjj problem edit p1 --title "App crashes on cold startup" --priority critical
 ```
 
 ## `jjj problem tree`
@@ -93,7 +93,7 @@ If no problem ID is given, shows all root problems and their children.
 
 ```bash,test
 jjj problem tree
-jjj problem tree P-1
+jjj problem tree p1
 ```
 
 ## `jjj problem solve`
@@ -105,7 +105,7 @@ jjj problem solve <problem_id>
 ```
 
 ```bash
-jjj problem solve P-1
+jjj problem solve p1
 ```
 
 ## `jjj problem dissolve`
@@ -121,7 +121,7 @@ jjj problem dissolve <problem_id> [OPTIONS]
 | `--reason` | string | Reason for dissolving |
 
 ```bash
-jjj problem dissolve P-2 --reason "Turned out to be expected behavior"
+jjj problem dissolve p2 --reason "Turned out to be expected behavior"
 ```
 
 ## `jjj problem assign`
@@ -137,5 +137,5 @@ jjj problem assign <problem_id> [OPTIONS]
 | `--to` | string | Assignee name (defaults to self) |
 
 ```bash
-jjj problem assign P-1 --to alice
+jjj problem assign p1 --to alice
 ```

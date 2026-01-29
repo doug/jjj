@@ -23,7 +23,7 @@ priority:
 jjj problem new "Search is slow" --priority P1
 ```
 
-This creates `P-1`. Priorities range from P0 (critical) to P3 (low) and
+This creates `p1`. Priorities range from P0 (critical) to P3 (low) and
 affect how `jjj status` orders your work.
 
 ## Propose a Solution
@@ -32,10 +32,10 @@ Solutions are conjectures -- proposed ways to solve a problem. They start in
 `proposed` status and must survive criticism before acceptance.
 
 ```bash,test
-jjj solution new "Add search index" --problem P-1
+jjj solution new "Add search index" --problem p1
 ```
 
-This creates `S-1`, linked to problem `P-1`. A single problem can have
+This creates `s1`, linked to problem `p1`. A single problem can have
 multiple competing solutions.
 
 ## Start Working
@@ -45,7 +45,7 @@ and moves the solution to `testing` status. To resume work on an existing
 solution:
 
 ```bash
-jjj solution resume S-1
+jjj solution resume s1
 ```
 
 Your working copy now has a change tracked by jjj. The parent problem
@@ -57,10 +57,10 @@ Critiques are explicit criticism of a solution. They block acceptance until
 every critique is resolved (addressed, validated, or dismissed).
 
 ```bash
-jjj critique new S-1 "Missing error handling" --severity medium
+jjj critique new s1 "Missing error handling" --severity medium
 ```
 
-This creates `CQ-1` against solution `S-1`. Severities are `low`, `medium`,
+This creates `c1` against solution `s1`. Severities are `low`, `medium`,
 `high`, and `critical`.
 
 ## Address the Critique
@@ -69,14 +69,14 @@ After modifying the solution to handle the criticism, mark the critique as
 addressed:
 
 ```bash
-jjj critique address CQ-1
+jjj critique address c1
 ```
 
 Other resolution options:
 
-- `jjj critique validate CQ-1` -- the critique is correct and the solution
+- `jjj critique validate c1` -- the critique is correct and the solution
   should be refuted
-- `jjj critique dismiss CQ-1` -- the critique is incorrect or irrelevant
+- `jjj critique dismiss c1` -- the critique is incorrect or irrelevant
 
 ## Submit
 
@@ -145,12 +145,12 @@ problems surface first.
 | `jjj init` | Initialize jjj in current repository |
 | `jjj problem new "title" --priority P1` | Create a problem |
 | `jjj problem list` | List all problems |
-| `jjj problem show P-1` | Show problem details and solutions |
-| `jjj solution new "title" --problem P-1` | Propose a solution |
+| `jjj problem show p1` | Show problem details and solutions |
+| `jjj solution new "title" --problem p1` | Propose a solution |
 | `jjj solution list` | List all solutions |
-| `jjj solution resume S-1` | Switch to a solution's change |
-| `jjj critique new S-1 "title" --severity medium` | Critique a solution |
-| `jjj critique address CQ-1` | Mark critique as addressed |
+| `jjj solution resume s1` | Switch to a solution's change |
+| `jjj critique new s1 "title" --severity medium` | Critique a solution |
+| `jjj critique address c1` | Mark critique as addressed |
 | `jjj submit` | Squash, accept solution, solve problem |
 | `jjj status` | Show status and prioritized next actions |
 | `jjj board` | Show Kanban board |
