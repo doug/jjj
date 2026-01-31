@@ -899,4 +899,25 @@ This is the context.
         assert!(body.contains("## Context"));
         assert!(!body.contains("## Empty")); // Empty sections are skipped
     }
+
+    #[test]
+    fn test_critique_frontmatter_with_reviewer() {
+        use crate::models::{Critique, CritiqueFrontmatter};
+
+        let mut critique = Critique::new(
+            "c1".to_string(),
+            "Awaiting review".to_string(),
+            "s1".to_string(),
+        );
+        critique.reviewer = Some("bob".to_string());
+
+        let frontmatter = CritiqueFrontmatter::from(&critique);
+        let body = build_body(&[
+            ("Argument", &critique.argument),
+            ("Evidence", &critique.evidence),
+        ]);
+
+        let markdown = to_markdown(&frontmatter, &body).unwrap();
+        assert!(markdown.contains("reviewer: bob"));
+    }
 }
