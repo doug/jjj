@@ -67,21 +67,6 @@ pub enum Commands {
         shell: Shell,
     },
 
-    /// Request review on current change's solution (shorthand for solution review)
-    #[command(name = "review")]
-    ReviewShorthand {
-        /// Reviewers (e.g., @alice, @bob)
-        reviewers: Vec<String>,
-    },
-
-    /// LGTM current change's solution (shorthand for solution lgtm)
-    #[command(name = "lgtm")]
-    LgtmShorthand {
-        /// Comment with sign-off
-        #[arg(long)]
-        comment: Option<String>,
-    },
-
     /// Show status and next actions
     Status {
         /// Show all items (no limit)
@@ -238,9 +223,10 @@ pub enum SolutionAction {
         #[arg(long)]
         supersedes: Option<String>,
 
-        /// Assign reviewers (e.g., @alice, @bob)
-        #[arg(long)]
-        review: Vec<String>,
+        /// Request review from specified people (creates awaiting review critiques)
+        /// Use @name or name:severity (e.g., @bob, alice:high)
+        #[arg(long, value_name = "REVIEWER")]
+        reviewer: Vec<String>,
     },
 
     /// List all solutions
@@ -327,24 +313,6 @@ pub enum SolutionAction {
         /// Assignee name (if not specified, assigns to self)
         #[arg(long)]
         to: Option<String>,
-    },
-
-    /// Request review on a solution
-    Review {
-        /// Solution ID (e.g., S-1)
-        solution_id: String,
-
-        /// Reviewers (e.g., @alice, @bob)
-        reviewers: Vec<String>,
-    },
-
-    /// LGTM a solution (mark as reviewed)
-    Lgtm {
-        /// Solution ID (e.g., S-1)
-        solution_id: String,
-        /// Comment with sign-off
-        #[arg(long)]
-        comment: Option<String>,
     },
 
     /// Resume working on an existing solution

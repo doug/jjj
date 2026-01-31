@@ -295,46 +295,6 @@ fn test_next_priority_sorting() {
 }
 
 #[test]
-fn test_solution_lgtm_with_comment() {
-    if which::which("jj").is_err() { return; }
-    let temp_dir = setup_test_repo();
-    let dir = temp_dir.path();
-
-    run_jjj(dir, &["init"]);
-    run_jjj(dir, &["problem", "new", "Review Problem"]);
-    run_jjj(dir, &["solution", "new", "Test Solution", "--problem", "p1"]);
-    run_jjj(dir, &["solution", "review", "s1", "@alice"]);
-
-    let output = run_jjj(dir, &["solution", "lgtm", "s1", "--comment", "looks good"]);
-    assert!(output.status.success(), "lgtm failed: {}", String::from_utf8_lossy(&output.stderr));
-
-    let show = run_jjj(dir, &["solution", "show", "s1", "--json"]);
-    assert!(show.status.success(), "solution show --json failed: {}", String::from_utf8_lossy(&show.stderr));
-    let stdout = String::from_utf8_lossy(&show.stdout);
-    assert!(stdout.contains("sign_offs") || stdout.contains("looks good"),
-        "Expected sign_off data in output: {}", stdout);
-}
-
-#[test]
-fn test_solution_new_with_review() {
-    if which::which("jj").is_err() { return; }
-    let temp_dir = setup_test_repo();
-    let dir = temp_dir.path();
-
-    run_jjj(dir, &["init"]);
-    run_jjj(dir, &["problem", "new", "Review Problem"]);
-
-    let output = run_jjj(dir, &["solution", "new", "With Review", "--problem", "p1", "--review", "@alice", "--review", "@bob"]);
-    assert!(output.status.success(), "new with review failed: {}", String::from_utf8_lossy(&output.stderr));
-
-    let show = run_jjj(dir, &["solution", "show", "s1", "--json"]);
-    assert!(show.status.success(), "solution show --json failed: {}", String::from_utf8_lossy(&show.stderr));
-    let stdout = String::from_utf8_lossy(&show.stdout);
-    assert!(stdout.contains("alice"), "Expected alice in output: {}", stdout);
-    assert!(stdout.contains("bob"), "Expected bob in output: {}", stdout);
-}
-
-#[test]
 fn test_critique_new_with_reviewer() {
     if which::which("jj").is_err() { return; }
     let temp_dir = setup_test_repo();
@@ -374,4 +334,48 @@ fn test_critique_list_filter_by_reviewer() {
     assert!(stdout.contains("For alice"), "Expected 'For alice' in output: {}", stdout);
     assert!(!stdout.contains("For bob"), "Should not contain 'For bob' in output: {}", stdout);
     assert!(!stdout.contains("No reviewer"), "Should not contain 'No reviewer' in output: {}", stdout);
+}
+
+#[test]
+fn test_solution_new_with_reviewer() {
+    if which::which("jj").is_err() { return; }
+    let temp_dir = setup_test_repo();
+    let dir = temp_dir.path();
+
+    run_jjj(dir, &["init"]);
+    run_jjj(dir, &["problem", "new", "Test problem"]);
+    let output = run_jjj(dir, &["solution", "new", "Test solution", "--problem", "p1", "--reviewer", "bob"]);
+
+    assert!(output.status.success(), "solution new with --reviewer failed: {}", String::from_utf8_lossy(&output.stderr));
+
+    // Should have created an awaiting review critique
+    let critiques = run_jjj(dir, &["critique", "list", "--json"]);
+    assert!(critiques.status.success(), "critique list --json failed: {}", String::from_utf8_lossy(&critiques.stderr));
+    let stdout = String::from_utf8_lossy(&critiques.stdout);
+    assert!(stdout.contains("Awaiting review from @bob"), "Expected 'Awaiting review from @bob' in output: {}", stdout);
+    assert!(stdout.contains("\"reviewer\": \"bob\""), "Expected '\"reviewer\": \"bob\"' in output: {}", stdout);
+}
+
+#[test]
+fn test_solution_new_with_multiple_reviewers() {
+    if which::which("jj").is_err() { return; }
+    let temp_dir = setup_test_repo();
+    let dir = temp_dir.path();
+
+    run_jjj(dir, &["init"]);
+    run_jjj(dir, &["problem", "new", "Test problem"]);
+    let output = run_jjj(dir, &["solution", "new", "Test solution", "--problem", "p1", "--reviewer", "@alice", "--reviewer", "bob:high"]);
+
+    assert!(output.status.success(), "solution new with multiple --reviewer failed: {}", String::from_utf8_lossy(&output.stderr));
+
+    // Should have created awaiting review critiques for both
+    let critiques = run_jjj(dir, &["critique", "list", "--json"]);
+    assert!(critiques.status.success(), "critique list --json failed: {}", String::from_utf8_lossy(&critiques.stderr));
+    let stdout = String::from_utf8_lossy(&critiques.stdout);
+    assert!(stdout.contains("Awaiting review from @alice"), "Expected 'Awaiting review from @alice' in output: {}", stdout);
+    assert!(stdout.contains("Awaiting review from @bob"), "Expected 'Awaiting review from @bob' in output: {}", stdout);
+    assert!(stdout.contains("\"reviewer\": \"alice\""), "Expected '\"reviewer\": \"alice\"' in output: {}", stdout);
+    assert!(stdout.contains("\"reviewer\": \"bob\""), "Expected '\"reviewer\": \"bob\"' in output: {}", stdout);
+    // Bob's critique should have high severity
+    assert!(stdout.contains("\"severity\": \"high\""), "Expected '\"severity\": \"high\"' for bob in output: {}", stdout);
 }

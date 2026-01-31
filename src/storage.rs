@@ -372,8 +372,6 @@ impl MetadataStore {
             critique_ids: frontmatter.critique_ids,
             change_ids: frontmatter.change_ids,
             assignee: frontmatter.assignee,
-            reviewers: frontmatter.reviewers,
-            sign_offs: frontmatter.sign_offs,
             created_at: frontmatter.created_at,
             updated_at: frontmatter.updated_at,
             approach: sections.get("Approach").cloned().unwrap_or_default(),

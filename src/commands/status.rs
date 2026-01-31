@@ -65,16 +65,6 @@ pub fn execute(all: bool, mine: bool, limit: Option<usize>, json: bool) -> Resul
             if let Some(active) = solutions.iter().find(|s| s.change_ids.contains(change_id)) {
                 println!("Active: {} \"{}\" -> {} [{}]", active.id, active.title, active.problem_id, active.status);
 
-                // Show reviewers if any
-                if !active.reviewers.is_empty() {
-                    let pending = active.pending_reviewers();
-                    if pending.is_empty() {
-                        println!("  Reviewers: all signed off");
-                    } else {
-                        println!("  Awaiting review: {}", pending.iter().map(|r| format!("@{}", r)).collect::<Vec<_>>().join(", "));
-                    }
-                }
-
                 // Show open critiques on active solution
                 let active_critiques: Vec<_> = critiques.iter()
                     .filter(|c| c.solution_id == active.id && c.status == CritiqueStatus::Open)
@@ -206,50 +196,60 @@ fn build_next_actions(
         }
     }
 
-    // 3. REVIEW: Solutions where user is a requested reviewer but hasn't signed off
+    // 3. REVIEW: Critiques assigned to user that need response
     if !mine {
-        for solution in solutions.iter().filter(|s| s.is_active()) {
-            if solution.reviewers.iter().any(|r| user == *r)
-                && !solution.sign_offs.iter().any(|so| user == so.reviewer)
-            {
+        for critique in critiques.iter().filter(|c| c.status == CritiqueStatus::Open) {
+            if let Some(reviewer) = &critique.reviewer {
+                if user.contains(reviewer) || reviewer.contains(user) {
+                    let solution = solutions.iter().find(|s| s.id == critique.solution_id);
+                    let problem = solution.and_then(|s| problems.iter().find(|p| p.id == s.problem_id));
+                    let priority = problem.map(|p| &p.priority).cloned().unwrap_or_default();
+
+                    items.push(serde_json::json!({
+                        "category": "review",
+                        "entity_type": "critique",
+                        "entity_id": critique.id,
+                        "title": critique.title,
+                        "summary": format!("Review requested on {}", critique.solution_id),
+                        "suggested_command": format!("jjj critique show {}", critique.id),
+                        "priority": format!("{}", priority),
+                        "priority_sort": priority_sort_value(&priority),
+                        "details": [],
+                    }));
+                }
+            }
+        }
+    }
+
+    // 4. WAITING: User's solutions with pending review critiques (assigned to others)
+    for solution in solutions.iter().filter(|s| s.is_active()) {
+        let is_mine = solution.assignee.as_ref().map(|a| user == *a).unwrap_or(false);
+        if is_mine {
+            let pending_reviews: Vec<_> = critiques.iter()
+                .filter(|c| c.solution_id == solution.id && c.status == CritiqueStatus::Open)
+                .filter(|c| c.reviewer.is_some() && c.reviewer.as_ref().map(|r| !user.contains(r)).unwrap_or(false))
+                .collect();
+
+            if !pending_reviews.is_empty() {
                 let problem = problems.iter().find(|p| p.id == solution.problem_id);
                 let priority = problem.map(|p| &p.priority).cloned().unwrap_or_default();
+                let reviewers: Vec<_> = pending_reviews.iter()
+                    .filter_map(|c| c.reviewer.as_ref())
+                    .map(|r| format!("@{}", r))
+                    .collect();
 
                 items.push(serde_json::json!({
-                    "category": "review",
+                    "category": "waiting",
                     "entity_type": "solution",
                     "entity_id": solution.id,
                     "title": solution.title,
-                    "summary": format!("Review requested by {}", solution.assignee.as_deref().unwrap_or("author")),
-                    "suggested_command": format!("jjj solution show {}", solution.id),
+                    "summary": format!("Awaiting review from {}", reviewers.join(", ")),
+                    "suggested_command": "",
                     "priority": format!("{}", priority),
                     "priority_sort": priority_sort_value(&priority),
                     "details": [],
                 }));
             }
-        }
-    }
-
-    // 4. WAITING: User's solutions awaiting review
-    for solution in solutions.iter().filter(|s| s.is_active()) {
-        let is_mine = solution.assignee.as_ref().map(|a| user == *a).unwrap_or(false);
-        if is_mine && solution.requires_review()
-            && !solution.all_reviewers_signed_off()
-        {
-            let problem = problems.iter().find(|p| p.id == solution.problem_id);
-            let priority = problem.map(|p| &p.priority).cloned().unwrap_or_default();
-
-            items.push(serde_json::json!({
-                "category": "waiting",
-                "entity_type": "solution",
-                "entity_id": solution.id,
-                "title": solution.title,
-                "summary": format!("Awaiting review from {}", solution.pending_reviewers().join(", ")),
-                "suggested_command": "",
-                "priority": format!("{}", priority),
-                "priority_sort": priority_sort_value(&priority),
-                "details": [],
-            }));
         }
     }
 

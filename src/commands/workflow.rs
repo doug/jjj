@@ -30,9 +30,7 @@ pub fn submit(force: bool) -> Result<()> {
     println!("Submitting {}: {}", solution.id, solution.title);
 
     if !force {
-        let mut blocked = false;
-
-        // Check critiques
+        // Check critiques - open critiques (including review requests) block submission
         let critiques = store.list_critiques()?;
         let open_critiques: Vec<_> = critiques
             .iter()
@@ -45,29 +43,9 @@ pub fn submit(force: bool) -> Result<()> {
                 eprintln!("    {}: {} [{}]", c.id, c.title, c.severity);
                 eprintln!("    -> jjj critique address {}", c.id);
             }
-            blocked = true;
-        }
-
-        // Check reviews
-        if solution.requires_review() && !solution.all_reviewers_signed_off()
-        {
-            let pending = solution.pending_reviewers();
-            eprintln!(
-                "\n  * Review pending from {}",
-                pending
-                    .iter()
-                    .map(|r| format!("@{}", r))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            );
-            eprintln!("    -> waiting for LGTM");
-            blocked = true;
-        }
-
-        if blocked {
             eprintln!("\nCannot auto-accept. Use --force to submit without acceptance.");
             return Err(crate::error::JjjError::CannotAcceptSolution(
-                "Unresolved critiques or pending reviews".to_string(),
+                "Unresolved critiques block submission".to_string(),
             ));
         }
     }

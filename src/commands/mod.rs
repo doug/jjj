@@ -9,8 +9,8 @@ pub mod solution;
 pub mod status;
 pub mod workflow;
 
-use crate::cli::{Cli, Commands, SolutionAction};
-use crate::error::{JjjError, Result};
+use crate::cli::{Cli, Commands};
+use crate::error::Result;
 
 pub fn execute(cli: Cli) -> Result<()> {
     match cli.command {
@@ -30,41 +30,5 @@ pub fn execute(cli: Cli) -> Result<()> {
 
         // Status (replaces dashboard + next)
         Commands::Status { all, mine, limit, json } => status::execute(all, mine, limit, json),
-
-        // Shorthand commands
-        Commands::ReviewShorthand { reviewers } => {
-            let jj_client = crate::jj::JjClient::new()?;
-            let store = crate::storage::MetadataStore::new(jj_client.clone())?;
-            let change_id = jj_client.current_change_id()?;
-
-            let solutions = store.list_solutions()?;
-            let sol = solutions.iter()
-                .find(|s| s.change_ids.contains(&change_id))
-                .ok_or_else(|| JjjError::Other(
-                    format!("No solution found for current change {}. Use 'jjj solution review <id>' instead.", change_id)
-                ))?;
-
-            solution::execute(SolutionAction::Review {
-                solution_id: sol.id.clone(),
-                reviewers,
-            })
-        }
-        Commands::LgtmShorthand { comment } => {
-            let jj_client = crate::jj::JjClient::new()?;
-            let store = crate::storage::MetadataStore::new(jj_client.clone())?;
-            let change_id = jj_client.current_change_id()?;
-
-            let solutions = store.list_solutions()?;
-            let sol = solutions.iter()
-                .find(|s| s.change_ids.contains(&change_id))
-                .ok_or_else(|| JjjError::Other(
-                    format!("No solution found for current change {}. Use 'jjj solution lgtm <id>' instead.", change_id)
-                ))?;
-
-            solution::execute(SolutionAction::Lgtm {
-                solution_id: sol.id.clone(),
-                comment,
-            })
-        }
     }
 }

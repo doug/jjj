@@ -192,26 +192,6 @@ fn test_submit_blocked_by_critiques() {
         "Expected critique blocking message in stderr: {}", stderr);
 }
 
-#[test]
-fn test_submit_blocked_by_review() {
-    if which::which("jj").is_err() { return; }
-    let temp_dir = setup_test_repo();
-    let dir = temp_dir.path();
-
-    // Create main
-    Command::new("jj").current_dir(dir).args(&["new", "root()", "-m", "initial"]).status().unwrap();
-    Command::new("jj").current_dir(dir).args(&["bookmark", "create", "main"]).status().unwrap();
-
-    // Create solution via solution new (replaces start)
-    run_jjj(dir, &["solution", "new", "Token refresh", "--problem", "p1"]);
-
-    // Request review
-    run_jjj(dir, &["solution", "review", "s1", "@alice"]);
-
-    // Submit without --force should fail
-    let output = run_jjj(dir, &["submit"]);
-    assert!(!output.status.success(), "Expected submit to fail with pending review");
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("review") || stderr.contains("alice") || stderr.contains("Cannot") || stderr.contains("LGTM"),
-        "Expected review blocking message in stderr: {}", stderr);
-}
+// Note: test_submit_blocked_by_review was removed as the reviewer/sign-off system
+// has been replaced with critique-based reviews. The test_submit_blocked_by_critiques
+// test covers the blocking behavior via the unified critique system.
