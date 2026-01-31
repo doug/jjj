@@ -379,3 +379,30 @@ fn test_solution_new_with_multiple_reviewers() {
     // Bob's critique should have high severity
     assert!(stdout.contains("\"severity\": \"high\""), "Expected '\"severity\": \"high\"' for bob in output: {}", stdout);
 }
+
+#[test]
+fn test_status_shows_review_needed() {
+    if which::which("jj").is_err() { return; }
+    let temp_dir = setup_test_repo();
+    let dir = temp_dir.path();
+
+    // Configure git user as "bob" for this test
+    Command::new("git")
+        .args(["config", "user.name", "bob"])
+        .current_dir(dir)
+        .output()
+        .expect("Failed to set git user");
+
+    run_jjj(dir, &["init"]);
+    run_jjj(dir, &["problem", "new", "Test problem"]);
+    run_jjj(dir, &["solution", "new", "Test solution", "--problem", "p1", "--reviewer", "bob"]);
+
+    let output = run_jjj(dir, &["status"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    // Should show REVIEW category for bob's awaiting review
+    assert!(stdout.contains("REVIEW") || stdout.contains("review"),
+            "Expected REVIEW in status output: {}", stdout);
+    assert!(stdout.contains("Awaiting review from @bob") || stdout.contains("Review requested"),
+            "Expected awaiting review info: {}", stdout);
+}
