@@ -78,24 +78,22 @@ export class EntityDocumentProvider implements vscode.TextDocumentContentProvide
       }).join("\n")
       : "  (none)";
 
-    const reviewerSection = s.reviewers.length > 0
-      ? s.reviewers.map(r => {
-        const signOff = s.sign_offs.find(so => so.reviewer === r);
-        if (signOff) {
-          const date = new Date(signOff.at).toLocaleDateString();
-          const comment = signOff.comment ? ` \u2014 "${signOff.comment}"` : "";
-          return `  @${r}: signed off (${date})${comment}`;
-        }
-        return `  @${r}: pending`;
-      }).join("\n")
+    // Build reviewer summary from critiques
+    const reviewerCritiques = critiques.filter(c => c.reviewer);
+    const reviewerMap = new Map<string, { total: number; open: number }>();
+    for (const c of reviewerCritiques) {
+      if (c.reviewer) {
+        const stats = reviewerMap.get(c.reviewer) || { total: 0, open: 0 };
+        stats.total++;
+        if (c.status === "open") { stats.open++; }
+        reviewerMap.set(c.reviewer, stats);
+      }
+    }
+    const reviewerSection = reviewerMap.size > 0
+      ? Array.from(reviewerMap.entries())
+        .map(([r, stats]) => `  @${r}: ${stats.open}/${stats.total} open`)
+        .join("\n")
       : "  none";
-
-    const endorsements = s.sign_offs
-      .filter(so => !s.reviewers.includes(so.reviewer))
-      .map(so => `@${so.reviewer} (${new Date(so.at).toLocaleDateString()})`);
-    const endorsementLine = endorsements.length > 0
-      ? `\nAlso endorsed by: ${endorsements.join(", ")}`
-      : "";
 
     return [
       `${s.title}`,
@@ -110,7 +108,7 @@ export class EntityDocumentProvider implements vscode.TextDocumentContentProvide
       "",
       s.tradeoffs ? `## Tradeoffs\n\n${s.tradeoffs}\n` : "",
       "## Reviewers",
-      reviewerSection + endorsementLine,
+      reviewerSection,
       "",
       `## Critiques (${openCritiques.length} open)`,
       critiqueList,

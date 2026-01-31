@@ -102,12 +102,6 @@ describe("JjjCli", () => {
       assert.deepStrictEqual(execStub.firstCall.args[0], ["solution", "accept", "s1"]);
     });
 
-    it("requestReview passes reviewers", async () => {
-      execStub.resolves("ok");
-      await cli.requestReview("s1", ["@alice", "@bob"]);
-      assert.deepStrictEqual(execStub.firstCall.args[0], ["solution", "review", "s1", "@alice", "@bob"]);
-    });
-
     it("assignProblem uses --to flag", async () => {
       execStub.resolves("ok");
       await cli.assignProblem("p1", "alice");

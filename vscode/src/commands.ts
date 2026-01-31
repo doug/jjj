@@ -88,34 +88,6 @@ export function registerCommands(
     vscode.window.showInformationMessage(result);
   });
 
-  register("jjj.requestReview", async () => {
-    const solutions = cache.getSolutions().filter(s => s.status === "testing" || s.status === "proposed");
-    const solutionPick = await vscode.window.showQuickPick(
-      solutions.map(s => ({ label: `${s.id}: ${s.title}`, id: s.id })),
-      { placeHolder: "Select solution for review" },
-    );
-    if (!solutionPick) { return; }
-
-    const reviewer = await vscode.window.showInputBox({
-      prompt: "Reviewer name (e.g., @alice)",
-      placeHolder: "@alice",
-    });
-    if (!reviewer) { return; }
-    const result = await cli.requestReview(solutionPick.id, [reviewer]);
-    vscode.window.showInformationMessage(result);
-  });
-
-  register("jjj.lgtm", async () => {
-    const solutions = cache.getSolutions().filter(s => s.status === "testing" || s.status === "proposed");
-    const pick = await vscode.window.showQuickPick(
-      solutions.map(s => ({ label: `${s.id}: ${s.title}`, id: s.id })),
-      { placeHolder: "Select solution to LGTM" },
-    );
-    if (!pick) { return; }
-    const result = await cli.lgtm(pick.id);
-    vscode.window.showInformationMessage(result);
-  });
-
   register("jjj.resumeSolution", async () => {
     const solutions = cache.getSolutions().filter(s => s.status === "testing" || s.status === "proposed");
     const pick = await vscode.window.showQuickPick(

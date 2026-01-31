@@ -20,8 +20,7 @@ function makeSolution(overrides: Partial<Solution> = {}): Solution {
   return {
     id: "s1", title: "Add search index", problem_id: "p1", status: "testing",
     critique_ids: ["c1"], change_ids: ["kxq2p"],
-    assignee: "doug", reviewers: ["alice"],
-    sign_offs: [{ reviewer: "alice", at: "2026-01-27T15:30:00Z", comment: "looks good" }],
+    assignee: "doug",
     force_accepted: false, created_at: "", updated_at: "",
     approach: "Add a B-tree index", tradeoffs: "Extra storage",
     supersedes: null,
@@ -32,7 +31,7 @@ function makeSolution(overrides: Partial<Solution> = {}): Solution {
 function makeCritique(overrides: Partial<Critique> = {}): Critique {
   return {
     id: "c1", title: "SQL injection risk", solution_id: "s1", status: "open",
-    severity: "high", author: "alice", created_at: "", updated_at: "",
+    severity: "high", author: "alice", reviewer: "alice", created_at: "", updated_at: "",
     argument: "The query concatenates user input", evidence: "See line 42",
     file_path: "src/db.rs", line_start: 42, line_end: null,
     code_context: [], replies: [
@@ -158,13 +157,6 @@ describe("EntityDocumentProvider", () => {
       assert.ok(content.includes("Status: testing"));
     });
 
-    it("includes reviewer sign-off status", () => {
-      const uri = vscode.Uri.parse("jjj:///solution/s1.md");
-      const content = provider.provideTextDocumentContent(uri);
-      assert.ok(content.includes("@alice: signed off"));
-      assert.ok(content.includes("looks good"));
-    });
-
     it("lists critiques", () => {
       const uri = vscode.Uri.parse("jjj:///solution/s1.md");
       const content = provider.provideTextDocumentContent(uri);
@@ -189,36 +181,6 @@ describe("EntityDocumentProvider", () => {
       assert.ok(content.includes("Supersedes: s1"));
     });
 
-    it("shows pending reviewers", async () => {
-      const solution2 = makeSolution({
-        id: "s2", title: "Pending review", reviewers: ["bob"],
-        sign_offs: [], force_accepted: false,
-      });
-      cli.listSolutions.resolves([makeSolution(), solution2]);
-      await cache.refresh();
-
-      const uri = vscode.Uri.parse("jjj:///solution/s2.md");
-      const content = provider.provideTextDocumentContent(uri);
-      assert.ok(content.includes("@bob: pending"));
-    });
-
-    it("shows non-assigned endorsements", async () => {
-      const solution3 = makeSolution({
-        id: "s3", title: "Endorsed", reviewers: ["alice"],
-        sign_offs: [
-          { reviewer: "alice", at: "2026-01-27T15:30:00Z", comment: undefined },
-          { reviewer: "charlie", at: "2026-01-27T16:00:00Z", comment: "nice work" },
-        ],
-        force_accepted: false,
-      });
-      cli.listSolutions.resolves([makeSolution(), solution3]);
-      await cache.refresh();
-
-      const uri = vscode.Uri.parse("jjj:///solution/s3.md");
-      const content = provider.provideTextDocumentContent(uri);
-      assert.ok(content.includes("Also endorsed by"));
-      assert.ok(content.includes("charlie"));
-    });
   });
 
   describe("critique rendering", () => {
