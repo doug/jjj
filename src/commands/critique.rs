@@ -12,7 +12,8 @@ pub fn execute(action: CritiqueAction) -> Result<()> {
             severity,
             file,
             line,
-        } => new_critique(solution_id, title, severity, file, line),
+            reviewer,
+        } => new_critique(solution_id, title, severity, file, line, reviewer),
         CritiqueAction::List {
             solution,
             status,
@@ -38,6 +39,7 @@ fn new_critique(
     severity_str: String,
     file: Option<String>,
     line: Option<usize>,
+    reviewer: Option<String>,
 ) -> Result<()> {
     let jj_client = JjClient::new()?;
     let store = MetadataStore::new(jj_client)?;
@@ -64,6 +66,11 @@ fn new_critique(
         // Set author to current user
         let author = store.jj_client.user_identity()?;
         critique.author = Some(author);
+
+        // Set reviewer if provided
+        if let Some(ref r) = reviewer {
+            critique.reviewer = Some(r.trim_start_matches('@').to_string());
+        }
 
         // Set location if provided
         if let (Some(file_path), Some(line_num)) = (file.clone(), line) {

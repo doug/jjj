@@ -333,3 +333,24 @@ fn test_solution_new_with_review() {
     assert!(stdout.contains("alice"), "Expected alice in output: {}", stdout);
     assert!(stdout.contains("bob"), "Expected bob in output: {}", stdout);
 }
+
+#[test]
+fn test_critique_new_with_reviewer() {
+    if which::which("jj").is_err() { return; }
+    let temp_dir = setup_test_repo();
+    let dir = temp_dir.path();
+
+    run_jjj(dir, &["init"]);
+    run_jjj(dir, &["problem", "new", "Test problem"]);
+    run_jjj(dir, &["solution", "new", "Test solution", "--problem", "p1"]);
+    let output = run_jjj(dir, &["critique", "new", "s1", "Review needed", "--reviewer", "bob"]);
+
+    assert!(output.status.success(), "critique new with reviewer failed: {}", String::from_utf8_lossy(&output.stderr));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("c1"), "Expected c1 in output: {}", stdout);
+
+    let show_output = run_jjj(dir, &["critique", "show", "c1", "--json"]);
+    assert!(show_output.status.success(), "critique show --json failed: {}", String::from_utf8_lossy(&show_output.stderr));
+    let show_stdout = String::from_utf8_lossy(&show_output.stdout);
+    assert!(show_stdout.contains("\"reviewer\": \"bob\""), "Expected reviewer: bob in output: {}", show_stdout);
+}

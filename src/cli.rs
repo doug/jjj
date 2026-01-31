@@ -379,6 +379,10 @@ pub enum CritiqueAction {
         /// Line number for code-level critique
         #[arg(long)]
         line: Option<usize>,
+
+        /// Assign a reviewer to address this critique
+        #[arg(long)]
+        reviewer: Option<String>,
     },
 
     /// List critiques
