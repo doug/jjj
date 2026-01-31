@@ -395,6 +395,10 @@ pub enum CritiqueAction {
         #[arg(long)]
         status: Option<String>,
 
+        /// Filter by assigned reviewer
+        #[arg(long)]
+        reviewer: Option<String>,
+
         /// Output in JSON format
         #[arg(long)]
         json: bool,

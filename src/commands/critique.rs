@@ -17,8 +17,9 @@ pub fn execute(action: CritiqueAction) -> Result<()> {
         CritiqueAction::List {
             solution,
             status,
+            reviewer,
             json,
-        } => list_critiques(solution, status, json),
+        } => list_critiques(solution, status, reviewer, json),
         CritiqueAction::Show { critique_id, json } => show_critique(critique_id, json),
         CritiqueAction::Edit {
             critique_id,
@@ -113,6 +114,7 @@ fn new_critique(
 fn list_critiques(
     solution_filter: Option<String>,
     status_filter: Option<String>,
+    reviewer_filter: Option<String>,
     json: bool,
 ) -> Result<()> {
     let jj_client = JjClient::new()?;
@@ -129,6 +131,12 @@ fn list_critiques(
     if let Some(status_str) = status_filter {
         let status: CritiqueStatus = status_str.parse().map_err(|e: String| e)?;
         critiques.retain(|c| c.status == status);
+    }
+
+    // Filter by reviewer
+    if let Some(ref reviewer) = reviewer_filter {
+        let reviewer = reviewer.trim_start_matches('@');
+        critiques.retain(|c| c.reviewer.as_deref() == Some(reviewer));
     }
 
     if json {

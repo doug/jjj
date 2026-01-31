@@ -354,3 +354,24 @@ fn test_critique_new_with_reviewer() {
     let show_stdout = String::from_utf8_lossy(&show_output.stdout);
     assert!(show_stdout.contains("\"reviewer\": \"bob\""), "Expected reviewer: bob in output: {}", show_stdout);
 }
+
+#[test]
+fn test_critique_list_filter_by_reviewer() {
+    if which::which("jj").is_err() { return; }
+    let temp_dir = setup_test_repo();
+    let dir = temp_dir.path();
+
+    run_jjj(dir, &["init"]);
+    run_jjj(dir, &["problem", "new", "Test problem"]);
+    run_jjj(dir, &["solution", "new", "Test solution", "--problem", "p1"]);
+    run_jjj(dir, &["critique", "new", "s1", "For alice", "--reviewer", "alice"]);
+    run_jjj(dir, &["critique", "new", "s1", "For bob", "--reviewer", "bob"]);
+    run_jjj(dir, &["critique", "new", "s1", "No reviewer"]);
+
+    let output = run_jjj(dir, &["critique", "list", "--reviewer", "alice"]);
+    assert!(output.status.success(), "critique list --reviewer failed: {}", String::from_utf8_lossy(&output.stderr));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("For alice"), "Expected 'For alice' in output: {}", stdout);
+    assert!(!stdout.contains("For bob"), "Should not contain 'For bob' in output: {}", stdout);
+    assert!(!stdout.contains("No reviewer"), "Should not contain 'No reviewer' in output: {}", stdout);
+}
