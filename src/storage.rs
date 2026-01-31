@@ -499,6 +499,7 @@ impl MetadataStore {
             status: frontmatter.status,
             severity: frontmatter.severity,
             author: frontmatter.author,
+            reviewer: frontmatter.reviewer,
             created_at: frontmatter.created_at,
             updated_at: frontmatter.updated_at,
             argument: sections.get("Argument").cloned().unwrap_or_default(),

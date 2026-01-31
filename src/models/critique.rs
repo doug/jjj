@@ -24,6 +24,9 @@ pub struct Critique {
     /// Author of the critique
     pub author: Option<String>,
 
+    /// Who should address/review this critique
+    pub reviewer: Option<String>,
+
     /// Creation timestamp
     pub created_at: DateTime<Utc>,
 
@@ -172,6 +175,7 @@ impl Critique {
             status: CritiqueStatus::Open,
             severity: CritiqueSeverity::Medium,
             author: None,
+            reviewer: None,
             created_at: now,
             updated_at: now,
             argument: String::new(),
@@ -274,6 +278,8 @@ pub struct CritiqueFrontmatter {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub author: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reviewer: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub file_path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub line_start: Option<usize>,
@@ -292,6 +298,7 @@ impl From<&Critique> for CritiqueFrontmatter {
             status: c.status.clone(),
             severity: c.severity.clone(),
             author: c.author.clone(),
+            reviewer: c.reviewer.clone(),
             file_path: c.file_path.clone(),
             line_start: c.line_start,
             line_end: c.line_end,
@@ -434,5 +441,16 @@ mod tests {
         );
 
         assert!(!critique.has_location());
+    }
+
+    #[test]
+    fn test_critique_with_reviewer() {
+        let mut critique = Critique::new(
+            "c1".to_string(),
+            "Awaiting review from @bob".to_string(),
+            "s1".to_string(),
+        );
+        critique.reviewer = Some("bob".to_string());
+        assert_eq!(critique.reviewer, Some("bob".to_string()));
     }
 }
