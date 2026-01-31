@@ -28,8 +28,6 @@ export interface Solution {
   critique_ids: string[];
   change_ids: string[];
   assignee: string | null;
-  reviewers: string[];
-  sign_offs: Array<{ reviewer: string; at: string; comment?: string }>;
   force_accepted: boolean;
   created_at: string;
   updated_at: string;
@@ -52,6 +50,7 @@ export interface Critique {
   status: "open" | "addressed" | "valid" | "dismissed";
   severity: "low" | "medium" | "high" | "critical";
   author: string | null;
+  reviewer?: string;
   created_at: string;
   updated_at: string;
   argument: string;
@@ -171,14 +170,30 @@ export class JjjCli {
     return this.exec(["problem", "new", title]);
   }
 
-  async newSolution(title: string, problemId: string): Promise<string> {
-    return this.exec(["solution", "new", title, "--problem", problemId]);
+  async newSolution(title: string, problemId: string, reviewers?: string[]): Promise<string> {
+    const args = ["solution", "new", title, "--problem", problemId];
+    for (const reviewer of reviewers ?? []) {
+      args.push("--reviewer", reviewer);
+    }
+    return this.exec(args);
   }
 
-  async newCritique(solutionId: string, title: string, severity: string, file?: string, line?: number): Promise<string> {
+  async newCritique(
+    solutionId: string,
+    title: string,
+    severity: string,
+    filePath?: string,
+    line?: number,
+    reviewer?: string
+  ): Promise<string> {
     const args = ["critique", "new", solutionId, title, "--severity", severity];
-    if (file) { args.push("--file", file); }
-    if (line !== undefined) { args.push("--line", String(line)); }
+    if (filePath) {
+      args.push("--file", filePath);
+      if (line) args.push("--line", String(line));
+    }
+    if (reviewer) {
+      args.push("--reviewer", reviewer);
+    }
     return this.exec(args);
   }
 
@@ -202,16 +217,6 @@ export class JjjCli {
 
   async refuteSolution(solutionId: string): Promise<string> {
     return this.exec(["solution", "refute", solutionId]);
-  }
-
-  async requestReview(solutionId: string, reviewers: string[]): Promise<string> {
-    return this.exec(["solution", "review", solutionId, ...reviewers]);
-  }
-
-  async lgtm(solutionId: string, comment?: string): Promise<string> {
-    const args = ["solution", "lgtm", solutionId];
-    if (comment) { args.push("--comment", comment); }
-    return this.exec(args);
   }
 
   async solveProblem(problemId: string): Promise<string> {
