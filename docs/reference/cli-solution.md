@@ -14,7 +14,7 @@ jjj solution new <title> [OPTIONS]
 |------|------|----------|-------------|
 | `--problem` | string | no | Problem this solution addresses (prompts interactively if not provided) |
 | `--supersedes` | string | no | Solution this supersedes (e.g., s1) |
-| `--review` | string (repeatable) | no | Assign reviewers at creation (e.g., `@alice`) |
+| `--reviewer` | string (repeatable) | no | Assign reviewers at creation (e.g., `@alice`) |
 
 When `--problem` is not provided, lists open problems and prompts you to select one interactively. After creation, automatically creates a jj change, attaches it to the solution, and moves the solution to `testing` status.
 
@@ -29,10 +29,10 @@ jjj solution list
 Assign reviewers at creation:
 
 ```bash
-jjj solution new "Add caching" --problem p1 --review @alice --review @bob
+jjj solution new "Add caching" --problem p1 --reviewer @alice --reviewer @bob
 ```
 
-When reviewers are assigned, the solution requires all of them to sign off before it can be accepted. Review is not required by default -- it is enabled per-solution by assigning reviewers.
+When reviewers are assigned, the solution requires all of them to sign off before it can be accepted. Sign-offs are recorded via review-type critiques. Review is not required by default -- it is enabled per-solution by assigning reviewers.
 
 ## `jjj solution list`
 
@@ -129,7 +129,7 @@ jjj solution test s1
 
 ## `jjj solution accept`
 
-Accept a solution. Requires no open critiques and, if reviewers are assigned, all reviewers must have signed off.
+Accept a solution. Requires no open critiques (including review critiques).
 
 ```
 jjj solution accept <solution_id> [OPTIONS]
@@ -137,16 +137,14 @@ jjj solution accept <solution_id> [OPTIONS]
 
 | Flag | Type | Description |
 |------|------|-------------|
-| `--force` | bool | Force accept even with open critiques or missing sign-offs (sets `force_accepted` flag) |
+| `--force` | bool | Force accept even with open critiques (sets `force_accepted` flag) |
 
-The acceptance gate checks two conditions in order:
+The acceptance gate checks that all critiques are resolved (addressed, dismissed, or validated). This includes:
 
-1. **No open critiques** -- all critiques must be resolved (addressed, dismissed, or validated).
-2. **All assigned reviewers signed off** -- every reviewer in the `reviewers` list must have an LGTM sign-off.
+1. **Regular critiques** -- issues raised about the solution's approach
+2. **Review critiques** -- review requests (critiques with `--reviewer` flag) that must be addressed by the assigned reviewer
 
-Non-assigned sign-offs (from people not in the `reviewers` list) are recorded but do not affect the gate.
-
-Using `--force` bypasses both checks and sets the `force_accepted` flag on the solution.
+Using `--force` bypasses the check and sets the `force_accepted` flag on the solution.
 
 ```bash
 jjj solution accept s1
@@ -181,20 +179,6 @@ jjj solution assign <solution_id> [OPTIONS]
 jjj solution assign s1 --to bob
 ```
 
-## `jjj solution review`
-
-Assign reviewers to a solution. Reviewers must sign off before the solution can be accepted.
-
-```
-jjj solution review <solution_id> <reviewers...>
-```
-
-Reviewers are specified as names (e.g., `@alice`, `@bob`). Adding reviewers makes the solution require sign-offs from all assigned reviewers.
-
-```bash
-jjj solution review s1 @alice @bob
-```
-
 ## `jjj solution resume`
 
 Resume working on an existing solution. Switches to the solution's most recent jj change, or creates a new change if none exists.
@@ -207,21 +191,3 @@ jjj solution resume <solution_id>
 jjj solution resume s1
 ```
 
-## `jjj solution lgtm`
-
-Sign off on a solution (LGTM). Records a structured sign-off with the reviewer's name, timestamp, and optional comment.
-
-```
-jjj solution lgtm <solution_id> [OPTIONS]
-```
-
-| Flag | Type | Description |
-|------|------|-------------|
-| `--comment` | string | Optional comment to include with the sign-off |
-
-If the reviewer is in the solution's `reviewers` list, the sign-off counts toward the acceptance gate. Sign-offs from non-assigned reviewers are recorded but do not affect the gate.
-
-```bash
-jjj solution lgtm s1
-jjj solution lgtm s1 --comment "looks good"
-```

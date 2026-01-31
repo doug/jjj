@@ -15,6 +15,9 @@ jjj critique new <solution_id> <title> [OPTIONS]
 | `--severity` | string | `medium` | Severity: low, medium, high, critical |
 | `--file` | string | | File path for code-level critique |
 | `--line` | integer | | Line number for code-level critique |
+| `--reviewer` | string | | Mark as a review request from this reviewer (e.g., `@alice`) |
+
+When `--reviewer` is specified, the critique is created as a review request. The reviewer field indicates which reviewer should address this critique. This unifies the concepts of review requests and critiques into a single model.
 
 ```bash,test
 jjj init
@@ -37,6 +40,7 @@ jjj critique list [OPTIONS]
 |------|------|-------------|
 | `--solution` | string | Filter by solution |
 | `--status` | string | Filter by status (open, addressed, valid, dismissed) |
+| `--reviewer` | string | Filter by reviewer (e.g., `@alice`) |
 | `--json` | bool | Output in JSON format |
 
 ```bash,test

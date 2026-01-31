@@ -33,9 +33,11 @@ The change ID `kpqxywon` stays the same even if you:
 
 This stability makes it perfect for attaching review metadata.
 
-### Solutions Own the Review
+### Unified Critique Model
 
-In jjj, code review is attached to **solutions** (s1, s2, etc.), not directly to changes. A solution may have one or more jj changes associated with it. When you assign reviewers, you are requiring them to sign off on the solution's implementation before it can be accepted.
+In jjj, code review is attached to **solutions** (s1, s2, etc.), not directly to changes. A solution may have one or more jj changes associated with it. Review requests and critiques are unified into a single model: **critiques with a reviewer field**.
+
+When you assign reviewers at solution creation (using `--reviewer`), jjj automatically creates review-type critiques for each reviewer. These critiques must be resolved (typically by addressing them with an LGTM comment) before the solution can be accepted.
 
 ### Comment Relocation
 
@@ -51,32 +53,24 @@ This is powered by **context fingerprinting** using SHA-256 hashing.
 
 ### 1. Assign Reviewers
 
-You can assign reviewers when creating a solution, or add them later.
+You can assign reviewers when creating a solution, or add them later using critiques.
 
 At creation:
 
 ```bash
-jjj solution new "Use JWT tokens" --problem p1 --review @alice --review @bob
+jjj solution new "Use JWT tokens" --problem p1 --reviewer @alice --reviewer @bob
 ```
 
-Or assign reviewers to an existing solution:
+This creates review-type critiques for each reviewer. You can also add reviewers to an existing solution by creating review critiques:
 
 ```bash
-# Assign reviewers by solution ID
-jjj solution review s1 @alice @bob
-```
-
-If you are currently working on a solution's change, use the shorthand:
-
-```bash
-# Shorthand: detects the solution from your current change
-jjj review @alice @bob
+# Add a reviewer via critique
+jjj critique new s1 "Review requested" --reviewer @alice
 ```
 
 Output:
 ```
-Reviewers assigned for s1: Use JWT tokens
-Reviewers: @alice, @bob
+Created critique c1 for s1 (reviewer: @alice)
 ```
 
 ### 2. Reviewer: Examine the Solution
@@ -136,19 +130,18 @@ See the [Critique Guidelines](critique-guidelines.md) for severity levels and ho
 
 #### If the implementation looks correct: sign off (LGTM)
 
+When a reviewer approves the solution, they address their review critique:
+
 ```bash
-# Sign off by solution ID
-jjj solution lgtm s1
+# Find your review critique
+jjj critique list --solution s1 --reviewer @alice
 
-# Sign off with a comment
-jjj solution lgtm s1 --comment "looks good, clean implementation"
-
-# Shorthand: sign off from the solution's current change
-jjj lgtm
-jjj lgtm --comment "approved"
+# Address it with an LGTM comment
+jjj critique reply c1 "LGTM - clean implementation"
+jjj critique address c1
 ```
 
-A sign-off records the reviewer's name, a timestamp, and an optional comment. If the reviewer is in the solution's assigned `reviewers` list, the sign-off counts toward the acceptance gate. Sign-offs from non-assigned reviewers are recorded but do not affect the gate.
+Addressing a review critique is the sign-off. The critique's resolution records the reviewer's approval with a timestamp.
 
 ### 4. Author: Respond to Critiques
 
@@ -169,10 +162,10 @@ jjj critique reply c4 "The token is stored in an httpOnly cookie, not localStora
 jjj critique dismiss c4
 ```
 
-After addressing critiques, request re-review if needed:
+After addressing critiques, request re-review if needed by creating a new review critique:
 
 ```bash
-jjj review @alice
+jjj critique new s1 "Re-review requested after fixes" --reviewer @alice
 ```
 
 ### 5. Submit
@@ -190,20 +183,21 @@ jjj submit
 
 If any check fails, submit will explain what is still needed. Use `--force` to bypass the gates in emergencies (this sets the `force_accepted` flag on the solution).
 
-## Two Gates to Acceptance
+## Unified Gate to Acceptance
 
-jjj has two mechanisms that gate whether a solution can be accepted, both managed through the solution model:
+jjj uses a unified critique model where all feedback -- including review requests -- are critiques:
 
-| Gate | What it checks | Who participates | How to resolve |
-|------|---------------|-----------------|----------------|
-| **Critiques** | Is the approach sound? Are there flaws? | Anyone can raise a critique | Address, dismiss, or validate each critique |
-| **Reviewer sign-offs** | Does the implementation look correct? | Assigned reviewers | Reviewer runs `jjj lgtm` (with optional `--comment`) |
+| Critique Type | What it represents | How to resolve |
+|---------------|-------------------|----------------|
+| **Regular critique** | A flaw or issue in the approach | Address, dismiss, or validate |
+| **Review critique** (has `--reviewer`) | A review request from a specific person | Reviewer addresses it (LGTM) or raises issues |
 
-Both must be satisfied. A solution with all sign-offs but an open critique cannot be accepted. A solution with all critiques resolved but missing sign-offs from assigned reviewers also cannot be accepted.
+All critiques must be resolved before a solution can be accepted. Review critiques are resolved when the assigned reviewer addresses them, which serves as the sign-off.
 
-Review is per-solution and derived: a solution requires sign-offs when it has assigned reviewers (`reviewers` list is not empty). Solutions without assigned reviewers skip the sign-off gate entirely.
-
-This separation is intentional. A critique says "there is a flaw in the approach." A sign-off says "I have reviewed the code and it looks right." These are different judgments made by potentially different people.
+This unified model means:
+- A solution with any open critique (regular or review) cannot be accepted
+- Review requests and issue critiques follow the same lifecycle
+- The `--reviewer` field distinguishes review requests from issue critiques
 
 ## Landing Changes
 
@@ -244,21 +238,16 @@ In the hybrid flow, review and critique happen in jjj. The GitHub PR is used for
 
 ## Advanced Features
 
-### Stack Reviews
-
-Review an entire stack of changes:
+### Viewing Review Requests
 
 ```bash
-jjj solution review s1 @alice --stack
-```
-
-### Viewing All Reviews
-
-```bash
-# All solutions with pending sign-offs
+# All solutions with pending reviews
 jjj solution list --status testing
 
-# Solutions waiting for your sign-off
+# Review critiques assigned to you
+jjj critique list --reviewer @alice --status open
+
+# Your actionable items
 jjj status
 ```
 
