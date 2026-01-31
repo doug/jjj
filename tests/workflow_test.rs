@@ -2,13 +2,18 @@ use std::path::PathBuf;
 use std::process::Command;
 use tempfile::TempDir;
 
-/// Helper to run the jjj binary
-fn run_jjj(dir: &std::path::Path, args: &[&str]) -> std::process::Output {
+/// Helper to get the jjj binary path
+fn jjj_binary() -> PathBuf {
     let debug_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/debug/jjj");
     if !debug_dir.exists() {
         panic!("jjj binary not found at {:?}. Make sure to build first.", debug_dir);
     }
-    Command::new(&debug_dir).current_dir(dir).args(args).output().expect("Failed to execute jjj")
+    debug_dir
+}
+
+/// Helper to run the jjj binary
+fn run_jjj(dir: &std::path::Path, args: &[&str]) -> std::process::Output {
+    Command::new(&jjj_binary()).current_dir(dir).args(args).output().expect("Failed to execute jjj")
 }
 
 /// Helper to setup a test repo with jj
@@ -195,3 +200,26 @@ fn test_submit_blocked_by_critiques() {
 // Note: test_submit_blocked_by_review was removed as the reviewer/sign-off system
 // has been replaced with critique-based reviews. The test_submit_blocked_by_critiques
 // test covers the blocking behavior via the unified critique system.
+
+#[test]
+fn test_submit_blocked_by_awaiting_review() {
+    if which::which("jj").is_err() { return; }
+    let temp_dir = setup_test_repo();
+    let dir = temp_dir.path();
+
+    run_jjj(dir, &["init"]);
+    run_jjj(dir, &["problem", "new", "Test problem"]);
+    run_jjj(dir, &["solution", "new", "Test solution", "--problem", "p1", "--reviewer", "bob"]);
+
+    // Submit should fail because awaiting review critique is open
+    let output = Command::new(jjj_binary())
+        .args(["submit"])
+        .current_dir(dir)
+        .output()
+        .expect("Failed to execute jjj submit");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "Submit should have failed");
+    assert!(stderr.contains("open critique") || stderr.contains("Awaiting review"),
+            "Expected open critique error, got: {}", stderr);
+}
