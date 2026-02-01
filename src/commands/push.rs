@@ -96,16 +96,16 @@ fn check_and_prompt_accept_solve(store: &MetadataStore) -> Result<()> {
                         .filter(|s| s.problem_id == solution.problem_id && s.is_active() && s.id != solution.id)
                         .collect();
 
-                    if other_active.is_empty() {
-                        if prompt_yes_no(&format!(
+                    if other_active.is_empty()
+                        && prompt_yes_no(&format!(
                             "Problem {} \"{}\" has no other active solutions. Mark solved?",
                             problem.id, problem.title
-                        )) {
-                            let mut problem = store.load_problem(&solution.problem_id)?;
-                            problem.set_status(ProblemStatus::Solved);
-                            store.save_problem(&problem)?;
-                            println!("  Problem {} solved.", problem.id);
-                        }
+                        ))
+                    {
+                        let mut problem = store.load_problem(&solution.problem_id)?;
+                        problem.set_status(ProblemStatus::Solved);
+                        store.save_problem(&problem)?;
+                        println!("  Problem {} solved.", problem.id);
                     }
                 }
             }
