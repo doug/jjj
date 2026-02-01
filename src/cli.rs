@@ -85,6 +85,13 @@ pub enum Commands {
         #[arg(long)]
         json: bool,
     },
+
+    /// Fetch code and metadata from remote
+    Fetch {
+        /// Remote to fetch from (default: origin)
+        #[arg(long, default_value = "origin")]
+        remote: String,
+    },
 }
 
 #[derive(ValueEnum, Clone, Debug)]

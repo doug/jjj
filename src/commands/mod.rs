@@ -1,6 +1,7 @@
 pub mod board;
 pub mod completion;
 pub mod critique;
+pub mod fetch;
 pub mod init;
 pub mod milestone;
 pub mod problem;
@@ -30,5 +31,8 @@ pub fn execute(cli: Cli) -> Result<()> {
 
         // Status (replaces dashboard + next)
         Commands::Status { all, mine, limit, json } => status::execute(all, mine, limit, json),
+
+        // Sync commands
+        Commands::Fetch { remote } => fetch::execute(&remote),
     }
 }
