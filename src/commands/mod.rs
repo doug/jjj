@@ -5,6 +5,7 @@ pub mod fetch;
 pub mod init;
 pub mod milestone;
 pub mod problem;
+pub mod push;
 pub mod resolve;
 pub mod solution;
 pub mod status;
@@ -34,5 +35,8 @@ pub fn execute(cli: Cli) -> Result<()> {
 
         // Sync commands
         Commands::Fetch { remote } => fetch::execute(&remote),
+        Commands::Push { bookmarks, remote, no_prompt, dry_run } => {
+            push::execute(bookmarks, &remote, no_prompt, dry_run)
+        }
     }
 }

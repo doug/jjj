@@ -92,6 +92,24 @@ pub enum Commands {
         #[arg(long, default_value = "origin")]
         remote: String,
     },
+
+    /// Push code and metadata to remote
+    Push {
+        /// Bookmarks to push (in addition to jjj/meta)
+        bookmarks: Vec<String>,
+
+        /// Remote to push to (default: origin)
+        #[arg(long, default_value = "origin")]
+        remote: String,
+
+        /// Skip interactive prompts
+        #[arg(long)]
+        no_prompt: bool,
+
+        /// Show what would be pushed without pushing
+        #[arg(long)]
+        dry_run: bool,
+    },
 }
 
 #[derive(ValueEnum, Clone, Debug)]
