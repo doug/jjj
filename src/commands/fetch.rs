@@ -1,8 +1,14 @@
 use crate::error::Result;
 use crate::jj::JjClient;
+use crate::storage::MetadataStore;
 
 pub fn execute(remote: &str) -> Result<()> {
     let jj_client = JjClient::new()?;
+
+    // Snapshot counts before fetch
+    let store_before = MetadataStore::new(jj_client.clone())?;
+    let solutions_before = store_before.list_solutions().unwrap_or_default().len();
+    let critiques_before = store_before.list_critiques().unwrap_or_default().len();
 
     // 1. Fetch from remote
     println!("Fetching from {}...", remote);
@@ -11,13 +17,31 @@ pub fn execute(remote: &str) -> Result<()> {
     // 2. Update jjj-meta workspace if it exists
     let meta_path = jj_client.repo_root().join(".jj").join("jjj-meta");
     if meta_path.exists() {
-        // Update workspace to track jjj/meta bookmark
-        // Create a new JjClient for the meta workspace
         if let Ok(meta_client) = JjClient::with_root(meta_path) {
-            let _ = meta_client.execute(&["new", "jjj/meta@origin"]);
+            if let Err(e) = meta_client.execute(&["new", "jjj/meta@origin"]) {
+                eprintln!("Warning: could not update jjj-meta workspace: {}", e);
+            }
         }
     }
 
-    println!("Fetched from {}", remote);
+    // 3. Show summary
+    let store_after = MetadataStore::new(jj_client)?;
+    let solutions_after = store_after.list_solutions().unwrap_or_default().len();
+    let critiques_after = store_after.list_critiques().unwrap_or_default().len();
+
+    let new_solutions = solutions_after.saturating_sub(solutions_before);
+    let new_critiques = critiques_after.saturating_sub(critiques_before);
+
+    println!("Fetched from {}.", remote);
+    if new_solutions > 0 {
+        println!("  {} new solution(s)", new_solutions);
+    }
+    if new_critiques > 0 {
+        println!("  {} new critique(s)", new_critiques);
+    }
+    if new_solutions == 0 && new_critiques == 0 {
+        println!("  No new jjj changes.");
+    }
+
     Ok(())
 }
