@@ -24,7 +24,7 @@ pub struct MetadataStore {
     pub jj_client: JjClient,
 
     /// JJ client for the metadata workspace
-    meta_client: JjClient,
+    pub meta_client: JjClient,
 }
 
 // =============================================================================
