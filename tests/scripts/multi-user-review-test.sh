@@ -73,33 +73,15 @@ jjj_bob() {
 # Sync metadata between users via git (works around jj push limitations)
 # jjj uses a separate workspace for metadata, so we need to ensure that workspace is updated
 sync_alice_to_bob() {
-    echo -e "  ${BLUE}Syncing metadata: Alice -> Origin -> Bob${NC}"
-    # Push from Alice
-    (cd "$ALICE_DIR" && git push origin jjj/meta --force 2>/dev/null || true)
-    # Fetch to Bob and update local branch
-    (cd "$BOB_DIR" && git fetch origin jjj/meta:jjj/meta --force 2>/dev/null || true)
-    # Import into jj
-    (cd "$BOB_DIR" && jj git import 2>/dev/null || true)
-    # Create a new commit based on the updated bookmark (workaround for immutability)
-    # Only if the workspace exists (it gets created on first jjj command)
-    if [[ -d "$BOB_DIR/.jj/jjj-meta" ]]; then
-        (cd "$BOB_DIR/.jj/jjj-meta" && jj new "jjj/meta" 2>/dev/null || true)
-    fi
+    echo -e "  ${CYAN}Syncing: Alice -> Origin -> Bob${NC}"
+    (cd "$ALICE_DIR" && "$JJJ_BIN" push --no-prompt 2>/dev/null) || true
+    (cd "$BOB_DIR" && "$JJJ_BIN" fetch 2>/dev/null) || true
 }
 
 sync_bob_to_alice() {
-    echo -e "  ${BLUE}Syncing metadata: Bob -> Origin -> Alice${NC}"
-    # Push from Bob
-    (cd "$BOB_DIR" && git push origin jjj/meta --force 2>/dev/null || true)
-    # Fetch to Alice and update local branch
-    (cd "$ALICE_DIR" && git fetch origin jjj/meta:jjj/meta --force 2>/dev/null || true)
-    # Import into jj
-    (cd "$ALICE_DIR" && jj git import 2>/dev/null || true)
-    # Create a new commit based on the updated bookmark (workaround for immutability)
-    # Only if the workspace exists (it gets created on first jjj command)
-    if [[ -d "$ALICE_DIR/.jj/jjj-meta" ]]; then
-        (cd "$ALICE_DIR/.jj/jjj-meta" && jj new "jjj/meta" 2>/dev/null || true)
-    fi
+    echo -e "  ${CYAN}Syncing: Bob -> Origin -> Alice${NC}"
+    (cd "$BOB_DIR" && "$JJJ_BIN" push --no-prompt 2>/dev/null) || true
+    (cd "$ALICE_DIR" && "$JJJ_BIN" fetch 2>/dev/null) || true
 }
 
 # Sync code changes between users
