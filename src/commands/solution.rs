@@ -87,6 +87,16 @@ fn new_solution(title: String, problem_id: Option<String>, supersedes: Option<St
 
         store.save_solution(&solution)?;
 
+        // Auto-set jj change description
+        let problem = store.load_problem(&solution.problem_id)?;
+        let description = format!(
+            "{}: {}\n\nProblem: {} - {}",
+            solution.id, solution.title, problem.id, problem.title
+        );
+        if let Err(e) = store.jj_client.describe(&description) {
+            eprintln!("Warning: Could not set jj description: {}", e);
+        }
+
         // Create awaiting review critiques for each reviewer (from --reviewer flag)
         for reviewer_spec in &reviewer_critiques {
             let (reviewer_name, severity) = parse_reviewer_spec(reviewer_spec);
