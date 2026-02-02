@@ -74,7 +74,38 @@ fn draw_next_actions(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     f.render_stateful_widget(list, area, &mut state);
 }
 
+fn status_color_problem(status: &crate::models::ProblemStatus) -> Color {
+    use crate::models::ProblemStatus;
+    match status {
+        ProblemStatus::Solved => Color::Green,
+        ProblemStatus::InProgress => Color::Yellow,
+        ProblemStatus::Dissolved => Color::DarkGray,
+        ProblemStatus::Open => Color::White,
+    }
+}
+
+fn status_color_solution(status: &crate::models::SolutionStatus) -> Color {
+    use crate::models::SolutionStatus;
+    match status {
+        SolutionStatus::Accepted => Color::Green,
+        SolutionStatus::Refuted => Color::Red,
+        SolutionStatus::Testing => Color::Yellow,
+        SolutionStatus::Proposed => Color::Cyan,
+    }
+}
+
+fn status_color_critique(status: &crate::models::CritiqueStatus) -> Color {
+    use crate::models::CritiqueStatus;
+    match status {
+        CritiqueStatus::Addressed | CritiqueStatus::Dismissed => Color::Green,
+        CritiqueStatus::Valid => Color::Red,
+        CritiqueStatus::Open => Color::Yellow,
+    }
+}
+
 fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
+    use super::tree::TreeNode;
+
     let is_focused = app.focused_pane == FocusedPane::ProjectTree;
     let border_style = if is_focused {
         Style::default().fg(Color::Cyan)
@@ -82,12 +113,49 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
         Style::default().fg(Color::DarkGray)
     };
 
-    let tree = Paragraph::new("Project Tree placeholder")
+    let items: Vec<ListItem> = app.tree_items.iter().map(|item| {
+        let indent = "  ".repeat(item.depth);
+        let expand_char = if item.has_children {
+            if item.node.is_expanded() { "▼ " } else { "▶ " }
+        } else {
+            "○ "
+        };
+
+        let (label, color) = match &item.node {
+            TreeNode::Milestone { title, .. } => {
+                (format!("{}{}{}", indent, expand_char, title), Color::Magenta)
+            }
+            TreeNode::Backlog { .. } => {
+                (format!("{}{}Backlog", indent, expand_char), Color::DarkGray)
+            }
+            TreeNode::Problem { id, title, status, .. } => {
+                (format!("{}{}{}: {}", indent, expand_char, id, title), status_color_problem(status))
+            }
+            TreeNode::Solution { id, title, status, .. } => {
+                (format!("{}{}{}: {}", indent, expand_char, id, title), status_color_solution(status))
+            }
+            TreeNode::Critique { id, title, status, severity } => {
+                (format!("{}○ {}: {} [{}]", indent, id, title, severity), status_color_critique(status))
+            }
+        };
+
+        ListItem::new(Line::from(Span::styled(label, Style::default().fg(color))))
+    }).collect();
+
+    let list = List::new(items)
         .block(Block::default()
             .title("Project Tree")
             .borders(Borders::ALL)
-            .border_style(border_style));
-    f.render_widget(tree, area);
+            .border_style(border_style))
+        .highlight_style(Style::default().add_modifier(Modifier::REVERSED))
+        .highlight_symbol("> ");
+
+    let mut state = ListState::default();
+    if !app.tree_items.is_empty() && app.tree_index < app.tree_items.len() {
+        state.select(Some(app.tree_index));
+    }
+
+    f.render_stateful_widget(list, area, &mut state);
 }
 
 fn draw_detail(f: &mut Frame, _app: &App, area: ratatui::layout::Rect) {
