@@ -9,6 +9,7 @@ pub mod push;
 pub mod resolve;
 pub mod solution;
 pub mod status;
+pub mod ui;
 pub mod workflow;
 
 use crate::cli::{Cli, Commands};
@@ -18,6 +19,7 @@ pub fn execute(cli: Cli) -> Result<()> {
     match cli.command {
         Commands::Init => init::execute(),
         Commands::Board { json } => board::execute(json),
+        Commands::Ui => ui::execute(),
         Commands::Problem { action } => problem::execute(action),
         Commands::Solution { action } => solution::execute(action),
         Commands::Critique { action } => critique::execute(action),

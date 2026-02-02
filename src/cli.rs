@@ -20,6 +20,9 @@ pub enum Commands {
         json: bool,
     },
 
+    /// Launch interactive TUI
+    Ui,
+
     /// Manage problems (what needs to be solved)
     Problem {
         #[command(subcommand)]
