@@ -34,16 +34,6 @@ pub enum Commands {
         action: CritiqueAction,
     },
 
-    /// Resolve conflicts
-    Resolve {
-        /// ID to resolve
-        id: String,
-
-        /// Pick a specific version
-        #[arg(long)]
-        pick: Option<String>,
-    },
-
     /// Manage milestones
     Milestone {
         #[command(subcommand)]

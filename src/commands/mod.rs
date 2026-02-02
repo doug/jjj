@@ -5,7 +5,6 @@ pub mod init;
 pub mod milestone;
 pub mod problem;
 pub mod push;
-pub mod resolve;
 pub mod solution;
 pub mod status;
 pub mod ui;
@@ -21,7 +20,6 @@ pub fn execute(cli: Cli) -> Result<()> {
         Commands::Problem { action } => problem::execute(action),
         Commands::Solution { action } => solution::execute(action),
         Commands::Critique { action } => critique::execute(action),
-        Commands::Resolve { id, pick } => resolve::execute(id, pick),
         Commands::Milestone { action } => milestone::execute(action),
 
         // Workflow Commands
