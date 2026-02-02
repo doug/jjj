@@ -191,9 +191,18 @@ fn draw_footer(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
         .constraints([Constraint::Length(1), Constraint::Length(1)])
         .split(area);
 
-    // Context line (top)
-    let context = Paragraph::new(app.context_hints())
-        .style(Style::default().fg(Color::Yellow));
+    // Context line (top) - or flash message if present
+    let context_text = if let Some((msg, _)) = &app.flash_message {
+        msg.clone()
+    } else {
+        app.context_hints()
+    };
+    let context_style = if app.flash_message.is_some() {
+        Style::default().fg(Color::Green)
+    } else {
+        Style::default().fg(Color::Yellow)
+    };
+    let context = Paragraph::new(context_text).style(context_style);
     f.render_widget(context, chunks[0]);
 
     // Global shortcuts (bottom)

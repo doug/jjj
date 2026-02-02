@@ -5,7 +5,7 @@ use crate::storage::MetadataStore;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{backend::Backend, Terminal};
 use std::collections::HashSet;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FocusedPane {
@@ -27,6 +27,7 @@ pub struct App {
     pub tree_index: usize,
     pub detail_scroll: u16,
     pub selected_detail: super::DetailContent,
+    pub flash_message: Option<(String, Instant)>,
     store: MetadataStore,
 }
 
@@ -67,6 +68,7 @@ impl App {
             tree_index: 0,
             detail_scroll: 0,
             selected_detail: super::DetailContent::None,
+            flash_message: None,
             store,
         };
         app.update_selected_detail();
@@ -75,6 +77,7 @@ impl App {
 
     pub fn run<B: Backend>(&mut self, terminal: &mut Terminal<B>) -> Result<()> {
         while !self.should_quit {
+            self.clear_expired_flash();
             terminal.draw(|f| super::ui::draw(f, self))?;
 
             if event::poll(Duration::from_millis(100))? {
@@ -86,6 +89,18 @@ impl App {
             }
         }
         Ok(())
+    }
+
+    fn show_flash(&mut self, message: &str) {
+        self.flash_message = Some((message.to_string(), Instant::now()));
+    }
+
+    fn clear_expired_flash(&mut self) {
+        if let Some((_, time)) = &self.flash_message {
+            if time.elapsed() > Duration::from_secs(2) {
+                self.flash_message = None;
+            }
+        }
     }
 
     fn handle_key(&mut self, key: KeyCode) -> Result<()> {
@@ -460,46 +475,78 @@ impl App {
     }
 
     fn accept_solution(&mut self, solution_id: &str) -> Result<()> {
-        self.store.with_metadata(&format!("Accept solution {}", solution_id), || {
+        let id = solution_id.to_string();
+        match self.store.with_metadata(&format!("Accept solution {}", solution_id), || {
             let mut solution = self.store.load_solution(solution_id)?;
             solution.accept();
             self.store.save_solution(&solution)?;
             Ok(())
-        })?;
-        self.refresh_data()?;
+        }) {
+            Ok(_) => {
+                self.show_flash(&format!("{} accepted", id));
+                self.refresh_data()?;
+            }
+            Err(e) => {
+                self.show_flash(&format!("Error: {}", e));
+            }
+        }
         Ok(())
     }
 
     fn refute_solution(&mut self, solution_id: &str) -> Result<()> {
-        self.store.with_metadata(&format!("Refute solution {}", solution_id), || {
+        let id = solution_id.to_string();
+        match self.store.with_metadata(&format!("Refute solution {}", solution_id), || {
             let mut solution = self.store.load_solution(solution_id)?;
             solution.refute();
             self.store.save_solution(&solution)?;
             Ok(())
-        })?;
-        self.refresh_data()?;
+        }) {
+            Ok(_) => {
+                self.show_flash(&format!("{} refuted", id));
+                self.refresh_data()?;
+            }
+            Err(e) => {
+                self.show_flash(&format!("Error: {}", e));
+            }
+        }
         Ok(())
     }
 
     fn address_critique(&mut self, critique_id: &str) -> Result<()> {
-        self.store.with_metadata(&format!("Address critique {}", critique_id), || {
+        let id = critique_id.to_string();
+        match self.store.with_metadata(&format!("Address critique {}", critique_id), || {
             let mut critique = self.store.load_critique(critique_id)?;
             critique.address();
             self.store.save_critique(&critique)?;
             Ok(())
-        })?;
-        self.refresh_data()?;
+        }) {
+            Ok(_) => {
+                self.show_flash(&format!("{} addressed", id));
+                self.refresh_data()?;
+            }
+            Err(e) => {
+                self.show_flash(&format!("Error: {}", e));
+            }
+        }
         Ok(())
     }
 
     fn dismiss_critique(&mut self, critique_id: &str) -> Result<()> {
-        self.store.with_metadata(&format!("Dismiss critique {}", critique_id), || {
+        let id = critique_id.to_string();
+        match self.store.with_metadata(&format!("Dismiss critique {}", critique_id), || {
             let mut critique = self.store.load_critique(critique_id)?;
             critique.dismiss();
             self.store.save_critique(&critique)?;
             Ok(())
-        })?;
-        self.refresh_data()?;
+        }) {
+            Ok(_) => {
+                self.show_flash(&format!("{} dismissed", id));
+                self.refresh_data()?;
+            }
+            Err(e) => {
+                self.show_flash(&format!("Error: {}", e));
+            }
+        }
         Ok(())
     }
 
