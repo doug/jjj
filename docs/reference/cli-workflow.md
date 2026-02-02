@@ -98,22 +98,15 @@ jjj lgtm
 jjj lgtm --comment "looks good"
 ```
 
-## `jjj board`
+## `jjj ui`
 
-Display the board showing solutions organized by status.
+Launch the interactive TUI dashboard.
 
 ```
-jjj board [OPTIONS]
+jjj ui
 ```
 
-| Flag | Type | Description |
-|------|------|-------------|
-| `--json` | bool | Output in JSON format |
-
-```bash,test
-jjj board
-jjj board --json
-```
+The TUI provides a visual interface for browsing problems, solutions, and their relationships.
 
 ## `jjj completion`
 
