@@ -215,6 +215,53 @@ impl App {
         );
     }
 
+    pub fn context_hints(&self) -> String {
+        use super::tree::TreeNode;
+
+        match self.focused_pane {
+            FocusedPane::NextActions => {
+                if let Some(action) = self.next_actions.get(self.next_actions_index) {
+                    match action.entity_type {
+                        super::next_actions::EntityType::Problem => {
+                            format!("{}: [n]ew solution [s]olve [d]issolve [e]dit", action.entity_id)
+                        }
+                        super::next_actions::EntityType::Solution => {
+                            format!("{}: [a]ccept [r]efute [n]ew critique [e]dit", action.entity_id)
+                        }
+                        super::next_actions::EntityType::Critique => {
+                            format!("{}: [a]ddress [d]ismiss [e]dit", action.entity_id)
+                        }
+                    }
+                } else {
+                    "No selection".to_string()
+                }
+            }
+            FocusedPane::ProjectTree => {
+                if let Some(item) = self.tree_items.get(self.tree_index) {
+                    match &item.node {
+                        TreeNode::Milestone { id, .. } => {
+                            format!("{}: [e]dit", id)
+                        }
+                        TreeNode::Backlog { .. } => {
+                            "[p]roblem new".to_string()
+                        }
+                        TreeNode::Problem { id, .. } => {
+                            format!("{}: [n]ew solution [s]olve [d]issolve [e]dit", id)
+                        }
+                        TreeNode::Solution { id, .. } => {
+                            format!("{}: [a]ccept [r]efute [n]ew critique [e]dit", id)
+                        }
+                        TreeNode::Critique { id, .. } => {
+                            format!("{}: [a]ddress [d]ismiss [e]dit", id)
+                        }
+                    }
+                } else {
+                    "No selection".to_string()
+                }
+            }
+        }
+    }
+
     pub fn update_selected_detail(&mut self) {
         use super::tree::TreeNode;
 

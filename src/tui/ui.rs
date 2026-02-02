@@ -11,6 +11,15 @@ use ratatui::{
 pub fn draw(f: &mut Frame, app: &App) {
     let size = f.area();
 
+    // Vertical split: main content and footer
+    let vertical_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Min(0),    // Main content
+            Constraint::Length(2), // Footer (2 lines)
+        ])
+        .split(size);
+
     // Main layout: three columns
     let main_chunks = Layout::default()
         .direction(Direction::Horizontal)
@@ -19,11 +28,12 @@ pub fn draw(f: &mut Frame, app: &App) {
             Constraint::Percentage(35), // Project Tree
             Constraint::Percentage(45), // Detail Pane
         ])
-        .split(size);
+        .split(vertical_chunks[0]);
 
     draw_next_actions(f, app, main_chunks[0]);
     draw_project_tree(f, app, main_chunks[1]);
     draw_detail(f, app, main_chunks[2]);
+    draw_footer(f, app, vertical_chunks[1]);
 }
 
 fn category_color(cat: Category) -> Color {
@@ -173,4 +183,21 @@ fn draw_detail(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
         .wrap(ratatui::widgets::Wrap { trim: false });
 
     f.render_widget(detail, area);
+}
+
+fn draw_footer(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(1), Constraint::Length(1)])
+        .split(area);
+
+    // Context line (top)
+    let context = Paragraph::new(app.context_hints())
+        .style(Style::default().fg(Color::Yellow));
+    f.render_widget(context, chunks[0]);
+
+    // Global shortcuts (bottom)
+    let global = Paragraph::new("[Tab] pane | [/] commands | [j/k] scroll | [?] help | [q] quit")
+        .style(Style::default().fg(Color::DarkGray));
+    f.render_widget(global, chunks[1]);
 }
