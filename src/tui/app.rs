@@ -4,6 +4,7 @@ use crate::models::{Critique, Milestone, Problem, Solution};
 use crate::storage::MetadataStore;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{backend::Backend, Terminal};
+use std::collections::HashSet;
 use std::time::Duration;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -21,6 +22,8 @@ pub struct App {
     pub critiques: Vec<Critique>,
     pub next_actions: Vec<super::NextAction>,
     pub next_actions_index: usize,
+    pub tree_items: Vec<super::FlatTreeItem>,
+    pub expanded_nodes: HashSet<String>,
     pub tree_index: usize,
     pub detail_scroll: u16,
     store: MetadataStore,
@@ -38,6 +41,17 @@ impl App {
         let user = store.jj_client.user_identity().unwrap_or_default();
         let next_actions = super::build_next_actions(&problems, &solutions, &critiques, &user);
 
+        // Expand first milestone and backlog by default
+        let mut expanded_nodes = HashSet::new();
+        if let Some(m) = milestones.first() {
+            expanded_nodes.insert(m.id.clone());
+        }
+        expanded_nodes.insert("backlog".to_string());
+
+        let tree_items = super::build_flat_tree(
+            &milestones, &problems, &solutions, &critiques, &expanded_nodes
+        );
+
         Ok(Self {
             should_quit: false,
             focused_pane: FocusedPane::NextActions,
@@ -47,6 +61,8 @@ impl App {
             critiques,
             next_actions,
             next_actions_index: 0,
+            tree_items,
+            expanded_nodes,
             tree_index: 0,
             detail_scroll: 0,
             store,
@@ -128,5 +144,15 @@ impl App {
 
     fn page_detail_down(&mut self) {
         self.detail_scroll = self.detail_scroll.saturating_add(10);
+    }
+
+    pub fn rebuild_tree(&mut self) {
+        self.tree_items = super::build_flat_tree(
+            &self.milestones,
+            &self.problems,
+            &self.solutions,
+            &self.critiques,
+            &self.expanded_nodes,
+        );
     }
 }
