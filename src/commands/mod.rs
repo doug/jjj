@@ -1,4 +1,3 @@
-pub mod board;
 pub mod completion;
 pub mod critique;
 pub mod fetch;
@@ -18,7 +17,6 @@ use crate::error::Result;
 pub fn execute(cli: Cli) -> Result<()> {
     match cli.command {
         Commands::Init => init::execute(),
-        Commands::Board { json } => board::execute(json),
         Commands::Ui => ui::execute(),
         Commands::Problem { action } => problem::execute(action),
         Commands::Solution { action } => solution::execute(action),

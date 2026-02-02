@@ -13,7 +13,7 @@ pub fn execute() -> Result<()> {
     println!("✓ jjj initialized successfully!");
     println!();
     println!("The jjj/meta bookmark has been created to store task and review metadata.");
-    println!("Run 'jjj board' to view your Kanban board.");
+    println!("Run 'jjj ui' to launch the interactive TUI.");
 
     Ok(())
 }

@@ -13,13 +13,6 @@ pub enum Commands {
     /// Initialize jjj in the current repository
     Init,
 
-    /// Display the board (solutions by status)
-    Board {
-        /// Output in JSON format
-        #[arg(long)]
-        json: bool,
-    },
-
     /// Launch interactive TUI
     Ui,
 
