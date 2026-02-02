@@ -72,6 +72,11 @@ impl App {
         match key {
             KeyCode::Char('q') => self.should_quit = true,
             KeyCode::Tab => self.toggle_focus(),
+            KeyCode::Up => self.navigate_up(),
+            KeyCode::Down => self.navigate_down(),
+            KeyCode::Char('j') => self.scroll_detail_down(),
+            KeyCode::Char('k') => self.scroll_detail_up(),
+            KeyCode::Char(' ') => self.page_detail_down(),
             _ => {}
         }
         Ok(())
@@ -82,5 +87,46 @@ impl App {
             FocusedPane::NextActions => FocusedPane::ProjectTree,
             FocusedPane::ProjectTree => FocusedPane::NextActions,
         };
+    }
+
+    fn navigate_up(&mut self) {
+        match self.focused_pane {
+            FocusedPane::NextActions => {
+                if self.next_actions_index > 0 {
+                    self.next_actions_index -= 1;
+                }
+            }
+            FocusedPane::ProjectTree => {
+                if self.tree_index > 0 {
+                    self.tree_index -= 1;
+                }
+            }
+        }
+    }
+
+    fn navigate_down(&mut self) {
+        match self.focused_pane {
+            FocusedPane::NextActions => {
+                if self.next_actions_index < self.next_actions.len().saturating_sub(1) {
+                    self.next_actions_index += 1;
+                }
+            }
+            FocusedPane::ProjectTree => {
+                // Will implement with tree
+                self.tree_index += 1;
+            }
+        }
+    }
+
+    fn scroll_detail_down(&mut self) {
+        self.detail_scroll = self.detail_scroll.saturating_add(1);
+    }
+
+    fn scroll_detail_up(&mut self) {
+        self.detail_scroll = self.detail_scroll.saturating_sub(1);
+    }
+
+    fn page_detail_down(&mut self) {
+        self.detail_scroll = self.detail_scroll.saturating_add(10);
     }
 }
