@@ -158,11 +158,19 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     f.render_stateful_widget(list, area, &mut state);
 }
 
-fn draw_detail(f: &mut Frame, _app: &App, area: ratatui::layout::Rect) {
-    let detail = Paragraph::new("Select an item to see details")
+fn draw_detail(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
+    let lines = app.selected_detail.to_lines();
+    let text: Vec<Line> = lines.iter()
+        .skip(app.detail_scroll as usize)
+        .map(|s| Line::from(s.as_str()))
+        .collect();
+
+    let detail = Paragraph::new(text)
         .block(Block::default()
             .title("Detail")
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::DarkGray)));
+            .border_style(Style::default().fg(Color::DarkGray)))
+        .wrap(ratatui::widgets::Wrap { trim: false });
+
     f.render_widget(detail, area);
 }

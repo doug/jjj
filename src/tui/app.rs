@@ -26,6 +26,7 @@ pub struct App {
     pub expanded_nodes: HashSet<String>,
     pub tree_index: usize,
     pub detail_scroll: u16,
+    pub selected_detail: super::DetailContent,
     store: MetadataStore,
 }
 
@@ -52,7 +53,7 @@ impl App {
             &milestones, &problems, &solutions, &critiques, &expanded_nodes
         );
 
-        Ok(Self {
+        let mut app = Self {
             should_quit: false,
             focused_pane: FocusedPane::NextActions,
             milestones,
@@ -65,8 +66,11 @@ impl App {
             expanded_nodes,
             tree_index: 0,
             detail_scroll: 0,
+            selected_detail: super::DetailContent::None,
             store,
-        })
+        };
+        app.update_selected_detail();
+        Ok(app)
     }
 
     pub fn run<B: Backend>(&mut self, terminal: &mut Terminal<B>) -> Result<()> {
@@ -105,6 +109,7 @@ impl App {
             FocusedPane::NextActions => FocusedPane::ProjectTree,
             FocusedPane::ProjectTree => FocusedPane::NextActions,
         };
+        self.update_selected_detail();
     }
 
     fn navigate_up(&mut self) {
@@ -120,6 +125,7 @@ impl App {
                 }
             }
         }
+        self.update_selected_detail();
     }
 
     fn navigate_down(&mut self) {
@@ -135,6 +141,7 @@ impl App {
                 }
             }
         }
+        self.update_selected_detail();
     }
 
     fn collapse_or_parent(&mut self) {
@@ -206,5 +213,76 @@ impl App {
             &self.critiques,
             &self.expanded_nodes,
         );
+    }
+
+    pub fn update_selected_detail(&mut self) {
+        use super::tree::TreeNode;
+
+        // Check focused pane and get relevant selection
+        match self.focused_pane {
+            FocusedPane::NextActions => {
+                if let Some(action) = self.next_actions.get(self.next_actions_index) {
+                    self.selected_detail = match action.entity_type {
+                        super::next_actions::EntityType::Problem => {
+                            self.problems.iter()
+                                .find(|p| p.id == action.entity_id)
+                                .cloned()
+                                .map(super::DetailContent::Problem)
+                                .unwrap_or(super::DetailContent::None)
+                        }
+                        super::next_actions::EntityType::Solution => {
+                            self.solutions.iter()
+                                .find(|s| s.id == action.entity_id)
+                                .cloned()
+                                .map(super::DetailContent::Solution)
+                                .unwrap_or(super::DetailContent::None)
+                        }
+                        super::next_actions::EntityType::Critique => {
+                            self.critiques.iter()
+                                .find(|c| c.id == action.entity_id)
+                                .cloned()
+                                .map(super::DetailContent::Critique)
+                                .unwrap_or(super::DetailContent::None)
+                        }
+                    };
+                }
+            }
+            FocusedPane::ProjectTree => {
+                if let Some(item) = self.tree_items.get(self.tree_index) {
+                    self.selected_detail = match &item.node {
+                        TreeNode::Milestone { id, .. } => {
+                            self.milestones.iter()
+                                .find(|m| m.id == *id)
+                                .cloned()
+                                .map(super::DetailContent::Milestone)
+                                .unwrap_or(super::DetailContent::None)
+                        }
+                        TreeNode::Backlog { .. } => super::DetailContent::None,
+                        TreeNode::Problem { id, .. } => {
+                            self.problems.iter()
+                                .find(|p| p.id == *id)
+                                .cloned()
+                                .map(super::DetailContent::Problem)
+                                .unwrap_or(super::DetailContent::None)
+                        }
+                        TreeNode::Solution { id, .. } => {
+                            self.solutions.iter()
+                                .find(|s| s.id == *id)
+                                .cloned()
+                                .map(super::DetailContent::Solution)
+                                .unwrap_or(super::DetailContent::None)
+                        }
+                        TreeNode::Critique { id, .. } => {
+                            self.critiques.iter()
+                                .find(|c| c.id == *id)
+                                .cloned()
+                                .map(super::DetailContent::Critique)
+                                .unwrap_or(super::DetailContent::None)
+                        }
+                    };
+                }
+            }
+        }
+        self.detail_scroll = 0; // Reset scroll on new selection
     }
 }

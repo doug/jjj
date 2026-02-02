@@ -1,9 +1,11 @@
 mod app;
+mod detail;
 mod next_actions;
 mod tree;
 mod ui;
 
 pub use app::App;
+pub use detail::DetailContent;
 pub use next_actions::{build_next_actions, NextAction};
 pub use tree::{build_flat_tree, FlatTreeItem, TreeNode};
 
