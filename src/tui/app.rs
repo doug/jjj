@@ -117,6 +117,7 @@ impl App {
             FocusedPane::NextActions => {
                 if self.next_actions_index > 0 {
                     self.next_actions_index -= 1;
+                    self.sync_tree_to_selection();
                 }
             }
             FocusedPane::ProjectTree => {
@@ -133,6 +134,7 @@ impl App {
             FocusedPane::NextActions => {
                 if self.next_actions_index < self.next_actions.len().saturating_sub(1) {
                     self.next_actions_index += 1;
+                    self.sync_tree_to_selection();
                 }
             }
             FocusedPane::ProjectTree => {
@@ -142,6 +144,70 @@ impl App {
             }
         }
         self.update_selected_detail();
+    }
+
+    fn sync_tree_to_selection(&mut self) {
+        if self.focused_pane != FocusedPane::NextActions {
+            return;
+        }
+
+        let target_id = match self.next_actions.get(self.next_actions_index) {
+            Some(action) => action.entity_id.clone(),
+            None => return,
+        };
+
+        // Find which nodes need to be expanded to show this item
+        self.expand_to_reveal(&target_id);
+        self.rebuild_tree();
+
+        // Find the item in the tree
+        for (i, item) in self.tree_items.iter().enumerate() {
+            if item.node.id() == target_id {
+                self.tree_index = i;
+                break;
+            }
+        }
+    }
+
+    fn expand_to_reveal(&mut self, target_id: &str) {
+        // For a solution, we need its problem expanded, and that problem's milestone expanded
+        if let Some(solution) = self.solutions.iter().find(|s| s.id == target_id) {
+            self.expanded_nodes.insert(solution.problem_id.clone());
+
+            if let Some(problem) = self.problems.iter().find(|p| p.id == solution.problem_id) {
+                if let Some(milestone_id) = &problem.milestone_id {
+                    self.expanded_nodes.insert(milestone_id.clone());
+                } else {
+                    self.expanded_nodes.insert("backlog".to_string());
+                }
+            }
+        }
+
+        // For a problem, we need its milestone expanded
+        if let Some(problem) = self.problems.iter().find(|p| p.id == target_id) {
+            if let Some(milestone_id) = &problem.milestone_id {
+                self.expanded_nodes.insert(milestone_id.clone());
+            } else {
+                self.expanded_nodes.insert("backlog".to_string());
+            }
+        }
+
+        // For a critique, we need its solution and problem expanded
+        if let Some(critique) = self.critiques.iter().find(|c| c.id == target_id) {
+            self.expanded_nodes.insert(critique.solution_id.clone());
+
+            if let Some(solution) = self.solutions.iter().find(|s| s.id == critique.solution_id) {
+                self.expanded_nodes.insert(solution.problem_id.clone());
+
+                if let Some(problem) = self.problems.iter().find(|p| p.id == solution.problem_id) {
+                    if let Some(milestone_id) = &problem.milestone_id {
+                        self.expanded_nodes.insert(milestone_id.clone());
+                    } else {
+                        self.expanded_nodes.insert("backlog".to_string());
+                    }
+                }
+            }
+        }
     }
 
     fn collapse_or_parent(&mut self) {
