@@ -90,6 +90,8 @@ impl App {
             KeyCode::Tab => self.toggle_focus(),
             KeyCode::Up => self.navigate_up(),
             KeyCode::Down => self.navigate_down(),
+            KeyCode::Left => self.collapse_or_parent(),
+            KeyCode::Right => self.expand_or_child(),
             KeyCode::Char('j') => self.scroll_detail_down(),
             KeyCode::Char('k') => self.scroll_detail_up(),
             KeyCode::Char(' ') => self.page_detail_down(),
@@ -128,8 +130,58 @@ impl App {
                 }
             }
             FocusedPane::ProjectTree => {
-                // Will implement with tree
-                self.tree_index += 1;
+                if self.tree_index < self.tree_items.len().saturating_sub(1) {
+                    self.tree_index += 1;
+                }
+            }
+        }
+    }
+
+    fn collapse_or_parent(&mut self) {
+        if self.focused_pane != FocusedPane::ProjectTree {
+            return;
+        }
+
+        if let Some(item) = self.tree_items.get(self.tree_index) {
+            let node_id = item.node.id().to_string();
+
+            if item.node.is_expanded() {
+                // Collapse current node
+                self.expanded_nodes.remove(&node_id);
+                self.rebuild_tree();
+            } else if item.depth > 0 {
+                // Move to parent
+                for i in (0..self.tree_index).rev() {
+                    if self.tree_items[i].depth < item.depth {
+                        self.tree_index = i;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    fn expand_or_child(&mut self) {
+        if self.focused_pane != FocusedPane::ProjectTree {
+            return;
+        }
+
+        if let Some(item) = self.tree_items.get(self.tree_index) {
+            if !item.has_children {
+                return;
+            }
+
+            let node_id = item.node.id().to_string();
+
+            if item.node.is_expanded() {
+                // Move to first child
+                if self.tree_index + 1 < self.tree_items.len() {
+                    self.tree_index += 1;
+                }
+            } else {
+                // Expand
+                self.expanded_nodes.insert(node_id);
+                self.rebuild_tree();
             }
         }
     }
