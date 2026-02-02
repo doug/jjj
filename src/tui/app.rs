@@ -19,6 +19,7 @@ pub struct App {
     pub problems: Vec<Problem>,
     pub solutions: Vec<Solution>,
     pub critiques: Vec<Critique>,
+    pub next_actions: Vec<super::NextAction>,
     pub next_actions_index: usize,
     pub tree_index: usize,
     pub detail_scroll: u16,
@@ -34,6 +35,9 @@ impl App {
         let solutions = store.list_solutions()?;
         let critiques = store.list_critiques()?;
 
+        let user = store.jj_client.user_identity().unwrap_or_default();
+        let next_actions = super::build_next_actions(&problems, &solutions, &critiques, &user);
+
         Ok(Self {
             should_quit: false,
             focused_pane: FocusedPane::NextActions,
@@ -41,6 +45,7 @@ impl App {
             problems,
             solutions,
             critiques,
+            next_actions,
             next_actions_index: 0,
             tree_index: 0,
             detail_scroll: 0,

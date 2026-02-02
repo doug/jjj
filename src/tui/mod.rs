@@ -1,7 +1,9 @@
 mod app;
+mod next_actions;
 mod ui;
 
 pub use app::App;
+pub use next_actions::{build_next_actions, NextAction};
 
 use crate::error::Result;
 use crossterm::{
