@@ -99,6 +99,9 @@ impl App {
             KeyCode::Char('j') => self.scroll_detail_down(),
             KeyCode::Char('k') => self.scroll_detail_up(),
             KeyCode::Char(' ') => self.page_detail_down(),
+            KeyCode::Char('a') => self.handle_action_a()?,
+            KeyCode::Char('r') => self.handle_action_r()?,
+            KeyCode::Char('d') => self.handle_action_d()?,
             _ => {}
         }
         Ok(())
@@ -397,5 +400,120 @@ impl App {
             }
         }
         self.detail_scroll = 0; // Reset scroll on new selection
+    }
+
+    fn get_selected_entity(&self) -> Option<(String, super::next_actions::EntityType)> {
+        use super::tree::TreeNode;
+
+        match self.focused_pane {
+            FocusedPane::NextActions => {
+                self.next_actions.get(self.next_actions_index)
+                    .map(|a| (a.entity_id.clone(), a.entity_type))
+            }
+            FocusedPane::ProjectTree => {
+                self.tree_items.get(self.tree_index).and_then(|item| {
+                    match &item.node {
+                        TreeNode::Problem { id, .. } => Some((id.clone(), super::next_actions::EntityType::Problem)),
+                        TreeNode::Solution { id, .. } => Some((id.clone(), super::next_actions::EntityType::Solution)),
+                        TreeNode::Critique { id, .. } => Some((id.clone(), super::next_actions::EntityType::Critique)),
+                        _ => None,
+                    }
+                })
+            }
+        }
+    }
+
+    fn handle_action_a(&mut self) -> Result<()> {
+        use super::next_actions::EntityType;
+
+        if let Some((id, entity_type)) = self.get_selected_entity() {
+            match entity_type {
+                EntityType::Solution => self.accept_solution(&id)?,
+                EntityType::Critique => self.address_critique(&id)?,
+                EntityType::Problem => {} // No 'a' action for problems
+            }
+        }
+        Ok(())
+    }
+
+    fn handle_action_r(&mut self) -> Result<()> {
+        use super::next_actions::EntityType;
+
+        if let Some((id, entity_type)) = self.get_selected_entity() {
+            if entity_type == EntityType::Solution {
+                self.refute_solution(&id)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn handle_action_d(&mut self) -> Result<()> {
+        use super::next_actions::EntityType;
+
+        if let Some((id, entity_type)) = self.get_selected_entity() {
+            if entity_type == EntityType::Critique {
+                self.dismiss_critique(&id)?;
+            }
+            // For problems, 'd' would be dissolve - add later with input
+        }
+        Ok(())
+    }
+
+    fn accept_solution(&mut self, solution_id: &str) -> Result<()> {
+        self.store.with_metadata(&format!("Accept solution {}", solution_id), || {
+            let mut solution = self.store.load_solution(solution_id)?;
+            solution.accept();
+            self.store.save_solution(&solution)?;
+            Ok(())
+        })?;
+        self.refresh_data()?;
+        Ok(())
+    }
+
+    fn refute_solution(&mut self, solution_id: &str) -> Result<()> {
+        self.store.with_metadata(&format!("Refute solution {}", solution_id), || {
+            let mut solution = self.store.load_solution(solution_id)?;
+            solution.refute();
+            self.store.save_solution(&solution)?;
+            Ok(())
+        })?;
+        self.refresh_data()?;
+        Ok(())
+    }
+
+    fn address_critique(&mut self, critique_id: &str) -> Result<()> {
+        self.store.with_metadata(&format!("Address critique {}", critique_id), || {
+            let mut critique = self.store.load_critique(critique_id)?;
+            critique.address();
+            self.store.save_critique(&critique)?;
+            Ok(())
+        })?;
+        self.refresh_data()?;
+        Ok(())
+    }
+
+    fn dismiss_critique(&mut self, critique_id: &str) -> Result<()> {
+        self.store.with_metadata(&format!("Dismiss critique {}", critique_id), || {
+            let mut critique = self.store.load_critique(critique_id)?;
+            critique.dismiss();
+            self.store.save_critique(&critique)?;
+            Ok(())
+        })?;
+        self.refresh_data()?;
+        Ok(())
+    }
+
+    fn refresh_data(&mut self) -> Result<()> {
+        self.milestones = self.store.list_milestones()?;
+        self.problems = self.store.list_problems()?;
+        self.solutions = self.store.list_solutions()?;
+        self.critiques = self.store.list_critiques()?;
+
+        let user = self.store.jj_client.user_identity().unwrap_or_default();
+        self.next_actions = super::build_next_actions(&self.problems, &self.solutions, &self.critiques, &user);
+        self.rebuild_tree();
+        self.update_selected_detail();
+
+        Ok(())
     }
 }
