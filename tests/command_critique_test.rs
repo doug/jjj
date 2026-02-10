@@ -10,10 +10,9 @@ fn test_critique_new_creates_critique() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "p1"]);
-    let stdout = run_jjj_success(&dir, &["critique", "new", "s1", "Test Critique"]);
+    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "Problem"]);
+    let stdout = run_jjj_success(&dir, &["critique", "new", "Solution", "Test Critique"]);
 
-    assert!(stdout.contains("c1"), "Expected c1 in output: {}", stdout);
     assert!(
         stdout.contains("Test Critique"),
         "Expected title in output: {}",
@@ -29,13 +28,13 @@ fn test_critique_new_with_severity() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "p1"]);
+    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "Problem"]);
     run_jjj_success(
         &dir,
-        &["critique", "new", "s1", "Critical Issue", "--severity", "critical"],
+        &["critique", "new", "Solution", "Critical Issue", "--severity", "critical"],
     );
 
-    let stdout = run_jjj_success(&dir, &["critique", "show", "c1"]);
+    let stdout = run_jjj_success(&dir, &["critique", "show", "Critical Issue"]);
     assert!(
         stdout.contains("critical") || stdout.contains("Critical"),
         "Expected critical severity: {}",
@@ -51,13 +50,13 @@ fn test_critique_new_with_reviewer() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "p1"]);
+    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "Problem"]);
     run_jjj_success(
         &dir,
-        &["critique", "new", "s1", "Review Request", "--reviewer", "bob"],
+        &["critique", "new", "Solution", "Review Request", "--reviewer", "bob"],
     );
 
-    let stdout = run_jjj_success(&dir, &["critique", "show", "c1", "--json"]);
+    let stdout = run_jjj_success(&dir, &["critique", "show", "Review Request", "--json"]);
     assert!(
         stdout.contains("\"reviewer\": \"bob\""),
         "Expected reviewer bob: {}",
@@ -73,13 +72,13 @@ fn test_critique_list_shows_all() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "p1"]);
-    run_jjj_success(&dir, &["critique", "new", "s1", "First Critique"]);
-    run_jjj_success(&dir, &["critique", "new", "s1", "Second Critique"]);
+    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "Problem"]);
+    run_jjj_success(&dir, &["critique", "new", "Solution", "First Critique"]);
+    run_jjj_success(&dir, &["critique", "new", "Solution", "Second Critique"]);
 
     let stdout = run_jjj_success(&dir, &["critique", "list"]);
-    assert!(stdout.contains("c1"), "Expected c1: {}", stdout);
-    assert!(stdout.contains("c2"), "Expected c2: {}", stdout);
+    assert!(stdout.contains("First Critique"), "Expected First Critique: {}", stdout);
+    assert!(stdout.contains("Second Critique"), "Expected Second Critique: {}", stdout);
 }
 
 #[test]
@@ -90,12 +89,12 @@ fn test_critique_list_filter_by_solution() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Solution 1", "--problem", "p1"]);
-    run_jjj_success(&dir, &["solution", "new", "Solution 2", "--problem", "p1"]);
-    run_jjj_success(&dir, &["critique", "new", "s1", "Critique on S1"]);
-    run_jjj_success(&dir, &["critique", "new", "s2", "Critique on S2"]);
+    run_jjj_success(&dir, &["solution", "new", "Solution 1", "--problem", "Problem"]);
+    run_jjj_success(&dir, &["solution", "new", "Solution 2", "--problem", "Problem"]);
+    run_jjj_success(&dir, &["critique", "new", "Solution 1", "Critique on S1"]);
+    run_jjj_success(&dir, &["critique", "new", "Solution 2", "Critique on S2"]);
 
-    let stdout = run_jjj_success(&dir, &["critique", "list", "--solution", "s1"]);
+    let stdout = run_jjj_success(&dir, &["critique", "list", "--solution", "Solution 1"]);
     assert!(
         stdout.contains("Critique on S1"),
         "Expected S1 critique: {}",
@@ -116,10 +115,10 @@ fn test_critique_list_filter_by_status() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "p1"]);
-    run_jjj_success(&dir, &["critique", "new", "s1", "Open Critique"]);
-    run_jjj_success(&dir, &["critique", "new", "s1", "Addressed Critique"]);
-    run_jjj_success(&dir, &["critique", "address", "c2"]);
+    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "Problem"]);
+    run_jjj_success(&dir, &["critique", "new", "Solution", "Open Critique"]);
+    run_jjj_success(&dir, &["critique", "new", "Solution", "Addressed Critique"]);
+    run_jjj_success(&dir, &["critique", "address", "Addressed Critique"]);
 
     let stdout = run_jjj_success(&dir, &["critique", "list", "--status", "open"]);
     assert!(
@@ -142,14 +141,14 @@ fn test_critique_list_filter_by_reviewer() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "p1"]);
+    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "Problem"]);
     run_jjj_success(
         &dir,
-        &["critique", "new", "s1", "For Alice", "--reviewer", "alice"],
+        &["critique", "new", "Solution", "For Alice", "--reviewer", "alice"],
     );
     run_jjj_success(
         &dir,
-        &["critique", "new", "s1", "For Bob", "--reviewer", "bob"],
+        &["critique", "new", "Solution", "For Bob", "--reviewer", "bob"],
     );
 
     let stdout = run_jjj_success(&dir, &["critique", "list", "--reviewer", "alice"]);
@@ -173,8 +172,8 @@ fn test_critique_list_json_output() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "p1"]);
-    run_jjj_success(&dir, &["critique", "new", "s1", "JSON Critique"]);
+    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "Problem"]);
+    run_jjj_success(&dir, &["critique", "new", "Solution", "JSON Critique"]);
 
     let stdout = run_jjj_success(&dir, &["critique", "list", "--json"]);
     let json: serde_json::Value =
@@ -182,7 +181,8 @@ fn test_critique_list_json_output() {
     assert!(json.is_array());
     let arr = json.as_array().unwrap();
     assert_eq!(arr.len(), 1);
-    assert_eq!(arr[0]["id"], "c1");
+    // ID should exist but we don't assert specific value
+    assert!(arr[0]["id"].is_string(), "Expected id to be a string");
     assert_eq!(arr[0]["title"], "JSON Critique");
 }
 
@@ -194,13 +194,13 @@ fn test_critique_show_details() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "p1"]);
+    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "Problem"]);
     run_jjj_success(
         &dir,
-        &["critique", "new", "s1", "Detailed Critique", "--severity", "high"],
+        &["critique", "new", "Solution", "Detailed Critique", "--severity", "high"],
     );
 
-    let stdout = run_jjj_success(&dir, &["critique", "show", "c1"]);
+    let stdout = run_jjj_success(&dir, &["critique", "show", "Detailed Critique"]);
     assert!(
         stdout.contains("Detailed Critique"),
         "Expected title: {}",
@@ -211,7 +211,7 @@ fn test_critique_show_details() {
         "Expected severity: {}",
         stdout
     );
-    assert!(stdout.contains("s1"), "Expected solution id: {}", stdout);
+    assert!(stdout.contains("Solution"), "Expected solution reference: {}", stdout);
 }
 
 #[test]
@@ -222,15 +222,16 @@ fn test_critique_show_json_output() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "p1"]);
-    run_jjj_success(&dir, &["critique", "new", "s1", "JSON Show"]);
+    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "Problem"]);
+    run_jjj_success(&dir, &["critique", "new", "Solution", "JSON Show"]);
 
-    let stdout = run_jjj_success(&dir, &["critique", "show", "c1", "--json"]);
+    let stdout = run_jjj_success(&dir, &["critique", "show", "JSON Show", "--json"]);
     let json: serde_json::Value =
         serde_json::from_str(&stdout).expect("Failed to parse JSON");
-    assert_eq!(json["id"], "c1");
+    // ID should exist but we don't assert specific value
+    assert!(json["id"].is_string(), "Expected id to be a string");
     assert_eq!(json["title"], "JSON Show");
-    assert_eq!(json["solution_id"], "s1");
+    assert!(json["solution_id"].is_string(), "Expected solution_id to be a string");
 }
 
 #[test]
@@ -241,17 +242,17 @@ fn test_critique_address() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "p1"]);
-    run_jjj_success(&dir, &["critique", "new", "s1", "To Address"]);
+    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "Problem"]);
+    run_jjj_success(&dir, &["critique", "new", "Solution", "To Address"]);
 
-    let stdout = run_jjj_success(&dir, &["critique", "address", "c1"]);
+    let stdout = run_jjj_success(&dir, &["critique", "address", "To Address"]);
     assert!(
         stdout.contains("addressed"),
         "Expected addressed confirmation: {}",
         stdout
     );
 
-    let show = run_jjj_success(&dir, &["critique", "show", "c1"]);
+    let show = run_jjj_success(&dir, &["critique", "show", "To Address"]);
     assert!(
         show.contains("Addressed") || show.contains("addressed"),
         "Expected addressed status: {}",
@@ -267,17 +268,17 @@ fn test_critique_dismiss() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "p1"]);
-    run_jjj_success(&dir, &["critique", "new", "s1", "To Dismiss"]);
+    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "Problem"]);
+    run_jjj_success(&dir, &["critique", "new", "Solution", "To Dismiss"]);
 
-    let stdout = run_jjj_success(&dir, &["critique", "dismiss", "c1"]);
+    let stdout = run_jjj_success(&dir, &["critique", "dismiss", "To Dismiss"]);
     assert!(
         stdout.contains("dismissed"),
         "Expected dismissed confirmation: {}",
         stdout
     );
 
-    let show = run_jjj_success(&dir, &["critique", "show", "c1"]);
+    let show = run_jjj_success(&dir, &["critique", "show", "To Dismiss"]);
     assert!(
         show.contains("Dismissed") || show.contains("dismissed"),
         "Expected dismissed status: {}",
@@ -293,17 +294,17 @@ fn test_critique_validate() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Flawed Solution", "--problem", "p1"]);
-    run_jjj_success(&dir, &["critique", "new", "s1", "Valid Flaw"]);
+    run_jjj_success(&dir, &["solution", "new", "Flawed Solution", "--problem", "Problem"]);
+    run_jjj_success(&dir, &["critique", "new", "Flawed Solution", "Valid Flaw"]);
 
-    let stdout = run_jjj_success(&dir, &["critique", "validate", "c1"]);
+    let stdout = run_jjj_success(&dir, &["critique", "validate", "Valid Flaw"]);
     assert!(
         stdout.contains("validated") || stdout.contains("correct"),
         "Expected validated confirmation: {}",
         stdout
     );
 
-    let show = run_jjj_success(&dir, &["critique", "show", "c1"]);
+    let show = run_jjj_success(&dir, &["critique", "show", "Valid Flaw"]);
     assert!(
         show.contains("Valid") || show.contains("valid"),
         "Expected valid status: {}",
@@ -319,11 +320,11 @@ fn test_critique_edit() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "p1"]);
-    run_jjj_success(&dir, &["critique", "new", "s1", "Original"]);
-    run_jjj_success(&dir, &["critique", "edit", "c1", "--title", "Updated Title"]);
+    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "Problem"]);
+    run_jjj_success(&dir, &["critique", "new", "Solution", "Original"]);
+    run_jjj_success(&dir, &["critique", "edit", "Original", "--title", "Updated Title"]);
 
-    let stdout = run_jjj_success(&dir, &["critique", "show", "c1"]);
+    let stdout = run_jjj_success(&dir, &["critique", "show", "Updated Title"]);
     assert!(
         stdout.contains("Updated Title"),
         "Expected updated title: {}",
@@ -339,11 +340,11 @@ fn test_critique_edit_severity() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "p1"]);
-    run_jjj_success(&dir, &["critique", "new", "s1", "Low Issue"]);
-    run_jjj_success(&dir, &["critique", "edit", "c1", "--severity", "critical"]);
+    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "Problem"]);
+    run_jjj_success(&dir, &["critique", "new", "Solution", "Low Issue"]);
+    run_jjj_success(&dir, &["critique", "edit", "Low Issue", "--severity", "critical"]);
 
-    let stdout = run_jjj_success(&dir, &["critique", "show", "c1"]);
+    let stdout = run_jjj_success(&dir, &["critique", "show", "Low Issue"]);
     assert!(
         stdout.contains("critical") || stdout.contains("Critical"),
         "Expected critical severity: {}",
@@ -359,11 +360,11 @@ fn test_critique_reply() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "p1"]);
-    run_jjj_success(&dir, &["critique", "new", "s1", "Discussion Starter"]);
+    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "Problem"]);
+    run_jjj_success(&dir, &["critique", "new", "Solution", "Discussion Starter"]);
     let reply_output = run_jjj_success(
         &dir,
-        &["critique", "reply", "c1", "This is my response to the critique"],
+        &["critique", "reply", "Discussion Starter", "This is my response to the critique"],
     );
     // Reply command should confirm the reply was added
     assert!(
@@ -372,7 +373,7 @@ fn test_critique_reply() {
         reply_output
     );
 
-    let stdout = run_jjj_success(&dir, &["critique", "show", "c1"]);
+    let stdout = run_jjj_success(&dir, &["critique", "show", "Discussion Starter"]);
     // The implementation shows replies under "## Discussion" section
     assert!(
         stdout.contains("Discussion") || stdout.contains("This is my response"),
@@ -389,21 +390,21 @@ fn test_critique_blocks_solution_accept() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Blocked", "--problem", "p1"]);
-    run_jjj_success(&dir, &["critique", "new", "s1", "Blocker"]);
+    run_jjj_success(&dir, &["solution", "new", "Blocked", "--problem", "Problem"]);
+    run_jjj_success(&dir, &["critique", "new", "Blocked", "Blocker"]);
 
     // Try to accept - should fail
-    let output = run_jjj(&dir, &["solution", "accept", "s1"]);
+    let output = run_jjj(&dir, &["solution", "accept", "Blocked"]);
     assert!(
         !output.status.success(),
         "Accept should fail with open critique"
     );
 
     // Address the critique
-    run_jjj_success(&dir, &["critique", "address", "c1"]);
+    run_jjj_success(&dir, &["critique", "address", "Blocker"]);
 
     // Now accept should work
-    let stdout = run_jjj_success(&dir, &["solution", "accept", "s1"]);
+    let stdout = run_jjj_success(&dir, &["solution", "accept", "Blocked"]);
     assert!(
         stdout.contains("accepted"),
         "Expected accepted: {}",
@@ -418,7 +419,7 @@ fn test_critique_show_nonexistent_fails() {
     }
     let dir = setup_test_repo();
 
-    let output = run_jjj(&dir, &["critique", "show", "c999"]);
+    let output = run_jjj(&dir, &["critique", "show", "nonexistent-critique-xyz"]);
     assert!(
         !output.status.success(),
         "Expected failure for nonexistent critique"
@@ -433,11 +434,11 @@ fn test_critique_on_finalized_solution_warns() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "p1"]);
-    run_jjj_success(&dir, &["solution", "accept", "s1"]);
+    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "Problem"]);
+    run_jjj_success(&dir, &["solution", "accept", "Solution"]);
 
     // Creating critique on accepted solution should warn but succeed
-    let output = run_jjj(&dir, &["critique", "new", "s1", "Late Critique"]);
+    let output = run_jjj(&dir, &["critique", "new", "Solution", "Late Critique"]);
     assert!(output.status.success(), "Critique creation should succeed");
     let combined = format!(
         "{}{}",

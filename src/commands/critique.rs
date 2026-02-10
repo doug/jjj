@@ -1,6 +1,7 @@
 use crate::cli::CritiqueAction;
 use crate::context::CommandContext;
 use crate::db::{search, Database};
+use crate::display::truncated_prefixes;
 use crate::error::Result;
 use crate::models::{
     Critique, CritiqueSeverity, CritiqueStatus, Event, EventExtra, EventType, SolutionStatus,
@@ -39,13 +40,14 @@ pub fn execute(ctx: &CommandContext, action: CritiqueAction) -> Result<()> {
 
 fn new_critique(
     ctx: &CommandContext,
-    solution_id: String,
+    solution_input: String,
     title: String,
     severity_str: String,
     file: Option<String>,
     line: Option<usize>,
     reviewer: Option<String>,
 ) -> Result<()> {
+    let solution_id = ctx.resolve_solution(&solution_input)?;
     let store = &ctx.store;
 
     // Parse severity
@@ -145,9 +147,10 @@ fn list_critiques(
 
     let mut critiques = store.list_critiques()?;
 
-    // Filter by solution
-    if let Some(ref sid) = solution_filter {
-        critiques.retain(|c| &c.solution_id == sid);
+    // Filter by solution (resolve input if provided)
+    if let Some(ref solution_input) = solution_filter {
+        let solution_id = ctx.resolve_solution(solution_input)?;
+        critiques.retain(|c| c.solution_id == solution_id);
     }
 
     // Filter by status
@@ -186,13 +189,25 @@ fn list_critiques(
         return Ok(());
     }
 
+    // Calculate truncated prefixes for critiques
+    let critique_uuids: Vec<&str> = critiques.iter().map(|c| c.id.as_str()).collect();
+    let critique_prefixes = truncated_prefixes(&critique_uuids);
+
+    // Calculate truncated prefixes for solutions (for display)
+    let solution_uuids: Vec<&str> = critiques.iter().map(|c| c.solution_id.as_str()).collect();
+    let solution_prefixes = truncated_prefixes(&solution_uuids);
+
     println!(
-        "{:<8} {:<12} {:<10} {:<10} TITLE",
+        "{:<10} {:<12} {:<10} {:<10} TITLE",
         "ID", "STATUS", "SEVERITY", "SOLUTION"
     );
     println!("{}", "-".repeat(80));
 
-    for critique in &critiques {
+    for ((critique, (_, crit_prefix)), (_, sol_prefix)) in critiques
+        .iter()
+        .zip(critique_prefixes.iter())
+        .zip(solution_prefixes.iter())
+    {
         let status_icon = match critique.status {
             CritiqueStatus::Open => "?",
             CritiqueStatus::Addressed => "+",
@@ -201,12 +216,12 @@ fn list_critiques(
         };
 
         println!(
-            "{:<8} {}{:<11} {:<10} {:<10} {}",
-            critique.id,
+            "{:<10} {}{:<11} {:<10} {:<10} {}",
+            crit_prefix,
             status_icon,
             critique.status,
             critique.severity,
-            critique.solution_id,
+            sol_prefix,
             critique.title
         );
     }
@@ -214,7 +229,8 @@ fn list_critiques(
     Ok(())
 }
 
-fn show_critique(ctx: &CommandContext, critique_id: String, json: bool) -> Result<()> {
+fn show_critique(ctx: &CommandContext, critique_input: String, json: bool) -> Result<()> {
+    let critique_id = ctx.resolve_critique(&critique_input)?;
     let store = &ctx.store;
 
     let critique = store.load_critique(&critique_id)?;
@@ -267,11 +283,12 @@ fn show_critique(ctx: &CommandContext, critique_id: String, json: bool) -> Resul
 
 fn edit_critique(
     ctx: &CommandContext,
-    critique_id: String,
+    critique_input: String,
     title: Option<String>,
     severity: Option<String>,
     status: Option<String>,
 ) -> Result<()> {
+    let critique_id = ctx.resolve_critique(&critique_input)?;
     let store = &ctx.store;
 
     store.with_metadata(&format!("Edit critique {}", critique_id), || {
@@ -297,7 +314,8 @@ fn edit_critique(
     })
 }
 
-fn address_critique(ctx: &CommandContext, critique_id: String) -> Result<()> {
+fn address_critique(ctx: &CommandContext, critique_input: String) -> Result<()> {
+    let critique_id = ctx.resolve_critique(&critique_input)?;
     let store = &ctx.store;
 
     // Create event for decision log
@@ -317,7 +335,8 @@ fn address_critique(ctx: &CommandContext, critique_id: String) -> Result<()> {
     })
 }
 
-fn validate_critique(ctx: &CommandContext, critique_id: String) -> Result<()> {
+fn validate_critique(ctx: &CommandContext, critique_input: String) -> Result<()> {
+    let critique_id = ctx.resolve_critique(&critique_input)?;
     let store = &ctx.store;
 
     // Create event for decision log
@@ -354,7 +373,8 @@ fn validate_critique(ctx: &CommandContext, critique_id: String) -> Result<()> {
     })
 }
 
-fn dismiss_critique(ctx: &CommandContext, critique_id: String) -> Result<()> {
+fn dismiss_critique(ctx: &CommandContext, critique_input: String) -> Result<()> {
+    let critique_id = ctx.resolve_critique(&critique_input)?;
     let store = &ctx.store;
 
     // Create event for decision log
@@ -374,7 +394,8 @@ fn dismiss_critique(ctx: &CommandContext, critique_id: String) -> Result<()> {
     })
 }
 
-fn reply_to_critique(ctx: &CommandContext, critique_id: String, body: String) -> Result<()> {
+fn reply_to_critique(ctx: &CommandContext, critique_input: String, body: String) -> Result<()> {
+    let critique_id = ctx.resolve_critique(&critique_input)?;
     let store = &ctx.store;
 
     store.with_metadata(&format!("Reply to critique {}", critique_id), || {

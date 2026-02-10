@@ -1,6 +1,7 @@
 use crate::cli::ProblemAction;
 use crate::context::CommandContext;
 use crate::db::{search, Database};
+use crate::display::truncated_prefixes;
 use crate::error::Result;
 use crate::models::{Event, EventType, Priority, Problem, ProblemStatus};
 use crate::storage::MetadataStore;
@@ -44,15 +45,19 @@ fn new_problem(
 ) -> Result<()> {
     let store = &ctx.store;
 
-    // Validate parent if provided
-    if let Some(ref parent_id) = parent {
-        store.load_problem(parent_id)?;
-    }
+    // Resolve and validate parent if provided
+    let resolved_parent = if let Some(ref parent_input) = parent {
+        Some(ctx.resolve_problem(parent_input)?)
+    } else {
+        None
+    };
 
-    // Validate milestone if provided
-    if let Some(ref milestone_id) = milestone {
-        store.load_milestone(milestone_id)?;
-    }
+    // Resolve and validate milestone if provided
+    let resolved_milestone = if let Some(ref milestone_input) = milestone {
+        Some(ctx.resolve_milestone(milestone_input)?)
+    } else {
+        None
+    };
 
     let user = store.get_current_user()?;
 
@@ -64,7 +69,7 @@ fn new_problem(
         problem.priority = priority.parse::<Priority>()?;
 
         // Set parent
-        if let Some(ref parent_id) = parent {
+        if let Some(ref parent_id) = resolved_parent {
             problem.set_parent(Some(parent_id.clone()));
 
             // Update parent's child_ids
@@ -74,7 +79,7 @@ fn new_problem(
         }
 
         // Set milestone
-        if let Some(ref milestone_id) = milestone {
+        if let Some(ref milestone_id) = resolved_milestone {
             problem.set_milestone(Some(milestone_id.clone()));
 
             // Update milestone's problem_ids
@@ -90,8 +95,8 @@ fn new_problem(
         store.save_problem(&problem)?;
 
         println!("Created problem {} ({})", problem.id, problem.title);
-        if parent.is_some() {
-            println!("  Parent: {}", parent.unwrap());
+        if let Some(ref parent_id) = resolved_parent {
+            println!("  Parent: {}", parent_id);
         }
         Ok(())
     })
@@ -152,10 +157,14 @@ fn list_problems(
             return Ok(());
         }
 
-        println!("{:<8} {:<12} TITLE", "ID", "STATUS");
+        // Calculate truncated prefixes
+        let uuids: Vec<&str> = problems.iter().map(|p| p.id.as_str()).collect();
+        let prefixes = truncated_prefixes(&uuids);
+
+        println!("{:<10} {:<12} TITLE", "ID", "STATUS");
         println!("{}", "-".repeat(60));
 
-        for problem in &problems {
+        for (problem, (_, prefix)) in problems.iter().zip(prefixes.iter()) {
             let status_icon = match problem.status {
                 ProblemStatus::Open => " ",
                 ProblemStatus::InProgress => ">",
@@ -163,8 +172,8 @@ fn list_problems(
                 ProblemStatus::Dissolved => "~",
             };
             println!(
-                "{:<8} {}{:<11} {}",
-                problem.id, status_icon, problem.status, problem.title
+                "{:<10} {}{:<11} {}",
+                prefix, status_icon, problem.status, problem.title
             );
         }
     }
@@ -207,9 +216,10 @@ fn print_problem_tree(store: &MetadataStore, problem: &Problem, depth: usize) ->
     Ok(())
 }
 
-fn show_problem(ctx: &CommandContext, problem_id: String, json: bool) -> Result<()> {
+fn show_problem(ctx: &CommandContext, problem_input: String, json: bool) -> Result<()> {
     let store = &ctx.store;
 
+    let problem_id = ctx.resolve_problem(&problem_input)?;
     let problem = store.load_problem(&problem_id)?;
 
     if json {
@@ -283,13 +293,26 @@ fn show_problem(ctx: &CommandContext, problem_id: String, json: bool) -> Result<
 
 fn edit_problem(
     ctx: &CommandContext,
-    problem_id: String,
+    problem_input: String,
     title: Option<String>,
     status: Option<String>,
     priority: Option<String>,
     parent: Option<String>,
 ) -> Result<()> {
     let store = &ctx.store;
+
+    let problem_id = ctx.resolve_problem(&problem_input)?;
+
+    // Resolve parent if provided and not empty
+    let resolved_parent = if let Some(ref parent_input) = parent {
+        if parent_input.is_empty() {
+            Some(String::new()) // Empty means clear parent
+        } else {
+            Some(ctx.resolve_problem(parent_input)?)
+        }
+    } else {
+        None
+    };
 
     store.with_metadata(&format!("Edit problem {}", problem_id), || {
         let mut problem = store.load_problem(&problem_id)?;
@@ -307,15 +330,11 @@ fn edit_problem(
             problem.priority = p_str.parse::<Priority>()?;
         }
 
-        if let Some(new_parent) = parent {
-            // Validate new parent exists
-            if !new_parent.is_empty() {
-                store.load_problem(&new_parent)?;
-            }
+        if let Some(ref new_parent) = resolved_parent {
             problem.set_parent(if new_parent.is_empty() {
                 None
             } else {
-                Some(new_parent)
+                Some(new_parent.clone())
             });
         }
 
@@ -325,11 +344,12 @@ fn edit_problem(
     })
 }
 
-fn show_tree(ctx: &CommandContext, problem_id: Option<String>) -> Result<()> {
+fn show_tree(ctx: &CommandContext, problem_input: Option<String>) -> Result<()> {
     let store = &ctx.store;
 
-    if let Some(pid) = problem_id {
-        let problem = store.load_problem(&pid)?;
+    if let Some(ref input) = problem_input {
+        let problem_id = ctx.resolve_problem(input)?;
+        let problem = store.load_problem(&problem_id)?;
         print_problem_tree(&store, &problem, 0)?;
     } else {
         let root_problems = store.get_root_problems()?;
@@ -345,8 +365,10 @@ fn show_tree(ctx: &CommandContext, problem_id: Option<String>) -> Result<()> {
     Ok(())
 }
 
-fn solve_problem(ctx: &CommandContext, problem_id: String) -> Result<()> {
+fn solve_problem(ctx: &CommandContext, problem_input: String) -> Result<()> {
     let store = &ctx.store;
+
+    let problem_id = ctx.resolve_problem(&problem_input)?;
 
     // Check if can be solved
     let (can_solve, message) = store.can_solve_problem(&problem_id)?;
@@ -392,10 +414,12 @@ fn solve_problem(ctx: &CommandContext, problem_id: String) -> Result<()> {
 
 fn dissolve_problem(
     ctx: &CommandContext,
-    problem_id: String,
+    problem_input: String,
     reason: Option<String>,
 ) -> Result<()> {
     let store = &ctx.store;
+
+    let problem_id = ctx.resolve_problem(&problem_input)?;
 
     // Create event for decision log
     let user = store.get_current_user()?;
@@ -423,10 +447,12 @@ fn dissolve_problem(
 
 fn assign_problem(
     ctx: &CommandContext,
-    problem_id: String,
+    problem_input: String,
     assignee: Option<String>,
 ) -> Result<()> {
     let store = &ctx.store;
+
+    let problem_id = ctx.resolve_problem(&problem_input)?;
 
     let assignee_name = match assignee {
         Some(name) => name,

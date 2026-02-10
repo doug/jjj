@@ -1,6 +1,8 @@
 use crate::context::CommandContext;
+use crate::display::{format_with_type_prefix, truncated_prefixes};
 use crate::error::Result;
 use crate::models::{CritiqueStatus, Critique, Priority, ProblemStatus, SolutionStatus};
+use std::collections::HashMap;
 
 fn priority_sort_value(priority: &Priority) -> i32 {
     match priority {
@@ -58,20 +60,46 @@ pub fn execute(ctx: &CommandContext, all: bool, mine: bool, limit: Option<usize>
         });
         println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
+        // Build a prefix map for all entity IDs for display
+        let all_uuids: Vec<&str> = problems
+            .iter()
+            .map(|p| p.id.as_str())
+            .chain(solutions.iter().map(|s| s.id.as_str()))
+            .chain(critiques.iter().map(|c| c.id.as_str()))
+            .collect();
+        let prefix_list = truncated_prefixes(&all_uuids);
+        let prefix_map: HashMap<&str, &str> = prefix_list
+            .iter()
+            .map(|(uuid, prefix)| (uuid.as_str(), prefix.as_str()))
+            .collect();
+
+        // Helper to get display ID with type prefix
+        let display_id = |entity_type: &str, id: &str| -> String {
+            let prefix = prefix_map.get(id).map(|s| *s).unwrap_or(id);
+            format_with_type_prefix(entity_type, prefix)
+        };
+
         // 1. Active Solution section
         let current_change = jj_client.current_change_id().ok();
         if let Some(change_id) = &current_change {
             if let Some(active) = solutions.iter().find(|s| s.change_ids.contains(change_id)) {
-                println!("Active: {} \"{}\" -> {} [{}]", active.id, active.title, active.problem_id, active.status);
+                let solution_display = display_id("solution", &active.id);
+                let problem_display = display_id("problem", &active.problem_id);
+                println!(
+                    "Active: {} \"{}\" -> {} [{}]",
+                    solution_display, active.title, problem_display, active.status
+                );
 
                 // Show open critiques on active solution
-                let active_critiques: Vec<_> = critiques.iter()
+                let active_critiques: Vec<_> = critiques
+                    .iter()
                     .filter(|c| c.solution_id == active.id && c.status == CritiqueStatus::Open)
                     .collect();
                 if !active_critiques.is_empty() {
                     println!("  Open critiques: {}", active_critiques.len());
                     for c in &active_critiques {
-                        println!("    {}: {} [{}]", c.id, c.title, c.severity);
+                        let critique_display = display_id("critique", &c.id);
+                        println!("    {}: {} [{}]", critique_display, c.title, c.severity);
                     }
                 }
                 println!();
@@ -90,18 +118,29 @@ pub fn execute(ctx: &CommandContext, all: bool, mine: bool, limit: Option<usize>
             println!("Next actions:\n");
             for (i, item) in items.iter().enumerate() {
                 let category = item["category"].as_str().unwrap_or("").to_uppercase();
+                let entity_type = item["entity_type"].as_str().unwrap_or("");
                 let entity_id = item["entity_id"].as_str().unwrap_or("");
                 let title = item["title"].as_str().unwrap_or("");
                 let summary = item["summary"].as_str().unwrap_or("");
 
-                println!("{}. [{}] {}: {} -- {}", i + 1, category, entity_id, title, summary);
+                let entity_display = display_id(entity_type, entity_id);
+                println!(
+                    "{}. [{}] {}: {} -- {}",
+                    i + 1,
+                    category,
+                    entity_display,
+                    title,
+                    summary
+                );
 
                 if let Some(details) = item["details"].as_array() {
                     for detail in details {
-                        let id = detail["id"].as_str().unwrap_or("");
+                        let detail_id = detail["id"].as_str().unwrap_or("");
                         let text = detail["text"].as_str().unwrap_or("");
                         let severity = detail["severity"].as_str().unwrap_or("");
-                        println!("   {}: {} [{}]", id, text, severity);
+                        // Details in status are always critiques
+                        let detail_display = display_id("critique", detail_id);
+                        println!("   {}: {} [{}]", detail_display, text, severity);
                     }
                 }
 
@@ -114,7 +153,10 @@ pub fn execute(ctx: &CommandContext, all: bool, mine: bool, limit: Option<usize>
             }
 
             if !all && total_count > effective_limit {
-                println!("Showing {} of {} items. Use --all to see everything.", effective_limit, total_count);
+                println!(
+                    "Showing {} of {} items. Use --all to see everything.",
+                    effective_limit, total_count
+                );
             }
         }
 

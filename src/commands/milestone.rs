@@ -1,5 +1,6 @@
 use crate::cli::MilestoneAction;
 use crate::context::CommandContext;
+use crate::display::truncated_prefixes;
 use crate::error::Result;
 use crate::models::{Milestone, MilestoneStatus, ProblemStatus, SolutionStatus};
 use chrono::NaiveDate;
@@ -57,11 +58,12 @@ fn create_milestone(ctx: &CommandContext, title: String, date: Option<String>) -
 
 fn edit_milestone(
     ctx: &CommandContext,
-    milestone_id: String,
+    milestone_input: String,
     title: Option<String>,
     date: Option<String>,
     status: Option<String>,
 ) -> Result<()> {
+    let milestone_id = ctx.resolve_milestone(&milestone_input)?;
     let store = &ctx.store;
 
     store.with_metadata(&format!("Edit milestone {}", milestone_id), || {
@@ -103,10 +105,14 @@ fn list_milestones(ctx: &CommandContext, json: bool) -> Result<()> {
         return Ok(());
     }
 
-    println!("{:<8} {:<12} {:<12} {:<6} TITLE", "ID", "STATUS", "TARGET", "PROBS");
-    println!("{}", "-".repeat(60));
+    // Calculate truncated prefixes
+    let uuids: Vec<&str> = milestones.iter().map(|m| m.id.as_str()).collect();
+    let prefixes = truncated_prefixes(&uuids);
 
-    for milestone in &milestones {
+    println!("{:<10} {:<12} {:<12} {:<6} TITLE", "ID", "STATUS", "TARGET", "PROBS");
+    println!("{}", "-".repeat(70));
+
+    for (milestone, (_, prefix)) in milestones.iter().zip(prefixes.iter()) {
         let date_str = milestone
             .target_date
             .map(|d| d.format("%Y-%m-%d").to_string())
@@ -120,8 +126,8 @@ fn list_milestones(ctx: &CommandContext, json: bool) -> Result<()> {
         };
 
         println!(
-            "{:<8} {}{:<11} {:<12} {:<6} {}",
-            milestone.id,
+            "{:<10} {}{:<11} {:<12} {:<6} {}",
+            prefix,
             status_icon,
             milestone.status,
             date_str,
@@ -133,7 +139,8 @@ fn list_milestones(ctx: &CommandContext, json: bool) -> Result<()> {
     Ok(())
 }
 
-fn show_milestone(ctx: &CommandContext, milestone_id: String, json: bool) -> Result<()> {
+fn show_milestone(ctx: &CommandContext, milestone_input: String, json: bool) -> Result<()> {
+    let milestone_id = ctx.resolve_milestone(&milestone_input)?;
     let store = &ctx.store;
 
     let milestone = store.load_milestone(&milestone_id)?;
@@ -230,7 +237,9 @@ fn show_milestone(ctx: &CommandContext, milestone_id: String, json: bool) -> Res
     Ok(())
 }
 
-fn add_problem(ctx: &CommandContext, milestone_id: String, problem_id: String) -> Result<()> {
+fn add_problem(ctx: &CommandContext, milestone_input: String, problem_input: String) -> Result<()> {
+    let milestone_id = ctx.resolve_milestone(&milestone_input)?;
+    let problem_id = ctx.resolve_problem(&problem_input)?;
     let store = &ctx.store;
 
     store.with_metadata(
@@ -254,7 +263,9 @@ fn add_problem(ctx: &CommandContext, milestone_id: String, problem_id: String) -
     )
 }
 
-fn remove_problem(ctx: &CommandContext, milestone_id: String, problem_id: String) -> Result<()> {
+fn remove_problem(ctx: &CommandContext, milestone_input: String, problem_input: String) -> Result<()> {
+    let milestone_id = ctx.resolve_milestone(&milestone_input)?;
+    let problem_id = ctx.resolve_problem(&problem_input)?;
     let store = &ctx.store;
 
     store.with_metadata(
@@ -355,7 +366,8 @@ fn show_roadmap(ctx: &CommandContext, json: bool) -> Result<()> {
     Ok(())
 }
 
-fn assign_milestone(ctx: &CommandContext, milestone_id: String, assignee: Option<String>) -> Result<()> {
+fn assign_milestone(ctx: &CommandContext, milestone_input: String, assignee: Option<String>) -> Result<()> {
+    let milestone_id = ctx.resolve_milestone(&milestone_input)?;
     let store = &ctx.store;
 
     let assignee_name = match assignee {
