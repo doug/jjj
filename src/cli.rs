@@ -72,6 +72,20 @@ pub enum Commands {
         json: bool,
     },
 
+    /// Search across all entities
+    Search {
+        /// Search query
+        query: String,
+
+        /// Filter by entity type (problem, solution, critique, milestone, event)
+        #[arg(long, short = 't')]
+        r#type: Option<String>,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
     /// Fetch code and metadata from remote
     Fetch {
         /// Remote to fetch from (default: origin)
@@ -206,6 +220,10 @@ pub enum ProblemAction {
         #[arg(long)]
         milestone: Option<String>,
 
+        /// Search problems
+        #[arg(long)]
+        search: Option<String>,
+
         /// Output in JSON format
         #[arg(long)]
         json: bool,
@@ -310,6 +328,10 @@ pub enum SolutionAction {
         /// Filter by status (proposed, testing, refuted, accepted)
         #[arg(long)]
         status: Option<String>,
+
+        /// Search solutions
+        #[arg(long)]
+        search: Option<String>,
 
         /// Output in JSON format
         #[arg(long)]
@@ -454,6 +476,10 @@ pub enum CritiqueAction {
         /// Filter by assigned reviewer
         #[arg(long)]
         reviewer: Option<String>,
+
+        /// Search critiques
+        #[arg(long)]
+        search: Option<String>,
 
         /// Output in JSON format
         #[arg(long)]
@@ -602,4 +628,3 @@ pub enum MilestoneAction {
         to: Option<String>,
     },
 }
-

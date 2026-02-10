@@ -41,6 +41,9 @@ sha2 = "0.10"
 # Fuzzy matching for comment relocation
 similar = "2.6"
 
+# SQLite storage
+rusqlite = { version = "0.31", features = ["bundled"] }
+
 [dev-dependencies]
 tempfile = "3.13"
 pretty_assertions = "1.4"

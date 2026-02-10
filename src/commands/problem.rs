@@ -1,7 +1,8 @@
 use crate::cli::ProblemAction;
 use crate::context::CommandContext;
+use crate::db::{search, Database};
 use crate::error::Result;
-use crate::models::{Event, EventType, Problem, ProblemStatus, Priority};
+use crate::models::{Event, EventType, Priority, Problem, ProblemStatus};
 use crate::storage::MetadataStore;
 
 pub fn execute(ctx: &CommandContext, action: ProblemAction) -> Result<()> {
@@ -16,8 +17,9 @@ pub fn execute(ctx: &CommandContext, action: ProblemAction) -> Result<()> {
             status,
             tree,
             milestone,
+            search,
             json,
-        } => list_problems(ctx, status, tree, milestone, json),
+        } => list_problems(ctx, status, tree, milestone, search.as_deref(), json),
         ProblemAction::Show { problem_id, json } => show_problem(ctx, problem_id, json),
         ProblemAction::Edit {
             problem_id,
@@ -100,6 +102,7 @@ fn list_problems(
     status_filter: Option<String>,
     tree: bool,
     milestone_filter: Option<String>,
+    search_query: Option<&str>,
     json: bool,
 ) -> Result<()> {
     let store = &ctx.store;
@@ -115,6 +118,20 @@ fn list_problems(
     // Filter by milestone
     if let Some(ref ms_id) = milestone_filter {
         problems.retain(|p| p.milestone_id.as_deref() == Some(ms_id.as_str()));
+    }
+
+    // Filter by search query using FTS
+    if let Some(query) = search_query {
+        let jj_client = ctx.jj();
+        let db_path = jj_client.repo_root().join(".jj").join("jjj.db");
+
+        if db_path.exists() {
+            let db = Database::open(&db_path)?;
+            let results = search::search(db.conn(), query, Some("problem"))?;
+            let matching_ids: std::collections::HashSet<_> =
+                results.iter().map(|r| r.entity_id.as_str()).collect();
+            problems.retain(|p| matching_ids.contains(p.id.as_str()));
+        }
     }
 
     if json {
@@ -242,7 +259,10 @@ fn show_problem(ctx: &CommandContext, problem_id: String, json: bool) -> Result<
                 crate::models::SolutionStatus::Accepted => "+",
                 crate::models::SolutionStatus::Refuted => "x",
             };
-            println!("  {} {} - {} [{}]", status_icon, solution.id, solution.title, solution.status);
+            println!(
+                "  {} {} - {} [{}]",
+                status_icon, solution.id, solution.title, solution.status
+            );
         }
     }
 
@@ -341,11 +361,15 @@ fn solve_problem(ctx: &CommandContext, problem_id: String) -> Result<()> {
 
     // Warn about active solutions still in progress
     let solutions = store.list_solutions()?;
-    let active: Vec<_> = solutions.iter()
+    let active: Vec<_> = solutions
+        .iter()
         .filter(|s| s.problem_id == problem_id && s.is_active())
         .collect();
     if !active.is_empty() {
-        eprintln!("Warning: {} active solution(s) still in progress:", active.len());
+        eprintln!(
+            "Warning: {} active solution(s) still in progress:",
+            active.len()
+        );
         for s in &active {
             eprintln!("  {}: {} [{}]", s.id, s.title, s.status);
         }
@@ -366,7 +390,11 @@ fn solve_problem(ctx: &CommandContext, problem_id: String) -> Result<()> {
     })
 }
 
-fn dissolve_problem(ctx: &CommandContext, problem_id: String, reason: Option<String>) -> Result<()> {
+fn dissolve_problem(
+    ctx: &CommandContext,
+    problem_id: String,
+    reason: Option<String>,
+) -> Result<()> {
     let store = &ctx.store;
 
     // Create event for decision log
@@ -393,7 +421,11 @@ fn dissolve_problem(ctx: &CommandContext, problem_id: String, reason: Option<Str
     })
 }
 
-fn assign_problem(ctx: &CommandContext, problem_id: String, assignee: Option<String>) -> Result<()> {
+fn assign_problem(
+    ctx: &CommandContext,
+    problem_id: String,
+    assignee: Option<String>,
+) -> Result<()> {
     let store = &ctx.store;
 
     let assignee_name = match assignee {
@@ -401,11 +433,14 @@ fn assign_problem(ctx: &CommandContext, problem_id: String, assignee: Option<Str
         None => store.jj_client.user_identity()?,
     };
 
-    store.with_metadata(&format!("Assign problem {} to {}", problem_id, assignee_name), || {
-        let mut problem = store.load_problem(&problem_id)?;
-        problem.assignee = Some(assignee_name.clone());
-        store.save_problem(&problem)?;
-        println!("Problem {} assigned to {}", problem_id, assignee_name);
-        Ok(())
-    })
+    store.with_metadata(
+        &format!("Assign problem {} to {}", problem_id, assignee_name),
+        || {
+            let mut problem = store.load_problem(&problem_id)?;
+            problem.assignee = Some(assignee_name.clone());
+            store.save_problem(&problem)?;
+            println!("Problem {} assigned to {}", problem_id, assignee_name);
+            Ok(())
+        },
+    )
 }

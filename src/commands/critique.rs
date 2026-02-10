@@ -1,7 +1,10 @@
 use crate::cli::CritiqueAction;
 use crate::context::CommandContext;
+use crate::db::{search, Database};
 use crate::error::Result;
-use crate::models::{Critique, CritiqueSeverity, CritiqueStatus, Event, EventExtra, EventType, SolutionStatus};
+use crate::models::{
+    Critique, CritiqueSeverity, CritiqueStatus, Event, EventExtra, EventType, SolutionStatus,
+};
 
 pub fn execute(ctx: &CommandContext, action: CritiqueAction) -> Result<()> {
     match action {
@@ -17,8 +20,9 @@ pub fn execute(ctx: &CommandContext, action: CritiqueAction) -> Result<()> {
             solution,
             status,
             reviewer,
+            search,
             json,
-        } => list_critiques(ctx, solution, status, reviewer, json),
+        } => list_critiques(ctx, solution, status, reviewer, search.as_deref(), json),
         CritiqueAction::Show { critique_id, json } => show_critique(ctx, critique_id, json),
         CritiqueAction::Edit {
             critique_id,
@@ -61,67 +65,72 @@ fn new_critique(
     // Get user for event
     let user = store.get_current_user()?;
 
-    store.with_metadata(&format!("Create critique on {}: {}", solution_id, title), || {
-        let critique_id = store.next_critique_id()?;
-        let mut critique = Critique::new(critique_id.clone(), title.clone(), solution_id.clone());
-        critique.set_severity(severity.clone());
+    store.with_metadata(
+        &format!("Create critique on {}: {}", solution_id, title),
+        || {
+            let critique_id = store.next_critique_id()?;
+            let mut critique =
+                Critique::new(critique_id.clone(), title.clone(), solution_id.clone());
+            critique.set_severity(severity.clone());
 
-        // Set author to current user
-        let author = store.jj_client.user_identity()?;
-        critique.author = Some(author);
+            // Set author to current user
+            let author = store.jj_client.user_identity()?;
+            critique.author = Some(author);
 
-        // Set reviewer if provided
-        if let Some(ref r) = reviewer {
-            critique.reviewer = Some(r.trim_start_matches('@').to_string());
-        }
+            // Set reviewer if provided
+            if let Some(ref r) = reviewer {
+                critique.reviewer = Some(r.trim_start_matches('@').to_string());
+            }
 
-        // Set location if provided
-        if let (Some(file_path), Some(line_num)) = (file.clone(), line) {
-            // Try to read context from file
-            let context = store.jj_client
-                .file_at_revision("@", &file_path)
-                .ok()
-                .map(|content| {
-                    let lines: Vec<String> = content.lines().map(|s| s.to_string()).collect();
-                    let start = line_num.saturating_sub(2);
-                    let end = (line_num + 2).min(lines.len());
-                    lines[start..end].to_vec()
-                })
-                .unwrap_or_default();
+            // Set location if provided
+            if let (Some(file_path), Some(line_num)) = (file.clone(), line) {
+                // Try to read context from file
+                let context = store
+                    .jj_client
+                    .file_at_revision("@", &file_path)
+                    .ok()
+                    .map(|content| {
+                        let lines: Vec<String> = content.lines().map(|s| s.to_string()).collect();
+                        let start = line_num.saturating_sub(2);
+                        let end = (line_num + 2).min(lines.len());
+                        lines[start..end].to_vec()
+                    })
+                    .unwrap_or_default();
 
-            critique.set_location(file_path, line_num, None, context);
-        }
+                critique.set_location(file_path, line_num, None, context);
+            }
 
-        // Create event for decision log
-        let extra = EventExtra {
-            target: Some(solution_id.clone()),
-            severity: Some(severity.to_string()),
-            title: Some(title.clone()),
-            ..Default::default()
-        };
-        let event = Event::new(EventType::CritiqueRaised, critique_id.clone(), user.clone())
-            .with_extra(extra);
-        store.set_pending_event(event);
+            // Create event for decision log
+            let extra = EventExtra {
+                target: Some(solution_id.clone()),
+                severity: Some(severity.to_string()),
+                title: Some(title.clone()),
+                ..Default::default()
+            };
+            let event = Event::new(EventType::CritiqueRaised, critique_id.clone(), user.clone())
+                .with_extra(extra);
+            store.set_pending_event(event);
 
-        store.save_critique(&critique)?;
+            store.save_critique(&critique)?;
 
-        // Update solution's critique_ids
-        let mut solution = store.load_solution(&solution_id)?;
-        solution.add_critique(critique_id.clone());
-        store.save_solution(&solution)?;
+            // Update solution's critique_ids
+            let mut solution = store.load_solution(&solution_id)?;
+            solution.add_critique(critique_id.clone());
+            store.save_solution(&solution)?;
 
-        println!(
-            "Created critique {} ({}) on solution {}",
-            critique.id, critique.title, solution_id
-        );
-        println!("  Severity: {}", severity);
+            println!(
+                "Created critique {} ({}) on solution {}",
+                critique.id, critique.title, solution_id
+            );
+            println!("  Severity: {}", severity);
 
-        if let Some(ref fp) = file {
-            println!("  Location: {}:{}", fp, line.unwrap_or(0));
-        }
+            if let Some(ref fp) = file {
+                println!("  Location: {}:{}", fp, line.unwrap_or(0));
+            }
 
-        Ok(())
-    })
+            Ok(())
+        },
+    )
 }
 
 fn list_critiques(
@@ -129,6 +138,7 @@ fn list_critiques(
     solution_filter: Option<String>,
     status_filter: Option<String>,
     reviewer_filter: Option<String>,
+    search_query: Option<&str>,
     json: bool,
 ) -> Result<()> {
     let store = &ctx.store;
@@ -150,6 +160,20 @@ fn list_critiques(
     if let Some(ref reviewer) = reviewer_filter {
         let reviewer = reviewer.trim_start_matches('@');
         critiques.retain(|c| c.reviewer.as_deref() == Some(reviewer));
+    }
+
+    // Filter by search query using FTS
+    if let Some(query) = search_query {
+        let jj_client = ctx.jj();
+        let db_path = jj_client.repo_root().join(".jj").join("jjj.db");
+
+        if db_path.exists() {
+            let db = Database::open(&db_path)?;
+            let results = search::search(db.conn(), query, Some("critique"))?;
+            let matching_ids: std::collections::HashSet<_> =
+                results.iter().map(|r| r.entity_id.as_str()).collect();
+            critiques.retain(|c| matching_ids.contains(c.id.as_str()));
+        }
     }
 
     if json {
@@ -223,12 +247,19 @@ fn show_critique(ctx: &CommandContext, critique_id: String, json: bool) -> Resul
     if !critique.replies.is_empty() {
         println!("\n## Discussion ({} replies)", critique.replies.len());
         for reply in &critique.replies {
-            println!("\n### {} @ {}", reply.author, reply.created_at.format("%Y-%m-%d %H:%M"));
+            println!(
+                "\n### {} @ {}",
+                reply.author,
+                reply.created_at.format("%Y-%m-%d %H:%M")
+            );
             println!("{}", reply.body);
         }
     }
 
-    println!("\nCreated: {}", critique.created_at.format("%Y-%m-%d %H:%M"));
+    println!(
+        "\nCreated: {}",
+        critique.created_at.format("%Y-%m-%d %H:%M")
+    );
     println!("Updated: {}", critique.updated_at.format("%Y-%m-%d %H:%M"));
 
     Ok(())
@@ -313,7 +344,10 @@ fn validate_critique(ctx: &CommandContext, critique_id: String) -> Result<()> {
                 "\nThe target solution {} should likely be refuted.",
                 solution_id
             );
-            println!("Use 'jjj solution refute {}' to mark it as refuted.", solution_id);
+            println!(
+                "Use 'jjj solution refute {}' to mark it as refuted.",
+                solution_id
+            );
         }
 
         Ok(())

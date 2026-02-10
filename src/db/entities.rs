@@ -1,0 +1,750 @@
+//! CRUD operations for jjj entities in SQLite.
+//!
+//! This module provides functions to store, retrieve, and delete
+//! Problems, Solutions, Critiques, and Milestones from the SQLite database.
+
+use chrono::{DateTime, Utc};
+use rusqlite::{params, Connection, Result as SqliteResult};
+
+use crate::models::{
+    Critique, CritiqueSeverity, CritiqueStatus, Milestone, MilestoneStatus, Priority, Problem,
+    ProblemStatus, Reply, Solution, SolutionStatus,
+};
+
+// ============================================================================
+// Problems
+// ============================================================================
+
+/// Insert or update a problem in the database.
+pub fn upsert_problem(conn: &Connection, problem: &Problem) -> SqliteResult<()> {
+    conn.execute(
+        "INSERT OR REPLACE INTO problems (
+            id, title, status, priority, parent_id, milestone_id, assignee,
+            created_at, updated_at, description, context, dissolved_reason
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+        params![
+            problem.id,
+            problem.title,
+            problem.status.to_string(),
+            format!("{:?}", problem.priority).to_lowercase(),
+            problem.parent_id,
+            problem.milestone_id,
+            problem.assignee,
+            problem.created_at.to_rfc3339(),
+            problem.updated_at.to_rfc3339(),
+            problem.description,
+            problem.context,
+            problem.dissolved_reason,
+        ],
+    )?;
+    Ok(())
+}
+
+/// Load a problem by ID.
+pub fn load_problem(conn: &Connection, id: &str) -> SqliteResult<Option<Problem>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, title, status, priority, parent_id, milestone_id, assignee,
+                created_at, updated_at, description, context, dissolved_reason
+         FROM problems WHERE id = ?1",
+    )?;
+
+    let mut rows = stmt.query(params![id])?;
+
+    if let Some(row) = rows.next()? {
+        Ok(Some(row_to_problem(row)?))
+    } else {
+        Ok(None)
+    }
+}
+
+/// List all problems.
+pub fn list_problems(conn: &Connection) -> SqliteResult<Vec<Problem>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, title, status, priority, parent_id, milestone_id, assignee,
+                created_at, updated_at, description, context, dissolved_reason
+         FROM problems ORDER BY created_at DESC",
+    )?;
+
+    let rows = stmt.query_map([], |row| row_to_problem(row))?;
+
+    rows.collect()
+}
+
+/// Delete a problem by ID. Returns true if a row was deleted.
+pub fn delete_problem(conn: &Connection, id: &str) -> SqliteResult<bool> {
+    let changes = conn.execute("DELETE FROM problems WHERE id = ?1", params![id])?;
+    Ok(changes > 0)
+}
+
+fn row_to_problem(row: &rusqlite::Row) -> SqliteResult<Problem> {
+    let status_str: String = row.get(2)?;
+    let priority_str: String = row.get(3)?;
+    let created_at_str: String = row.get(7)?;
+    let updated_at_str: String = row.get(8)?;
+
+    Ok(Problem {
+        id: row.get(0)?,
+        title: row.get(1)?,
+        status: status_str.parse().unwrap_or(ProblemStatus::Open),
+        priority: priority_str.parse().unwrap_or(Priority::Medium),
+        parent_id: row.get(4)?,
+        milestone_id: row.get(5)?,
+        assignee: row.get(6)?,
+        created_at: DateTime::parse_from_rfc3339(&created_at_str)
+            .map(|dt| dt.with_timezone(&Utc))
+            .unwrap_or_else(|_| Utc::now()),
+        updated_at: DateTime::parse_from_rfc3339(&updated_at_str)
+            .map(|dt| dt.with_timezone(&Utc))
+            .unwrap_or_else(|_| Utc::now()),
+        description: row.get::<_, Option<String>>(9)?.unwrap_or_default(),
+        context: row.get::<_, Option<String>>(10)?.unwrap_or_default(),
+        dissolved_reason: row.get(11)?,
+        // Computed fields - leave empty, will be populated by relationships
+        solution_ids: Vec::new(),
+        child_ids: Vec::new(),
+    })
+}
+
+// ============================================================================
+// Solutions
+// ============================================================================
+
+/// Insert or update a solution in the database.
+pub fn upsert_solution(conn: &Connection, solution: &Solution) -> SqliteResult<()> {
+    let change_ids_json = serde_json::to_string(&solution.change_ids).unwrap_or_else(|_| "[]".to_string());
+
+    conn.execute(
+        "INSERT OR REPLACE INTO solutions (
+            id, title, status, problem_id, change_ids, supersedes, assignee,
+            force_accepted, created_at, updated_at, approach, tradeoffs
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+        params![
+            solution.id,
+            solution.title,
+            solution.status.to_string(),
+            solution.problem_id,
+            change_ids_json,
+            solution.supersedes,
+            solution.assignee,
+            solution.force_accepted,
+            solution.created_at.to_rfc3339(),
+            solution.updated_at.to_rfc3339(),
+            solution.approach,
+            solution.tradeoffs,
+        ],
+    )?;
+    Ok(())
+}
+
+/// Load a solution by ID.
+pub fn load_solution(conn: &Connection, id: &str) -> SqliteResult<Option<Solution>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, title, status, problem_id, change_ids, supersedes, assignee,
+                force_accepted, created_at, updated_at, approach, tradeoffs
+         FROM solutions WHERE id = ?1",
+    )?;
+
+    let mut rows = stmt.query(params![id])?;
+
+    if let Some(row) = rows.next()? {
+        Ok(Some(row_to_solution(row)?))
+    } else {
+        Ok(None)
+    }
+}
+
+/// List all solutions.
+pub fn list_solutions(conn: &Connection) -> SqliteResult<Vec<Solution>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, title, status, problem_id, change_ids, supersedes, assignee,
+                force_accepted, created_at, updated_at, approach, tradeoffs
+         FROM solutions ORDER BY created_at DESC",
+    )?;
+
+    let rows = stmt.query_map([], |row| row_to_solution(row))?;
+
+    rows.collect()
+}
+
+/// List solutions for a specific problem.
+pub fn list_solutions_for_problem(conn: &Connection, problem_id: &str) -> SqliteResult<Vec<Solution>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, title, status, problem_id, change_ids, supersedes, assignee,
+                force_accepted, created_at, updated_at, approach, tradeoffs
+         FROM solutions WHERE problem_id = ?1 ORDER BY created_at DESC",
+    )?;
+
+    let rows = stmt.query_map(params![problem_id], |row| row_to_solution(row))?;
+
+    rows.collect()
+}
+
+/// Delete a solution by ID. Returns true if a row was deleted.
+pub fn delete_solution(conn: &Connection, id: &str) -> SqliteResult<bool> {
+    let changes = conn.execute("DELETE FROM solutions WHERE id = ?1", params![id])?;
+    Ok(changes > 0)
+}
+
+fn row_to_solution(row: &rusqlite::Row) -> SqliteResult<Solution> {
+    let status_str: String = row.get(2)?;
+    let change_ids_json: String = row.get::<_, Option<String>>(4)?.unwrap_or_else(|| "[]".to_string());
+    let created_at_str: String = row.get(8)?;
+    let updated_at_str: String = row.get(9)?;
+
+    let change_ids: Vec<String> = serde_json::from_str(&change_ids_json).unwrap_or_default();
+
+    Ok(Solution {
+        id: row.get(0)?,
+        title: row.get(1)?,
+        status: status_str.parse().unwrap_or(SolutionStatus::Proposed),
+        problem_id: row.get(3)?,
+        change_ids,
+        supersedes: row.get(5)?,
+        assignee: row.get(6)?,
+        force_accepted: row.get(7)?,
+        created_at: DateTime::parse_from_rfc3339(&created_at_str)
+            .map(|dt| dt.with_timezone(&Utc))
+            .unwrap_or_else(|_| Utc::now()),
+        updated_at: DateTime::parse_from_rfc3339(&updated_at_str)
+            .map(|dt| dt.with_timezone(&Utc))
+            .unwrap_or_else(|_| Utc::now()),
+        approach: row.get::<_, Option<String>>(10)?.unwrap_or_default(),
+        tradeoffs: row.get::<_, Option<String>>(11)?.unwrap_or_default(),
+        // Computed field - leave empty, will be populated by relationships
+        critique_ids: Vec::new(),
+    })
+}
+
+// ============================================================================
+// Critiques
+// ============================================================================
+
+/// Insert or update a critique in the database.
+pub fn upsert_critique(conn: &Connection, critique: &Critique) -> SqliteResult<()> {
+    let replies_json = serde_json::to_string(&critique.replies).unwrap_or_else(|_| "[]".to_string());
+
+    // The schema uses 'reviewer' but we also have 'author' - map author to reviewer for now
+    // since the DB schema only has 'reviewer'. The body field combines argument and evidence.
+    let body = if critique.evidence.is_empty() {
+        critique.argument.clone()
+    } else {
+        format!("{}\n\n## Evidence\n\n{}", critique.argument, critique.evidence)
+    };
+
+    conn.execute(
+        "INSERT OR REPLACE INTO critiques (
+            id, title, status, solution_id, severity, reviewer, file_path,
+            line_number, created_at, updated_at, body, replies
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+        params![
+            critique.id,
+            critique.title,
+            critique.status.to_string(),
+            critique.solution_id,
+            critique.severity.to_string(),
+            critique.reviewer.as_ref().or(critique.author.as_ref()),
+            critique.file_path,
+            critique.line_start.map(|n| n as i64),
+            critique.created_at.to_rfc3339(),
+            critique.updated_at.to_rfc3339(),
+            body,
+            replies_json,
+        ],
+    )?;
+    Ok(())
+}
+
+/// Load a critique by ID.
+pub fn load_critique(conn: &Connection, id: &str) -> SqliteResult<Option<Critique>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, title, status, solution_id, severity, reviewer, file_path,
+                line_number, created_at, updated_at, body, replies
+         FROM critiques WHERE id = ?1",
+    )?;
+
+    let mut rows = stmt.query(params![id])?;
+
+    if let Some(row) = rows.next()? {
+        Ok(Some(row_to_critique(row)?))
+    } else {
+        Ok(None)
+    }
+}
+
+/// List all critiques.
+pub fn list_critiques(conn: &Connection) -> SqliteResult<Vec<Critique>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, title, status, solution_id, severity, reviewer, file_path,
+                line_number, created_at, updated_at, body, replies
+         FROM critiques ORDER BY created_at DESC",
+    )?;
+
+    let rows = stmt.query_map([], |row| row_to_critique(row))?;
+
+    rows.collect()
+}
+
+/// List critiques for a specific solution.
+pub fn list_critiques_for_solution(conn: &Connection, solution_id: &str) -> SqliteResult<Vec<Critique>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, title, status, solution_id, severity, reviewer, file_path,
+                line_number, created_at, updated_at, body, replies
+         FROM critiques WHERE solution_id = ?1 ORDER BY created_at DESC",
+    )?;
+
+    let rows = stmt.query_map(params![solution_id], |row| row_to_critique(row))?;
+
+    rows.collect()
+}
+
+/// Delete a critique by ID. Returns true if a row was deleted.
+pub fn delete_critique(conn: &Connection, id: &str) -> SqliteResult<bool> {
+    let changes = conn.execute("DELETE FROM critiques WHERE id = ?1", params![id])?;
+    Ok(changes > 0)
+}
+
+fn row_to_critique(row: &rusqlite::Row) -> SqliteResult<Critique> {
+    let status_str: String = row.get(2)?;
+    let severity_str: String = row.get(4)?;
+    let created_at_str: String = row.get(8)?;
+    let updated_at_str: String = row.get(9)?;
+    let body: String = row.get::<_, Option<String>>(10)?.unwrap_or_default();
+    let replies_json: String = row.get::<_, Option<String>>(11)?.unwrap_or_else(|| "[]".to_string());
+
+    let replies: Vec<Reply> = serde_json::from_str(&replies_json).unwrap_or_default();
+
+    // Parse body back into argument and evidence
+    const EVIDENCE_SEPARATOR: &str = "\n\n## Evidence\n\n";
+    let (argument, evidence) = if let Some(idx) = body.find(EVIDENCE_SEPARATOR) {
+        (body[..idx].to_string(), body[idx + EVIDENCE_SEPARATOR.len()..].to_string())
+    } else {
+        (body, String::new())
+    };
+
+    Ok(Critique {
+        id: row.get(0)?,
+        title: row.get(1)?,
+        status: status_str.parse().unwrap_or(CritiqueStatus::Open),
+        solution_id: row.get(3)?,
+        severity: severity_str.parse().unwrap_or(CritiqueSeverity::Medium),
+        author: row.get(5)?, // Using reviewer as author
+        reviewer: row.get(5)?,
+        file_path: row.get(6)?,
+        line_start: row.get::<_, Option<i64>>(7)?.map(|n| n as usize),
+        line_end: row.get::<_, Option<i64>>(7)?.map(|n| n as usize), // Same as line_start (DB only stores one)
+        created_at: DateTime::parse_from_rfc3339(&created_at_str)
+            .map(|dt| dt.with_timezone(&Utc))
+            .unwrap_or_else(|_| Utc::now()),
+        updated_at: DateTime::parse_from_rfc3339(&updated_at_str)
+            .map(|dt| dt.with_timezone(&Utc))
+            .unwrap_or_else(|_| Utc::now()),
+        argument,
+        evidence,
+        code_context: Vec::new(), // Not stored in DB
+        replies,
+    })
+}
+
+// ============================================================================
+// Milestones
+// ============================================================================
+
+/// Insert or update a milestone in the database.
+pub fn upsert_milestone(conn: &Connection, milestone: &Milestone) -> SqliteResult<()> {
+    let problem_ids_json = serde_json::to_string(&milestone.problem_ids).unwrap_or_else(|_| "[]".to_string());
+
+    conn.execute(
+        "INSERT OR REPLACE INTO milestones (
+            id, title, status, target_date, assignee, created_at, updated_at,
+            description, problem_ids
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        params![
+            milestone.id,
+            milestone.title,
+            milestone.status.to_string(),
+            milestone.target_date.map(|dt| dt.to_rfc3339()),
+            milestone.assignee,
+            milestone.created_at.to_rfc3339(),
+            milestone.updated_at.to_rfc3339(),
+            // Combine goals and success_criteria into description
+            if milestone.success_criteria.is_empty() {
+                milestone.goals.clone()
+            } else {
+                format!("{}\n\n## Success Criteria\n\n{}", milestone.goals, milestone.success_criteria)
+            },
+            problem_ids_json,
+        ],
+    )?;
+    Ok(())
+}
+
+/// Load a milestone by ID.
+pub fn load_milestone(conn: &Connection, id: &str) -> SqliteResult<Option<Milestone>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, title, status, target_date, assignee, created_at, updated_at,
+                description, problem_ids
+         FROM milestones WHERE id = ?1",
+    )?;
+
+    let mut rows = stmt.query(params![id])?;
+
+    if let Some(row) = rows.next()? {
+        Ok(Some(row_to_milestone(row)?))
+    } else {
+        Ok(None)
+    }
+}
+
+/// List all milestones.
+pub fn list_milestones(conn: &Connection) -> SqliteResult<Vec<Milestone>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, title, status, target_date, assignee, created_at, updated_at,
+                description, problem_ids
+         FROM milestones ORDER BY created_at DESC",
+    )?;
+
+    let rows = stmt.query_map([], |row| row_to_milestone(row))?;
+
+    rows.collect()
+}
+
+/// Delete a milestone by ID. Returns true if a row was deleted.
+pub fn delete_milestone(conn: &Connection, id: &str) -> SqliteResult<bool> {
+    let changes = conn.execute("DELETE FROM milestones WHERE id = ?1", params![id])?;
+    Ok(changes > 0)
+}
+
+fn row_to_milestone(row: &rusqlite::Row) -> SqliteResult<Milestone> {
+    let status_str: String = row.get(2)?;
+    let target_date_str: Option<String> = row.get(3)?;
+    let created_at_str: String = row.get(5)?;
+    let updated_at_str: String = row.get(6)?;
+    let description: String = row.get::<_, Option<String>>(7)?.unwrap_or_default();
+    let problem_ids_json: String = row.get::<_, Option<String>>(8)?.unwrap_or_else(|| "[]".to_string());
+
+    let problem_ids: Vec<String> = serde_json::from_str(&problem_ids_json).unwrap_or_default();
+
+    // Parse description back into goals and success_criteria
+    const CRITERIA_SEPARATOR: &str = "\n\n## Success Criteria\n\n";
+    let (goals, success_criteria) = if let Some(idx) = description.find(CRITERIA_SEPARATOR) {
+        (description[..idx].to_string(), description[idx + CRITERIA_SEPARATOR.len()..].to_string())
+    } else {
+        (description, String::new())
+    };
+
+    Ok(Milestone {
+        id: row.get(0)?,
+        title: row.get(1)?,
+        status: status_str.parse().unwrap_or(MilestoneStatus::Planning),
+        target_date: target_date_str.and_then(|s| {
+            DateTime::parse_from_rfc3339(&s)
+                .map(|dt| dt.with_timezone(&Utc))
+                .ok()
+        }),
+        assignee: row.get(4)?,
+        created_at: DateTime::parse_from_rfc3339(&created_at_str)
+            .map(|dt| dt.with_timezone(&Utc))
+            .unwrap_or_else(|_| Utc::now()),
+        updated_at: DateTime::parse_from_rfc3339(&updated_at_str)
+            .map(|dt| dt.with_timezone(&Utc))
+            .unwrap_or_else(|_| Utc::now()),
+        goals,
+        success_criteria,
+        problem_ids,
+    })
+}
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::Database;
+
+    #[test]
+    fn test_problem_crud() {
+        let db = Database::open_in_memory().expect("Failed to open database");
+        let conn = db.conn();
+
+        // Create
+        let mut problem = Problem::new("p1".to_string(), "Test problem".to_string());
+        problem.description = "A test description".to_string();
+        problem.context = "Some context".to_string();
+        problem.priority = Priority::High;
+        problem.assignee = Some("alice".to_string());
+
+        upsert_problem(conn, &problem).expect("Failed to upsert problem");
+
+        // Read
+        let loaded = load_problem(conn, "p1")
+            .expect("Failed to load problem")
+            .expect("Problem not found");
+
+        assert_eq!(loaded.id, "p1");
+        assert_eq!(loaded.title, "Test problem");
+        assert_eq!(loaded.description, "A test description");
+        assert_eq!(loaded.context, "Some context");
+        assert_eq!(loaded.priority, Priority::High);
+        assert_eq!(loaded.assignee, Some("alice".to_string()));
+        assert_eq!(loaded.status, ProblemStatus::Open);
+
+        // Update
+        problem.title = "Updated title".to_string();
+        problem.set_status(ProblemStatus::InProgress);
+        upsert_problem(conn, &problem).expect("Failed to update problem");
+
+        let loaded = load_problem(conn, "p1")
+            .expect("Failed to load")
+            .expect("Not found");
+        assert_eq!(loaded.title, "Updated title");
+        assert_eq!(loaded.status, ProblemStatus::InProgress);
+
+        // List
+        let problem2 = Problem::new("p2".to_string(), "Another problem".to_string());
+        upsert_problem(conn, &problem2).expect("Failed to upsert");
+
+        let problems = list_problems(conn).expect("Failed to list");
+        assert_eq!(problems.len(), 2);
+
+        // Delete
+        let deleted = delete_problem(conn, "p1").expect("Failed to delete");
+        assert!(deleted);
+
+        let deleted_again = delete_problem(conn, "p1").expect("Failed to delete");
+        assert!(!deleted_again);
+
+        let loaded = load_problem(conn, "p1").expect("Failed to load");
+        assert!(loaded.is_none());
+    }
+
+    #[test]
+    fn test_solution_crud() {
+        let db = Database::open_in_memory().expect("Failed to open database");
+        let conn = db.conn();
+
+        // First create a problem (foreign key)
+        let problem = Problem::new("p1".to_string(), "Test problem".to_string());
+        upsert_problem(conn, &problem).expect("Failed to upsert problem");
+
+        // Create solution
+        let mut solution = Solution::new("s1".to_string(), "Test solution".to_string(), "p1".to_string());
+        solution.approach = "Use this approach".to_string();
+        solution.tradeoffs = "Some tradeoffs".to_string();
+        solution.change_ids = vec!["abc123".to_string(), "def456".to_string()];
+        solution.assignee = Some("bob".to_string());
+
+        upsert_solution(conn, &solution).expect("Failed to upsert solution");
+
+        // Read
+        let loaded = load_solution(conn, "s1")
+            .expect("Failed to load")
+            .expect("Not found");
+
+        assert_eq!(loaded.id, "s1");
+        assert_eq!(loaded.title, "Test solution");
+        assert_eq!(loaded.problem_id, "p1");
+        assert_eq!(loaded.approach, "Use this approach");
+        assert_eq!(loaded.tradeoffs, "Some tradeoffs");
+        assert_eq!(loaded.change_ids, vec!["abc123".to_string(), "def456".to_string()]);
+        assert_eq!(loaded.assignee, Some("bob".to_string()));
+        assert_eq!(loaded.status, SolutionStatus::Proposed);
+
+        // Update
+        solution.set_status(SolutionStatus::Testing);
+        solution.attach_change("ghi789".to_string());
+        upsert_solution(conn, &solution).expect("Failed to update");
+
+        let loaded = load_solution(conn, "s1")
+            .expect("Failed to load")
+            .expect("Not found");
+        assert_eq!(loaded.status, SolutionStatus::Testing);
+        assert_eq!(loaded.change_ids.len(), 3);
+
+        // List for problem
+        let solution2 = Solution::new("s2".to_string(), "Another solution".to_string(), "p1".to_string());
+        upsert_solution(conn, &solution2).expect("Failed to upsert");
+
+        let solutions = list_solutions_for_problem(conn, "p1").expect("Failed to list");
+        assert_eq!(solutions.len(), 2);
+
+        // List all
+        let all_solutions = list_solutions(conn).expect("Failed to list");
+        assert_eq!(all_solutions.len(), 2);
+
+        // Delete
+        let deleted = delete_solution(conn, "s1").expect("Failed to delete");
+        assert!(deleted);
+
+        let loaded = load_solution(conn, "s1").expect("Failed to load");
+        assert!(loaded.is_none());
+    }
+
+    #[test]
+    fn test_critique_crud() {
+        let db = Database::open_in_memory().expect("Failed to open database");
+        let conn = db.conn();
+
+        // Create problem and solution (foreign keys)
+        let problem = Problem::new("p1".to_string(), "Test problem".to_string());
+        upsert_problem(conn, &problem).expect("Failed to upsert problem");
+
+        let solution = Solution::new("s1".to_string(), "Test solution".to_string(), "p1".to_string());
+        upsert_solution(conn, &solution).expect("Failed to upsert solution");
+
+        // Create critique
+        let mut critique = Critique::new("c1".to_string(), "Test critique".to_string(), "s1".to_string());
+        critique.argument = "This is problematic".to_string();
+        critique.evidence = "Here is the evidence".to_string();
+        critique.severity = CritiqueSeverity::High;
+        critique.author = Some("charlie".to_string());
+        critique.reviewer = Some("charlie".to_string());
+        critique.file_path = Some("src/main.rs".to_string());
+        critique.line_start = Some(42);
+
+        upsert_critique(conn, &critique).expect("Failed to upsert critique");
+
+        // Read
+        let loaded = load_critique(conn, "c1")
+            .expect("Failed to load")
+            .expect("Not found");
+
+        assert_eq!(loaded.id, "c1");
+        assert_eq!(loaded.title, "Test critique");
+        assert_eq!(loaded.solution_id, "s1");
+        assert_eq!(loaded.argument, "This is problematic");
+        assert_eq!(loaded.evidence, "Here is the evidence");
+        assert_eq!(loaded.severity, CritiqueSeverity::High);
+        assert_eq!(loaded.reviewer, Some("charlie".to_string()));
+        assert_eq!(loaded.file_path, Some("src/main.rs".to_string()));
+        assert_eq!(loaded.line_start, Some(42));
+        assert_eq!(loaded.status, CritiqueStatus::Open);
+
+        // Update with reply
+        critique.add_reply("dave".to_string(), "I disagree".to_string());
+        critique.set_status(CritiqueStatus::Addressed);
+        upsert_critique(conn, &critique).expect("Failed to update");
+
+        let loaded = load_critique(conn, "c1")
+            .expect("Failed to load")
+            .expect("Not found");
+        assert_eq!(loaded.status, CritiqueStatus::Addressed);
+        assert_eq!(loaded.replies.len(), 1);
+        assert_eq!(loaded.replies[0].author, "dave");
+        assert_eq!(loaded.replies[0].body, "I disagree");
+
+        // List for solution
+        let critique2 = Critique::new("c2".to_string(), "Another critique".to_string(), "s1".to_string());
+        upsert_critique(conn, &critique2).expect("Failed to upsert");
+
+        let critiques = list_critiques_for_solution(conn, "s1").expect("Failed to list");
+        assert_eq!(critiques.len(), 2);
+
+        // List all
+        let all_critiques = list_critiques(conn).expect("Failed to list");
+        assert_eq!(all_critiques.len(), 2);
+
+        // Delete
+        let deleted = delete_critique(conn, "c1").expect("Failed to delete");
+        assert!(deleted);
+
+        let loaded = load_critique(conn, "c1").expect("Failed to load");
+        assert!(loaded.is_none());
+    }
+
+    #[test]
+    fn test_milestone_crud() {
+        let db = Database::open_in_memory().expect("Failed to open database");
+        let conn = db.conn();
+
+        // Create
+        let mut milestone = Milestone::new("m1".to_string(), "v1.0 Release".to_string());
+        milestone.goals = "Ship the product".to_string();
+        milestone.success_criteria = "All tests pass".to_string();
+        milestone.assignee = Some("eve".to_string());
+        milestone.target_date = Some(Utc::now());
+        milestone.problem_ids = vec!["p1".to_string(), "p2".to_string()];
+
+        upsert_milestone(conn, &milestone).expect("Failed to upsert milestone");
+
+        // Read
+        let loaded = load_milestone(conn, "m1")
+            .expect("Failed to load")
+            .expect("Not found");
+
+        assert_eq!(loaded.id, "m1");
+        assert_eq!(loaded.title, "v1.0 Release");
+        assert_eq!(loaded.goals, "Ship the product");
+        assert_eq!(loaded.success_criteria, "All tests pass");
+        assert_eq!(loaded.assignee, Some("eve".to_string()));
+        assert!(loaded.target_date.is_some());
+        assert_eq!(loaded.problem_ids, vec!["p1".to_string(), "p2".to_string()]);
+        assert_eq!(loaded.status, MilestoneStatus::Planning);
+
+        // Update
+        milestone.set_status(MilestoneStatus::Active);
+        milestone.add_problem("p3".to_string());
+        upsert_milestone(conn, &milestone).expect("Failed to update");
+
+        let loaded = load_milestone(conn, "m1")
+            .expect("Failed to load")
+            .expect("Not found");
+        assert_eq!(loaded.status, MilestoneStatus::Active);
+        assert_eq!(loaded.problem_ids.len(), 3);
+
+        // List
+        let milestone2 = Milestone::new("m2".to_string(), "v2.0 Release".to_string());
+        upsert_milestone(conn, &milestone2).expect("Failed to upsert");
+
+        let milestones = list_milestones(conn).expect("Failed to list");
+        assert_eq!(milestones.len(), 2);
+
+        // Delete
+        let deleted = delete_milestone(conn, "m1").expect("Failed to delete");
+        assert!(deleted);
+
+        let loaded = load_milestone(conn, "m1").expect("Failed to load");
+        assert!(loaded.is_none());
+    }
+
+    #[test]
+    fn test_problem_dissolved() {
+        let db = Database::open_in_memory().expect("Failed to open database");
+        let conn = db.conn();
+
+        let mut problem = Problem::new("p1".to_string(), "Test problem".to_string());
+        problem.dissolve("No longer relevant".to_string());
+
+        upsert_problem(conn, &problem).expect("Failed to upsert");
+
+        let loaded = load_problem(conn, "p1")
+            .expect("Failed to load")
+            .expect("Not found");
+
+        assert_eq!(loaded.status, ProblemStatus::Dissolved);
+        assert_eq!(loaded.dissolved_reason, Some("No longer relevant".to_string()));
+    }
+
+    #[test]
+    fn test_solution_supersedes() {
+        let db = Database::open_in_memory().expect("Failed to open database");
+        let conn = db.conn();
+
+        let problem = Problem::new("p1".to_string(), "Test problem".to_string());
+        upsert_problem(conn, &problem).expect("Failed to upsert problem");
+
+        let s1 = Solution::new("s1".to_string(), "First solution".to_string(), "p1".to_string());
+        upsert_solution(conn, &s1).expect("Failed to upsert");
+
+        let mut s2 = Solution::new("s2".to_string(), "Better solution".to_string(), "p1".to_string());
+        s2.supersedes = Some("s1".to_string());
+        upsert_solution(conn, &s2).expect("Failed to upsert");
+
+        let loaded = load_solution(conn, "s2")
+            .expect("Failed to load")
+            .expect("Not found");
+
+        assert_eq!(loaded.supersedes, Some("s1".to_string()));
+    }
+}
