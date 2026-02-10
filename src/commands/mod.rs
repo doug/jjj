@@ -1,5 +1,6 @@
 pub mod completion;
 pub mod critique;
+pub mod events;
 pub mod fetch;
 pub mod init;
 pub mod milestone;
@@ -52,5 +53,9 @@ fn execute_with_context(ctx: &CommandContext, command: Commands) -> Result<()> {
         Commands::Init | Commands::Ui | Commands::Completion { .. } => {
             unreachable!("These commands should be handled in execute()")
         }
+
+        // Event log
+        Commands::Events { action, from, to, problem, solution, event_type, search, json, limit } =>
+            events::execute(action, from, to, problem, solution, event_type, search, json, limit),
     }
 }

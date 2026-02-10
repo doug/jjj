@@ -96,6 +96,44 @@ pub enum Commands {
         #[arg(long)]
         dry_run: bool,
     },
+
+    /// Query the event log
+    Events {
+        #[command(subcommand)]
+        action: Option<EventsAction>,
+
+        /// Filter by start date (YYYY-MM-DD or YYYY-MM)
+        #[arg(long)]
+        from: Option<String>,
+
+        /// Filter by end date
+        #[arg(long)]
+        to: Option<String>,
+
+        /// Filter by problem
+        #[arg(long)]
+        problem: Option<String>,
+
+        /// Filter by solution
+        #[arg(long)]
+        solution: Option<String>,
+
+        /// Filter by event type
+        #[arg(long, name = "type")]
+        event_type: Option<String>,
+
+        /// Full-text search in rationales
+        #[arg(long)]
+        search: Option<String>,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+
+        /// Number of events to show (default: 20)
+        #[arg(long, default_value = "20")]
+        limit: usize,
+    },
 }
 
 #[derive(ValueEnum, Clone, Debug)]
@@ -105,6 +143,19 @@ pub enum Shell {
     Fish,
     PowerShell,
     Elvish,
+}
+
+// =============================================================================
+// Events Commands
+// =============================================================================
+
+#[derive(Subcommand)]
+pub enum EventsAction {
+    /// Rebuild events.jsonl from commit history
+    Rebuild,
+
+    /// Validate event log against entity states
+    Validate,
 }
 
 // =============================================================================
