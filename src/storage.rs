@@ -73,7 +73,7 @@ fn parse_body_sections(body: &str) -> std::collections::HashMap<String, String> 
             if !current_section.is_empty() {
                 sections.insert(current_section.clone(), current_content.trim().to_string());
             }
-            current_section = line.strip_prefix("## ").unwrap().to_string();
+            current_section = line.strip_prefix("## ").expect("strip_prefix failed after starts_with check").to_string();
             current_content = String::new();
         } else {
             current_content.push_str(line);
@@ -149,10 +149,12 @@ impl MetadataStore {
     fn ensure_meta_checkout(&self) -> Result<()> {
         if !self.meta_path.exists() {
             // Create workspace for metadata
+            let meta_path_str = self.meta_path.to_str()
+                .ok_or_else(|| JjjError::PathError(self.meta_path.clone()))?;
             self.jj_client.execute(&[
                 "workspace",
                 "add",
-                self.meta_path.to_str().unwrap(),
+                meta_path_str,
                 "-r",
                 META_BOOKMARK,
             ])?;
@@ -279,16 +281,25 @@ impl MetadataStore {
         }
 
         let mut problems = Vec::new();
+        let mut failures = Vec::new();
         for entry in fs::read_dir(problems_dir)? {
             let entry = entry?;
             let path = entry.path();
 
             if path.extension().and_then(|s| s.to_str()) == Some("md") {
                 if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                    if let Ok(problem) = self.load_problem(stem) {
-                        problems.push(problem);
+                    match self.load_problem(stem) {
+                        Ok(problem) => problems.push(problem),
+                        Err(e) => failures.push(format!("{}: {}", stem, e)),
                     }
                 }
+            }
+        }
+
+        if !failures.is_empty() {
+            eprintln!("Warning: Failed to load {} problem(s):", failures.len());
+            for failure in &failures {
+                eprintln!("  {}", failure);
             }
         }
 
@@ -430,16 +441,25 @@ impl MetadataStore {
         }
 
         let mut solutions = Vec::new();
+        let mut failures = Vec::new();
         for entry in fs::read_dir(solutions_dir)? {
             let entry = entry?;
             let path = entry.path();
 
             if path.extension().and_then(|s| s.to_str()) == Some("md") {
                 if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                    if let Ok(solution) = self.load_solution(stem) {
-                        solutions.push(solution);
+                    match self.load_solution(stem) {
+                        Ok(solution) => solutions.push(solution),
+                        Err(e) => failures.push(format!("{}: {}", stem, e)),
                     }
                 }
+            }
+        }
+
+        if !failures.is_empty() {
+            eprintln!("Warning: Failed to load {} solution(s):", failures.len());
+            for failure in &failures {
+                eprintln!("  {}", failure);
             }
         }
 
@@ -559,16 +579,25 @@ impl MetadataStore {
         }
 
         let mut critiques = Vec::new();
+        let mut failures = Vec::new();
         for entry in fs::read_dir(critiques_dir)? {
             let entry = entry?;
             let path = entry.path();
 
             if path.extension().and_then(|s| s.to_str()) == Some("md") {
                 if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                    if let Ok(critique) = self.load_critique(stem) {
-                        critiques.push(critique);
+                    match self.load_critique(stem) {
+                        Ok(critique) => critiques.push(critique),
+                        Err(e) => failures.push(format!("{}: {}", stem, e)),
                     }
                 }
+            }
+        }
+
+        if !failures.is_empty() {
+            eprintln!("Warning: Failed to load {} critique(s):", failures.len());
+            for failure in &failures {
+                eprintln!("  {}", failure);
             }
         }
 
@@ -680,16 +709,25 @@ impl MetadataStore {
         }
 
         let mut milestones = Vec::new();
+        let mut failures = Vec::new();
         for entry in fs::read_dir(milestones_dir)? {
             let entry = entry?;
             let path = entry.path();
 
             if path.extension().and_then(|s| s.to_str()) == Some("md") {
                 if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                    if let Ok(milestone) = self.load_milestone(stem) {
-                        milestones.push(milestone);
+                    match self.load_milestone(stem) {
+                        Ok(milestone) => milestones.push(milestone),
+                        Err(e) => failures.push(format!("{}: {}", stem, e)),
                     }
                 }
+            }
+        }
+
+        if !failures.is_empty() {
+            eprintln!("Warning: Failed to load {} milestone(s):", failures.len());
+            for failure in &failures {
+                eprintln!("  {}", failure);
             }
         }
 

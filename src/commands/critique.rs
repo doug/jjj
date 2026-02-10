@@ -327,8 +327,11 @@ fn reply_to_critique(critique_id: String, body: String) -> Result<()> {
         critique.add_reply(author.clone(), body.clone());
         store.save_critique(&critique)?;
 
-        let reply_id = &critique.replies.last().unwrap().id;
-        println!("Added reply {} to critique {}", reply_id, critique_id);
+        if let Some(reply) = critique.replies.last() {
+            println!("Added reply {} to critique {}", reply.id, critique_id);
+        } else {
+            println!("Added reply to critique {}", critique_id);
+        }
 
         Ok(())
     })

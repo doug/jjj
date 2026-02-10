@@ -53,6 +53,9 @@ pub enum JjjError {
     #[error("Failed to parse frontmatter: {0}")]
     FrontmatterParse(String),
 
+    #[error("Failed to parse {field}: {value}")]
+    ParseError { field: String, value: String },
+
     #[error("Failed to parse JSON: {0}")]
     JsonParse(#[from] serde_json::Error),
 

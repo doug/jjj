@@ -6,10 +6,14 @@ use std::io::{self, Write};
 
 fn prompt_yes_no(message: &str) -> bool {
     print!("{} [Y/n] ", message);
-    io::stdout().flush().unwrap();
+    if io::stdout().flush().is_err() {
+        return false;
+    }
 
     let mut input = String::new();
-    io::stdin().read_line(&mut input).unwrap();
+    if io::stdin().read_line(&mut input).is_err() {
+        return false;
+    }
     let input = input.trim().to_lowercase();
 
     input.is_empty() || input == "y" || input == "yes"
