@@ -25,8 +25,8 @@ pub fn execute(ctx: &CommandContext, action: SolutionAction) -> Result<()> {
             change_id,
         } => detach_change(ctx, solution_id, change_id),
         SolutionAction::Test { solution_id } => test_solution(ctx, solution_id),
-        SolutionAction::Accept { solution_id, force } => accept_solution(ctx, solution_id, force),
-        SolutionAction::Refute { solution_id } => refute_solution(ctx, solution_id),
+        SolutionAction::Accept { solution_id, force, rationale, no_rationale } => accept_solution(ctx, solution_id, force, rationale, no_rationale),
+        SolutionAction::Refute { solution_id, rationale, no_rationale } => refute_solution(ctx, solution_id, rationale, no_rationale),
         SolutionAction::Assign { solution_id, to } => assign_solution(ctx, solution_id, to),
         SolutionAction::Resume { solution_id } => resume_solution(ctx, solution_id),
     }
@@ -356,7 +356,9 @@ fn test_solution(ctx: &CommandContext, solution_id: String) -> Result<()> {
     })
 }
 
-fn accept_solution(ctx: &CommandContext, solution_id: String, force: bool) -> Result<()> {
+fn accept_solution(ctx: &CommandContext, solution_id: String, force: bool, rationale: Option<String>, no_rationale: bool) -> Result<()> {
+    use crate::models::{Event, EventType};
+
     let store = &ctx.store;
 
     let critiques = store.list_critiques()?;
@@ -389,7 +391,30 @@ fn accept_solution(ctx: &CommandContext, solution_id: String, force: bool) -> Re
         }
     }
 
+    // Get rationale (prompt if not provided and not skipped)
+    let rationale = if let Some(r) = rationale {
+        Some(r)
+    } else if no_rationale {
+        None
+    } else {
+        print!("Rationale (optional, press Enter to skip): ");
+        io::stdout().flush()?;
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        let trimmed = input.trim();
+        if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
+    };
+
+    // Create event
+    let user = store.get_current_user()?;
+    let mut event = Event::new(EventType::SolutionAccepted, solution_id.clone(), user);
+    if let Some(r) = &rationale {
+        event = event.with_rationale(r);
+    }
+
     store.with_metadata(&format!("Accept solution {}", solution_id), || {
+        store.set_pending_event(event.clone());
+
         let mut solution = store.load_solution(&solution_id)?;
         if force {
             solution.force_accepted = true;
@@ -428,10 +453,35 @@ fn accept_solution(ctx: &CommandContext, solution_id: String, force: bool) -> Re
     })
 }
 
-fn refute_solution(ctx: &CommandContext, solution_id: String) -> Result<()> {
+fn refute_solution(ctx: &CommandContext, solution_id: String, rationale: Option<String>, no_rationale: bool) -> Result<()> {
+    use crate::models::{Event, EventType};
+
     let store = &ctx.store;
 
+    // Get rationale (prompt if not provided and not skipped)
+    let rationale = if let Some(r) = rationale {
+        Some(r)
+    } else if no_rationale {
+        None
+    } else {
+        print!("Rationale (optional, press Enter to skip): ");
+        io::stdout().flush()?;
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        let trimmed = input.trim();
+        if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
+    };
+
+    // Create event
+    let user = store.get_current_user()?;
+    let mut event = Event::new(EventType::SolutionRefuted, solution_id.clone(), user);
+    if let Some(r) = &rationale {
+        event = event.with_rationale(r);
+    }
+
     store.with_metadata(&format!("Refute solution {}", solution_id), || {
+        store.set_pending_event(event.clone());
+
         let mut solution = store.load_solution(&solution_id)?;
         solution.refute();
         store.save_solution(&solution)?;

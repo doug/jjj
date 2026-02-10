@@ -302,18 +302,34 @@ pub enum SolutionAction {
 
     /// Accept solution (requires no open critiques)
     Accept {
-        /// Solution ID (e.g., S-1)
+        /// Solution ID (e.g., s1)
         solution_id: String,
 
         /// Force accept even with open critiques
         #[arg(long)]
         force: bool,
+
+        /// Reason for accepting
+        #[arg(long)]
+        rationale: Option<String>,
+
+        /// Skip rationale prompt
+        #[arg(long)]
+        no_rationale: bool,
     },
 
     /// Refute solution (criticism showed it won't work)
     Refute {
-        /// Solution ID (e.g., S-1)
+        /// Solution ID (e.g., s1)
         solution_id: String,
+
+        /// Reason for refuting
+        #[arg(long)]
+        rationale: Option<String>,
+
+        /// Skip rationale prompt
+        #[arg(long)]
+        no_rationale: bool,
     },
 
     /// Assign a solution to a person
