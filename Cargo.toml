@@ -48,7 +48,7 @@ rusqlite = { version = "0.31", features = ["bundled"] }
 uuid = { version = "1.11", features = ["v7"] }
 
 # Interactive prompts
-dialoguer = "0.11"
+dialoguer = { version = "0.11", features = ["fuzzy-select"] }
 
 [dev-dependencies]
 tempfile = "3.13"

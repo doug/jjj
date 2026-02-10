@@ -80,6 +80,15 @@ pub enum JjjError {
     #[error("Database error: {0}")]
     Database(#[from] rusqlite::Error),
 
+    #[error("Selection cancelled: {0}")]
+    Cancelled(String),
+
+    #[error("{0}")]
+    AmbiguousMatch(String),
+
+    #[error("Entity not found: {0}")]
+    EntityNotFound(String),
+
     #[error("{0}")]
     Other(String),
 }

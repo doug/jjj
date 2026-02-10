@@ -11,6 +11,7 @@ pub mod id;
 pub mod jj;
 pub mod models;
 pub mod resolve;
+pub mod picker;
 pub mod storage;
 pub mod tui;
 pub mod utils;
