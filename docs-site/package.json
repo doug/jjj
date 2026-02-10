@@ -12,6 +12,7 @@
   "dependencies": {
     "@astrojs/react": "^4.4.2",
     "@astrojs/starlight": "^0.37.6",
+    "@astrojs/starlight-tailwind": "^4.0.2",
     "@tailwindcss/vite": "^4.1.18",
     "@types/react": "^19.2.13",
     "@types/react-dom": "^19.2.3",

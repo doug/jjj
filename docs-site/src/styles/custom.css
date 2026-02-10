@@ -1,0 +1,83 @@
+/* Warm theme with fuchsia accent */
+:root {
+  /* Light mode */
+  --sl-color-white: #FDFBF7;
+  --sl-color-gray-1: #F7F5F0;
+  --sl-color-gray-2: #E5E2DC;
+  --sl-color-gray-3: #C5C0B8;
+  --sl-color-gray-4: #A8A49E;
+  --sl-color-gray-5: #6B6660;
+  --sl-color-gray-6: #2D2A26;
+  --sl-color-black: #1A1918;
+
+  --sl-color-accent-low: #FDF4FF;
+  --sl-color-accent: #D946EF;
+  --sl-color-accent-high: #A21CAF;
+
+  --sl-color-text: var(--sl-color-gray-6);
+  --sl-color-text-accent: var(--sl-color-accent);
+  --sl-color-bg: var(--sl-color-white);
+  --sl-color-bg-nav: var(--sl-color-gray-1);
+  --sl-color-bg-sidebar: var(--sl-color-gray-1);
+  --sl-color-hairline-light: var(--sl-color-gray-2);
+  --sl-color-hairline: var(--sl-color-gray-2);
+}
+
+:root[data-theme='dark'] {
+  /* Dark mode */
+  --sl-color-white: #F5F3EF;
+  --sl-color-gray-1: #A8A49E;
+  --sl-color-gray-2: #6B6660;
+  --sl-color-gray-3: #3D3A36;
+  --sl-color-gray-4: #2D2A26;
+  --sl-color-gray-5: #252322;
+  --sl-color-gray-6: #1A1918;
+  --sl-color-black: #0F0E0D;
+
+  --sl-color-accent-low: #4A1D5C;
+  --sl-color-accent: #D946EF;
+  --sl-color-accent-high: #F0ABFC;
+
+  --sl-color-text: var(--sl-color-white);
+  --sl-color-bg: var(--sl-color-gray-6);
+  --sl-color-bg-nav: var(--sl-color-gray-5);
+  --sl-color-bg-sidebar: var(--sl-color-gray-5);
+  --sl-color-hairline-light: var(--sl-color-gray-3);
+  --sl-color-hairline: var(--sl-color-gray-3);
+}
+
+/* Typography - Inter font */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  --sl-font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --sl-font-mono: 'Geist Mono', 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+/* Code blocks - dark theme */
+.expressive-code {
+  --ec-codeBg: #1E1E1E;
+  --ec-codeSelectionBg: #3D3A36;
+  --ec-codePadBlock: 1.5rem;
+  --ec-codePadInline: 1.5rem;
+  --ec-codeFontFam: var(--sl-font-mono);
+  --ec-uiFontFam: var(--sl-font);
+  --ec-brdRad: 8px;
+}
+
+/* Generous spacing */
+.sl-markdown-content {
+  --sl-content-width: 720px;
+}
+
+.sl-markdown-content > * + * {
+  margin-top: 1.5rem;
+}
+
+.sl-markdown-content h2 {
+  margin-top: 3rem;
+}
+
+.sl-markdown-content h3 {
+  margin-top: 2rem;
+}
