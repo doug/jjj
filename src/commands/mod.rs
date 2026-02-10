@@ -8,6 +8,7 @@ pub mod problem;
 pub mod push;
 pub mod solution;
 pub mod status;
+pub mod timeline;
 pub mod ui;
 pub mod workflow;
 
@@ -57,5 +58,8 @@ fn execute_with_context(ctx: &CommandContext, command: Commands) -> Result<()> {
         // Event log
         Commands::Events { action, from, to, problem, solution, event_type, search, json, limit } =>
             events::execute(action, from, to, problem, solution, event_type, search, json, limit),
+
+        // Timeline
+        Commands::Timeline { problem_id, json } => timeline::execute(problem_id, json),
     }
 }

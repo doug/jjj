@@ -97,6 +97,16 @@ pub enum Commands {
         dry_run: bool,
     },
 
+    /// Show timeline for a problem
+    Timeline {
+        /// Problem ID to show timeline for
+        problem_id: String,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
     /// Query the event log
     Events {
         #[command(subcommand)]
