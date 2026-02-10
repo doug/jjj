@@ -1,7 +1,7 @@
 use crate::cli::CritiqueAction;
 use crate::context::CommandContext;
 use crate::error::Result;
-use crate::models::{Critique, CritiqueSeverity, CritiqueStatus, SolutionStatus};
+use crate::models::{Critique, CritiqueSeverity, CritiqueStatus, Event, EventExtra, EventType, SolutionStatus};
 
 pub fn execute(ctx: &CommandContext, action: CritiqueAction) -> Result<()> {
     match action {
@@ -58,6 +58,9 @@ fn new_critique(
         );
     }
 
+    // Get user for event
+    let user = store.get_current_user()?;
+
     store.with_metadata(&format!("Create critique on {}: {}", solution_id, title), || {
         let critique_id = store.next_critique_id()?;
         let mut critique = Critique::new(critique_id.clone(), title.clone(), solution_id.clone());
@@ -88,6 +91,17 @@ fn new_critique(
 
             critique.set_location(file_path, line_num, None, context);
         }
+
+        // Create event for decision log
+        let extra = EventExtra {
+            target: Some(solution_id.clone()),
+            severity: Some(severity.to_string()),
+            title: Some(title.clone()),
+            ..Default::default()
+        };
+        let event = Event::new(EventType::CritiqueRaised, critique_id.clone(), user.clone())
+            .with_extra(extra);
+        store.set_pending_event(event);
 
         store.save_critique(&critique)?;
 
@@ -255,7 +269,12 @@ fn edit_critique(
 fn address_critique(ctx: &CommandContext, critique_id: String) -> Result<()> {
     let store = &ctx.store;
 
+    // Create event for decision log
+    let user = store.get_current_user()?;
+    let event = Event::new(EventType::CritiqueAddressed, critique_id.clone(), user);
+
     store.with_metadata(&format!("Address critique {}", critique_id), || {
+        store.set_pending_event(event.clone());
         let mut critique = store.load_critique(&critique_id)?;
         critique.address();
         store.save_critique(&critique)?;
@@ -270,7 +289,12 @@ fn address_critique(ctx: &CommandContext, critique_id: String) -> Result<()> {
 fn validate_critique(ctx: &CommandContext, critique_id: String) -> Result<()> {
     let store = &ctx.store;
 
+    // Create event for decision log
+    let user = store.get_current_user()?;
+    let event = Event::new(EventType::CritiqueValidated, critique_id.clone(), user);
+
     store.with_metadata(&format!("Validate critique {}", critique_id), || {
+        store.set_pending_event(event.clone());
         let mut critique = store.load_critique(&critique_id)?;
         let solution_id = critique.solution_id.clone();
 
@@ -299,7 +323,12 @@ fn validate_critique(ctx: &CommandContext, critique_id: String) -> Result<()> {
 fn dismiss_critique(ctx: &CommandContext, critique_id: String) -> Result<()> {
     let store = &ctx.store;
 
+    // Create event for decision log
+    let user = store.get_current_user()?;
+    let event = Event::new(EventType::CritiqueDismissed, critique_id.clone(), user);
+
     store.with_metadata(&format!("Dismiss critique {}", critique_id), || {
+        store.set_pending_event(event.clone());
         let mut critique = store.load_critique(&critique_id)?;
         critique.dismiss();
         store.save_critique(&critique)?;

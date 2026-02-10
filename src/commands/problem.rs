@@ -1,7 +1,7 @@
 use crate::cli::ProblemAction;
 use crate::context::CommandContext;
 use crate::error::Result;
-use crate::models::{Problem, ProblemStatus, Priority};
+use crate::models::{Event, EventType, Problem, ProblemStatus, Priority};
 use crate::storage::MetadataStore;
 
 pub fn execute(ctx: &CommandContext, action: ProblemAction) -> Result<()> {
@@ -52,6 +52,8 @@ fn new_problem(
         store.load_milestone(milestone_id)?;
     }
 
+    let user = store.get_current_user()?;
+
     store.with_metadata(&format!("Create problem: {}", title), || {
         let problem_id = store.next_problem_id()?;
         let mut problem = Problem::new(problem_id.clone(), title.clone());
@@ -78,6 +80,10 @@ fn new_problem(
             ms.add_problem(problem_id.clone());
             store.save_milestone(&ms)?;
         }
+
+        // Create event for decision log
+        let event = Event::new(EventType::ProblemCreated, problem_id.clone(), user.clone());
+        store.set_pending_event(event);
 
         store.save_problem(&problem)?;
 
@@ -346,7 +352,12 @@ fn solve_problem(ctx: &CommandContext, problem_id: String) -> Result<()> {
         eprintln!("Proceeding with solve anyway.");
     }
 
+    // Create event for decision log
+    let user = store.get_current_user()?;
+    let event = Event::new(EventType::ProblemSolved, problem_id.clone(), user);
+
     store.with_metadata(&format!("Solve problem {}", problem_id), || {
+        store.set_pending_event(event.clone());
         let mut problem = store.load_problem(&problem_id)?;
         problem.set_status(ProblemStatus::Solved);
         store.save_problem(&problem)?;
@@ -358,9 +369,17 @@ fn solve_problem(ctx: &CommandContext, problem_id: String) -> Result<()> {
 fn dissolve_problem(ctx: &CommandContext, problem_id: String, reason: Option<String>) -> Result<()> {
     let store = &ctx.store;
 
+    // Create event for decision log
+    let user = store.get_current_user()?;
+    let mut event = Event::new(EventType::ProblemDissolved, problem_id.clone(), user);
+    if let Some(ref r) = reason {
+        event = event.with_rationale(r);
+    }
+
     store.with_metadata(&format!("Dissolve problem {}", problem_id), || {
+        store.set_pending_event(event.clone());
         let mut problem = store.load_problem(&problem_id)?;
-        if let Some(reason) = reason {
+        if let Some(reason) = reason.clone() {
             problem.dissolve(reason);
         } else {
             problem.set_status(ProblemStatus::Dissolved);

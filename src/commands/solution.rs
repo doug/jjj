@@ -1,7 +1,7 @@
 use crate::cli::SolutionAction;
 use crate::context::CommandContext;
 use crate::error::Result;
-use crate::models::{Critique, CritiqueSeverity, CritiqueStatus, ProblemStatus, Solution, SolutionStatus};
+use crate::models::{Critique, CritiqueSeverity, CritiqueStatus, Event, EventExtra, EventType, ProblemStatus, Solution, SolutionStatus};
 use std::io::{self, Write};
 
 pub fn execute(ctx: &CommandContext, action: SolutionAction) -> Result<()> {
@@ -71,12 +71,25 @@ fn new_solution(ctx: &CommandContext, title: String, problem_id: Option<String>,
     // Validate problem exists
     let _problem = store.load_problem(&problem_id)?;
 
+    // Get user for event
+    let user = store.get_current_user()?;
+
     store.with_metadata(&format!("Start solution: {}", title), || {
         let solution_id = store.next_solution_id()?;
         let mut solution = Solution::new(solution_id.clone(), title.clone(), problem_id.clone());
 
         // Set supersedes
         solution.supersedes = supersedes.clone();
+
+        // Create event for decision log
+        let extra = EventExtra {
+            problem: Some(problem_id.clone()),
+            supersedes: supersedes.clone(),
+            ..Default::default()
+        };
+        let event = Event::new(EventType::SolutionCreated, solution_id.clone(), user.clone())
+            .with_extra(extra);
+        store.set_pending_event(event);
 
         // Auto-attach: create jj change and link to solution
         jj_client.new_empty_change(&title)?;
