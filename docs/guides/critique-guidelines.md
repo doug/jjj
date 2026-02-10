@@ -25,7 +25,7 @@ When raising a critique, assign a severity that reflects the impact of the issue
 The critique identifies a flaw that definitively invalidates the solution. If this critique stands, the solution must be refuted.
 
 ```bash
-jjj critique new s3 "SQL injection in user input handling" --severity critical
+jjj critique new "parameterized queries" "SQL injection in user input handling" --severity critical
 ```
 
 Examples:
@@ -39,7 +39,7 @@ Examples:
 A significant problem that may invalidate the solution. The solution cannot be accepted without addressing this.
 
 ```bash
-jjj critique new s3 "Race condition in concurrent write path" --severity high
+jjj critique new "concurrent writes" "Race condition in concurrent write path" --severity high
 ```
 
 Examples:
@@ -53,7 +53,7 @@ Examples:
 A legitimate concern that should be addressed but does not necessarily invalidate the approach. Most critiques fall here.
 
 ```bash
-jjj critique new s3 "No tests for the error handling path"
+jjj critique new "error handling" "No tests for the error handling path"
 # Severity defaults to medium
 ```
 
@@ -68,7 +68,7 @@ Examples:
 A minor observation. Worth noting but not a blocker.
 
 ```bash
-jjj critique new s3 "Variable name 'x' could be more descriptive" --severity low
+jjj critique new "naming conventions" "Variable name 'x' could be more descriptive" --severity low
 ```
 
 Examples:
@@ -86,7 +86,7 @@ When you receive a critique on your solution, you have three options. Each one r
 Use this when the critique identifies a real issue and you have modified the solution to fix it. This is the most common response.
 
 ```bash
-jjj critique address c5
+jjj critique address "race condition"
 ```
 
 What it means: "You were right. I have changed the solution to handle this."
@@ -98,7 +98,7 @@ After addressing, the solution can proceed toward acceptance (assuming no other 
 Use this when the critique does not apply to this solution, is based on a misunderstanding, or identifies something that is not actually a problem.
 
 ```bash
-jjj critique dismiss c5
+jjj critique dismiss "race condition"
 ```
 
 What it means: "I have considered this criticism and it does not apply. Here is why."
@@ -106,7 +106,7 @@ What it means: "I have considered this criticism and it does not apply. Here is 
 You should explain your reasoning. Use the reply mechanism:
 
 ```bash
-jjj critique reply c5 "This path is only reachable from the admin API, which already validates input upstream. See s3's approach section for the trust model."
+jjj critique reply "race condition" "This path is only reachable from the admin API, which already validates input upstream. See the solution's approach section for the trust model."
 ```
 
 Dismissing without explanation is technically valid but makes it harder for others to understand your reasoning.
@@ -116,7 +116,7 @@ Dismissing without explanation is technically valid but makes it harder for othe
 Use this when the critique is correct and the flaw it identifies is fundamental enough that the solution should be refuted. This is the honest thing to do when a critique reveals that your approach will not work.
 
 ```bash
-jjj critique validate c5
+jjj critique validate "sql injection"
 ```
 
 What it means: "This criticism is correct. The solution is fundamentally flawed."
@@ -124,8 +124,8 @@ What it means: "This criticism is correct. The solution is fundamentally flawed.
 After validation, the typical next step is to refute the solution and propose a new one (potentially noting what was learned):
 
 ```bash
-jjj solution refute s3
-jjj solution new "Use parameterized queries for all DB access" --problem p8 --supersedes s3
+jjj solution refute "direct queries"
+jjj solution new "Use parameterized queries for all DB access" --problem "db security" --supersedes "direct queries"
 ```
 
 ## Writing Effective Critiques
@@ -147,7 +147,7 @@ Good: "This performs N+1 queries -- one per user in the result set. For the typi
 For code-level critiques, reference the specific location:
 
 ```bash
-jjj critique new s3 "Unbounded memory growth from accumulating results" \
+jjj critique new "search engine" "Unbounded memory growth from accumulating results" \
   --severity high \
   --file src/search/engine.rs \
   --line 142
@@ -160,7 +160,7 @@ This makes it easy for the solution author to find and evaluate the concern.
 A critique identifies what is wrong. If you have an idea for how to fix it, mention it, but recognize that the solution author may find a better approach:
 
 ```bash
-jjj critique reply c7 "One approach would be to use a streaming iterator here instead of collecting into a Vec, but there may be other ways to bound the memory usage."
+jjj critique reply "memory growth" "One approach would be to use a streaming iterator here instead of collecting into a Vec, but there may be other ways to bound the memory usage."
 ```
 
 ### One issue per critique
@@ -173,31 +173,31 @@ Here is a complete critique lifecycle, from raising a critique through resolutio
 
 ```bash
 # Alice proposes a solution
-jjj solution new "Cache search results in Redis" --problem p10
-# Created s7
+jjj solution new "Cache search results in Redis" --problem "slow search"
+# Created 01958a: Cache search results in Redis
 
 # Bob reviews and raises a critique
-jjj critique new s7 "Cache invalidation not handled on data updates" --severity high
-# Created c12
+jjj critique new "Redis" "Cache invalidation not handled on data updates" --severity high
+# Created 01958b: Cache invalidation not handled on data updates
 
 # Alice and Bob discuss
-jjj critique reply c12 "Good point. What about TTL-based expiration?"
-jjj critique reply c12 "TTL alone is insufficient -- stale data is visible for the TTL window. We need event-driven invalidation for writes."
+jjj critique reply "invalidation" "Good point. What about TTL-based expiration?"
+jjj critique reply "invalidation" "TTL alone is insufficient -- stale data is visible for the TTL window. We need event-driven invalidation for writes."
 
 # Alice addresses the critique by modifying the solution
 # ... updates the approach to include write-through invalidation ...
-jjj critique address c12
+jjj critique address "invalidation"
 
 # Carol raises a low-severity critique
-jjj critique new s7 "Redis client library is unmaintained" --severity low
-# Created c13
+jjj critique new "Redis" "Redis client library is unmaintained" --severity low
+# Created 01958c: Redis client library is unmaintained
 
 # Alice dismisses with explanation
-jjj critique reply c13 "The library had a release last month and has active maintainers. The GitHub issue that flagged it as unmaintained was from 2023 and has since been closed."
-jjj critique dismiss c13
+jjj critique reply "unmaintained" "The library had a release last month and has active maintainers. The GitHub issue that flagged it as unmaintained was from 2023 and has since been closed."
+jjj critique dismiss "unmaintained"
 
 # All critiques resolved -- solution can now be accepted
-jjj solution accept s7
+jjj solution accept "Redis caching"
 ```
 
 ## Critiques and Sign-offs: Two Gates to Acceptance
@@ -214,15 +214,15 @@ Review is per-solution: assign reviewers with `--reviewer` when creating a solut
 
 ```bash
 # Assign reviewers at creation
-jjj solution new "Add caching" --problem p1 --reviewer @alice --reviewer @bob
+jjj solution new "Add caching" --problem "performance" --reviewer @alice --reviewer @bob
 
 # Or add a review critique later
-jjj critique new s1 "Review requested" --reviewer @alice
+jjj critique new "caching" "Review requested" --reviewer @alice
 
 # Reviewer signs off by addressing their review critique
-jjj critique list --solution s1 --reviewer @alice
-jjj critique reply c1 "LGTM - clean implementation"
-jjj critique address c1
+jjj critique list --solution "caching" --reviewer @alice
+jjj critique reply "review" "LGTM - clean implementation"
+jjj critique address "review"
 ```
 
 See the [Code Review guide](code-review.md) for the full sign-off workflow.

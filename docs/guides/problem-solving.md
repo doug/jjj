@@ -49,17 +49,17 @@ Decompose a problem when:
 ```bash
 # Create the root problem
 jjj problem new "Authentication system is unreliable"
-# Created p1
+# Created 01957d: Authentication system is unreliable
 
-# Break it down into specific sub-problems
-jjj problem new "Token refresh fails silently" --parent p1
-# Created p2
+# Break it down into specific sub-problems (reference parent by title)
+jjj problem new "Token refresh fails silently" --parent "Authentication"
+# Created 01958a: Token refresh fails silently
 
-jjj problem new "Session state lost after network interruption" --parent p1
-# Created p3
+jjj problem new "Session state lost after network interruption" --parent "auth"
+# Created 01958b: Session state lost after network interruption
 
-jjj problem new "No retry logic for auth API calls" --parent p1
-# Created p4
+jjj problem new "No retry logic for auth API calls" --parent "auth"
+# Created 01958c: No retry logic for auth API calls
 ```
 
 You can view the hierarchy as a tree:
@@ -71,10 +71,10 @@ jjj problem tree
 Output:
 
 ```
-p1 Authentication system is unreliable [open, P2/medium]
-  p2 Token refresh fails silently [open, P2/medium]
-  p3 Session state lost after network interruption [open, P2/medium]
-  p4 No retry logic for auth API calls [open, P2/medium]
+01957d Authentication system is unreliable [open, P2/medium]
+  01958a Token refresh fails silently [open, P2/medium]
+  01958b Session state lost after network interruption [open, P2/medium]
+  01958c No retry logic for auth API calls [open, P2/medium]
 ```
 
 ### Depth guidelines
@@ -149,7 +149,7 @@ Examples:
 Priorities are not permanent. Reassess when context changes:
 
 ```bash
-jjj problem edit p5 --priority high
+jjj problem edit "button spacing" --priority high
 ```
 
 A P3 cosmetic issue becomes P1 if your CEO is demo-ing the product tomorrow. A P1 bug becomes P3 if a workaround is found and the affected feature is being replaced.
@@ -168,7 +168,7 @@ A problem is solved when an accepted solution addresses it and there are no rema
 4. Mark the problem as solved
 
 ```bash
-jjj problem solve p1
+jjj problem solve "Authentication"
 ```
 
 If the problem has open sub-problems or no accepted solution, jjj will warn you. You can still proceed, but the warning exists to prevent premature closure.
@@ -181,13 +181,13 @@ Always provide a reason so future readers understand why:
 
 ```bash
 # False premise
-jjj problem dissolve p7 --reason "The data was correct; our validation rule was wrong"
+jjj problem dissolve "validation error" --reason "The data was correct; our validation rule was wrong"
 
 # Duplicate
-jjj problem dissolve p12 --reason "Duplicate of p3, which already has solutions in progress"
+jjj problem dissolve "login issue" --reason "Duplicate of token refresh problem, which already has solutions in progress"
 
 # Environment-specific
-jjj problem dissolve p15 --reason "Only reproducible on the old CI image; resolved by infrastructure upgrade"
+jjj problem dissolve "CI failure" --reason "Only reproducible on the old CI image; resolved by infrastructure upgrade"
 ```
 
 The `--reason` flag is optional but strongly recommended. A dissolved problem without a reason is a mystery for anyone who encounters it later.
@@ -204,16 +204,16 @@ Milestones group problems for release planning and delivery tracking. Assigning 
 
 ```bash
 # Assign during creation
-jjj problem new "Implement SSO" --milestone m2 --priority high
+jjj problem new "Implement SSO" --milestone "v2.0" --priority high
 
 # Or assign later
-jjj milestone add-problem m2 p10
+jjj milestone add-problem "v2.0" "Implement SSO"
 ```
 
 View all problems in a milestone:
 
 ```bash
-jjj milestone show m2
+jjj milestone show "v2.0"
 ```
 
 Use milestones to answer questions like:
@@ -230,25 +230,25 @@ Here is a typical problem-solving workflow from start to finish:
 jjj problem new "Search results include deleted items" --priority high
 
 # 2. Investigate and decompose if needed
-jjj problem new "Soft-deleted records not filtered in search index" --parent p20
-jjj problem new "Cache not invalidated on delete" --parent p20
+jjj problem new "Soft-deleted records not filtered in search index" --parent "deleted items"
+jjj problem new "Cache not invalidated on delete" --parent "deleted items"
 
 # 3. Propose solutions for the sub-problems
-jjj solution new "Add deleted_at filter to search query" --problem p21
-jjj solution new "Invalidate search cache entry on soft delete" --problem p22
+jjj solution new "Add deleted_at filter to search query" --problem "soft-deleted"
+jjj solution new "Invalidate search cache entry on soft delete" --problem "cache not invalidated"
 
 # 4. Work on solutions (attach changes, face critique, iterate)
-jjj solution resume s5
+jjj solution resume "deleted_at filter"
 # ... implement fix, attach change ...
 jjj submit
 
 # 5. Once sub-problems are solved, solve the parent
-jjj problem solve p21
-jjj problem solve p22
-jjj problem solve p20
+jjj problem solve "soft-deleted"
+jjj problem solve "cache invalidated"
+jjj problem solve "deleted items"
 
 # 6. Assign to milestone for release tracking
-jjj milestone add-problem m3 p20
+jjj milestone add-problem "v2.1" "deleted items"
 ```
 
 ## Next Steps

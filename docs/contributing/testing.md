@@ -272,8 +272,11 @@ fn create_test_problem(id: &str) -> Problem {
 
 ```rust
 // Usage example:
-let problem = Problem::new("p1".into(), "Test problem".into());
-let solution = Solution::new("s1".into(), "Test solution".into(), "p1".into());
+use crate::id::generate_id;
+
+let problem_id = generate_id();  // Generates UUID7
+let problem = Problem::new(problem_id.clone(), "Test problem".into());
+let solution = Solution::new(generate_id(), "Test solution".into(), problem_id);
 ```
 
 ## Continuous Integration

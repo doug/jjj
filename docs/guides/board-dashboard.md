@@ -26,13 +26,13 @@ The TUI provides two panes:
 
 ```
 Milestones
-├── m1: Q1 Release
-│   ├── p1: Search is slow [open]
-│   │   └── s1: Add search index [testing]
-│   │       └── c1: Missing error handling [open]
-│   └── p2: Login fails [solved]
+├── 01957d: Q1 Release
+│   ├── 01958a: Search is slow [open]
+│   │   └── 01958b: Add search index [testing]
+│   │       └── 01958c: Missing error handling [open]
+│   └── 01958d: Login fails [solved]
 └── Backlog
-    └── p3: Add dark mode [open]
+    └── 01958e: Add dark mode [open]
 ```
 
 ### TUI Navigation
@@ -63,20 +63,20 @@ jjj status
 Output:
 
 ```
-Active: s5 "Add Redis caching" -> p10 [testing]
+Active: s/01959a "Add Redis caching" -> p/01958f [testing]
   Open critiques: 2
-    c8: Cache invalidation not handled [high]
-    c9: Redis single point of failure [medium]
+    c/01959b: Cache invalidation not handled [high]
+    c/01959c: Redis single point of failure [medium]
 
 Next actions:
 
-1. [BLOCKED] s5: Add Redis caching -- 2 open critique(s)
-   c8: Cache invalidation not handled [high]
-   c9: Redis single point of failure [medium]
-   -> jjj critique show c8
+1. [BLOCKED] s/01959a: Add Redis caching -- 2 open critique(s)
+   c/01959b: Cache invalidation not handled [high]
+   c/01959c: Redis single point of failure [medium]
+   -> jjj critique show "invalidation"
 
-2. [TODO] p8: API rate limiting needed -- No solutions proposed
-   -> jjj solution new "title" --problem p8
+2. [TODO] p/01959d: API rate limiting needed -- No solutions proposed
+   -> jjj solution new "title" --problem "rate limiting"
 
 Summary: 4 open problems, 3 testing solutions, 5 open critiques
 ```
@@ -100,19 +100,19 @@ jjj status --json
 
 1. **Open critiques?** Address them first. They are blocking your solutions.
    ```bash
-   jjj critique show c8
+   jjj critique show "invalidation"
    # Understand the concern, then address, dismiss, or validate
-   jjj critique address c8
+   jjj critique address "invalidation"
    ```
 
 2. **Solutions in testing?** Continue implementation, request reviews when ready.
    ```bash
-   jjj solution new "title" --problem p1 --reviewer @bob
+   jjj solution new "title" --problem "search slow" --reviewer @bob
    ```
 
 3. **Problems assigned but no solutions?** Propose a solution.
    ```bash
-   jjj solution new "Rate limit with token bucket algorithm" --problem p8
+   jjj solution new "Rate limit with token bucket algorithm" --problem "rate limiting"
    ```
 
 4. **Nothing assigned?** Run `jjj status --all` to see all items across the project.

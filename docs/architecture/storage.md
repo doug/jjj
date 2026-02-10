@@ -9,9 +9,9 @@ jjj stores all project management metadata in a **shadow graph**—a separate, o
 A shadow graph is an orphaned commit history that exists in your repository but is completely separate from your project code:
 
 ```
-Project History          Shadow Graph (jjj/meta)
+Project History          Shadow Graph (jjj)
 ─────────────────        ───────────────────────
-main                     jjj/meta
+main                     jjj
  ◯ Feature C              ◯ Update metadata
  │                        │
  ◯ Feature B              ◯ Add tasks
@@ -33,11 +33,11 @@ Traditional approaches to storing metadata have problems:
 # Bad: Metadata mixed with code
 ◯ Add user authentication
 │
-◯ jjj: Update problem p1 status   ← Noise!
+◯ jjj: Update problem status       ← Noise!
 │
 ◯ Fix login bug
 │
-◯ jjj: Create solution s1          ← More noise!
+◯ jjj: Create solution             ← More noise!
 ```
 
 This clutters `git log` and makes project history messy.
@@ -59,7 +59,7 @@ Problems:
 ```
 # Same repo, separate histories
 jj log -r main                    # Clean project history
-jj log -r jjj/meta                # Metadata history
+jj log -r jjj                # Metadata history
 
 jj git push --all                 # Push both at once
 ```
@@ -72,26 +72,27 @@ Benefits:
 
 ## File Structure
 
-When you run `jjj init`, it creates this structure:
+When you run `jjj init`, it creates this structure on the `jjj` branch:
 
 ```
-.jjj/
-├── config.toml              # Project configuration
-├── milestones/              # Milestone storage
-│   ├── m1.md
-│   └── m2.md
-├── problems/                # Problem storage
-│   ├── p1.md
-│   ├── p2.md
-│   └── p3.md
-├── solutions/               # Solution storage
-│   ├── s1.md
-│   ├── s2.md
-│   └── ...
-└── critiques/               # Critique storage
-    ├── c1.md
-    └── c2.md
+config.toml                                    # Project configuration
+milestones/                                    # Milestone storage
+├── 01959c4d-e5f6-7a7b-8c9d-0e1f2a3b4c5d.md
+└── 01959d5e-f6a7-7b8c-9d0e-1f2a3b4c5d6e.md
+problems/                                      # Problem storage
+├── 01957d3e-a8b2-7def-8c3a-9f4e5d6c7b8a.md
+├── 01958a2b-c3d4-7e5f-6a7b-8c9d0e1f2a3b.md
+└── 01958b3c-d4e5-7f6a-7b8c-9d0e1f2a3b4c.md
+solutions/                                     # Solution storage
+├── 01958c4d-e5f6-7a7b-8c9d-0e1f2a3b4c5d.md
+└── ...
+critiques/                                     # Critique storage
+├── 01958d5e-f6a7-7b8c-9d0e-1f2a3b4c5d6e.md
+└── 01958e6f-a7b8-7c9d-0e1f-2a3b4c5d6e7f.md
+events.jsonl                                   # Event log
 ```
+
+Entity files are named with their full UUID7 identifier. UUID7 is time-ordered, so files naturally sort chronologically.
 
 ## Storage Layer Implementation
 
@@ -118,12 +119,12 @@ When you run `jjj init`:
 
 2. **Create bookmark**:
    ```bash
-   jj bookmark create jjj/meta
+   jj bookmark create jjj
    ```
 
 3. **Create workspace**:
    ```bash
-   jj workspace add .jj/jjj-meta -r jjj/meta
+   jj workspace add .jj/jjj-meta -r jjj
    ```
 
 4. **Initialize directories**:
@@ -162,9 +163,9 @@ allowed = ["backend", "frontend", "api", "ui"]
 Problems, solutions, critiques, and milestones use markdown files with YAML frontmatter:
 
 ```markdown
-# problems/p1.md
+# problems/01957d3e-a8b2-7def-8c3a-9f4e5d6c7b8a.md
 ---
-id: p1
+id: 01957d3e-a8b2-7def-8c3a-9f4e5d6c7b8a
 title: Search is slow on large datasets
 status: open
 priority: high
@@ -185,6 +186,8 @@ Users are reporting slow search results when querying datasets with more than 10
 - Server logs show full table scans
 ```
 
+Entity IDs are UUID7 (time-ordered UUIDs). In listings, truncated prefixes like `01957d` are shown for readability, with automatic extension for uniqueness.
+
 Why YAML frontmatter + Markdown?
 - Human-readable and writable
 - Structured metadata in frontmatter
@@ -199,7 +202,7 @@ Why YAML frontmatter + Markdown?
 jjj uses a simple transaction model:
 
 ```rust
-store.with_metadata("Create problem p1", || {
+store.with_metadata("Create problem", || {
     // 1. Perform operations
     let problem = Problem::new(...);
     store.save_problem(&problem)?;
@@ -210,7 +213,7 @@ store.with_metadata("Create problem p1", || {
 // 3. Metadata committed atomically
 ```
 
-This translates to writing TOML files to the `.jjj/` directory and committing to the shadow graph.
+This translates to writing markdown files to the shadow graph and committing.
 
 ### Conflict Resolution
 
@@ -221,19 +224,21 @@ User A                              User B
 ──────                              ──────
 jjj problem new "Fix login"         jjj problem new "Add search"
   ↓                                   ↓
-Creates p5                         Creates p6
+Creates 01957d...                   Creates 01958a...
   ↓                                   ↓
 jj git push                         jj git push
   ↓                                   ↓
   └──────── CONFLICT! ────────────┘
 ```
 
+Because each problem gets a unique UUID7, the actual files never conflict (different filenames). Conflicts only occur when editing the same entity.
+
 Resolution:
 
 ```bash
 # Pull and resolve
 jj git fetch
-jj bookmark track jjj/meta@origin
+jj bookmark track jjj@origin
 
 # jj automatically merges file-based changes
 # If both created different files → no conflict!
@@ -247,7 +252,7 @@ jj bookmark track jjj/meta@origin
 
 ```bash
 # Push metadata bookmark
-jj git push --bookmark jjj/meta
+jj git push --bookmark jjj
 
 # Or push all bookmarks
 jj git push --all
@@ -265,7 +270,7 @@ What gets pushed:
 jj git fetch
 
 # Track remote bookmark
-jj bookmark track jjj/meta@origin
+jj bookmark track jjj@origin
 
 # Metadata automatically merged
 ```
@@ -279,8 +284,8 @@ jjj is designed for offline-first workflows:
 jjj problem new "Fix login flow" --priority high
 jjj problem new "Add test coverage"
 
-# Propose solutions
-jjj solution new "Refactor auth handler" --problem p1
+# Propose solutions (reference by title)
+jjj solution new "Refactor auth handler" --problem "login flow"
 
 # Later, when online
 jj git push --all
@@ -292,23 +297,20 @@ All metadata is local until you push!
 
 ### ID Generation
 
-IDs are sequential within each type:
+IDs are UUID7, generated locally without coordination:
 
 ```rust
-pub fn next_problem_id(&self) -> Result<String> {
-    let problems = self.list_problems()?;
-    let max_id = problems
-        .iter()
-        .filter_map(|p| p.id.strip_prefix("p").and_then(|s| s.parse::<u32>().ok()))
-        .max()
-        .unwrap_or(0);
-    Ok(format!("p{}", max_id + 1))
+pub fn generate_id() -> String {
+    uuid::Uuid::now_v7().to_string()
 }
 ```
 
-Time complexity: O(n) where n = number of items
+Time complexity: O(1) - constant time, no scanning required.
 
-For large projects (1000s of items), this is still fast (~1ms).
+UUID7 provides:
+- **No conflicts**: UUIDs are globally unique, so distributed teams can create entities without coordination
+- **Time ordering**: UUID7 encodes creation time, so IDs sort chronologically
+- **Human-friendly prefixes**: The first 6+ hex characters are usually unique enough for display
 
 ### File System Layout
 
@@ -335,7 +337,7 @@ Future optimization: In-memory cache with file watchers.
 
 ```bash
 # Full backup
-jj git bundle create jjj-backup.bundle -r jjj/meta
+jj git bundle create jjj-backup.bundle -r jjj
 
 # Or use plain git
 cd .jj/jjj-meta
@@ -347,7 +349,7 @@ git bundle create ~/jjj-backup.bundle --all
 ```bash
 # Restore from bundle
 jj git bundle unbundle jjj-backup.bundle
-jj bookmark set jjj/meta -r <restored-commit>
+jj bookmark set jjj -r <restored-commit>
 ```
 
 ### Reset Metadata
@@ -356,10 +358,10 @@ If metadata gets corrupted:
 
 ```bash
 # Option 1: Reset to earlier state
-jj bookmark set jjj/meta -r <earlier-commit>
+jj bookmark set jjj -r <earlier-commit>
 
 # Option 2: Delete and reinitialize
-jj bookmark delete jjj/meta
+jj bookmark delete jjj
 jjj init
 ```
 

@@ -35,7 +35,7 @@ This stability makes it perfect for attaching review metadata.
 
 ### Unified Critique Model
 
-In jjj, code review is attached to **solutions** (s1, s2, etc.), not directly to changes. A solution may have one or more jj changes associated with it. Review requests and critiques are unified into a single model: **critiques with a reviewer field**.
+In jjj, code review is attached to **solutions**, not directly to changes. A solution may have one or more jj changes associated with it. Review requests and critiques are unified into a single model: **critiques with a reviewer field**.
 
 When you assign reviewers at solution creation (using `--reviewer`), jjj automatically creates review-type critiques for each reviewer. These critiques must be resolved (typically by addressing them with an LGTM comment) before the solution can be accepted.
 
@@ -58,19 +58,19 @@ You can assign reviewers when creating a solution, or add them later using criti
 At creation:
 
 ```bash
-jjj solution new "Use JWT tokens" --problem p1 --reviewer @alice --reviewer @bob
+jjj solution new "Use JWT tokens" --problem "authentication" --reviewer @alice --reviewer @bob
 ```
 
 This creates review-type critiques for each reviewer. You can also add reviewers to an existing solution by creating review critiques:
 
 ```bash
 # Add a reviewer via critique
-jjj critique new s1 "Review requested" --reviewer @alice
+jjj critique new "JWT tokens" "Review requested" --reviewer @alice
 ```
 
 Output:
 ```
-Created critique c1 for s1 (reviewer: @alice)
+Created critique 01958a: Review requested (reviewer: @alice)
 ```
 
 ### 2. Reviewer: Examine the Solution
@@ -93,10 +93,10 @@ Before looking at code, Alice can understand the solution's context:
 
 ```bash
 # See what problem this solution addresses
-jjj solution show s1
+jjj solution show "JWT tokens"
 
 # See any existing critiques
-jjj critique list --solution s1
+jjj critique list --solution "JWT"
 ```
 
 #### Run Tests
@@ -116,11 +116,11 @@ Critiques are the formal mechanism for identifying problems with a solution. The
 
 ```bash
 # Design-level critique
-jjj critique new s1 "JWT tokens stored in localStorage are vulnerable to XSS" \
+jjj critique new "JWT tokens" "JWT tokens stored in localStorage are vulnerable to XSS" \
   --severity high
 
 # Code-level critique with file location
-jjj critique new s1 "Password comparison is not constant-time" \
+jjj critique new "JWT" "Password comparison is not constant-time" \
   --severity critical \
   --file src/auth/password.rs \
   --line 42
@@ -134,11 +134,11 @@ When a reviewer approves the solution, they address their review critique:
 
 ```bash
 # Find your review critique
-jjj critique list --solution s1 --reviewer @alice
+jjj critique list --solution "JWT" --reviewer @alice
 
 # Address it with an LGTM comment
-jjj critique reply c1 "LGTM - clean implementation"
-jjj critique address c1
+jjj critique reply "review requested" "LGTM - clean implementation"
+jjj critique address "review requested"
 ```
 
 Addressing a review critique is the sign-off. The critique's resolution records the reviewer's approval with a timestamp.
@@ -148,24 +148,24 @@ Addressing a review critique is the sign-off. The critique's resolution records 
 Check what critiques are open:
 
 ```bash
-jjj critique list --solution s1 --status open
+jjj critique list --solution "JWT" --status open
 ```
 
 For each critique, address it, dismiss it, or validate it:
 
 ```bash
 # Fix the issue and mark as addressed
-jjj critique address c3
+jjj critique address "constant-time"
 
 # Or dismiss with explanation
-jjj critique reply c4 "The token is stored in an httpOnly cookie, not localStorage. See the approach section of s1."
-jjj critique dismiss c4
+jjj critique reply "localStorage" "The token is stored in an httpOnly cookie, not localStorage. See the solution's approach section."
+jjj critique dismiss "localStorage"
 ```
 
 After addressing critiques, request re-review if needed by creating a new review critique:
 
 ```bash
-jjj critique new s1 "Re-review requested after fixes" --reviewer @alice
+jjj critique new "JWT" "Re-review requested after fixes" --reviewer @alice
 ```
 
 ### 5. Submit
@@ -215,7 +215,7 @@ jj bookmark set main -r kpqxywon
 
 # Push
 jj git push -b main
-jj git push -b jjj/meta  # Push review metadata
+jj git push -b jjj  # Push review metadata
 ```
 
 ### Hybrid Workflow (GitHub/GitLab)
@@ -230,7 +230,7 @@ If your team requires Pull Requests for CI gating or compliance:
 
 2. Open a PR on GitHub/GitLab targeting `main`.
 
-3. Paste `jjj solution show s1` output in the PR description to show it has been reviewed and critiques resolved.
+3. Paste `jjj solution show "JWT"` output in the PR description to show it has been reviewed and critiques resolved.
 
 4. Merge via the forge's UI.
 
@@ -269,7 +269,7 @@ pub fn hash_password(password: &str) -> Result<String> {
 Alice raises a critique at line 42:
 
 ```bash
-jjj critique new s1 "Use bcrypt instead of SHA-256" \
+jjj critique new "password hashing" "Use bcrypt instead of SHA-256" \
   --severity high \
   --file src/auth/password.rs \
   --line 42
@@ -317,9 +317,9 @@ The original code context is gone. jjj detects the content change and marks the 
 
 > **Use Solution-Based Bookmarks**
 >
-> Name your jj bookmarks using the solution ID to make changes easy to find:
+> Name your jj bookmarks using a meaningful name to make changes easy to find:
 >
->     jj bookmark set solution/s1-jwt-auth
+>     jj bookmark set solution/jwt-auth
 
 > **Respond to All Critiques**
 >
@@ -337,7 +337,7 @@ The original code context is gone. jjj detects the content change and marks the 
 >     Replaces SHA-256 with bcrypt for better security.
 >     Uses DEFAULT_COST (12) for work factor.
 >
->     Addresses: p5 (password security)"
+>     Addresses: password security problem"
 
 ## Troubleshooting
 
@@ -346,7 +346,7 @@ The original code context is gone. jjj detects the content change and marks the 
 If critique locations do not update after rebase:
 
 1. **Check context**: Did you completely rewrite the section?
-2. **View orphaned critiques**: `jjj critique list --solution s1`
+2. **View orphaned critiques**: `jjj critique list --solution "JWT"`
 3. **Re-create if needed**: Raise a new critique at the correct location
 
 ### Submit Fails
@@ -355,8 +355,8 @@ If `jjj submit` reports unresolved critiques or missing sign-offs:
 
 ```bash
 # Check what is blocking
-jjj critique list --solution s1 --status open
-jjj solution show s1  # Shows reviewer and sign-off status
+jjj critique list --solution "JWT" --status open
+jjj solution show "JWT"  # Shows reviewer and sign-off status
 ```
 
 ### Finding the Right Solution
@@ -365,7 +365,7 @@ If you forget which solution you are working on:
 
 ```bash
 # List solutions for a problem
-jjj solution list --problem p1
+jjj solution list --problem "auth"
 
 # The dashboard shows your assigned work
 jjj status

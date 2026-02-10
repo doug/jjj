@@ -18,6 +18,7 @@
 
 # CLI Reference
 
+- [Entity Resolution](reference/entity-resolution.md)
 - [Problem Commands](reference/cli-problem.md)
 - [Solution Commands](reference/cli-solution.md)
 - [Critique Commands](reference/cli-critique.md)

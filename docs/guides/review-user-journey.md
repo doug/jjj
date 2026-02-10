@@ -19,7 +19,7 @@ Alice identifies what needs to be built and creates a problem to track it.
 ```bash
 # Alice's terminal
 $ jjj problem new "Add user authentication"
-Created problem p1 (Add user authentication)
+Created problem 01957d: Add user authentication
 ```
 
 ## Step 2: Alice Creates a Solution and Requests Bob's Review
@@ -28,21 +28,21 @@ Alice proposes a solution and requests Bob's review in one command.
 
 ```bash
 # Alice's terminal
-$ jjj solution new "JWT-based authentication" --problem p1 --reviewer bob
-Created solution s1 (JWT-based authentication)
-  Addresses: p1 - Add user authentication
+$ jjj solution new "JWT-based authentication" --problem "user auth" --reviewer bob
+Created solution 01958a: JWT-based authentication
+  Addresses: 01957d - Add user authentication
   Awaiting review: @bob
 ```
 
-This automatically creates an "Awaiting review from @bob" critique (c1) that blocks acceptance until Bob addresses it.
+This automatically creates an "Awaiting review from @bob" critique that blocks acceptance until Bob addresses it.
 
 Alice can verify what was created:
 
 ```bash
-$ jjj critique list --solution s1
+$ jjj critique list --solution "JWT"
 ID       STATUS       SEVERITY   SOLUTION   TITLE
 --------------------------------------------------------------------------------
-c1       open         low        s1         Awaiting review from @bob
+01958b   open         low        01958a     Awaiting review from @bob
 ```
 
 ## Step 3: Bob Checks His Review Queue
@@ -54,18 +54,18 @@ Bob runs `jjj status` to see what needs his attention.
 $ jjj status
 Next actions:
 
-1. [REVIEW] c1: Awaiting review from @bob -- Review requested on s1
-   -> jjj critique show c1
+1. [REVIEW] c/01958b: Awaiting review from @bob -- Review requested on s/01958a
+   -> jjj critique show "review"
 ```
 
 Bob sees he has a review request. He examines the solution:
 
 ```bash
-$ jjj solution show s1
-# Solution s1: JWT-based authentication
+$ jjj solution show "JWT"
+# Solution 01958a: JWT-based authentication
 
 Status: proposed
-Problem: p1 (Add user authentication)
+Problem: 01957d (Add user authentication)
 Assignee: alice
 
 ## Approach
@@ -74,7 +74,7 @@ Assignee: alice
 
 ## Open Critiques
 
-- c1: Awaiting review from @bob [low]
+- 01958b: Awaiting review from @bob [low]
 ```
 
 ## Step 4: Bob Reviews and Finds an Issue
@@ -83,12 +83,12 @@ Bob examines Alice's code and finds a security concern. He creates a critique:
 
 ```bash
 # Bob's terminal
-$ jjj critique new s1 "Token expiration is too long" --severity high
-Created critique c2 (Token expiration is too long) on solution s1
+$ jjj critique new "JWT" "Token expiration is too long" --severity high
+Created critique 01958c: Token expiration is too long on solution 01958a
   Severity: high
 ```
 
-Bob keeps his review critique (c1) open because he's not done reviewing yet - he wants to see the fix before signing off.
+Bob keeps his review critique open because he's not done reviewing yet - he wants to see the fix before signing off.
 
 ## Step 5: Alice Sees the Critique and Responds
 
@@ -99,19 +99,19 @@ Alice checks her status:
 $ jjj status
 Next actions:
 
-1. [BLOCKED] s1: JWT-based authentication -- 2 open critique(s)
-   c1: Awaiting review from @bob [low]
-   c2: Token expiration is too long [high]
-   -> jjj critique show c2
+1. [BLOCKED] s/01958a: JWT-based authentication -- 2 open critique(s)
+   c/01958b: Awaiting review from @bob [low]
+   c/01958c: Token expiration is too long [high]
+   -> jjj critique show "expiration"
 ```
 
 She views the critique details:
 
 ```bash
-$ jjj critique show c2
-# Critique c2: Token expiration is too long
+$ jjj critique show "expiration"
+# Critique 01958c: Token expiration is too long
 
-Solution: s1 (JWT-based authentication)
+Solution: 01958a (JWT-based authentication)
 Status: open
 Severity: high
 Author: bob
@@ -125,8 +125,8 @@ Alice fixes the code and marks the critique as addressed:
 
 ```bash
 # Alice fixes the token expiration in her code, then:
-$ jjj critique address c2
-Critique c2 marked as addressed
+$ jjj critique address "expiration"
+Critique 01958c marked as addressed
 ```
 
 ## Step 6: Bob Verifies the Fix
@@ -138,18 +138,18 @@ Bob's status now shows he needs to verify Alice's fix:
 $ jjj status
 Next actions:
 
-1. [REVIEW] c1: Awaiting review from @bob -- Review requested on s1
-   -> jjj critique show c1
+1. [REVIEW] c/01958b: Awaiting review from @bob -- Review requested on s/01958a
+   -> jjj critique show "review"
 
-2. [VERIFY] c2: Token expiration is too long -- was addressed
-   -> jjj critique show c2
+2. [VERIFY] c/01958c: Token expiration is too long -- was addressed
+   -> jjj critique show "expiration"
 ```
 
-Bob checks that Alice's fix is good. If satisfied, he can dismiss his original critique (c2 was addressed by Alice, but Bob raised it so he might want to validate):
+Bob checks that Alice's fix is good. If satisfied, he can dismiss his original critique (the expiration critique was addressed by Alice, but Bob raised it so he might want to validate):
 
 ```bash
 # Bob checks the fix looks good
-$ jjj critique show c2
+$ jjj critique show "expiration"
 # Shows the addressed critique
 
 # Bob is satisfied with the fix
@@ -161,8 +161,8 @@ Bob is now satisfied with the solution. He dismisses his review critique to sign
 
 ```bash
 # Bob's terminal
-$ jjj critique dismiss c1
-Critique c1 dismissed (shown to be incorrect or irrelevant)
+$ jjj critique dismiss "review"
+Critique 01958b dismissed (shown to be incorrect or irrelevant)
 ```
 
 Dismissing the "Awaiting review" critique is Bob's sign-off. It means "I've looked at this and have no concerns."
@@ -176,21 +176,21 @@ Alice checks her status:
 $ jjj status
 Next actions:
 
-1. [READY] s1: JWT-based authentication -- All critiques resolved
-   -> jjj solution accept s1
+1. [READY] s/01958a: JWT-based authentication -- All critiques resolved
+   -> jjj solution accept "JWT"
 ```
 
 All critiques are resolved:
-- c1 (review request): dismissed by Bob (LGTM)
-- c2 (token expiration): addressed by Alice
+- 01958b (review request): dismissed by Bob (LGTM)
+- 01958c (token expiration): addressed by Alice
 
 Alice accepts the solution:
 
 ```bash
-$ jjj solution accept s1
-Solution s1 accepted
-Solution accepted. Mark problem p1 as solved? [y/N] y
-Problem p1 marked as solved
+$ jjj solution accept "JWT"
+Solution 01958a accepted
+Solution accepted. Mark problem 01957d as solved? [y/N] y
+Problem 01957d marked as solved
 ```
 
 ## Summary: The Complete Flow
@@ -200,18 +200,18 @@ Alice                              Bob
 ─────                              ───
 1. problem new "Auth"
 2. solution new --reviewer bob
-   → creates s1, c1 (review req)
+   → creates solution, review req
                                    3. status → sees review request
-                                   4. critique new s1 "Issue"
-                                      → creates c2
+                                   4. critique new "JWT" "Issue"
+                                      → creates critique
 5. status → sees critiques
 6. (fixes code)
-7. critique address c2
+7. critique address "Issue"
                                    8. status → verify fix
                                    9. (checks fix is good)
-                                   10. critique dismiss c1 (LGTM)
+                                   10. critique dismiss "review" (LGTM)
 11. status → ready
-12. solution accept s1
+12. solution accept "JWT"
 ```
 
 ## Key Concepts
@@ -228,7 +228,7 @@ When you use `--reviewer bob`, jjj creates an "Awaiting review from @bob" critiq
 You can request multiple reviewers:
 
 ```bash
-jjj solution new "Feature" --problem p1 --reviewer alice --reviewer bob --reviewer carol
+jjj solution new "Feature" --problem "auth" --reviewer alice --reviewer bob --reviewer carol
 ```
 
 Each reviewer gets their own review critique. All must be resolved before acceptance.
@@ -238,14 +238,14 @@ Each reviewer gets their own review critique. All must be resolved before accept
 Specify severity for review requests:
 
 ```bash
-jjj solution new "Critical fix" --problem p1 --reviewer bob:critical
+jjj solution new "Critical fix" --problem "security issue" --reviewer bob:critical
 ```
 
 This creates a critical-severity review critique, useful for signaling urgency.
 
 ### Multi-Round Review
 
-Bob can raise multiple critiques during his review while keeping his review critique (c1) open. Only when fully satisfied does he dismiss c1. This prevents the "forgot to sign off" problem.
+Bob can raise multiple critiques during his review while keeping his review critique open. Only when fully satisfied does he dismiss it. This prevents the "forgot to sign off" problem.
 
 ### Viewing Your Queue
 

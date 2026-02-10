@@ -2,6 +2,16 @@
 
 Problems represent what needs to be solved. They can be organized hierarchically with parent-child relationships and assigned to milestones.
 
+## Entity Resolution
+
+All commands that take a problem ID support multiple resolution methods:
+
+- **Fuzzy title match**: `"App crashes"` or `"auth module"` -- matches against problem titles
+- **Truncated prefix**: `01957d` -- minimum 6 hex characters from the UUID
+- **Full UUID**: `01957d3e-a8b2-7def-8c3a-9f4e5d6c7b8a`
+
+If multiple entities match, an interactive picker appears (TTY) or suggestions are shown (non-TTY).
+
 ## `jjj problem new`
 
 Create a new problem.
@@ -13,13 +23,13 @@ jjj problem new <title> [OPTIONS]
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--priority` | string | `medium` | Priority: P0/critical, P1/high, P2/medium, P3/low |
-| `--parent` | string | | Parent problem ID for sub-problems |
-| `--milestone` | string | | Milestone to target |
+| `--parent` | string | | Parent problem (title, prefix, or UUID) |
+| `--milestone` | string | | Milestone to target (title, prefix, or UUID) |
 
 ```bash,test
 jjj init
 jjj problem new "App crashes on startup" --priority high
-jjj problem new "Null pointer in auth module" --parent p1
+jjj problem new "Null pointer in auth module" --parent "App crashes"
 jjj problem new "Improve test coverage"
 ```
 
@@ -50,7 +60,7 @@ jjj problem list --json
 Show problem details.
 
 ```
-jjj problem show <problem_id> [OPTIONS]
+jjj problem show <problem> [OPTIONS]
 ```
 
 | Flag | Type | Description |
@@ -58,8 +68,8 @@ jjj problem show <problem_id> [OPTIONS]
 | `--json` | bool | Output in JSON format |
 
 ```bash,test
-jjj problem show p1
-jjj problem show p1 --json
+jjj problem show "App crashes"
+jjj problem show "App crashes" --json
 ```
 
 ## `jjj problem edit`
@@ -67,7 +77,7 @@ jjj problem show p1 --json
 Edit problem details.
 
 ```
-jjj problem edit <problem_id> [OPTIONS]
+jjj problem edit <problem> [OPTIONS]
 ```
 
 | Flag | Type | Description |
@@ -78,7 +88,7 @@ jjj problem edit <problem_id> [OPTIONS]
 | `--parent` | string | Set parent problem |
 
 ```bash,test
-jjj problem edit p1 --title "App crashes on cold startup" --priority critical
+jjj problem edit "App crashes" --title "App crashes on cold startup" --priority critical
 ```
 
 ## `jjj problem tree`
@@ -86,14 +96,14 @@ jjj problem edit p1 --title "App crashes on cold startup" --priority critical
 Show problem hierarchy as a tree.
 
 ```
-jjj problem tree [problem_id]
+jjj problem tree [problem]
 ```
 
-If no problem ID is given, shows all root problems and their children.
+If no problem is given, shows all root problems and their children.
 
 ```bash,test
 jjj problem tree
-jjj problem tree p1
+jjj problem tree "App crashes"
 ```
 
 ## `jjj problem solve`
@@ -101,11 +111,11 @@ jjj problem tree p1
 Mark a problem as solved. Requires an accepted solution.
 
 ```
-jjj problem solve <problem_id>
+jjj problem solve <problem>
 ```
 
 ```bash
-jjj problem solve p1
+jjj problem solve "App crashes"
 ```
 
 ## `jjj problem dissolve`
@@ -113,7 +123,7 @@ jjj problem solve p1
 Mark a problem as dissolved (based on false premises).
 
 ```
-jjj problem dissolve <problem_id> [OPTIONS]
+jjj problem dissolve <problem> [OPTIONS]
 ```
 
 | Flag | Type | Description |
@@ -121,7 +131,7 @@ jjj problem dissolve <problem_id> [OPTIONS]
 | `--reason` | string | Reason for dissolving |
 
 ```bash
-jjj problem dissolve p2 --reason "Turned out to be expected behavior"
+jjj problem dissolve "test coverage" --reason "Turned out to be expected behavior"
 ```
 
 ## `jjj problem assign`
@@ -129,7 +139,7 @@ jjj problem dissolve p2 --reason "Turned out to be expected behavior"
 Assign a problem to a person.
 
 ```
-jjj problem assign <problem_id> [OPTIONS]
+jjj problem assign <problem> [OPTIONS]
 ```
 
 | Flag | Type | Description |
@@ -137,5 +147,5 @@ jjj problem assign <problem_id> [OPTIONS]
 | `--to` | string | Assignee name (defaults to self) |
 
 ```bash
-jjj problem assign p1 --to alice
+jjj problem assign "App crashes" --to alice
 ```

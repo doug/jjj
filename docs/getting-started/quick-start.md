@@ -12,7 +12,7 @@ jjj init
 ```
 
 This creates a shadow graph -- an orphaned commit history that stores all
-project metadata separately from your code. The bookmark `jjj/meta` tracks it.
+project metadata separately from your code. The bookmark `jjj` tracks it.
 
 ## Create a Problem
 
@@ -23,8 +23,9 @@ priority:
 jjj problem new "Search is slow" --priority P1
 ```
 
-This creates `p1`. Priorities range from P0 (critical) to P3 (low) and
-affect how `jjj status` orders your work.
+This creates a problem with a UUID7 identifier (e.g., `01957d3e-a8b2-7def-8c3a-9f4e5d6c7b8a`).
+In listings, you'll see a truncated prefix like `01957d`. Priorities range from
+P0 (critical) to P3 (low) and affect how `jjj status` orders your work.
 
 ## Propose a Solution
 
@@ -32,11 +33,15 @@ Solutions are conjectures -- proposed ways to solve a problem. They start in
 `proposed` status and must survive criticism before acceptance.
 
 ```bash,test
-jjj solution new "Add search index" --problem p1
+jjj solution new "Add search index" --problem "Search is slow"
 ```
 
-This creates `s1`, linked to problem `p1`. A single problem can have
-multiple competing solutions.
+This creates a solution linked to the problem. You can reference entities by:
+- **Fuzzy title match**: `"Search is slow"` or even `"search slow"`
+- **Truncated prefix**: `01957d` (minimum 6 hex characters)
+- **Full UUID**: `01957d3e-a8b2-7def-8c3a-9f4e5d6c7b8a`
+
+A single problem can have multiple competing solutions.
 
 ## Start Working
 
@@ -45,7 +50,7 @@ and moves the solution to `testing` status. To resume work on an existing
 solution:
 
 ```bash
-jjj solution resume s1
+jjj solution resume "Add search index"
 ```
 
 Your working copy now has a change tracked by jjj. The parent problem
@@ -57,10 +62,10 @@ Critiques are explicit criticism of a solution. They block acceptance until
 every critique is resolved (addressed, validated, or dismissed).
 
 ```bash
-jjj critique new s1 "Missing error handling" --severity medium
+jjj critique new "Add search index" "Missing error handling" --severity medium
 ```
 
-This creates `c1` against solution `s1`. Severities are `low`, `medium`,
+This creates a critique against the solution. Severities are `low`, `medium`,
 `high`, and `critical`.
 
 ## Address the Critique
@@ -69,14 +74,14 @@ After modifying the solution to handle the criticism, mark the critique as
 addressed:
 
 ```bash
-jjj critique address c1
+jjj critique address "Missing error"
 ```
 
 Other resolution options:
 
-- `jjj critique validate c1` -- the critique is correct and the solution
+- `jjj critique validate "Missing error"` -- the critique is correct and the solution
   should be refuted
-- `jjj critique dismiss c1` -- the critique is incorrect or irrelevant
+- `jjj critique dismiss "Missing error"` -- the critique is incorrect or irrelevant
 
 ## Submit
 
@@ -121,12 +126,20 @@ Press `q` to exit.
 
 ## Key Concepts
 
+**Entity IDs** -- All entities use UUID7 identifiers that are time-ordered for
+natural chronological sorting. You can reference entities by full UUID,
+truncated hex prefix (minimum 6 characters), or fuzzy title match.
+
+**Fuzzy Search** -- The primary way to reference entities. Type part of the
+title and jjj finds matches. If multiple entities match, an interactive picker
+appears (in TTY) or you get a list of suggestions (in scripts).
+
 **Change IDs** -- jjj uses Jujutsu change IDs (not commit hashes) as stable
 references. They survive rebases and history rewrites, so metadata links never
 break.
 
 **Shadow Graph** -- All jjj metadata lives in a separate orphaned commit
-history (`jjj/meta`). It never pollutes your project history and can be
+history (`jjj`). It never pollutes your project history and can be
 pushed or fetched independently.
 
 **Critique Blocking** -- A solution cannot be accepted while it has open
@@ -146,13 +159,13 @@ problems surface first.
 | `jjj ui` | Launch interactive TUI |
 | `jjj problem new "title" --priority high` | Create a problem |
 | `jjj problem list` | List all problems |
-| `jjj problem show p1` | Show problem details and solutions |
-| `jjj solution new "title" --problem p1` | Propose a solution |
-| `jjj solution new "title" --problem p1 --reviewer @alice` | Propose with reviewer |
+| `jjj problem show "auth bug"` | Show problem details (fuzzy search) |
+| `jjj solution new "title" --problem "auth bug"` | Propose a solution |
+| `jjj solution new "title" --problem "auth" --reviewer @alice` | Propose with reviewer |
 | `jjj solution list` | List all solutions |
-| `jjj solution resume s1` | Switch to a solution's change |
-| `jjj critique new s1 "title" --severity medium` | Critique a solution |
-| `jjj critique address c1` | Mark critique as addressed |
+| `jjj solution resume "pooling"` | Switch to a solution's change |
+| `jjj critique new "pooling" "title" --severity medium` | Critique a solution |
+| `jjj critique address "error handling"` | Mark critique as addressed |
 | `jjj submit` | Squash, accept solution, solve problem |
 | `jjj push` | Push code and metadata to remote |
 | `jjj fetch` | Fetch code and metadata from remote |

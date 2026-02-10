@@ -150,7 +150,7 @@ jjj events [OPTIONS]
 ```bash
 jjj events
 jjj events --from 2024-01 --to 2024-06
-jjj events --problem p1
+jjj events --problem "auth"
 jjj events --type solution_accepted
 jjj events --search "cache"
 ```
@@ -168,7 +168,7 @@ Validate event log against entity states.
 Show timeline for a problem and all related entities.
 
 ```
-jjj timeline <problem_id> [OPTIONS]
+jjj timeline <problem> [OPTIONS]
 ```
 
 | Flag | Type | Description |
@@ -176,5 +176,5 @@ jjj timeline <problem_id> [OPTIONS]
 | `--json` | bool | Output as JSON |
 
 ```bash
-jjj timeline p1
+jjj timeline "auth bug"
 ```

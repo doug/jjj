@@ -118,7 +118,7 @@
       <span class="terminal-prompt">$</span>
       <span class="terminal-cmd">jjj problem new "Search is slow" --priority P1</span>
     </div>
-    <div class="terminal-output">Created problem p1: Search is slow</div>
+    <div class="terminal-output">Created problem 01957d: Search is slow</div>
     <div class="terminal-section">
       <span class="terminal-user">alice</span>
       <span class="terminal-prompt">$</span>
@@ -133,9 +133,9 @@
     <div class="terminal-section">
       <span class="terminal-user">bob</span>
       <span class="terminal-prompt">$</span>
-      <span class="terminal-cmd">jjj solution new "Add search index" --problem p1</span>
+      <span class="terminal-cmd">jjj solution new "Add search index" --problem "Search is slow"</span>
     </div>
-    <div class="terminal-output">Created solution s1: Add search index</div>
+    <div class="terminal-output">Created solution 01958a: Add search index</div>
     <div class="terminal-section">
       <span class="terminal-user">bob</span>
       <span class="terminal-prompt">$</span>
@@ -150,9 +150,9 @@
     <div class="terminal-section">
       <span class="terminal-user">alice</span>
       <span class="terminal-prompt">$</span>
-      <span class="terminal-cmd">jjj critique new s1 "Missing error handling"</span>
+      <span class="terminal-cmd">jjj critique new "search index" "Missing error handling"</span>
     </div>
-    <div class="terminal-output">Created critique c1: Missing error handling</div>
+    <div class="terminal-output">Created critique 01958b: Missing error handling</div>
     <div class="terminal-section">
       <span class="terminal-user">alice</span>
       <span class="terminal-prompt">$</span>
@@ -167,15 +167,15 @@
     <div class="terminal-section">
       <span class="terminal-user">bob</span>
       <span class="terminal-prompt">$</span>
-      <span class="terminal-cmd">jjj critique address c1</span>
+      <span class="terminal-cmd">jjj critique address "error handling"</span>
     </div>
-    <div class="terminal-output">Addressed critique c1</div>
+    <div class="terminal-output">Addressed critique 01958b</div>
     <div class="terminal-section">
       <span class="terminal-user">bob</span>
       <span class="terminal-prompt">$</span>
-      <span class="terminal-cmd">jjj solution accept s1</span>
+      <span class="terminal-cmd">jjj solution accept "search index"</span>
     </div>
-    <div class="terminal-output">Accepted solution s1</div>
+    <div class="terminal-output">Accepted solution 01958a</div>
     <div class="terminal-section">
       <span class="terminal-user">bob</span>
       <span class="terminal-prompt">$</span>
