@@ -48,15 +48,15 @@ mdbook serve                   # Serve locally
 - **Milestones**: Time-based goals grouping problems
 
 ### Storage: Shadow Graph
-All metadata lives in an orphaned `jjj/meta` bookmark, never touching the working copy. Sync via `jj git push -b jjj/meta`.
+All metadata lives in an orphaned `jjj` bookmark, never touching the working copy. Sync via `jj git push -b jjj`.
 
 ```
-.jjj/
-├── config.toml
-├── problems/p{n}.md
-├── solutions/s{n}.md
-├── critiques/c{n}.md
-└── milestones/m{n}.md
+problems/{uuid}.md
+solutions/{uuid}.md
+critiques/{uuid}.md
+milestones/{uuid}.md
+config.toml
+events.jsonl
 ```
 
 Entity files use YAML frontmatter + markdown body.
@@ -73,10 +73,14 @@ TUI (src/tui/)               # Ratatui-based interactive UI
 ```
 
 ### Entity IDs
-- Problems: `p{n}` (e.g., `p1`, `p2`)
-- Solutions: `s{n}` (e.g., `s1`, `s2`)
-- Critiques: `c{n}` (e.g., `c1`, `c2`)
-- Milestones: `m{n}` (e.g., `m1`, `m2`)
+- All entities use UUID7 identifiers (e.g., "01957d3e-a8b2-7def-8c3a-9f4e5d6c7b8a")
+- UUIDs are time-ordered for natural chronological sorting
+- Users can reference entities by:
+  - Full UUID
+  - Truncated hex prefix (minimum 6 chars, e.g., "01957d")
+  - Fuzzy title match (e.g., "auth bug")
+- Listings show short prefixes auto-extended for uniqueness
+- Mixed-type listings use type prefixes: p/, s/, c/, m/
 - Change IDs: jj-native opaque strings (e.g., "kpqxywon")
 
 ### State Machines
@@ -110,7 +114,7 @@ TUI (src/tui/)               # Ratatui-based interactive UI
 
 ### Events and Timeline
 ```bash
-jjj events                     # Recent events
-jjj events --problem p1        # Events for a problem
-jjj timeline p1                # Full timeline visualization
+jjj events                           # Recent events
+jjj events --problem 01957d          # Events for a problem (by prefix)
+jjj timeline "auth bug"              # Full timeline (by fuzzy title)
 ```
