@@ -9,7 +9,7 @@ use std::cell::RefCell;
 use std::fs;
 use std::path::PathBuf;
 
-const META_BOOKMARK: &str = "jjj/meta";
+const META_BOOKMARK: &str = "jjj";
 const CONFIG_FILE: &str = "config.toml";
 const EVENTS_FILE: &str = "events.jsonl";
 const PROBLEMS_DIR: &str = "problems";
