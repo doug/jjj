@@ -255,4 +255,4 @@ jjj milestone add-problem m3 p20
 
 - [Critique Guidelines](critique-guidelines.md) -- Learn how critiques evaluate solutions
 - [Code Review](code-review.md) -- Understand the review flow for solutions
-- [Board and Dashboard](board-dashboard.md) -- Visualize your work
+- [TUI and Status](board-dashboard.md) -- Visualize your work

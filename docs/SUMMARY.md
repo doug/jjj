@@ -12,7 +12,7 @@
 - [Problem Solving](guides/problem-solving.md)
 - [Critique Guidelines](guides/critique-guidelines.md)
 - [Code Review Workflow](guides/code-review.md)
-- [Board & Dashboard](guides/board-dashboard.md)
+- [TUI & Status](guides/board-dashboard.md)
 - [Jujutsu Integration](guides/jujutsu-integration.md)
 - [VS Code Extension](guides/vscode-extension.md)
 

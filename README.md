@@ -1,195 +1,170 @@
-# **jjj: Jujutsu Juggler: Distributed Collaboration for Jujutsu**
+# jjj: Distributed Project Management for Jujutsu
 
-**jjj** is a distributed project management and code review system built exclusively for the [Jujutsu (jj)](https://github.com/jj-vcs/jj) version control system.
+**jjj** is a distributed project management and code review system built for [Jujutsu (jj)](https://github.com/jj-vcs/jj). It implements Popperian epistemology — Problems, Solutions, Critiques — as a workflow that lives entirely in your repository.
 
-It implements a **Kanban-style task manager** and a **resilient code review workflow** directly within your repository. It requires no central server, no database, and no browser. It functions entirely offline, synchronising via standard jj push/pull operations.
+No server. No database. No browser. Sync via standard `jj git push/pull`.
 
-## **I. The Philosophy**
+## Why Jujutsu?
 
-Previous attempts at distributed review (like git-appraise) suffered a fatal flaw: **The fragility of the Commit Hash.** In Git, if you rebase a branch to clean up history, every commit hash changes. Metadata attached to those hashes becomes orphaned, requiring complex heuristics to re-attach.
+Previous attempts at distributed review (like git-appraise) suffered a fatal flaw: **the fragility of the commit hash**. In Git, rebasing changes every commit hash, orphaning any attached metadata.
 
-**Jujutsu solves this.** jj treats changes as first-class citizens with stable **Change IDs** that persist across rewrites, rebases, and squashes. jjj leverages this stability to anchor tasks and reviews to the *identity* of a change, not its momentary snapshot.
+**Jujutsu solves this.** Its Change IDs persist across rebases, squashes, and history rewrites. jjj anchors metadata to change *identity*, not its momentary snapshot.
 
-### **Core Principles**
+## Core Model
 
-1. **The Shadow Graph:** All metadata (tasks, comments, statuses) lives in an orphaned history root tracked by the jjj/meta bookmark. It never touches your working copy.  
-2. **Change-Centricity:** Reviews attach to Change IDs. You can rebase your stack fifty times; the review comments remain attached.  
-3. **Conflict as Data:** If two users update a task state simultaneously, jjj accepts both, creates a standard jj conflict, and exposes it in the UI for resolution.
+jjj organizes work around Karl Popper's theory of knowledge growth: bold conjectures subjected to rigorous criticism.
 
-## **II. The Architecture**
+- **Problems** — Things that need solving. Can form hierarchies via parent/child relationships.
+- **Solutions** — Conjectures to solve problems. Linked to jj Change IDs.
+- **Critiques** — Error elimination. Block solution acceptance until addressed.
+- **Milestones** — Time-based goals grouping problems.
 
-jjj maintains a parallel directory structure within the jjj/meta bookmark.
+## Quick Start
 
-/ (root of jjj/meta)  
-├── config.toml           # Project-wide settings (columns, tags)  
-├── tasks/  
-│   ├── T-1024.json       # Task metadata  
-│   └── T-1025.json  
-└── reviews/  
-    └── kpzszn.../        # Directory named by Change ID  
-        ├── manifest.toml # Review status (Pending, Approved)  
-        └── comments/     # Individual comment objects  
-            └── c-998.json
-
-### **State Propagation**
-
-To share tasks and reviews with your team, you must push the `jjj/meta` bookmark.
-
-**Pushing changes:**
 ```bash
-# Push your changes and the jjj metadata
+# Initialize jjj in your repository
+jjj init
+
+# Define a problem
+jjj problem new "Search is slow" --priority high
+
+# Propose a solution
+jjj solution new "Add search index" --problem p1
+
+# Attach your current jj change to the solution
+jjj solution attach s1
+
+# Add a critique during review
+jjj critique new s1 "Missing error handling" --severity medium
+
+# Address the critique after fixing
+jjj critique address c1
+
+# Accept the solution and mark problem solved
+jjj solution accept s1
+jjj problem solve p1
+```
+
+## Commands
+
+### Workflow
+```bash
+jjj init                    # Initialize jjj/meta bookmark
+jjj status                  # Show next actions (what to work on)
+jjj ui                      # Launch interactive TUI
+jjj submit                  # Squash changes and complete solution
+jjj fetch                   # Fetch code and metadata from remote
+jjj push                    # Push code and metadata to remote
+```
+
+### Problems
+```bash
+jjj problem new "Title"     # Create problem
+jjj problem list            # List all problems
+jjj problem show p1         # Show details
+jjj problem tree            # Hierarchical view
+jjj problem solve p1        # Mark solved (requires accepted solution)
+jjj problem dissolve p1     # Mark dissolved (false premises)
+```
+
+### Solutions
+```bash
+jjj solution new "Title" --problem p1     # Create solution
+jjj solution attach s1                    # Link current change
+jjj solution resume s1                    # Resume working on solution
+jjj solution test s1                      # Move to testing status
+jjj solution accept s1                    # Accept (no open critiques)
+jjj solution refute s1                    # Refute (criticism showed it won't work)
+```
+
+### Critiques
+```bash
+jjj critique new s1 "Issue" --severity high     # Add critique
+jjj critique list --solution s1                 # List critiques
+jjj critique address c1                         # Mark addressed
+jjj critique dismiss c1                         # Dismiss (incorrect/irrelevant)
+jjj critique validate c1                        # Validate (solution should be refuted)
+```
+
+### Milestones
+```bash
+jjj milestone new "Q1 Release" --date 2024-03-31
+jjj milestone add-problem m1 p1
+jjj milestone roadmap
+```
+
+## Architecture
+
+### Shadow Graph
+
+All metadata lives in an orphaned `jjj/meta` bookmark, separate from your project history:
+
+```
+.jjj/
+├── config.toml
+├── problems/
+│   └── p1.md
+├── solutions/
+│   └── s1.md
+├── critiques/
+│   └── c1.md
+└── milestones/
+    └── m1.md
+```
+
+This means:
+- Metadata never pollutes project history
+- No merge conflicts between code and metadata
+- Can be synced independently
+
+### Syncing with Team
+
+```bash
+# Push your changes and metadata
+jjj push
+
+# Or manually:
 jj git push -b jjj/meta
-```
 
-**Fetching updates:**
-```bash
-# Fetch updates from the team
-jj git fetch
-```
+# Fetch updates
+jjj fetch
 
-**One-time setup:**
-If you haven't already, track the remote metadata bookmark:
-```bash
+# One-time setup: track remote metadata
 jj bookmark track jjj/meta@origin
 ```
 
-## **III. Workflow: Project Management (Kanban)**
+## Installation
 
-The goal is a frictionless, terminal-based board that tracks work without context switching.
+```bash
+# Build from source
+cargo build --release
 
-### **1. The Board View**
+# Install
+cargo install --path .
 
-$ jjj board
-
-**Output (TUI):**
-
-```
- ┌── TODO ────────────────┐ ┌── IN PROGRESS ─────────┐ ┌── REVIEW ──────────────┐  
- │                        │ │                        │ │                        │  
- │ T-101: Db Schema       │ │ T-105: Auth API        │ │ T-99:  Login UI        │  
- │ #backend               │ │ @james  (yqosq...)     │ │ @sarah (zpmoz...)      │  
- │                        │ │                        │ │ ⚠ 2 comments           │  
- │                        │ │                        │ │                        │  
- └────────────────────────┘ └────────────────────────┘ └────────────────────────┘
+# Generate shell completions
+jjj completion bash > ~/.local/share/bash-completion/completions/jjj
 ```
 
-### **2. Managing Tasks**
+## VS Code Extension
 
-Tasks are independent entities. When you start working, you associate a task with your current jj change.
+A VS Code extension provides sidebar views for Next Actions and Project Tree:
 
-
-```
-# Create a new task  
-$ jjj task new "Refactor User Authentication" --tag backend
-```
-
-```
-# Associate the current working change (Change ID: yqosq) with the task  
-$ jjj task attach T-105
+```bash
+cd vscode
+npm install
+npm run package
+npm run install-ext
 ```
 
-```
-# Move the card  
-$ jjj task move T-105 "In Progress"
-```
+## Documentation
 
-### **3. Handling Conflicts**
+Full documentation available via mdBook:
 
-If Alice moves T-105 to "Done" and Bob moves it to "Blocked" simultaneously, jj records a conflict in the file tasks/T-105.json.
-
-jjj board renders this card in red: [ ! CONFLICT ].  
-To resolve:  
-$ jjj resolve T-105 --pick "Done"
-
-This performs a standard jj merge on the hidden metadata file.
-
-## **IV. Workflow: Code Review**
-
-The review flow is designed for the "stacked diff" workflow that jj encourages.
-
-### **1. Requesting Review**
-
-The author requests a review on a specific change or a whole stack.
-
-$ jjj review request @alice
-
-*Effect:* Creates a review manifest in jjj/meta linked to the current Change ID.
-
-### **2. The Reviewer's Experience**
-
-Alice pulls the repo. She sees pending reviews in her dashboard.
-
-```
-$ jjj dashboard  
-Review Requested:  
-  - yqosq... "Refactor User Auth" (Author: James)
+```bash
+mdbook serve
 ```
 
-She enters the review mode:
+## License
 
-```
-$ jjj review start yqosq
-```
-
-This opens a TUI diff viewer (or launches your configured difftool).
-
-### **3. Anchoring Comments**
-
-Alice comments on src/auth.rs, line 42.  
-jjj stores the comment with a Context Fingerprint:
-
-* **Change ID:** yqosq...  
-* **File:** src/auth.rs  
-* **Line Context:** The code surrounding line 42.
-
-### **4. The Author's Evolution**
-
-James receives the feedback. He edits his code to fix the issue.
-
-```
-$ jj edit yqosq  
-# ... fixes code ...  
-$ jj squash
-```
-
-**Crucial Point:** In Git, the commit hash would change, and the comment might drift. In jj, the Change ID yqosq is constant.
-
-When James runs jjj review status, jjj attempts to locate the comment. If line 42 has shifted to line 50, jjj uses the Context Fingerprint (fuzzy matching) to float the comment to the correct new location.
-
-### **5. Approval**
-
-Once satisfied, the reviewer stamps the change.
-
-$ jjj review approve
-
-This adds a signed "Approved" record to the review manifest. This approval can be configured to act as a gate for CI/CD pipelines.
-
-## **V. Technical Specifics**
-
-### **Storage Format**
-
-We use **JSON** for machine readability and **TOML** for human readability where editing might occur manually.
-
-**Example: Review Comment (c-998.json)**
-
-{  
-  "id": "c-998",  
-  "author": "Alice <alice@example.com>",  
-  "timestamp": "2023-10-27T10:00:00Z",  
-  "target_change_id": "yqosq...",  
-  "file_path": "src/lib.rs",  
-  "location": {  
-    "start_line": 42,  
-    "end_line": 45,  
-    "context_hash": "a1b2c3d4..."   
-  },  
-  "body": "This lock acquisition is not panic-safe."  
-}
-
-### **Integration with Forge (GitHub/GitLab)**
-
-jjj is designed to replace the need for GitHub Pull Requests, but it can coexist. A server-side bridge could theoretically listen to jjj/meta pushes and generate HTML reports or sync status back to GitHub Issues if legacy compatibility is required.
-
-## **VI. Summary**
-
-`jjj` is not just "tasks in a text file." It is a distributed state machine piggybacking on the advanced cryptographic guarantees of Jujutsu. It enables a workflow where project management is as immutable, offline-capable, and branchable as the code itself.
+MIT OR Apache-2.0

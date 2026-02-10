@@ -109,16 +109,15 @@ Items are grouped by urgency:
 | WAITING   | Solutions in testing, waiting on others            |
 | TODO      | Open problems without solutions yet                |
 
-## View the Board
+## View the TUI
 
-The board gives you a Kanban-style overview of all solutions grouped by
-status:
+The interactive TUI gives you an overview of next actions and the project tree:
 
 ```bash
-jjj board
+jjj ui
 ```
 
-Press `q` to exit the TUI.
+Press `q` to exit.
 
 ## Key Concepts
 
@@ -143,20 +142,20 @@ problems surface first.
 | Command | Description |
 |---------|-------------|
 | `jjj init` | Initialize jjj in current repository |
-| `jjj problem new "title" --priority P1` | Create a problem |
+| `jjj status` | Show status and prioritized next actions |
+| `jjj ui` | Launch interactive TUI |
+| `jjj problem new "title" --priority high` | Create a problem |
 | `jjj problem list` | List all problems |
 | `jjj problem show p1` | Show problem details and solutions |
 | `jjj solution new "title" --problem p1` | Propose a solution |
+| `jjj solution new "title" --problem p1 --reviewer @alice` | Propose with reviewer |
 | `jjj solution list` | List all solutions |
 | `jjj solution resume s1` | Switch to a solution's change |
 | `jjj critique new s1 "title" --severity medium` | Critique a solution |
 | `jjj critique address c1` | Mark critique as addressed |
 | `jjj submit` | Squash, accept solution, solve problem |
-| `jjj status` | Show status and prioritized next actions |
-| `jjj board` | Show Kanban board |
-| `jjj review @alice` | Assign a reviewer to current solution |
-| `jjj lgtm` | Sign off on current solution |
-| `jjj lgtm --comment "looks good"` | Sign off with a comment |
+| `jjj push` | Push code and metadata to remote |
+| `jjj fetch` | Fetch code and metadata from remote |
 | `jjj milestone new "v1.0" --date 2025-06-01` | Create a milestone |
 | `jjj milestone roadmap` | Show milestone roadmap |
 

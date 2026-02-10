@@ -142,11 +142,11 @@ jjj provides JSON output for all commands via the `--json` flag, making it easy 
 # Get problems as JSON
 jjj problem list --json
 
-# Get board data as JSON
-jjj board --json
-
 # Get solutions as JSON
 jjj solution list --json
+
+# Get status as JSON
+jjj status --json
 ```
 
 ## Updating jjj

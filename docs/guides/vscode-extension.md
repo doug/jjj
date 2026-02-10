@@ -322,7 +322,7 @@ Path to the jjj executable. Set this if jjj is not in your system PATH.
 
 2. Verify initialization worked:
    ```bash
-   jjj board --json
+   jjj status --json
    ```
 
 3. Re-open the workspace folder

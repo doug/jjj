@@ -375,4 +375,4 @@ jjj status
 
 - [Critique Guidelines](critique-guidelines.md) -- How to write and respond to critiques
 - [Problem Solving](problem-solving.md) -- The problem lifecycle
-- [Board and Dashboard](board-dashboard.md) -- Visualize sign-off and critique status
+- [TUI and Status](board-dashboard.md) -- Visualize sign-off and critique status

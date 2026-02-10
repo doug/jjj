@@ -33,11 +33,11 @@ Traditional approaches to storing metadata have problems:
 # Bad: Metadata mixed with code
 ◯ Add user authentication
 │
-◯ jjj: Update task T-1 status   ← Noise!
+◯ jjj: Update problem p1 status   ← Noise!
 │
 ◯ Fix login bug
 │
-◯ jjj: Create feature F-1        ← More noise!
+◯ jjj: Create solution s1          ← More noise!
 ```
 
 This clutters `git log` and makes project history messy.
@@ -78,19 +78,19 @@ When you run `jjj init`, it creates this structure:
 .jjj/
 ├── config.toml              # Project configuration
 ├── milestones/              # Milestone storage
-│   ├── m1.toml
-│   └── m2.toml
+│   ├── m1.md
+│   └── m2.md
 ├── problems/                # Problem storage
-│   ├── p1.toml
-│   ├── p2.toml
-│   └── p3.toml
+│   ├── p1.md
+│   ├── p2.md
+│   └── p3.md
 ├── solutions/               # Solution storage
-│   ├── s1.toml
-│   ├── s2.toml
+│   ├── s1.md
+│   ├── s2.md
 │   └── ...
 └── critiques/               # Critique storage
-    ├── c1.toml
-    └── c2.toml
+    ├── c1.md
+    └── c2.md
 ```
 
 ## Storage Layer Implementation
@@ -157,26 +157,40 @@ allowed = ["backend", "frontend", "api", "ui"]
 # See solution --review flag and jjj solution review.
 ```
 
-#### TOML for Work Items
+#### Markdown with YAML Frontmatter for Work Items
 
-Problems, solutions, critiques, and milestones use TOML:
+Problems, solutions, critiques, and milestones use markdown files with YAML frontmatter:
 
-```toml
-# problems/p1.toml
-id = "p1"
-title = "Search is slow on large datasets"
-status = "open"
-priority = "high"
-tags = ["performance", "search"]
-created_at = "2025-11-23T10:00:00Z"
-updated_at = "2025-11-23T15:30:00Z"
+```markdown
+# problems/p1.md
+---
+id: p1
+title: Search is slow on large datasets
+status: open
+priority: high
+tags:
+  - performance
+  - search
+created_at: 2025-11-23T10:00:00Z
+updated_at: 2025-11-23T15:30:00Z
+---
+
+## Context
+
+Users are reporting slow search results when querying datasets with more than 10,000 records.
+
+## Symptoms
+
+- Search takes 5+ seconds
+- Server logs show full table scans
 ```
 
-Why TOML?
+Why YAML frontmatter + Markdown?
 - Human-readable and writable
-- Well-suited for configuration-like metadata
+- Structured metadata in frontmatter
+- Free-form description in markdown body
 - Native Rust ecosystem support (serde)
-- Clear structure without excessive syntax
+- Easy to edit with any text editor
 
 ## Transaction Model
 
@@ -285,10 +299,10 @@ pub fn next_problem_id(&self) -> Result<String> {
     let problems = self.list_problems()?;
     let max_id = problems
         .iter()
-        .filter_map(|p| p.id.strip_prefix("P-").and_then(|s| s.parse::<u32>().ok()))
+        .filter_map(|p| p.id.strip_prefix("p").and_then(|s| s.parse::<u32>().ok()))
         .max()
         .unwrap_or(0);
-    Ok(format!("P-{}", max_id + 1))
+    Ok(format!("p{}", max_id + 1))
 }
 ```
 
@@ -405,7 +419,7 @@ Shadow graph:
 
 The storage format is designed to evolve:
 
-- JSON allows schema evolution
+- YAML frontmatter allows schema evolution
 - Version field for migration
 - Unknown fields ignored
 

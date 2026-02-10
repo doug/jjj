@@ -65,37 +65,41 @@ jjj status --mine --limit 10
 jjj status --json
 ```
 
-## `jjj review`
+## `jjj fetch`
 
-Assign reviewers to the current change's solution. Shorthand for `jjj solution review`.
-
-Assigned reviewers must sign off before the solution can be accepted.
+Fetch code and metadata from remote.
 
 ```
-jjj review <reviewers...>
-```
-
-```bash
-jjj review @alice @bob
-```
-
-## `jjj lgtm`
-
-Sign off on the current change's solution. Shorthand for `jjj solution lgtm`.
-
-Records a structured sign-off with your name, timestamp, and optional comment.
-
-```
-jjj lgtm [OPTIONS]
+jjj fetch [OPTIONS]
 ```
 
 | Flag | Type | Description |
 |------|------|-------------|
-| `--comment` | string | Optional comment to include with the sign-off |
+| `--remote` | string | Remote to fetch from (default: origin) |
 
 ```bash
-jjj lgtm
-jjj lgtm --comment "looks good"
+jjj fetch
+jjj fetch --remote upstream
+```
+
+## `jjj push`
+
+Push code and metadata to remote.
+
+```
+jjj push [bookmarks...] [OPTIONS]
+```
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `--remote` | string | Remote to push to (default: origin) |
+| `--no-prompt` | bool | Skip interactive prompts |
+| `--dry-run` | bool | Show what would be pushed without pushing |
+
+```bash
+jjj push
+jjj push my-feature
+jjj push --dry-run
 ```
 
 ## `jjj ui`

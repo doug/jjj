@@ -206,21 +206,23 @@ jjj has two mechanisms that gate solution acceptance, both unified under the sol
 
 1. **Critiques** -- Evaluate the solution's approach, design, and correctness. Anyone can raise a critique at any time. All critiques must be resolved (addressed, dismissed, or validated).
 
-2. **Reviewer sign-offs** -- Assigned reviewers must sign off (LGTM) before the solution can be accepted. Sign-offs are structured records with the reviewer's name, a timestamp, and an optional comment.
+2. **Reviewer sign-offs** -- Assigned reviewers must sign off before the solution can be accepted. Sign-offs are recorded when a reviewer addresses their review critique.
 
 Both gates must be satisfied for `jjj submit` to succeed (unless `--force` is used). The acceptance check runs in order: first critiques, then sign-offs.
 
-Review is per-solution: assign reviewers with `--review` when creating a solution, or later with `jjj solution review`. Solutions without assigned reviewers skip the sign-off gate entirely.
+Review is per-solution: assign reviewers with `--reviewer` when creating a solution, or add review critiques later. Solutions without assigned reviewers skip the sign-off gate entirely.
 
 ```bash
 # Assign reviewers at creation
-jjj solution new "Add caching" --problem p1 --review @alice --review @bob
+jjj solution new "Add caching" --problem p1 --reviewer @alice --reviewer @bob
 
-# Or assign later
-jjj solution review s1 @alice
+# Or add a review critique later
+jjj critique new s1 "Review requested" --reviewer @alice
 
-# Sign off with an optional comment
-jjj solution lgtm s1 --comment "looks good"
+# Reviewer signs off by addressing their review critique
+jjj critique list --solution s1 --reviewer @alice
+jjj critique reply c1 "LGTM - clean implementation"
+jjj critique address c1
 ```
 
 See the [Code Review guide](code-review.md) for the full sign-off workflow.
@@ -229,4 +231,4 @@ See the [Code Review guide](code-review.md) for the full sign-off workflow.
 
 - [Problem Solving](problem-solving.md) -- When and how to create problems
 - [Code Review](code-review.md) -- The reviewer sign-off flow
-- [Board and Dashboard](board-dashboard.md) -- Visualize critiques and solutions
+- [TUI and Status](board-dashboard.md) -- Visualize critiques and solutions

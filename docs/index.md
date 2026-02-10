@@ -59,7 +59,7 @@ jjj submit
 - [Problem Commands](reference/cli-problem.md) -- problem management
 - [Solution Commands](reference/cli-solution.md) -- solution lifecycle
 - [Critique Commands](reference/cli-critique.md) -- critique operations
-- [Workflow Commands](reference/cli-workflow.md) -- init, submit, status, board
+- [Workflow Commands](reference/cli-workflow.md) -- init, status, submit, push, fetch, ui
 - [Configuration](reference/configuration.md) -- project and user settings
 
 ## Architecture Highlights
