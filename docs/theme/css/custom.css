@@ -1,0 +1,774 @@
+/* =============================================================================
+   jjj Documentation - Purple Theme Custom CSS
+   ============================================================================= */
+
+/* =============================================================================
+   CSS Variables - Purple Theme Colors
+   ============================================================================= */
+
+:root {
+  /* Background colors */
+  --jjj-bg-primary: #0d0d14;
+  --jjj-bg-surface: #1a1a24;
+  --jjj-bg-elevated: #242433;
+  --jjj-bg-hover: #2a2a3a;
+
+  /* Text colors */
+  --jjj-text-primary: #e8e6f0;
+  --jjj-text-secondary: #9690b0;
+  --jjj-text-muted: #6b6580;
+
+  /* Accent colors */
+  --jjj-accent: #a78bfa;
+  --jjj-accent-hover: #c4b5fd;
+  --jjj-accent-secondary: #7c3aed;
+  --jjj-accent-dim: #6d28d9;
+
+  /* Semantic colors */
+  --jjj-success: #4ade80;
+  --jjj-warning: #fbbf24;
+  --jjj-error: #f87171;
+
+  /* Border colors */
+  --jjj-border: #2a2a3a;
+  --jjj-border-accent: #7c3aed;
+
+  /* Shadows */
+  --jjj-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --jjj-shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
+  --jjj-shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.5);
+  --jjj-shadow-glow: 0 0 40px rgba(167, 139, 250, 0.15);
+
+  /* Spacing */
+  --jjj-space-xs: 0.25rem;
+  --jjj-space-sm: 0.5rem;
+  --jjj-space-md: 1rem;
+  --jjj-space-lg: 1.5rem;
+  --jjj-space-xl: 2rem;
+  --jjj-space-2xl: 3rem;
+  --jjj-space-3xl: 4rem;
+
+  /* Border radius */
+  --jjj-radius-sm: 4px;
+  --jjj-radius-md: 8px;
+  --jjj-radius-lg: 12px;
+  --jjj-radius-xl: 16px;
+
+  /* Transitions */
+  --jjj-transition-fast: 150ms ease;
+  --jjj-transition-normal: 250ms ease;
+}
+
+/* Coal theme overrides (mdbook dark theme) */
+.coal {
+  --bg: var(--jjj-bg-primary);
+  --fg: var(--jjj-text-primary);
+  --sidebar-bg: var(--jjj-bg-surface);
+  --sidebar-fg: var(--jjj-text-primary);
+  --sidebar-non-existant: var(--jjj-text-muted);
+  --sidebar-active: var(--jjj-accent);
+  --sidebar-spacer: var(--jjj-border);
+  --scrollbar: var(--jjj-bg-elevated);
+  --icons: var(--jjj-text-secondary);
+  --icons-hover: var(--jjj-accent);
+  --links: var(--jjj-accent);
+  --inline-code-color: var(--jjj-accent-hover);
+  --theme-popup-bg: var(--jjj-bg-surface);
+  --theme-popup-border: var(--jjj-border);
+  --theme-hover: var(--jjj-bg-hover);
+  --quote-bg: var(--jjj-bg-surface);
+  --quote-border: var(--jjj-accent-secondary);
+  --table-border-color: var(--jjj-border);
+  --table-header-bg: var(--jjj-bg-surface);
+  --table-alternate-bg: var(--jjj-bg-surface);
+  --searchbar-border-color: var(--jjj-border);
+  --searchbar-bg: var(--jjj-bg-surface);
+  --searchbar-fg: var(--jjj-text-primary);
+  --searchbar-shadow-color: rgba(0, 0, 0, 0.3);
+  --searchresults-header-fg: var(--jjj-text-secondary);
+  --searchresults-border-color: var(--jjj-border);
+  --searchresults-li-bg: var(--jjj-bg-surface);
+  --search-mark-bg: var(--jjj-accent-secondary);
+}
+
+/* =============================================================================
+   Typography
+   ============================================================================= */
+
+:root {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code, pre, .hljs {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+/* =============================================================================
+   Hero Section
+   ============================================================================= */
+
+.hero {
+  text-align: center;
+  padding: var(--jjj-space-3xl) var(--jjj-space-lg);
+  margin-bottom: var(--jjj-space-3xl);
+  position: relative;
+  overflow: hidden;
+}
+
+.hero::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(
+    circle,
+    rgba(167, 139, 250, 0.15) 0%,
+    rgba(124, 58, 237, 0.08) 40%,
+    transparent 70%
+  );
+  pointer-events: none;
+  z-index: -1;
+}
+
+.hero h1 {
+  font-size: 3.5rem;
+  font-weight: 700;
+  margin-bottom: var(--jjj-space-md);
+  background: linear-gradient(135deg, var(--jjj-text-primary) 0%, var(--jjj-accent) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.hero .tagline {
+  font-size: 1.5rem;
+  color: var(--jjj-text-secondary);
+  margin-bottom: var(--jjj-space-xl);
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.hero .subtitle {
+  font-size: 1.1rem;
+  color: var(--jjj-text-muted);
+  margin-bottom: var(--jjj-space-2xl);
+}
+
+.hero-buttons {
+  display: flex;
+  gap: var(--jjj-space-md);
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.hero-buttons a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--jjj-space-sm);
+  padding: var(--jjj-space-sm) var(--jjj-space-lg);
+  border-radius: var(--jjj-radius-md);
+  font-weight: 500;
+  text-decoration: none;
+  transition: all var(--jjj-transition-fast);
+}
+
+.hero-buttons .primary {
+  background: var(--jjj-accent-secondary);
+  color: white;
+}
+
+.hero-buttons .primary:hover {
+  background: var(--jjj-accent);
+  box-shadow: var(--jjj-shadow-glow);
+}
+
+.hero-buttons .secondary {
+  background: var(--jjj-bg-surface);
+  color: var(--jjj-text-primary);
+  border: 1px solid var(--jjj-border);
+}
+
+.hero-buttons .secondary:hover {
+  border-color: var(--jjj-accent);
+  color: var(--jjj-accent);
+}
+
+/* =============================================================================
+   Diagrams Section
+   ============================================================================= */
+
+.diagrams {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--jjj-space-xl);
+  margin: var(--jjj-space-2xl) 0;
+}
+
+.diagram {
+  background: var(--jjj-bg-surface);
+  border: 1px solid var(--jjj-border);
+  border-radius: var(--jjj-radius-lg);
+  padding: var(--jjj-space-lg);
+  transition: all var(--jjj-transition-normal);
+}
+
+.diagram:hover {
+  border-color: var(--jjj-accent-secondary);
+  box-shadow: var(--jjj-shadow-md);
+}
+
+.diagram h3 {
+  color: var(--jjj-accent);
+  margin-bottom: var(--jjj-space-md);
+  font-size: 1.1rem;
+}
+
+.diagram pre {
+  background: var(--jjj-bg-primary);
+  border-radius: var(--jjj-radius-md);
+  padding: var(--jjj-space-md);
+  overflow-x: auto;
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.diagram code {
+  color: var(--jjj-text-secondary);
+}
+
+/* =============================================================================
+   Terminal Component
+   ============================================================================= */
+
+.terminal {
+  background: var(--jjj-bg-surface);
+  border: 1px solid var(--jjj-border);
+  border-radius: var(--jjj-radius-lg);
+  overflow: hidden;
+  margin: var(--jjj-space-xl) 0;
+  box-shadow: var(--jjj-shadow-lg);
+}
+
+.terminal-header {
+  background: var(--jjj-bg-elevated);
+  padding: var(--jjj-space-sm) var(--jjj-space-md);
+  display: flex;
+  align-items: center;
+  gap: var(--jjj-space-sm);
+  border-bottom: 1px solid var(--jjj-border);
+}
+
+.terminal-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.terminal-dot.red {
+  background: #ff5f56;
+}
+
+.terminal-dot.yellow {
+  background: #ffbd2e;
+}
+
+.terminal-dot.green {
+  background: #27c93f;
+}
+
+.terminal-title {
+  margin-left: var(--jjj-space-md);
+  color: var(--jjj-text-muted);
+  font-size: 0.85rem;
+}
+
+.terminal-body {
+  padding: var(--jjj-space-lg);
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.terminal-body pre {
+  margin: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.terminal-body code {
+  background: transparent;
+  color: var(--jjj-text-primary);
+}
+
+.terminal-body .prompt {
+  color: var(--jjj-accent);
+}
+
+.terminal-body .command {
+  color: var(--jjj-text-primary);
+}
+
+.terminal-body .output {
+  color: var(--jjj-text-secondary);
+}
+
+.terminal-body .success {
+  color: var(--jjj-success);
+}
+
+.terminal-body .accent {
+  color: var(--jjj-accent);
+}
+
+/* =============================================================================
+   Features Section
+   ============================================================================= */
+
+.features {
+  margin: var(--jjj-space-3xl) 0;
+}
+
+.features h2 {
+  text-align: center;
+  margin-bottom: var(--jjj-space-2xl);
+  color: var(--jjj-text-primary);
+}
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--jjj-space-lg);
+}
+
+.feature-card {
+  background: var(--jjj-bg-surface);
+  border: 1px solid var(--jjj-border);
+  border-radius: var(--jjj-radius-lg);
+  padding: var(--jjj-space-xl);
+  transition: all var(--jjj-transition-normal);
+}
+
+.feature-card:hover {
+  border-color: var(--jjj-accent-secondary);
+  transform: translateY(-2px);
+  box-shadow: var(--jjj-shadow-md);
+}
+
+.feature-card .icon {
+  font-size: 2rem;
+  margin-bottom: var(--jjj-space-md);
+}
+
+.feature-card h3 {
+  color: var(--jjj-accent);
+  margin-bottom: var(--jjj-space-sm);
+  font-size: 1.2rem;
+}
+
+.feature-card p {
+  color: var(--jjj-text-secondary);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* =============================================================================
+   Comparison Table
+   ============================================================================= */
+
+.comparison {
+  margin: var(--jjj-space-3xl) 0;
+  overflow-x: auto;
+}
+
+.comparison h2 {
+  text-align: center;
+  margin-bottom: var(--jjj-space-2xl);
+}
+
+.comparison table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--jjj-bg-surface);
+  border-radius: var(--jjj-radius-lg);
+  overflow: hidden;
+}
+
+.comparison thead {
+  background: var(--jjj-bg-elevated);
+}
+
+.comparison th {
+  padding: var(--jjj-space-md) var(--jjj-space-lg);
+  text-align: left;
+  font-weight: 600;
+  color: var(--jjj-text-primary);
+  border-bottom: 1px solid var(--jjj-border);
+}
+
+.comparison th:first-child {
+  width: 40%;
+}
+
+.comparison td {
+  padding: var(--jjj-space-md) var(--jjj-space-lg);
+  border-bottom: 1px solid var(--jjj-border);
+  color: var(--jjj-text-secondary);
+}
+
+.comparison tr:last-child td {
+  border-bottom: none;
+}
+
+.comparison tr:hover td {
+  background: var(--jjj-bg-hover);
+}
+
+.comparison .check {
+  color: var(--jjj-accent);
+  font-weight: bold;
+}
+
+.comparison .cross {
+  color: var(--jjj-text-muted);
+}
+
+.comparison .partial {
+  color: var(--jjj-warning);
+}
+
+/* =============================================================================
+   Philosophy Section
+   ============================================================================= */
+
+.philosophy {
+  margin: var(--jjj-space-3xl) 0;
+  padding: var(--jjj-space-2xl);
+  background: var(--jjj-bg-surface);
+  border-radius: var(--jjj-radius-lg);
+  border-left: 4px solid var(--jjj-accent-secondary);
+}
+
+.philosophy h2 {
+  color: var(--jjj-accent);
+  margin-bottom: var(--jjj-space-lg);
+}
+
+.philosophy blockquote {
+  border-left: 3px solid var(--jjj-accent-secondary);
+  padding-left: var(--jjj-space-lg);
+  margin: var(--jjj-space-lg) 0;
+  color: var(--jjj-text-secondary);
+  font-style: italic;
+}
+
+.philosophy blockquote cite {
+  display: block;
+  margin-top: var(--jjj-space-sm);
+  color: var(--jjj-text-muted);
+  font-style: normal;
+  font-size: 0.9rem;
+}
+
+.philosophy p {
+  color: var(--jjj-text-secondary);
+  line-height: 1.7;
+}
+
+.philosophy ul {
+  color: var(--jjj-text-secondary);
+  line-height: 1.7;
+}
+
+.philosophy li {
+  margin-bottom: var(--jjj-space-sm);
+}
+
+.philosophy strong {
+  color: var(--jjj-accent);
+}
+
+/* =============================================================================
+   Quick Start Section
+   ============================================================================= */
+
+.quickstart {
+  margin: var(--jjj-space-3xl) 0;
+  text-align: center;
+}
+
+.quickstart h2 {
+  margin-bottom: var(--jjj-space-lg);
+}
+
+.quickstart p {
+  color: var(--jjj-text-secondary);
+  margin-bottom: var(--jjj-space-xl);
+}
+
+.quickstart-code {
+  display: inline-block;
+  background: var(--jjj-bg-surface);
+  border: 1px solid var(--jjj-border);
+  border-radius: var(--jjj-radius-md);
+  padding: var(--jjj-space-md) var(--jjj-space-xl);
+  font-family: var(--font-mono);
+  color: var(--jjj-accent);
+}
+
+/* =============================================================================
+   Call to Action
+   ============================================================================= */
+
+.cta {
+  text-align: center;
+  padding: var(--jjj-space-3xl) var(--jjj-space-lg);
+  margin: var(--jjj-space-3xl) 0;
+  background: linear-gradient(
+    135deg,
+    var(--jjj-bg-surface) 0%,
+    rgba(124, 58, 237, 0.1) 100%
+  );
+  border-radius: var(--jjj-radius-xl);
+  border: 1px solid var(--jjj-border);
+}
+
+.cta h2 {
+  margin-bottom: var(--jjj-space-md);
+}
+
+.cta p {
+  color: var(--jjj-text-secondary);
+  margin-bottom: var(--jjj-space-xl);
+  max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* =============================================================================
+   Workflow Diagram
+   ============================================================================= */
+
+.workflow {
+  margin: var(--jjj-space-2xl) 0;
+}
+
+.workflow-steps {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--jjj-space-md);
+}
+
+.workflow-step {
+  flex: 1;
+  min-width: 150px;
+  text-align: center;
+  padding: var(--jjj-space-lg);
+  background: var(--jjj-bg-surface);
+  border-radius: var(--jjj-radius-md);
+  border: 1px solid var(--jjj-border);
+}
+
+.workflow-step .number {
+  display: inline-block;
+  width: 32px;
+  height: 32px;
+  line-height: 32px;
+  background: var(--jjj-accent-secondary);
+  color: white;
+  border-radius: 50%;
+  font-weight: 600;
+  margin-bottom: var(--jjj-space-sm);
+}
+
+.workflow-step h4 {
+  color: var(--jjj-accent);
+  margin-bottom: var(--jjj-space-xs);
+}
+
+.workflow-step p {
+  color: var(--jjj-text-muted);
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.workflow-arrow {
+  color: var(--jjj-accent-secondary);
+  font-size: 1.5rem;
+}
+
+/* =============================================================================
+   Badges
+   ============================================================================= */
+
+.badges {
+  display: flex;
+  gap: var(--jjj-space-sm);
+  justify-content: center;
+  flex-wrap: wrap;
+  margin: var(--jjj-space-lg) 0;
+}
+
+.badge {
+  display: inline-block;
+  padding: var(--jjj-space-xs) var(--jjj-space-sm);
+  background: var(--jjj-bg-elevated);
+  border-radius: var(--jjj-radius-sm);
+  font-size: 0.8rem;
+  color: var(--jjj-text-secondary);
+  border: 1px solid var(--jjj-border);
+}
+
+.badge.accent {
+  background: var(--jjj-accent-secondary);
+  color: white;
+  border-color: var(--jjj-accent-secondary);
+}
+
+/* =============================================================================
+   Responsive Breakpoints
+   ============================================================================= */
+
+@media (max-width: 768px) {
+  .hero {
+    padding: var(--jjj-space-2xl) var(--jjj-space-md);
+  }
+
+  .hero h1 {
+    font-size: 2.5rem;
+  }
+
+  .hero .tagline {
+    font-size: 1.2rem;
+  }
+
+  .hero::before {
+    width: 400px;
+    height: 400px;
+  }
+
+  .diagrams {
+    grid-template-columns: 1fr;
+  }
+
+  .feature-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .comparison table {
+    font-size: 0.9rem;
+  }
+
+  .comparison th,
+  .comparison td {
+    padding: var(--jjj-space-sm);
+  }
+
+  .workflow-steps {
+    flex-direction: column;
+  }
+
+  .workflow-arrow {
+    transform: rotate(90deg);
+  }
+
+  .terminal-body {
+    padding: var(--jjj-space-md);
+    font-size: 0.8rem;
+  }
+
+  .philosophy {
+    padding: var(--jjj-space-lg);
+  }
+}
+
+@media (max-width: 480px) {
+  .hero h1 {
+    font-size: 2rem;
+  }
+
+  .hero .tagline {
+    font-size: 1rem;
+  }
+
+  .hero-buttons {
+    flex-direction: column;
+  }
+
+  .hero-buttons a {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .feature-card {
+    padding: var(--jjj-space-lg);
+  }
+
+  .cta {
+    padding: var(--jjj-space-xl) var(--jjj-space-md);
+  }
+}
+
+/* =============================================================================
+   Utility Classes
+   ============================================================================= */
+
+.text-center {
+  text-align: center;
+}
+
+.text-accent {
+  color: var(--jjj-accent);
+}
+
+.text-muted {
+  color: var(--jjj-text-muted);
+}
+
+.mt-0 { margin-top: 0; }
+.mb-0 { margin-bottom: 0; }
+.mt-lg { margin-top: var(--jjj-space-lg); }
+.mb-lg { margin-bottom: var(--jjj-space-lg); }
+.mt-xl { margin-top: var(--jjj-space-xl); }
+.mb-xl { margin-bottom: var(--jjj-space-xl); }
+
+.hidden {
+  display: none;
+}
+
+/* =============================================================================
+   Print Styles
+   ============================================================================= */
+
+@media print {
+  .hero::before {
+    display: none;
+  }
+
+  .terminal-header {
+    background: #f0f0f0;
+  }
+
+  .terminal-dot {
+    border: 1px solid #ccc;
+  }
+}

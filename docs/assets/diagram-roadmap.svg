@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 280">
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#a78bfa"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="700" height="280" fill="#0d0d12"/>
+
+  <!-- Timeline arrow -->
+  <line x1="40" y1="30" x2="660" y2="30" stroke="#a78bfa" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <text x="350" y="20" fill="#a78bfa" font-family="system-ui, sans-serif" font-size="12" font-weight="600" text-anchor="middle">MILESTONES</text>
+
+  <!-- Milestone 1: v0.1 Alpha -->
+  <rect x="40" y="50" width="190" height="210" rx="8" fill="#1a1a24" stroke="#2a2a3a" stroke-width="1"/>
+  <text x="135" y="75" fill="#a78bfa" font-family="system-ui, sans-serif" font-size="14" font-weight="600" text-anchor="middle">v0.1 Alpha</text>
+
+  <!-- Problem box in Milestone 1 -->
+  <rect x="55" y="90" width="160" height="155" rx="6" fill="#12121a" stroke="#2a2a3a" stroke-width="1"/>
+  <text x="135" y="115" fill="#e8e6f0" font-family="system-ui, sans-serif" font-size="12" font-weight="500" text-anchor="middle">PROBLEM</text>
+
+  <!-- Sub-problem box inside Problem in Milestone 1 -->
+  <rect x="70" y="130" width="130" height="100" rx="4" fill="#1a1a24" stroke="#2a2a3a" stroke-width="1"/>
+  <text x="135" y="160" fill="#9690b0" font-family="system-ui, sans-serif" font-size="11" text-anchor="middle">SUB</text>
+  <text x="135" y="175" fill="#9690b0" font-family="system-ui, sans-serif" font-size="10" text-anchor="middle">(problem)</text>
+
+  <!-- Milestone 2: v0.2 Beta -->
+  <rect x="250" y="50" width="190" height="210" rx="8" fill="#1a1a24" stroke="#2a2a3a" stroke-width="1"/>
+  <text x="345" y="75" fill="#a78bfa" font-family="system-ui, sans-serif" font-size="14" font-weight="600" text-anchor="middle">v0.2 Beta</text>
+
+  <!-- First Problem box in Milestone 2 -->
+  <rect x="265" y="90" width="160" height="70" rx="6" fill="#12121a" stroke="#2a2a3a" stroke-width="1"/>
+  <text x="345" y="130" fill="#e8e6f0" font-family="system-ui, sans-serif" font-size="12" font-weight="500" text-anchor="middle">PROBLEM</text>
+
+  <!-- Second Problem box in Milestone 2 -->
+  <rect x="265" y="175" width="160" height="70" rx="6" fill="#12121a" stroke="#2a2a3a" stroke-width="1"/>
+  <text x="345" y="215" fill="#e8e6f0" font-family="system-ui, sans-serif" font-size="12" font-weight="500" text-anchor="middle">PROBLEM</text>
+
+  <!-- Milestone 3: v1.0 Release -->
+  <rect x="460" y="50" width="190" height="210" rx="8" fill="#1a1a24" stroke="#2a2a3a" stroke-width="1"/>
+  <text x="555" y="75" fill="#a78bfa" font-family="system-ui, sans-serif" font-size="14" font-weight="600" text-anchor="middle">v1.0 Release</text>
+
+  <!-- Problem box in Milestone 3 -->
+  <rect x="475" y="90" width="160" height="155" rx="6" fill="#12121a" stroke="#2a2a3a" stroke-width="1"/>
+  <text x="555" y="175" fill="#e8e6f0" font-family="system-ui, sans-serif" font-size="12" font-weight="500" text-anchor="middle">PROBLEM</text>
+</svg>
