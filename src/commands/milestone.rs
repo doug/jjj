@@ -57,11 +57,12 @@ fn create_milestone(ctx: &CommandContext, title: String, date: Option<String>) -
 
 fn edit_milestone(
     ctx: &CommandContext,
-    milestone_id: String,
+    milestone_input: String,
     title: Option<String>,
     date: Option<String>,
     status: Option<String>,
 ) -> Result<()> {
+    let milestone_id = ctx.resolve_milestone(&milestone_input)?;
     let store = &ctx.store;
 
     store.with_metadata(&format!("Edit milestone {}", milestone_id), || {
@@ -133,7 +134,8 @@ fn list_milestones(ctx: &CommandContext, json: bool) -> Result<()> {
     Ok(())
 }
 
-fn show_milestone(ctx: &CommandContext, milestone_id: String, json: bool) -> Result<()> {
+fn show_milestone(ctx: &CommandContext, milestone_input: String, json: bool) -> Result<()> {
+    let milestone_id = ctx.resolve_milestone(&milestone_input)?;
     let store = &ctx.store;
 
     let milestone = store.load_milestone(&milestone_id)?;
@@ -230,7 +232,9 @@ fn show_milestone(ctx: &CommandContext, milestone_id: String, json: bool) -> Res
     Ok(())
 }
 
-fn add_problem(ctx: &CommandContext, milestone_id: String, problem_id: String) -> Result<()> {
+fn add_problem(ctx: &CommandContext, milestone_input: String, problem_input: String) -> Result<()> {
+    let milestone_id = ctx.resolve_milestone(&milestone_input)?;
+    let problem_id = ctx.resolve_problem(&problem_input)?;
     let store = &ctx.store;
 
     store.with_metadata(
@@ -254,7 +258,9 @@ fn add_problem(ctx: &CommandContext, milestone_id: String, problem_id: String) -
     )
 }
 
-fn remove_problem(ctx: &CommandContext, milestone_id: String, problem_id: String) -> Result<()> {
+fn remove_problem(ctx: &CommandContext, milestone_input: String, problem_input: String) -> Result<()> {
+    let milestone_id = ctx.resolve_milestone(&milestone_input)?;
+    let problem_id = ctx.resolve_problem(&problem_input)?;
     let store = &ctx.store;
 
     store.with_metadata(
@@ -355,7 +361,8 @@ fn show_roadmap(ctx: &CommandContext, json: bool) -> Result<()> {
     Ok(())
 }
 
-fn assign_milestone(ctx: &CommandContext, milestone_id: String, assignee: Option<String>) -> Result<()> {
+fn assign_milestone(ctx: &CommandContext, milestone_input: String, assignee: Option<String>) -> Result<()> {
+    let milestone_id = ctx.resolve_milestone(&milestone_input)?;
     let store = &ctx.store;
 
     let assignee_name = match assignee {
