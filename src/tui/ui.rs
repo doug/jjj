@@ -47,14 +47,14 @@ fn category_color(cat: Category) -> Color {
 }
 
 fn draw_next_actions(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
-    let is_focused = app.focused_pane == FocusedPane::NextActions;
+    let is_focused = app.ui.focused_pane == FocusedPane::NextActions;
     let border_style = if is_focused {
         Style::default().fg(Color::Cyan)
     } else {
         Style::default().fg(Color::DarkGray)
     };
 
-    let items: Vec<ListItem> = app.next_actions.iter().map(|action| {
+    let items: Vec<ListItem> = app.cache.next_actions.iter().map(|action| {
         let cat_span = Span::styled(
             format!("[{}] ", action.category.label()),
             Style::default().fg(category_color(action.category)),
@@ -77,8 +77,8 @@ fn draw_next_actions(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
         .highlight_symbol("> ");
 
     let mut state = ListState::default();
-    if !app.next_actions.is_empty() {
-        state.select(Some(app.next_actions_index));
+    if !app.cache.next_actions.is_empty() {
+        state.select(Some(app.ui.next_actions_index));
     }
 
     f.render_stateful_widget(list, area, &mut state);
@@ -116,14 +116,14 @@ fn status_color_critique(status: &crate::models::CritiqueStatus) -> Color {
 fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     use super::tree::TreeNode;
 
-    let is_focused = app.focused_pane == FocusedPane::ProjectTree;
+    let is_focused = app.ui.focused_pane == FocusedPane::ProjectTree;
     let border_style = if is_focused {
         Style::default().fg(Color::Cyan)
     } else {
         Style::default().fg(Color::DarkGray)
     };
 
-    let items: Vec<ListItem> = app.tree_items.iter().map(|item| {
+    let items: Vec<ListItem> = app.cache.tree_items.iter().map(|item| {
         let indent = "  ".repeat(item.depth);
         let expand_char = if item.has_children {
             if item.node.is_expanded() { "▼ " } else { "▶ " }
@@ -139,13 +139,13 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                 (format!("{}{}Backlog", indent, expand_char), Color::DarkGray)
             }
             TreeNode::Problem { id, title, status, .. } => {
-                (format!("{}{}{}: {}", indent, expand_char, id, title), status_color_problem(status))
+                (format!("{}{}{}: {}", indent, expand_char, id, title), status_color_problem(&status))
             }
             TreeNode::Solution { id, title, status, .. } => {
-                (format!("{}{}{}: {}", indent, expand_char, id, title), status_color_solution(status))
+                (format!("{}{}{}: {}", indent, expand_char, id, title), status_color_solution(&status))
             }
             TreeNode::Critique { id, title, status, severity } => {
-                (format!("{}○ {}: {} [{}]", indent, id, title, severity), status_color_critique(status))
+                (format!("{}○ {}: {} [{}]", indent, id, title, severity), status_color_critique(&status))
             }
         };
 
@@ -161,17 +161,17 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
         .highlight_symbol("> ");
 
     let mut state = ListState::default();
-    if !app.tree_items.is_empty() && app.tree_index < app.tree_items.len() {
-        state.select(Some(app.tree_index));
+    if !app.cache.tree_items.is_empty() && app.ui.tree_index < app.cache.tree_items.len() {
+        state.select(Some(app.ui.tree_index));
     }
 
     f.render_stateful_widget(list, area, &mut state);
 }
 
 fn draw_detail(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
-    let lines = app.selected_detail.to_lines();
+    let lines = app.cache.selected_detail.to_lines();
     let text: Vec<Line> = lines.iter()
-        .skip(app.detail_scroll as usize)
+        .skip(app.ui.detail_scroll as usize)
         .map(|s| Line::from(s.as_str()))
         .collect();
 
@@ -192,12 +192,12 @@ fn draw_footer(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
         .split(area);
 
     // Context line (top) - or flash message if present
-    let context_text = if let Some((msg, _)) = &app.flash_message {
+    let context_text = if let Some((msg, _)) = &app.ui.flash_message {
         msg.clone()
     } else {
         app.context_hints()
     };
-    let context_style = if app.flash_message.is_some() {
+    let context_style = if app.ui.flash_message.is_some() {
         Style::default().fg(Color::Green)
     } else {
         Style::default().fg(Color::Yellow)

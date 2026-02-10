@@ -13,21 +13,64 @@ pub enum FocusedPane {
     ProjectTree,
 }
 
-pub struct App {
-    pub should_quit: bool,
-    pub focused_pane: FocusedPane,
+/// Raw data from storage - single source of truth
+pub struct ProjectData {
     pub milestones: Vec<Milestone>,
     pub problems: Vec<Problem>,
     pub solutions: Vec<Solution>,
     pub critiques: Vec<Critique>,
-    pub next_actions: Vec<super::NextAction>,
+}
+
+impl ProjectData {
+    pub fn load(store: &MetadataStore) -> Result<Self> {
+        Ok(Self {
+            milestones: store.list_milestones()?,
+            problems: store.list_problems()?,
+            solutions: store.list_solutions()?,
+            critiques: store.list_critiques()?,
+        })
+    }
+}
+
+/// UI navigation and display state
+pub struct UiState {
+    pub focused_pane: FocusedPane,
     pub next_actions_index: usize,
-    pub tree_items: Vec<super::FlatTreeItem>,
-    pub expanded_nodes: HashSet<String>,
     pub tree_index: usize,
+    pub expanded_nodes: HashSet<String>,
     pub detail_scroll: u16,
-    pub selected_detail: super::DetailContent,
     pub flash_message: Option<(String, Instant)>,
+}
+
+impl UiState {
+    pub fn new() -> Self {
+        let mut expanded_nodes = HashSet::new();
+        expanded_nodes.insert("backlog".to_string());
+        Self {
+            focused_pane: FocusedPane::NextActions,
+            next_actions_index: 0,
+            tree_index: 0,
+            expanded_nodes,
+            detail_scroll: 0,
+            flash_message: None,
+        }
+    }
+}
+
+/// Cached derived data for rendering
+pub(crate) struct RenderCache {
+    pub(crate) next_actions: Vec<super::NextAction>,
+    pub(crate) tree_items: Vec<super::FlatTreeItem>,
+    pub(crate) selected_detail: super::DetailContent,
+}
+
+pub struct App {
+    pub should_quit: bool,
+    pub data: ProjectData,
+    pub ui: UiState,
+    pub(crate) cache: RenderCache,
+    #[allow(dead_code)] // Prepared for future cache invalidation
+    dirty: bool,
     store: MetadataStore,
 }
 
@@ -35,40 +78,32 @@ impl App {
     pub fn new() -> Result<Self> {
         let jj_client = JjClient::new()?;
         let store = MetadataStore::new(jj_client)?;
-        let milestones = store.list_milestones()?;
-        let problems = store.list_problems()?;
-        let solutions = store.list_solutions()?;
-        let critiques = store.list_critiques()?;
+        let data = ProjectData::load(&store)?;
+        let mut ui = UiState::new();
+
+        // Also expand first milestone by default
+        if let Some(m) = data.milestones.first() {
+            ui.expanded_nodes.insert(m.id.clone());
+        }
 
         let user = store.jj_client.user_identity().unwrap_or_default();
-        let next_actions = super::build_next_actions(&problems, &solutions, &critiques, &user);
-
-        // Expand first milestone and backlog by default
-        let mut expanded_nodes = HashSet::new();
-        if let Some(m) = milestones.first() {
-            expanded_nodes.insert(m.id.clone());
-        }
-        expanded_nodes.insert("backlog".to_string());
-
+        let next_actions = super::build_next_actions(&data.problems, &data.solutions, &data.critiques, &user);
         let tree_items = super::build_flat_tree(
-            &milestones, &problems, &solutions, &critiques, &expanded_nodes
+            &data.milestones, &data.problems, &data.solutions, &data.critiques, &ui.expanded_nodes
         );
+
+        let cache = RenderCache {
+            next_actions,
+            tree_items,
+            selected_detail: super::DetailContent::None,
+        };
 
         let mut app = Self {
             should_quit: false,
-            focused_pane: FocusedPane::NextActions,
-            milestones,
-            problems,
-            solutions,
-            critiques,
-            next_actions,
-            next_actions_index: 0,
-            tree_items,
-            expanded_nodes,
-            tree_index: 0,
-            detail_scroll: 0,
-            selected_detail: super::DetailContent::None,
-            flash_message: None,
+            data,
+            ui,
+            cache,
+            dirty: false,
             store,
         };
         app.update_selected_detail();
@@ -92,13 +127,13 @@ impl App {
     }
 
     fn show_flash(&mut self, message: &str) {
-        self.flash_message = Some((message.to_string(), Instant::now()));
+        self.ui.flash_message = Some((message.to_string(), Instant::now()));
     }
 
     fn clear_expired_flash(&mut self) {
-        if let Some((_, time)) = &self.flash_message {
+        if let Some((_, time)) = &self.ui.flash_message {
             if time.elapsed() > Duration::from_secs(2) {
-                self.flash_message = None;
+                self.ui.flash_message = None;
             }
         }
     }
@@ -123,7 +158,7 @@ impl App {
     }
 
     fn toggle_focus(&mut self) {
-        self.focused_pane = match self.focused_pane {
+        self.ui.focused_pane = match self.ui.focused_pane {
             FocusedPane::NextActions => FocusedPane::ProjectTree,
             FocusedPane::ProjectTree => FocusedPane::NextActions,
         };
@@ -131,16 +166,16 @@ impl App {
     }
 
     fn navigate_up(&mut self) {
-        match self.focused_pane {
+        match self.ui.focused_pane {
             FocusedPane::NextActions => {
-                if self.next_actions_index > 0 {
-                    self.next_actions_index -= 1;
+                if self.ui.next_actions_index > 0 {
+                    self.ui.next_actions_index -= 1;
                     self.sync_tree_to_selection();
                 }
             }
             FocusedPane::ProjectTree => {
-                if self.tree_index > 0 {
-                    self.tree_index -= 1;
+                if self.ui.tree_index > 0 {
+                    self.ui.tree_index -= 1;
                 }
             }
         }
@@ -148,16 +183,16 @@ impl App {
     }
 
     fn navigate_down(&mut self) {
-        match self.focused_pane {
+        match self.ui.focused_pane {
             FocusedPane::NextActions => {
-                if self.next_actions_index < self.next_actions.len().saturating_sub(1) {
-                    self.next_actions_index += 1;
+                if self.ui.next_actions_index < self.cache.next_actions.len().saturating_sub(1) {
+                    self.ui.next_actions_index += 1;
                     self.sync_tree_to_selection();
                 }
             }
             FocusedPane::ProjectTree => {
-                if self.tree_index < self.tree_items.len().saturating_sub(1) {
-                    self.tree_index += 1;
+                if self.ui.tree_index < self.cache.tree_items.len().saturating_sub(1) {
+                    self.ui.tree_index += 1;
                 }
             }
         }
@@ -165,11 +200,11 @@ impl App {
     }
 
     fn sync_tree_to_selection(&mut self) {
-        if self.focused_pane != FocusedPane::NextActions {
+        if self.ui.focused_pane != FocusedPane::NextActions {
             return;
         }
 
-        let target_id = match self.next_actions.get(self.next_actions_index) {
+        let target_id = match self.cache.next_actions.get(self.ui.next_actions_index) {
             Some(action) => action.entity_id.clone(),
             None => return,
         };
@@ -179,9 +214,9 @@ impl App {
         self.rebuild_tree();
 
         // Find the item in the tree
-        for (i, item) in self.tree_items.iter().enumerate() {
+        for (i, item) in self.cache.tree_items.iter().enumerate() {
             if item.node.id() == target_id {
-                self.tree_index = i;
+                self.ui.tree_index = i;
                 break;
             }
         }
@@ -189,39 +224,39 @@ impl App {
 
     fn expand_to_reveal(&mut self, target_id: &str) {
         // For a solution, we need its problem expanded, and that problem's milestone expanded
-        if let Some(solution) = self.solutions.iter().find(|s| s.id == target_id) {
-            self.expanded_nodes.insert(solution.problem_id.clone());
+        if let Some(solution) = self.data.solutions.iter().find(|s| s.id == target_id) {
+            self.ui.expanded_nodes.insert(solution.problem_id.clone());
 
-            if let Some(problem) = self.problems.iter().find(|p| p.id == solution.problem_id) {
+            if let Some(problem) = self.data.problems.iter().find(|p| p.id == solution.problem_id) {
                 if let Some(milestone_id) = &problem.milestone_id {
-                    self.expanded_nodes.insert(milestone_id.clone());
+                    self.ui.expanded_nodes.insert(milestone_id.clone());
                 } else {
-                    self.expanded_nodes.insert("backlog".to_string());
+                    self.ui.expanded_nodes.insert("backlog".to_string());
                 }
             }
         }
 
         // For a problem, we need its milestone expanded
-        if let Some(problem) = self.problems.iter().find(|p| p.id == target_id) {
+        if let Some(problem) = self.data.problems.iter().find(|p| p.id == target_id) {
             if let Some(milestone_id) = &problem.milestone_id {
-                self.expanded_nodes.insert(milestone_id.clone());
+                self.ui.expanded_nodes.insert(milestone_id.clone());
             } else {
-                self.expanded_nodes.insert("backlog".to_string());
+                self.ui.expanded_nodes.insert("backlog".to_string());
             }
         }
 
         // For a critique, we need its solution and problem expanded
-        if let Some(critique) = self.critiques.iter().find(|c| c.id == target_id) {
-            self.expanded_nodes.insert(critique.solution_id.clone());
+        if let Some(critique) = self.data.critiques.iter().find(|c| c.id == target_id) {
+            self.ui.expanded_nodes.insert(critique.solution_id.clone());
 
-            if let Some(solution) = self.solutions.iter().find(|s| s.id == critique.solution_id) {
-                self.expanded_nodes.insert(solution.problem_id.clone());
+            if let Some(solution) = self.data.solutions.iter().find(|s| s.id == critique.solution_id) {
+                self.ui.expanded_nodes.insert(solution.problem_id.clone());
 
-                if let Some(problem) = self.problems.iter().find(|p| p.id == solution.problem_id) {
+                if let Some(problem) = self.data.problems.iter().find(|p| p.id == solution.problem_id) {
                     if let Some(milestone_id) = &problem.milestone_id {
-                        self.expanded_nodes.insert(milestone_id.clone());
+                        self.ui.expanded_nodes.insert(milestone_id.clone());
                     } else {
-                        self.expanded_nodes.insert("backlog".to_string());
+                        self.ui.expanded_nodes.insert("backlog".to_string());
                     }
                 }
             }
@@ -229,22 +264,22 @@ impl App {
     }
 
     fn collapse_or_parent(&mut self) {
-        if self.focused_pane != FocusedPane::ProjectTree {
+        if self.ui.focused_pane != FocusedPane::ProjectTree {
             return;
         }
 
-        if let Some(item) = self.tree_items.get(self.tree_index) {
+        if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
             let node_id = item.node.id().to_string();
 
             if item.node.is_expanded() {
                 // Collapse current node
-                self.expanded_nodes.remove(&node_id);
+                self.ui.expanded_nodes.remove(&node_id);
                 self.rebuild_tree();
             } else if item.depth > 0 {
                 // Move to parent
-                for i in (0..self.tree_index).rev() {
-                    if self.tree_items[i].depth < item.depth {
-                        self.tree_index = i;
+                for i in (0..self.ui.tree_index).rev() {
+                    if self.cache.tree_items[i].depth < item.depth {
+                        self.ui.tree_index = i;
                         break;
                     }
                 }
@@ -253,11 +288,11 @@ impl App {
     }
 
     fn expand_or_child(&mut self) {
-        if self.focused_pane != FocusedPane::ProjectTree {
+        if self.ui.focused_pane != FocusedPane::ProjectTree {
             return;
         }
 
-        if let Some(item) = self.tree_items.get(self.tree_index) {
+        if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
             if !item.has_children {
                 return;
             }
@@ -266,45 +301,45 @@ impl App {
 
             if item.node.is_expanded() {
                 // Move to first child
-                if self.tree_index + 1 < self.tree_items.len() {
-                    self.tree_index += 1;
+                if self.ui.tree_index + 1 < self.cache.tree_items.len() {
+                    self.ui.tree_index += 1;
                 }
             } else {
                 // Expand
-                self.expanded_nodes.insert(node_id);
+                self.ui.expanded_nodes.insert(node_id);
                 self.rebuild_tree();
             }
         }
     }
 
     fn scroll_detail_down(&mut self) {
-        self.detail_scroll = self.detail_scroll.saturating_add(1);
+        self.ui.detail_scroll = self.ui.detail_scroll.saturating_add(1);
     }
 
     fn scroll_detail_up(&mut self) {
-        self.detail_scroll = self.detail_scroll.saturating_sub(1);
+        self.ui.detail_scroll = self.ui.detail_scroll.saturating_sub(1);
     }
 
     fn page_detail_down(&mut self) {
-        self.detail_scroll = self.detail_scroll.saturating_add(10);
+        self.ui.detail_scroll = self.ui.detail_scroll.saturating_add(10);
     }
 
     pub fn rebuild_tree(&mut self) {
-        self.tree_items = super::build_flat_tree(
-            &self.milestones,
-            &self.problems,
-            &self.solutions,
-            &self.critiques,
-            &self.expanded_nodes,
+        self.cache.tree_items = super::build_flat_tree(
+            &self.data.milestones,
+            &self.data.problems,
+            &self.data.solutions,
+            &self.data.critiques,
+            &self.ui.expanded_nodes,
         );
     }
 
     pub fn context_hints(&self) -> String {
         use super::tree::TreeNode;
 
-        match self.focused_pane {
+        match self.ui.focused_pane {
             FocusedPane::NextActions => {
-                if let Some(action) = self.next_actions.get(self.next_actions_index) {
+                if let Some(action) = self.cache.next_actions.get(self.ui.next_actions_index) {
                     match action.entity_type {
                         super::next_actions::EntityType::Problem => {
                             format!("{}: [n]ew solution [s]olve [d]issolve [e]dit", action.entity_id)
@@ -321,7 +356,7 @@ impl App {
                 }
             }
             FocusedPane::ProjectTree => {
-                if let Some(item) = self.tree_items.get(self.tree_index) {
+                if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
                     match &item.node {
                         TreeNode::Milestone { id, .. } => {
                             format!("{}: [e]dit", id)
@@ -350,26 +385,26 @@ impl App {
         use super::tree::TreeNode;
 
         // Check focused pane and get relevant selection
-        match self.focused_pane {
+        match self.ui.focused_pane {
             FocusedPane::NextActions => {
-                if let Some(action) = self.next_actions.get(self.next_actions_index) {
-                    self.selected_detail = match action.entity_type {
+                if let Some(action) = self.cache.next_actions.get(self.ui.next_actions_index) {
+                    self.cache.selected_detail = match action.entity_type {
                         super::next_actions::EntityType::Problem => {
-                            self.problems.iter()
+                            self.data.problems.iter()
                                 .find(|p| p.id == action.entity_id)
                                 .cloned()
                                 .map(super::DetailContent::Problem)
                                 .unwrap_or(super::DetailContent::None)
                         }
                         super::next_actions::EntityType::Solution => {
-                            self.solutions.iter()
+                            self.data.solutions.iter()
                                 .find(|s| s.id == action.entity_id)
                                 .cloned()
                                 .map(super::DetailContent::Solution)
                                 .unwrap_or(super::DetailContent::None)
                         }
                         super::next_actions::EntityType::Critique => {
-                            self.critiques.iter()
+                            self.data.critiques.iter()
                                 .find(|c| c.id == action.entity_id)
                                 .cloned()
                                 .map(super::DetailContent::Critique)
@@ -379,10 +414,10 @@ impl App {
                 }
             }
             FocusedPane::ProjectTree => {
-                if let Some(item) = self.tree_items.get(self.tree_index) {
-                    self.selected_detail = match &item.node {
+                if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
+                    self.cache.selected_detail = match &item.node {
                         TreeNode::Milestone { id, .. } => {
-                            self.milestones.iter()
+                            self.data.milestones.iter()
                                 .find(|m| m.id == *id)
                                 .cloned()
                                 .map(super::DetailContent::Milestone)
@@ -390,21 +425,21 @@ impl App {
                         }
                         TreeNode::Backlog { .. } => super::DetailContent::None,
                         TreeNode::Problem { id, .. } => {
-                            self.problems.iter()
+                            self.data.problems.iter()
                                 .find(|p| p.id == *id)
                                 .cloned()
                                 .map(super::DetailContent::Problem)
                                 .unwrap_or(super::DetailContent::None)
                         }
                         TreeNode::Solution { id, .. } => {
-                            self.solutions.iter()
+                            self.data.solutions.iter()
                                 .find(|s| s.id == *id)
                                 .cloned()
                                 .map(super::DetailContent::Solution)
                                 .unwrap_or(super::DetailContent::None)
                         }
                         TreeNode::Critique { id, .. } => {
-                            self.critiques.iter()
+                            self.data.critiques.iter()
                                 .find(|c| c.id == *id)
                                 .cloned()
                                 .map(super::DetailContent::Critique)
@@ -414,19 +449,19 @@ impl App {
                 }
             }
         }
-        self.detail_scroll = 0; // Reset scroll on new selection
+        self.ui.detail_scroll = 0; // Reset scroll on new selection
     }
 
     fn get_selected_entity(&self) -> Option<(String, super::next_actions::EntityType)> {
         use super::tree::TreeNode;
 
-        match self.focused_pane {
+        match self.ui.focused_pane {
             FocusedPane::NextActions => {
-                self.next_actions.get(self.next_actions_index)
+                self.cache.next_actions.get(self.ui.next_actions_index)
                     .map(|a| (a.entity_id.clone(), a.entity_type))
             }
             FocusedPane::ProjectTree => {
-                self.tree_items.get(self.tree_index).and_then(|item| {
+                self.cache.tree_items.get(self.ui.tree_index).and_then(|item| {
                     match &item.node {
                         TreeNode::Problem { id, .. } => Some((id.clone(), super::next_actions::EntityType::Problem)),
                         TreeNode::Solution { id, .. } => Some((id.clone(), super::next_actions::EntityType::Solution)),
@@ -551,16 +586,20 @@ impl App {
     }
 
     fn refresh_data(&mut self) -> Result<()> {
-        self.milestones = self.store.list_milestones()?;
-        self.problems = self.store.list_problems()?;
-        self.solutions = self.store.list_solutions()?;
-        self.critiques = self.store.list_critiques()?;
+        self.data = ProjectData::load(&self.store)?;
+        self.rebuild_cache();
+        Ok(())
+    }
 
+    fn rebuild_cache(&mut self) {
         let user = self.store.jj_client.user_identity().unwrap_or_default();
-        self.next_actions = super::build_next_actions(&self.problems, &self.solutions, &self.critiques, &user);
+        self.cache.next_actions = super::build_next_actions(
+            &self.data.problems,
+            &self.data.solutions,
+            &self.data.critiques,
+            &user,
+        );
         self.rebuild_tree();
         self.update_selected_detail();
-
-        Ok(())
     }
 }
