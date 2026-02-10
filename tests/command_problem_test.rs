@@ -1,0 +1,292 @@
+mod test_helpers;
+
+use test_helpers::{jj_available, run_jjj, run_jjj_success, setup_test_repo};
+
+#[test]
+fn test_problem_new_creates_problem() {
+    if !jj_available() {
+        return;
+    }
+    let dir = setup_test_repo();
+
+    let stdout = run_jjj_success(&dir, &["problem", "new", "Test Problem"]);
+    assert!(stdout.contains("p1"), "Expected p1 in output: {}", stdout);
+    assert!(
+        stdout.contains("Test Problem"),
+        "Expected title in output: {}",
+        stdout
+    );
+}
+
+#[test]
+fn test_problem_new_with_priority() {
+    if !jj_available() {
+        return;
+    }
+    let dir = setup_test_repo();
+
+    run_jjj_success(&dir, &["problem", "new", "Critical Bug", "--priority", "P0"]);
+
+    let stdout = run_jjj_success(&dir, &["problem", "show", "p1"]);
+    assert!(
+        stdout.contains("P0/critical") || stdout.contains("Critical"),
+        "Expected P0/critical priority: {}",
+        stdout
+    );
+}
+
+#[test]
+fn test_problem_new_with_parent() {
+    if !jj_available() {
+        return;
+    }
+    let dir = setup_test_repo();
+
+    run_jjj_success(&dir, &["problem", "new", "Parent Problem"]);
+    run_jjj_success(&dir, &["problem", "new", "Child Problem", "--parent", "p1"]);
+
+    let stdout = run_jjj_success(&dir, &["problem", "show", "p2"]);
+    assert!(stdout.contains("p1"), "Expected parent p1 in output: {}", stdout);
+}
+
+#[test]
+fn test_problem_list_shows_all_problems() {
+    if !jj_available() {
+        return;
+    }
+    let dir = setup_test_repo();
+
+    run_jjj_success(&dir, &["problem", "new", "First Problem"]);
+    run_jjj_success(&dir, &["problem", "new", "Second Problem"]);
+    run_jjj_success(&dir, &["problem", "new", "Third Problem"]);
+
+    let stdout = run_jjj_success(&dir, &["problem", "list"]);
+    assert!(stdout.contains("p1"), "Expected p1: {}", stdout);
+    assert!(stdout.contains("p2"), "Expected p2: {}", stdout);
+    assert!(stdout.contains("p3"), "Expected p3: {}", stdout);
+}
+
+#[test]
+fn test_problem_list_filter_by_status() {
+    if !jj_available() {
+        return;
+    }
+    let dir = setup_test_repo();
+
+    run_jjj_success(&dir, &["problem", "new", "Open Problem"]);
+    run_jjj_success(&dir, &["problem", "new", "Solved Problem"]);
+    // Create a solution and accept it to solve p2
+    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "p2"]);
+    run_jjj_success(&dir, &["solution", "accept", "s1"]);
+    run_jjj_success(&dir, &["problem", "solve", "p2"]);
+
+    let stdout = run_jjj_success(&dir, &["problem", "list", "--status", "open"]);
+    assert!(stdout.contains("p1"), "Expected p1 in open list: {}", stdout);
+    assert!(!stdout.contains("p2"), "p2 should not be in open list: {}", stdout);
+
+    let stdout = run_jjj_success(&dir, &["problem", "list", "--status", "solved"]);
+    assert!(stdout.contains("p2"), "Expected p2 in solved list: {}", stdout);
+}
+
+#[test]
+fn test_problem_list_json_output() {
+    if !jj_available() {
+        return;
+    }
+    let dir = setup_test_repo();
+
+    run_jjj_success(&dir, &["problem", "new", "JSON Problem"]);
+
+    let stdout = run_jjj_success(&dir, &["problem", "list", "--json"]);
+    let json: serde_json::Value =
+        serde_json::from_str(&stdout).expect("Failed to parse JSON output");
+    assert!(json.is_array(), "Expected JSON array");
+    let arr = json.as_array().unwrap();
+    assert_eq!(arr.len(), 1, "Expected 1 problem");
+    assert_eq!(arr[0]["id"], "p1");
+    assert_eq!(arr[0]["title"], "JSON Problem");
+}
+
+#[test]
+fn test_problem_show_displays_details() {
+    if !jj_available() {
+        return;
+    }
+    let dir = setup_test_repo();
+
+    run_jjj_success(
+        &dir,
+        &["problem", "new", "Detailed Problem", "--priority", "P1"],
+    );
+
+    let stdout = run_jjj_success(&dir, &["problem", "show", "p1"]);
+    assert!(
+        stdout.contains("Detailed Problem"),
+        "Expected title: {}",
+        stdout
+    );
+    assert!(
+        stdout.contains("P1/high") || stdout.contains("High"),
+        "Expected priority: {}",
+        stdout
+    );
+    assert!(
+        stdout.contains("Status") || stdout.contains("open"),
+        "Expected status: {}",
+        stdout
+    );
+}
+
+#[test]
+fn test_problem_show_json_output() {
+    if !jj_available() {
+        return;
+    }
+    let dir = setup_test_repo();
+
+    run_jjj_success(&dir, &["problem", "new", "JSON Show Problem"]);
+
+    let stdout = run_jjj_success(&dir, &["problem", "show", "p1", "--json"]);
+    let json: serde_json::Value =
+        serde_json::from_str(&stdout).expect("Failed to parse JSON output");
+    assert_eq!(json["id"], "p1");
+    assert_eq!(json["title"], "JSON Show Problem");
+    assert_eq!(json["status"], "open");
+}
+
+#[test]
+fn test_problem_show_nonexistent_fails() {
+    if !jj_available() {
+        return;
+    }
+    let dir = setup_test_repo();
+
+    let output = run_jjj(&dir, &["problem", "show", "p999"]);
+    assert!(
+        !output.status.success(),
+        "Expected failure for nonexistent problem"
+    );
+}
+
+#[test]
+fn test_problem_edit_title() {
+    if !jj_available() {
+        return;
+    }
+    let dir = setup_test_repo();
+
+    run_jjj_success(&dir, &["problem", "new", "Original Title"]);
+    run_jjj_success(&dir, &["problem", "edit", "p1", "--title", "Updated Title"]);
+
+    let stdout = run_jjj_success(&dir, &["problem", "show", "p1"]);
+    assert!(
+        stdout.contains("Updated Title"),
+        "Expected updated title: {}",
+        stdout
+    );
+}
+
+#[test]
+fn test_problem_edit_priority() {
+    if !jj_available() {
+        return;
+    }
+    let dir = setup_test_repo();
+
+    run_jjj_success(&dir, &["problem", "new", "Low Priority"]);
+    run_jjj_success(&dir, &["problem", "edit", "p1", "--priority", "P0"]);
+
+    let stdout = run_jjj_success(&dir, &["problem", "show", "p1"]);
+    assert!(
+        stdout.contains("P0/critical") || stdout.contains("Critical"),
+        "Expected P0 priority: {}",
+        stdout
+    );
+}
+
+#[test]
+fn test_problem_dissolve() {
+    if !jj_available() {
+        return;
+    }
+    let dir = setup_test_repo();
+
+    run_jjj_success(&dir, &["problem", "new", "False Problem"]);
+    run_jjj_success(
+        &dir,
+        &["problem", "dissolve", "p1", "--reason", "Based on misunderstanding"],
+    );
+
+    let stdout = run_jjj_success(&dir, &["problem", "show", "p1"]);
+    assert!(
+        stdout.contains("dissolved"),
+        "Expected dissolved status: {}",
+        stdout
+    );
+    assert!(
+        stdout.contains("Based on misunderstanding"),
+        "Expected dissolve reason: {}",
+        stdout
+    );
+}
+
+#[test]
+fn test_problem_tree_view() {
+    if !jj_available() {
+        return;
+    }
+    let dir = setup_test_repo();
+
+    run_jjj_success(&dir, &["problem", "new", "Root Problem"]);
+    run_jjj_success(&dir, &["problem", "new", "Child 1", "--parent", "p1"]);
+    run_jjj_success(&dir, &["problem", "new", "Child 2", "--parent", "p1"]);
+
+    let stdout = run_jjj_success(&dir, &["problem", "list", "--tree"]);
+    // Tree view should show hierarchy
+    assert!(
+        stdout.contains("Root Problem"),
+        "Expected root: {}",
+        stdout
+    );
+    assert!(stdout.contains("Child 1"), "Expected child 1: {}", stdout);
+    assert!(stdout.contains("Child 2"), "Expected child 2: {}", stdout);
+}
+
+#[test]
+fn test_problem_solve_requires_accepted_solution() {
+    if !jj_available() {
+        return;
+    }
+    let dir = setup_test_repo();
+
+    run_jjj_success(&dir, &["problem", "new", "Need Solution"]);
+
+    // Try to solve without any solution - should fail
+    let output = run_jjj(&dir, &["problem", "solve", "p1"]);
+    assert!(
+        !output.status.success(),
+        "Expected failure when solving without accepted solution"
+    );
+
+    // Add a solution and accept it
+    run_jjj_success(&dir, &["solution", "new", "Fix", "--problem", "p1"]);
+    run_jjj_success(&dir, &["solution", "accept", "s1"]);
+
+    // Now solve should work
+    let stdout = run_jjj_success(&dir, &["problem", "solve", "p1"]);
+    assert!(stdout.contains("solved"), "Expected solved: {}", stdout);
+}
+
+#[test]
+fn test_problem_assign() {
+    if !jj_available() {
+        return;
+    }
+    let dir = setup_test_repo();
+
+    run_jjj_success(&dir, &["problem", "new", "Assign Me"]);
+    run_jjj_success(&dir, &["problem", "assign", "p1", "--to", "alice"]);
+
+    let stdout = run_jjj_success(&dir, &["problem", "show", "p1"]);
+    assert!(stdout.contains("alice"), "Expected assignee alice: {}", stdout);
+}
