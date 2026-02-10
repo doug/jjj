@@ -33,7 +33,7 @@ fn test_status_shows_open_problems() {
     let stdout = run_jjj_success(&dir, &["status"]);
     // Should show open problems as TODO items
     assert!(
-        stdout.contains("TODO") || stdout.contains("todo") || stdout.contains("p1"),
+        stdout.contains("TODO") || stdout.contains("todo") || stdout.contains("Open Problem"),
         "Expected open problems in status: {}",
         stdout
     );
@@ -47,8 +47,8 @@ fn test_status_shows_solutions_needing_attention() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "p1"]);
-    run_jjj_success(&dir, &["critique", "new", "s1", "Blocker"]);
+    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "Problem"]);
+    run_jjj_success(&dir, &["critique", "new", "Solution", "Blocker"]);
 
     let stdout = run_jjj_success(&dir, &["status"]);
     // Should show blocked solution
@@ -67,9 +67,9 @@ fn test_status_shows_ready_solutions() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "p1"]);
-    run_jjj_success(&dir, &["critique", "new", "s1", "Issue"]);
-    run_jjj_success(&dir, &["critique", "address", "c1"]);
+    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "Problem"]);
+    run_jjj_success(&dir, &["critique", "new", "Solution", "Issue"]);
+    run_jjj_success(&dir, &["critique", "address", "Issue"]);
 
     let stdout = run_jjj_success(&dir, &["status"]);
     // Should show ready solution (all critiques resolved)
@@ -107,8 +107,8 @@ fn test_status_json_summary() {
 
     run_jjj_success(&dir, &["problem", "new", "Problem 1"]);
     run_jjj_success(&dir, &["problem", "new", "Problem 2"]);
-    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "p1"]);
-    run_jjj_success(&dir, &["critique", "new", "s1", "Critique"]);
+    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "Problem 1"]);
+    run_jjj_success(&dir, &["critique", "new", "Solution", "Critique"]);
 
     let stdout = run_jjj_success(&dir, &["status", "--json"]);
     let json: serde_json::Value =
@@ -177,14 +177,14 @@ fn test_status_mine_option() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "My Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "My Solution", "--problem", "p1"]);
+    run_jjj_success(&dir, &["solution", "new", "My Solution", "--problem", "My Problem"]);
     // Assign to current user (default)
-    run_jjj_success(&dir, &["solution", "assign", "s1"]);
+    run_jjj_success(&dir, &["solution", "assign", "My Solution"]);
 
     let stdout = run_jjj_success(&dir, &["status", "--mine"]);
     // Should filter to only my items
     assert!(
-        stdout.contains("My Solution") || stdout.contains("s1") || stdout.contains("Summary"),
+        stdout.contains("My Solution") || stdout.contains("Summary"),
         "Expected my solution in filtered status: {}",
         stdout
     );
@@ -198,7 +198,7 @@ fn test_status_shows_active_solution() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Active Solution", "--problem", "p1"]);
+    run_jjj_success(&dir, &["solution", "new", "Active Solution", "--problem", "Problem"]);
 
     let stdout = run_jjj_success(&dir, &["status"]);
     // Should show the active solution at the top
@@ -233,11 +233,12 @@ fn test_status_priority_sorting() {
 
     // Should be sorted by priority (Critical first)
     if todo_items.len() >= 2 {
-        let first_id = todo_items[0]["entity_id"].as_str().unwrap();
-        assert_eq!(
-            first_id, "p2",
-            "Expected Critical (p2) first, got {}",
-            first_id
+        // Verify that the first todo item has the "Critical" problem
+        let first_title = todo_items[0]["title"].as_str().unwrap_or("");
+        assert!(
+            first_title.contains("Critical"),
+            "Expected Critical first, got {}",
+            first_title
         );
     }
 }
@@ -251,7 +252,7 @@ fn test_status_shows_summary_counts() {
 
     run_jjj_success(&dir, &["problem", "new", "Problem 1"]);
     run_jjj_success(&dir, &["problem", "new", "Problem 2"]);
-    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "p1"]);
+    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "Problem 1"]);
 
     let stdout = run_jjj_success(&dir, &["status"]);
     // Should show summary with counts
@@ -277,7 +278,7 @@ fn test_status_shows_review_category() {
             "new",
             "Needs Review",
             "--problem",
-            "p1",
+            "Problem",
             "--reviewer",
             "Test User",
         ],
@@ -303,7 +304,7 @@ fn test_status_json_active_solution() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Active", "--problem", "p1"]);
+    run_jjj_success(&dir, &["solution", "new", "Active", "--problem", "Problem"]);
 
     let stdout = run_jjj_success(&dir, &["status", "--json"]);
     let json: serde_json::Value =
@@ -312,7 +313,8 @@ fn test_status_json_active_solution() {
     // Should have active_solution field
     let active = &json["active_solution"];
     if !active.is_null() {
-        assert_eq!(active["id"], "s1");
+        // ID should exist but we don't assert specific value
+        assert!(active["id"].is_string(), "Expected id to be a string");
         assert_eq!(active["title"], "Active");
     }
 }
@@ -327,8 +329,8 @@ fn test_status_category_ordering() {
     // Create items in different categories
     run_jjj_success(&dir, &["problem", "new", "TODO Problem"]); // Will be TODO (no solution)
     run_jjj_success(&dir, &["problem", "new", "Blocked Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Blocked Solution", "--problem", "p2"]);
-    run_jjj_success(&dir, &["critique", "new", "s1", "Blocker"]); // Makes s1 BLOCKED
+    run_jjj_success(&dir, &["solution", "new", "Blocked Solution", "--problem", "Blocked Problem"]);
+    run_jjj_success(&dir, &["critique", "new", "Blocked Solution", "Blocker"]); // Makes solution BLOCKED
 
     let stdout = run_jjj_success(&dir, &["status", "--json", "--all"]);
     let json: serde_json::Value =
