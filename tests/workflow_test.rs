@@ -223,3 +223,23 @@ fn test_submit_blocked_by_awaiting_review() {
     assert!(stderr.contains("open critique") || stderr.contains("Awaiting review"),
             "Expected open critique error, got: {}", stderr);
 }
+
+#[test]
+fn test_events_logged_on_status_changes() {
+    if which::which("jj").is_err() { return; }
+    let temp_dir = setup_test_repo();
+    let dir = temp_dir.path();
+
+    // Create and accept a solution
+    run_jjj(dir, &["solution", "new", "Test Solution", "--problem", "p1"]);
+    run_jjj(dir, &["solution", "accept", "s1", "--rationale", "Tests pass", "--force"]);
+
+    // Check events
+    let output = run_jjj(dir, &["events", "--json"]);
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("solution_created"), "Missing solution_created event");
+    assert!(stdout.contains("solution_accepted"), "Missing solution_accepted event");
+    assert!(stdout.contains("Tests pass"), "Missing rationale in event");
+}
