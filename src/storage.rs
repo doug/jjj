@@ -317,17 +317,9 @@ impl MetadataStore {
         Ok(problems)
     }
 
-    /// Generate next problem ID
+    /// Generate next problem ID using UUID7.
     pub fn next_problem_id(&self) -> Result<String> {
-        let problems = self.list_problems()?;
-
-        let max_id = problems
-            .iter()
-            .filter_map(|p| p.id.strip_prefix("p").and_then(|s| s.parse::<u32>().ok()))
-            .max()
-            .unwrap_or(0);
-
-        Ok(format!("p{}", max_id + 1))
+        Ok(crate::id::generate_id())
     }
 
     /// Get subproblems of a problem
@@ -480,17 +472,9 @@ impl MetadataStore {
         Ok(solutions)
     }
 
-    /// Generate next solution ID
+    /// Generate next solution ID using UUID7.
     pub fn next_solution_id(&self) -> Result<String> {
-        let solutions = self.list_solutions()?;
-
-        let max_id = solutions
-            .iter()
-            .filter_map(|s| s.id.strip_prefix("s").and_then(|s| s.parse::<u32>().ok()))
-            .max()
-            .unwrap_or(0);
-
-        Ok(format!("s{}", max_id + 1))
+        Ok(crate::id::generate_id())
     }
 
     /// Get solutions for a problem
@@ -618,17 +602,9 @@ impl MetadataStore {
         Ok(critiques)
     }
 
-    /// Generate next critique ID
+    /// Generate next critique ID using UUID7.
     pub fn next_critique_id(&self) -> Result<String> {
-        let critiques = self.list_critiques()?;
-
-        let max_id = critiques
-            .iter()
-            .filter_map(|c| c.id.strip_prefix("c").and_then(|s| s.parse::<u32>().ok()))
-            .max()
-            .unwrap_or(0);
-
-        Ok(format!("c{}", max_id + 1))
+        Ok(crate::id::generate_id())
     }
 
     /// Get critiques for a solution
@@ -751,17 +727,9 @@ impl MetadataStore {
         Ok(milestones)
     }
 
-    /// Generate next milestone ID
+    /// Generate next milestone ID using UUID7.
     pub fn next_milestone_id(&self) -> Result<String> {
-        let milestones = self.list_milestones()?;
-
-        let max_id = milestones
-            .iter()
-            .filter_map(|m| m.id.strip_prefix("m").and_then(|s| s.parse::<u32>().ok()))
-            .max()
-            .unwrap_or(0);
-
-        Ok(format!("m{}", max_id + 1))
+        Ok(crate::id::generate_id())
     }
 
     // =========================================================================
