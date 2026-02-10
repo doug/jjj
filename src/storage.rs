@@ -1,9 +1,9 @@
 use crate::error::{JjjError, Result};
 use crate::jj::JjClient;
 use crate::models::{
-    Critique, CritiqueFrontmatter, CritiqueStatus, Event, Milestone, MilestoneFrontmatter,
-    Problem, ProblemFrontmatter, ProblemStatus,
-    ProjectConfig, Solution, SolutionFrontmatter, SolutionStatus,
+    Critique, CritiqueFrontmatter, CritiqueStatus, Event, Milestone, MilestoneFrontmatter, Problem,
+    ProblemFrontmatter, ProblemStatus, ProjectConfig, Solution, SolutionFrontmatter,
+    SolutionStatus,
 };
 use std::cell::RefCell;
 use std::fs;
@@ -49,9 +49,9 @@ fn parse_frontmatter<T: serde::de::DeserializeOwned>(content: &str) -> Result<(T
 
     // Find the closing delimiter
     let rest = &content[3..];
-    let end_pos = rest
-        .find("\n---")
-        .ok_or_else(|| JjjError::FrontmatterParse("Missing closing frontmatter delimiter".to_string()))?;
+    let end_pos = rest.find("\n---").ok_or_else(|| {
+        JjjError::FrontmatterParse("Missing closing frontmatter delimiter".to_string())
+    })?;
 
     let yaml_str = &rest[..end_pos].trim();
     let body = rest[end_pos + 4..].trim().to_string();
@@ -78,7 +78,10 @@ fn parse_body_sections(body: &str) -> std::collections::HashMap<String, String> 
             if !current_section.is_empty() {
                 sections.insert(current_section.clone(), current_content.trim().to_string());
             }
-            current_section = line.strip_prefix("## ").expect("strip_prefix failed after starts_with check").to_string();
+            current_section = line
+                .strip_prefix("## ")
+                .expect("strip_prefix failed after starts_with check")
+                .to_string();
             current_content = String::new();
         } else {
             current_content.push_str(line);
@@ -160,15 +163,12 @@ impl MetadataStore {
     fn ensure_meta_checkout(&self) -> Result<()> {
         if !self.meta_path.exists() {
             // Create workspace for metadata
-            let meta_path_str = self.meta_path.to_str()
+            let meta_path_str = self
+                .meta_path
+                .to_str()
                 .ok_or_else(|| JjjError::PathError(self.meta_path.clone()))?;
-            self.jj_client.execute(&[
-                "workspace",
-                "add",
-                meta_path_str,
-                "-r",
-                META_BOOKMARK,
-            ])?;
+            self.jj_client
+                .execute(&["workspace", "add", meta_path_str, "-r", META_BOOKMARK])?;
         }
         Ok(())
     }
@@ -342,7 +342,10 @@ impl MetadataStore {
     /// Get root problems (problems without parents)
     pub fn get_root_problems(&self) -> Result<Vec<Problem>> {
         let problems = self.list_problems()?;
-        Ok(problems.into_iter().filter(|p| p.parent_id.is_none()).collect())
+        Ok(problems
+            .into_iter()
+            .filter(|p| p.parent_id.is_none())
+            .collect())
     }
 
     /// Get the parent chain for a problem (ancestors up to root)
@@ -684,7 +687,10 @@ impl MetadataStore {
             created_at: frontmatter.created_at,
             updated_at: frontmatter.updated_at,
             goals: sections.get("Goals").cloned().unwrap_or_default(),
-            success_criteria: sections.get("Success Criteria").cloned().unwrap_or_default(),
+            success_criteria: sections
+                .get("Success Criteria")
+                .cloned()
+                .unwrap_or_default(),
         };
 
         Ok(milestone)
@@ -829,7 +835,9 @@ impl MetadataStore {
 
         // Check for accepted solutions
         let solutions = self.get_solutions_for_problem(problem_id)?;
-        let has_accepted = solutions.iter().any(|s| s.status == SolutionStatus::Accepted);
+        let has_accepted = solutions
+            .iter()
+            .any(|s| s.status == SolutionStatus::Accepted);
 
         if has_accepted {
             return Ok((true, String::new()));
@@ -838,7 +846,9 @@ impl MetadataStore {
         // Check if all subproblems are solved
         let subproblems = self.get_subproblems(problem_id)?;
         if !subproblems.is_empty() {
-            let all_solved = subproblems.iter().all(|p| p.status == ProblemStatus::Solved);
+            let all_solved = subproblems
+                .iter()
+                .all(|p| p.status == ProblemStatus::Solved);
             if all_solved {
                 return Ok((true, "All subproblems are solved".to_string()));
             }
@@ -858,15 +868,15 @@ impl MetadataStore {
 
         // Check if already finalized
         if solution.is_finalized() {
-            return Ok((
-                false,
-                format!("Solution is already {:?}", solution.status),
-            ));
+            return Ok((false, format!("Solution is already {:?}", solution.status)));
         }
 
         // Check for valid critiques
         if self.has_valid_critiques(solution_id)? {
-            return Ok((false, "Solution has valid critiques that refute it".to_string()));
+            return Ok((
+                false,
+                "Solution has valid critiques that refute it".to_string(),
+            ));
         }
 
         // Check for open critiques (warning but not blocking)
@@ -889,7 +899,7 @@ impl MetadataStore {
     // =========================================================================
 
     /// Commit changes to the metadata
-    fn commit_changes(&self, message: &str) -> Result<()> {
+    pub fn commit_changes(&self, message: &str) -> Result<()> {
         // Handle pending event
         let event_suffix = if let Some(event) = self.pending_event.borrow_mut().take() {
             self.append_event(&event)?;
@@ -968,7 +978,10 @@ This is the context.
 "#;
 
         let sections = parse_body_sections(body);
-        assert_eq!(sections.get("Description").unwrap(), "This is the description.");
+        assert_eq!(
+            sections.get("Description").unwrap(),
+            "This is the description."
+        );
         assert_eq!(sections.get("Context").unwrap(), "This is the context.");
     }
 
