@@ -1,37 +1,35 @@
 use crate::cli::MilestoneAction;
+use crate::context::CommandContext;
 use crate::error::Result;
-use crate::jj::JjClient;
 use crate::models::{Milestone, MilestoneStatus, ProblemStatus, SolutionStatus};
-use crate::storage::MetadataStore;
 use chrono::NaiveDate;
 
-pub fn execute(action: MilestoneAction) -> Result<()> {
+pub fn execute(ctx: &CommandContext, action: MilestoneAction) -> Result<()> {
     match action {
-        MilestoneAction::New { title, date } => create_milestone(title, date),
+        MilestoneAction::New { title, date } => create_milestone(ctx, title, date),
         MilestoneAction::Edit {
             milestone_id,
             title,
             date,
             status,
-        } => edit_milestone(milestone_id, title, date, status),
-        MilestoneAction::List { json } => list_milestones(json),
-        MilestoneAction::Show { milestone_id, json } => show_milestone(milestone_id, json),
+        } => edit_milestone(ctx, milestone_id, title, date, status),
+        MilestoneAction::List { json } => list_milestones(ctx, json),
+        MilestoneAction::Show { milestone_id, json } => show_milestone(ctx, milestone_id, json),
         MilestoneAction::AddProblem {
             milestone_id,
             problem_id,
-        } => add_problem(milestone_id, problem_id),
+        } => add_problem(ctx, milestone_id, problem_id),
         MilestoneAction::RemoveProblem {
             milestone_id,
             problem_id,
-        } => remove_problem(milestone_id, problem_id),
-        MilestoneAction::Roadmap { json } => show_roadmap(json),
-        MilestoneAction::Assign { milestone_id, to } => assign_milestone(milestone_id, to),
+        } => remove_problem(ctx, milestone_id, problem_id),
+        MilestoneAction::Roadmap { json } => show_roadmap(ctx, json),
+        MilestoneAction::Assign { milestone_id, to } => assign_milestone(ctx, milestone_id, to),
     }
 }
 
-fn create_milestone(title: String, date: Option<String>) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client)?;
+fn create_milestone(ctx: &CommandContext, title: String, date: Option<String>) -> Result<()> {
+    let store = &ctx.store;
 
     store.with_metadata(&format!("Create milestone: {}", title), || {
         let milestone_id = store.next_milestone_id()?;
@@ -58,13 +56,13 @@ fn create_milestone(title: String, date: Option<String>) -> Result<()> {
 }
 
 fn edit_milestone(
+    ctx: &CommandContext,
     milestone_id: String,
     title: Option<String>,
     date: Option<String>,
     status: Option<String>,
 ) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client)?;
+    let store = &ctx.store;
 
     store.with_metadata(&format!("Edit milestone {}", milestone_id), || {
         let mut milestone = store.load_milestone(&milestone_id)?;
@@ -90,9 +88,8 @@ fn edit_milestone(
     })
 }
 
-fn list_milestones(json: bool) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client)?;
+fn list_milestones(ctx: &CommandContext, json: bool) -> Result<()> {
+    let store = &ctx.store;
 
     let milestones = store.list_milestones()?;
 
@@ -136,9 +133,8 @@ fn list_milestones(json: bool) -> Result<()> {
     Ok(())
 }
 
-fn show_milestone(milestone_id: String, json: bool) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client)?;
+fn show_milestone(ctx: &CommandContext, milestone_id: String, json: bool) -> Result<()> {
+    let store = &ctx.store;
 
     let milestone = store.load_milestone(&milestone_id)?;
 
@@ -234,9 +230,8 @@ fn show_milestone(milestone_id: String, json: bool) -> Result<()> {
     Ok(())
 }
 
-fn add_problem(milestone_id: String, problem_id: String) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client)?;
+fn add_problem(ctx: &CommandContext, milestone_id: String, problem_id: String) -> Result<()> {
+    let store = &ctx.store;
 
     store.with_metadata(
         &format!("Add problem {} to milestone {}", problem_id, milestone_id),
@@ -259,9 +254,8 @@ fn add_problem(milestone_id: String, problem_id: String) -> Result<()> {
     )
 }
 
-fn remove_problem(milestone_id: String, problem_id: String) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client)?;
+fn remove_problem(ctx: &CommandContext, milestone_id: String, problem_id: String) -> Result<()> {
+    let store = &ctx.store;
 
     store.with_metadata(
         &format!("Remove problem {} from milestone {}", problem_id, milestone_id),
@@ -286,9 +280,8 @@ fn remove_problem(milestone_id: String, problem_id: String) -> Result<()> {
     )
 }
 
-fn show_roadmap(json: bool) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client)?;
+fn show_roadmap(ctx: &CommandContext, json: bool) -> Result<()> {
+    let store = &ctx.store;
 
     let mut milestones = store.list_milestones()?;
 
@@ -362,9 +355,8 @@ fn show_roadmap(json: bool) -> Result<()> {
     Ok(())
 }
 
-fn assign_milestone(milestone_id: String, assignee: Option<String>) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client)?;
+fn assign_milestone(ctx: &CommandContext, milestone_id: String, assignee: Option<String>) -> Result<()> {
+    let store = &ctx.store;
 
     let assignee_name = match assignee {
         Some(name) => name,

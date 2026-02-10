@@ -1,28 +1,33 @@
+use crate::context::CommandContext;
 use crate::error::Result;
-use crate::jj::JjClient;
 use crate::models::{CritiqueStatus, ProblemStatus};
 use crate::storage::MetadataStore;
 use std::io::{self, Write};
 
 fn prompt_yes_no(message: &str) -> bool {
     print!("{} [Y/n] ", message);
-    io::stdout().flush().unwrap();
+    if io::stdout().flush().is_err() {
+        return false;
+    }
 
     let mut input = String::new();
-    io::stdin().read_line(&mut input).unwrap();
+    if io::stdin().read_line(&mut input).is_err() {
+        return false;
+    }
     let input = input.trim().to_lowercase();
 
     input.is_empty() || input == "y" || input == "yes"
 }
 
 pub fn execute(
+    ctx: &CommandContext,
     bookmarks: Vec<String>,
     remote: &str,
     no_prompt: bool,
     dry_run: bool,
 ) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client.clone())?;
+    let store = &ctx.store;
+    let jj_client = ctx.jj();
 
     if dry_run {
         println!("Would push to {}:", remote);

@@ -52,7 +52,9 @@ impl JjClient {
 
     /// Execute a jj command and return the output
     pub fn execute(&self, args: &[&str]) -> Result<String> {
-        eprintln!("DEBUG: jj {}", args.join(" "));
+        if std::env::var("JJJ_DEBUG").is_ok() {
+            eprintln!("DEBUG: jj {}", args.join(" "));
+        }
         let output = Command::new(&self.jj_path)
             .args(args)
             .current_dir(&self.repo_root)

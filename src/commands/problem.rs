@@ -1,46 +1,46 @@
 use crate::cli::ProblemAction;
+use crate::context::CommandContext;
 use crate::error::Result;
-use crate::jj::JjClient;
 use crate::models::{Problem, ProblemStatus, Priority};
 use crate::storage::MetadataStore;
 
-pub fn execute(action: ProblemAction) -> Result<()> {
+pub fn execute(ctx: &CommandContext, action: ProblemAction) -> Result<()> {
     match action {
         ProblemAction::New {
             title,
             priority,
             parent,
             milestone,
-        } => new_problem(title, priority, parent, milestone),
+        } => new_problem(ctx, title, priority, parent, milestone),
         ProblemAction::List {
             status,
             tree,
             milestone,
             json,
-        } => list_problems(status, tree, milestone, json),
-        ProblemAction::Show { problem_id, json } => show_problem(problem_id, json),
+        } => list_problems(ctx, status, tree, milestone, json),
+        ProblemAction::Show { problem_id, json } => show_problem(ctx, problem_id, json),
         ProblemAction::Edit {
             problem_id,
             title,
             status,
             priority,
             parent,
-        } => edit_problem(problem_id, title, status, priority, parent),
-        ProblemAction::Tree { problem_id } => show_tree(problem_id),
-        ProblemAction::Solve { problem_id } => solve_problem(problem_id),
-        ProblemAction::Dissolve { problem_id, reason } => dissolve_problem(problem_id, reason),
-        ProblemAction::Assign { problem_id, to } => assign_problem(problem_id, to),
+        } => edit_problem(ctx, problem_id, title, status, priority, parent),
+        ProblemAction::Tree { problem_id } => show_tree(ctx, problem_id),
+        ProblemAction::Solve { problem_id } => solve_problem(ctx, problem_id),
+        ProblemAction::Dissolve { problem_id, reason } => dissolve_problem(ctx, problem_id, reason),
+        ProblemAction::Assign { problem_id, to } => assign_problem(ctx, problem_id, to),
     }
 }
 
 fn new_problem(
+    ctx: &CommandContext,
     title: String,
     priority: String,
     parent: Option<String>,
     milestone: Option<String>,
 ) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client)?;
+    let store = &ctx.store;
 
     // Validate parent if provided
     if let Some(ref parent_id) = parent {
@@ -90,13 +90,13 @@ fn new_problem(
 }
 
 fn list_problems(
+    ctx: &CommandContext,
     status_filter: Option<String>,
     tree: bool,
     milestone_filter: Option<String>,
     json: bool,
 ) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client)?;
+    let store = &ctx.store;
 
     let mut problems = store.list_problems()?;
 
@@ -184,9 +184,8 @@ fn print_problem_tree(store: &MetadataStore, problem: &Problem, depth: usize) ->
     Ok(())
 }
 
-fn show_problem(problem_id: String, json: bool) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client)?;
+fn show_problem(ctx: &CommandContext, problem_id: String, json: bool) -> Result<()> {
+    let store = &ctx.store;
 
     let problem = store.load_problem(&problem_id)?;
 
@@ -257,14 +256,14 @@ fn show_problem(problem_id: String, json: bool) -> Result<()> {
 }
 
 fn edit_problem(
+    ctx: &CommandContext,
     problem_id: String,
     title: Option<String>,
     status: Option<String>,
     priority: Option<String>,
     parent: Option<String>,
 ) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client)?;
+    let store = &ctx.store;
 
     store.with_metadata(&format!("Edit problem {}", problem_id), || {
         let mut problem = store.load_problem(&problem_id)?;
@@ -300,9 +299,8 @@ fn edit_problem(
     })
 }
 
-fn show_tree(problem_id: Option<String>) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client)?;
+fn show_tree(ctx: &CommandContext, problem_id: Option<String>) -> Result<()> {
+    let store = &ctx.store;
 
     if let Some(pid) = problem_id {
         let problem = store.load_problem(&pid)?;
@@ -321,9 +319,8 @@ fn show_tree(problem_id: Option<String>) -> Result<()> {
     Ok(())
 }
 
-fn solve_problem(problem_id: String) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client)?;
+fn solve_problem(ctx: &CommandContext, problem_id: String) -> Result<()> {
+    let store = &ctx.store;
 
     // Check if can be solved
     let (can_solve, message) = store.can_solve_problem(&problem_id)?;
@@ -358,9 +355,8 @@ fn solve_problem(problem_id: String) -> Result<()> {
     })
 }
 
-fn dissolve_problem(problem_id: String, reason: Option<String>) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client)?;
+fn dissolve_problem(ctx: &CommandContext, problem_id: String, reason: Option<String>) -> Result<()> {
+    let store = &ctx.store;
 
     store.with_metadata(&format!("Dissolve problem {}", problem_id), || {
         let mut problem = store.load_problem(&problem_id)?;
@@ -378,9 +374,8 @@ fn dissolve_problem(problem_id: String, reason: Option<String>) -> Result<()> {
     })
 }
 
-fn assign_problem(problem_id: String, assignee: Option<String>) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client)?;
+fn assign_problem(ctx: &CommandContext, problem_id: String, assignee: Option<String>) -> Result<()> {
+    let store = &ctx.store;
 
     let assignee_name = match assignee {
         Some(name) => name,

@@ -1,7 +1,6 @@
+use crate::context::CommandContext;
 use crate::error::Result;
-use crate::jj::JjClient;
 use crate::models::{CritiqueStatus, Critique, Priority, ProblemStatus, SolutionStatus};
-use crate::storage::MetadataStore;
 
 fn priority_sort_value(priority: &Priority) -> i32 {
     match priority {
@@ -12,9 +11,9 @@ fn priority_sort_value(priority: &Priority) -> i32 {
     }
 }
 
-pub fn execute(all: bool, mine: bool, limit: Option<usize>, json: bool) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client.clone())?;
+pub fn execute(ctx: &CommandContext, all: bool, mine: bool, limit: Option<usize>, json: bool) -> Result<()> {
+    let store = &ctx.store;
+    let jj_client = ctx.jj();
     let user = store.jj_client.user_identity().unwrap_or_default();
 
     let problems = store.list_problems()?;

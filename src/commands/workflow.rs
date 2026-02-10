@@ -1,11 +1,10 @@
+use crate::context::CommandContext;
 use crate::error::Result;
-use crate::jj::JjClient;
 use crate::models::{CritiqueStatus, ProblemStatus, SolutionStatus};
-use crate::storage::MetadataStore;
 
-pub fn submit(force: bool) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client.clone())?;
+pub fn submit(ctx: &CommandContext, force: bool) -> Result<()> {
+    let store = &ctx.store;
+    let jj_client = ctx.jj();
 
     let change_id = jj_client.current_change_id()?;
 
