@@ -57,17 +57,13 @@ fn list_events(
 
         // Entity filters
         if let Some(ref p) = problem {
-            if !e.entity.starts_with('p') || e.entity != *p {
-                if !e.refs.contains(p) {
-                    return false;
-                }
+            if e.entity != *p && !e.refs.contains(p) {
+                return false;
             }
         }
         if let Some(ref s) = solution {
-            if !e.entity.starts_with('s') || e.entity != *s {
-                if !e.refs.contains(s) {
-                    return false;
-                }
+            if e.entity != *s && !e.refs.contains(s) {
+                return false;
             }
         }
 
@@ -137,10 +133,11 @@ fn parse_date_filter(s: &str) -> Option<chrono::DateTime<Utc>> {
 }
 
 fn truncate(s: &str, max: usize) -> String {
-    if s.len() <= max {
+    if s.chars().count() <= max {
         s.to_string()
     } else {
-        format!("{}...", &s[..max-3])
+        let truncated: String = s.chars().take(max.saturating_sub(3)).collect();
+        format!("{}...", truncated)
     }
 }
 
