@@ -54,16 +54,16 @@ pub fn execute(ctx: &CommandContext, action: SolutionAction) -> Result<()> {
 fn new_solution(
     ctx: &CommandContext,
     title: String,
-    problem_id: Option<String>,
-    supersedes: Option<String>,
+    problem_input: Option<String>,
+    supersedes_input: Option<String>,
     reviewer_critiques: Vec<String>,
 ) -> Result<()> {
     let store = &ctx.store;
     let jj_client = ctx.jj();
 
     // Resolve problem ID: use provided value or prompt interactively
-    let problem_id = match problem_id {
-        Some(pid) => pid,
+    let problem_id = match problem_input {
+        Some(ref input) => ctx.resolve_problem(input)?,
         None => {
             // List open problems for interactive selection
             let problems = store.list_problems()?;
@@ -97,6 +97,12 @@ fn new_solution(
 
     // Validate problem exists
     let _problem = store.load_problem(&problem_id)?;
+
+    // Resolve supersedes if provided
+    let supersedes = match supersedes_input {
+        Some(ref input) => Some(ctx.resolve_solution(input)?),
+        None => None,
+    };
 
     // Get user for event
     let user = store.get_current_user()?;
@@ -208,9 +214,10 @@ fn list_solutions(
 
     let mut solutions = store.list_solutions()?;
 
-    // Filter by problem
-    if let Some(ref pid) = problem_filter {
-        solutions.retain(|s| &s.problem_id == pid);
+    // Filter by problem (resolve the input first)
+    if let Some(ref problem_input) = problem_filter {
+        let problem_id = ctx.resolve_problem(problem_input)?;
+        solutions.retain(|s| s.problem_id == problem_id);
     }
 
     // Filter by status
@@ -263,7 +270,8 @@ fn list_solutions(
     Ok(())
 }
 
-fn show_solution(ctx: &CommandContext, solution_id: String, json: bool) -> Result<()> {
+fn show_solution(ctx: &CommandContext, solution_input: String, json: bool) -> Result<()> {
+    let solution_id = ctx.resolve_solution(&solution_input)?;
     let store = &ctx.store;
 
     let solution = store.load_solution(&solution_id)?;
@@ -334,10 +342,11 @@ fn show_solution(ctx: &CommandContext, solution_id: String, json: bool) -> Resul
 
 fn edit_solution(
     ctx: &CommandContext,
-    solution_id: String,
+    solution_input: String,
     title: Option<String>,
     status: Option<String>,
 ) -> Result<()> {
+    let solution_id = ctx.resolve_solution(&solution_input)?;
     let store = &ctx.store;
 
     store.with_metadata(&format!("Edit solution {}", solution_id), || {
@@ -358,7 +367,8 @@ fn edit_solution(
     })
 }
 
-fn attach_change(ctx: &CommandContext, solution_id: String) -> Result<()> {
+fn attach_change(ctx: &CommandContext, solution_input: String) -> Result<()> {
+    let solution_id = ctx.resolve_solution(&solution_input)?;
     let store = &ctx.store;
     let jj_client = ctx.jj();
 
@@ -378,9 +388,10 @@ fn attach_change(ctx: &CommandContext, solution_id: String) -> Result<()> {
 
 fn detach_change(
     ctx: &CommandContext,
-    solution_id: String,
+    solution_input: String,
     change_id: Option<String>,
 ) -> Result<()> {
+    let solution_id = ctx.resolve_solution(&solution_input)?;
     let store = &ctx.store;
     let jj_client = ctx.jj();
 
@@ -411,7 +422,8 @@ fn detach_change(
     )
 }
 
-fn test_solution(ctx: &CommandContext, solution_id: String) -> Result<()> {
+fn test_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
+    let solution_id = ctx.resolve_solution(&solution_input)?;
     let store = &ctx.store;
 
     store.with_metadata(&format!("Move solution {} to testing", solution_id), || {
@@ -434,13 +446,14 @@ fn test_solution(ctx: &CommandContext, solution_id: String) -> Result<()> {
 
 fn accept_solution(
     ctx: &CommandContext,
-    solution_id: String,
+    solution_input: String,
     force: bool,
     rationale: Option<String>,
     no_rationale: bool,
 ) -> Result<()> {
     use crate::models::{Event, EventType};
 
+    let solution_id = ctx.resolve_solution(&solution_input)?;
     let store = &ctx.store;
 
     let critiques = store.list_critiques()?;
@@ -558,12 +571,13 @@ fn accept_solution(
 
 fn refute_solution(
     ctx: &CommandContext,
-    solution_id: String,
+    solution_input: String,
     rationale: Option<String>,
     no_rationale: bool,
 ) -> Result<()> {
     use crate::models::{Event, EventType};
 
+    let solution_id = ctx.resolve_solution(&solution_input)?;
     let store = &ctx.store;
 
     // Get rationale (prompt if not provided and not skipped)
@@ -607,9 +621,10 @@ fn refute_solution(
 
 fn assign_solution(
     ctx: &CommandContext,
-    solution_id: String,
+    solution_input: String,
     assignee: Option<String>,
 ) -> Result<()> {
+    let solution_id = ctx.resolve_solution(&solution_input)?;
     let store = &ctx.store;
 
     let assignee_name = match assignee {
@@ -629,7 +644,8 @@ fn assign_solution(
     )
 }
 
-fn resume_solution(ctx: &CommandContext, solution_id: String) -> Result<()> {
+fn resume_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
+    let solution_id = ctx.resolve_solution(&solution_input)?;
     let store = &ctx.store;
     let jj_client = ctx.jj();
 
