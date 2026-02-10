@@ -220,6 +220,10 @@ pub enum ProblemAction {
         #[arg(long)]
         milestone: Option<String>,
 
+        /// Search problems
+        #[arg(long)]
+        search: Option<String>,
+
         /// Output in JSON format
         #[arg(long)]
         json: bool,
@@ -324,6 +328,10 @@ pub enum SolutionAction {
         /// Filter by status (proposed, testing, refuted, accepted)
         #[arg(long)]
         status: Option<String>,
+
+        /// Search solutions
+        #[arg(long)]
+        search: Option<String>,
 
         /// Output in JSON format
         #[arg(long)]
@@ -468,6 +476,10 @@ pub enum CritiqueAction {
         /// Filter by assigned reviewer
         #[arg(long)]
         reviewer: Option<String>,
+
+        /// Search critiques
+        #[arg(long)]
+        search: Option<String>,
 
         /// Output in JSON format
         #[arg(long)]

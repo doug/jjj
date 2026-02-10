@@ -1,18 +1,28 @@
 use crate::cli::SolutionAction;
 use crate::context::CommandContext;
+use crate::db::{search, Database};
 use crate::error::Result;
-use crate::models::{Critique, CritiqueSeverity, CritiqueStatus, Event, EventExtra, EventType, ProblemStatus, Solution, SolutionStatus};
+use crate::models::{
+    Critique, CritiqueSeverity, CritiqueStatus, Event, EventExtra, EventType, ProblemStatus,
+    Solution, SolutionStatus,
+};
 use std::io::{self, Write};
 
 pub fn execute(ctx: &CommandContext, action: SolutionAction) -> Result<()> {
     match action {
-        SolutionAction::New { title, problem, supersedes, reviewer } => new_solution(ctx, title, problem, supersedes, reviewer),
+        SolutionAction::New {
+            title,
+            problem,
+            supersedes,
+            reviewer,
+        } => new_solution(ctx, title, problem, supersedes, reviewer),
 
         SolutionAction::List {
             problem,
             status,
+            search,
             json,
-        } => list_solutions(ctx, problem, status, json),
+        } => list_solutions(ctx, problem, status, search.as_deref(), json),
         SolutionAction::Show { solution_id, json } => show_solution(ctx, solution_id, json),
         SolutionAction::Edit {
             solution_id,
@@ -25,14 +35,29 @@ pub fn execute(ctx: &CommandContext, action: SolutionAction) -> Result<()> {
             change_id,
         } => detach_change(ctx, solution_id, change_id),
         SolutionAction::Test { solution_id } => test_solution(ctx, solution_id),
-        SolutionAction::Accept { solution_id, force, rationale, no_rationale } => accept_solution(ctx, solution_id, force, rationale, no_rationale),
-        SolutionAction::Refute { solution_id, rationale, no_rationale } => refute_solution(ctx, solution_id, rationale, no_rationale),
+        SolutionAction::Accept {
+            solution_id,
+            force,
+            rationale,
+            no_rationale,
+        } => accept_solution(ctx, solution_id, force, rationale, no_rationale),
+        SolutionAction::Refute {
+            solution_id,
+            rationale,
+            no_rationale,
+        } => refute_solution(ctx, solution_id, rationale, no_rationale),
         SolutionAction::Assign { solution_id, to } => assign_solution(ctx, solution_id, to),
         SolutionAction::Resume { solution_id } => resume_solution(ctx, solution_id),
     }
 }
 
-fn new_solution(ctx: &CommandContext, title: String, problem_id: Option<String>, supersedes: Option<String>, reviewer_critiques: Vec<String>) -> Result<()> {
+fn new_solution(
+    ctx: &CommandContext,
+    title: String,
+    problem_id: Option<String>,
+    supersedes: Option<String>,
+    reviewer_critiques: Vec<String>,
+) -> Result<()> {
     let store = &ctx.store;
     let jj_client = ctx.jj();
 
@@ -57,7 +82,9 @@ fn new_solution(ctx: &CommandContext, title: String, problem_id: Option<String>,
 
             let mut input = String::new();
             io::stdin().read_line(&mut input)?;
-            let choice: usize = input.trim().parse()
+            let choice: usize = input
+                .trim()
+                .parse()
                 .map_err(|_| crate::error::JjjError::Other("Invalid choice".to_string()))?;
 
             if choice < 1 || choice > open_problems.len() {
@@ -87,8 +114,12 @@ fn new_solution(ctx: &CommandContext, title: String, problem_id: Option<String>,
             supersedes: supersedes.clone(),
             ..Default::default()
         };
-        let event = Event::new(EventType::SolutionCreated, solution_id.clone(), user.clone())
-            .with_extra(extra);
+        let event = Event::new(
+            EventType::SolutionCreated,
+            solution_id.clone(),
+            user.clone(),
+        )
+        .with_extra(extra);
         store.set_pending_event(event);
 
         // Auto-attach: create jj change and link to solution
@@ -144,7 +175,8 @@ fn new_solution(ctx: &CommandContext, title: String, problem_id: Option<String>,
             println!("  Supersedes: {}", sup);
         }
         if !reviewer_critiques.is_empty() {
-            let names: Vec<_> = reviewer_critiques.iter()
+            let names: Vec<_> = reviewer_critiques
+                .iter()
                 .map(|s| format!("@{}", parse_reviewer_spec(s).0))
                 .collect();
             println!("  Awaiting review: {}", names.join(", "));
@@ -169,6 +201,7 @@ fn list_solutions(
     ctx: &CommandContext,
     problem_filter: Option<String>,
     status_filter: Option<String>,
+    search_query: Option<&str>,
     json: bool,
 ) -> Result<()> {
     let store = &ctx.store;
@@ -186,6 +219,20 @@ fn list_solutions(
         solutions.retain(|s| s.status == status);
     }
 
+    // Filter by search query using FTS
+    if let Some(query) = search_query {
+        let jj_client = ctx.jj();
+        let db_path = jj_client.repo_root().join(".jj").join("jjj.db");
+
+        if db_path.exists() {
+            let db = Database::open(&db_path)?;
+            let results = search::search(db.conn(), query, Some("solution"))?;
+            let matching_ids: std::collections::HashSet<_> =
+                results.iter().map(|r| r.entity_id.as_str()).collect();
+            solutions.retain(|s| matching_ids.contains(s.id.as_str()));
+        }
+    }
+
     if json {
         println!("{}", serde_json::to_string_pretty(&solutions)?);
         return Ok(());
@@ -196,10 +243,7 @@ fn list_solutions(
         return Ok(());
     }
 
-    println!(
-        "{:<8} {:<12} {:<10} TITLE",
-        "ID", "STATUS", "PROBLEM",
-    );
+    println!("{:<8} {:<12} {:<10} TITLE", "ID", "STATUS", "PROBLEM",);
     println!("{}", "-".repeat(70));
 
     for solution in &solutions {
@@ -279,7 +323,10 @@ fn show_solution(ctx: &CommandContext, solution_id: String, json: bool) -> Resul
         }
     }
 
-    println!("\nCreated: {}", solution.created_at.format("%Y-%m-%d %H:%M"));
+    println!(
+        "\nCreated: {}",
+        solution.created_at.format("%Y-%m-%d %H:%M")
+    );
     println!("Updated: {}", solution.updated_at.format("%Y-%m-%d %H:%M"));
 
     Ok(())
@@ -317,16 +364,23 @@ fn attach_change(ctx: &CommandContext, solution_id: String) -> Result<()> {
 
     let change_id = jj_client.current_change_id()?;
 
-    store.with_metadata(&format!("Attach change {} to solution {}", change_id, solution_id), || {
-        let mut solution = store.load_solution(&solution_id)?;
-        solution.attach_change(change_id.clone());
-        store.save_solution(&solution)?;
-        println!("Attached change {} to solution {}", change_id, solution_id);
-        Ok(())
-    })
+    store.with_metadata(
+        &format!("Attach change {} to solution {}", change_id, solution_id),
+        || {
+            let mut solution = store.load_solution(&solution_id)?;
+            solution.attach_change(change_id.clone());
+            store.save_solution(&solution)?;
+            println!("Attached change {} to solution {}", change_id, solution_id);
+            Ok(())
+        },
+    )
 }
 
-fn detach_change(ctx: &CommandContext, solution_id: String, change_id: Option<String>) -> Result<()> {
+fn detach_change(
+    ctx: &CommandContext,
+    solution_id: String,
+    change_id: Option<String>,
+) -> Result<()> {
     let store = &ctx.store;
     let jj_client = ctx.jj();
 
@@ -335,17 +389,26 @@ fn detach_change(ctx: &CommandContext, solution_id: String, change_id: Option<St
         None => jj_client.current_change_id()?,
     };
 
-    store.with_metadata(&format!("Detach change {} from solution {}", change_id, solution_id), || {
-        let mut solution = store.load_solution(&solution_id)?;
+    store.with_metadata(
+        &format!("Detach change {} from solution {}", change_id, solution_id),
+        || {
+            let mut solution = store.load_solution(&solution_id)?;
 
-        if solution.detach_change(&change_id) {
-            store.save_solution(&solution)?;
-            println!("Detached change {} from solution {}", change_id, solution_id);
-        } else {
-            println!("Change {} was not attached to solution {}", change_id, solution_id);
-        }
-        Ok(())
-    })
+            if solution.detach_change(&change_id) {
+                store.save_solution(&solution)?;
+                println!(
+                    "Detached change {} from solution {}",
+                    change_id, solution_id
+                );
+            } else {
+                println!(
+                    "Change {} was not attached to solution {}",
+                    change_id, solution_id
+                );
+            }
+            Ok(())
+        },
+    )
 }
 
 fn test_solution(ctx: &CommandContext, solution_id: String) -> Result<()> {
@@ -369,7 +432,13 @@ fn test_solution(ctx: &CommandContext, solution_id: String) -> Result<()> {
     })
 }
 
-fn accept_solution(ctx: &CommandContext, solution_id: String, force: bool, rationale: Option<String>, no_rationale: bool) -> Result<()> {
+fn accept_solution(
+    ctx: &CommandContext,
+    solution_id: String,
+    force: bool,
+    rationale: Option<String>,
+    no_rationale: bool,
+) -> Result<()> {
     use crate::models::{Event, EventType};
 
     let store = &ctx.store;
@@ -385,20 +454,37 @@ fn accept_solution(ctx: &CommandContext, solution_id: String, force: bool, ratio
     // Check critique blocking
     if !open_critiques.is_empty() {
         if !force {
-            eprintln!("Error: Cannot accept {} - {} open critique(s):\n", solution_id, open_critiques.len());
+            eprintln!(
+                "Error: Cannot accept {} - {} open critique(s):\n",
+                solution_id,
+                open_critiques.len()
+            );
             for c in &open_critiques {
-                let location = c.file_path.as_ref()
+                let location = c
+                    .file_path
+                    .as_ref()
                     .map(|f| format!(" - {}:{}", f, c.line_start.unwrap_or(0)))
                     .unwrap_or_default();
                 eprintln!("  {}: {} [{}]{}", c.id, c.title, c.severity, location);
             }
             eprintln!();
-            eprintln!("Resolve with: jjj critique address {}", open_critiques[0].id);
-            eprintln!("Or dismiss:   jjj critique dismiss {}", open_critiques[0].id);
+            eprintln!(
+                "Resolve with: jjj critique address {}",
+                open_critiques[0].id
+            );
+            eprintln!(
+                "Or dismiss:   jjj critique dismiss {}",
+                open_critiques[0].id
+            );
             eprintln!("Or force:     jjj solution accept {} --force", solution_id);
-            return Err(crate::error::JjjError::CannotAcceptSolution("Open critiques block acceptance".to_string()));
+            return Err(crate::error::JjjError::CannotAcceptSolution(
+                "Open critiques block acceptance".to_string(),
+            ));
         }
-        eprintln!("Warning: Accepting with {} open critique(s):", open_critiques.len());
+        eprintln!(
+            "Warning: Accepting with {} open critique(s):",
+            open_critiques.len()
+        );
         for c in &open_critiques {
             eprintln!("  {}: {} [{}]", c.id, c.title, c.severity);
         }
@@ -415,7 +501,11 @@ fn accept_solution(ctx: &CommandContext, solution_id: String, force: bool, ratio
         let mut input = String::new();
         io::stdin().read_line(&mut input)?;
         let trimmed = input.trim();
-        if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
     };
 
     // Create event
@@ -466,7 +556,12 @@ fn accept_solution(ctx: &CommandContext, solution_id: String, force: bool, ratio
     })
 }
 
-fn refute_solution(ctx: &CommandContext, solution_id: String, rationale: Option<String>, no_rationale: bool) -> Result<()> {
+fn refute_solution(
+    ctx: &CommandContext,
+    solution_id: String,
+    rationale: Option<String>,
+    no_rationale: bool,
+) -> Result<()> {
     use crate::models::{Event, EventType};
 
     let store = &ctx.store;
@@ -482,7 +577,11 @@ fn refute_solution(ctx: &CommandContext, solution_id: String, rationale: Option<
         let mut input = String::new();
         io::stdin().read_line(&mut input)?;
         let trimmed = input.trim();
-        if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
     };
 
     // Create event
@@ -506,7 +605,11 @@ fn refute_solution(ctx: &CommandContext, solution_id: String, rationale: Option<
     })
 }
 
-fn assign_solution(ctx: &CommandContext, solution_id: String, assignee: Option<String>) -> Result<()> {
+fn assign_solution(
+    ctx: &CommandContext,
+    solution_id: String,
+    assignee: Option<String>,
+) -> Result<()> {
     let store = &ctx.store;
 
     let assignee_name = match assignee {
@@ -514,13 +617,16 @@ fn assign_solution(ctx: &CommandContext, solution_id: String, assignee: Option<S
         None => store.jj_client.user_identity()?,
     };
 
-    store.with_metadata(&format!("Assign solution {} to {}", solution_id, assignee_name), || {
-        let mut solution = store.load_solution(&solution_id)?;
-        solution.assignee = Some(assignee_name.clone());
-        store.save_solution(&solution)?;
-        println!("Solution {} assigned to {}", solution_id, assignee_name);
-        Ok(())
-    })
+    store.with_metadata(
+        &format!("Assign solution {} to {}", solution_id, assignee_name),
+        || {
+            let mut solution = store.load_solution(&solution_id)?;
+            solution.assignee = Some(assignee_name.clone());
+            store.save_solution(&solution)?;
+            println!("Solution {} assigned to {}", solution_id, assignee_name);
+            Ok(())
+        },
+    )
 }
 
 fn resume_solution(ctx: &CommandContext, solution_id: String) -> Result<()> {
