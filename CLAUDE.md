@@ -107,3 +107,10 @@ TUI (src/tui/)               # Ratatui-based interactive UI
 - `j/k`: Scroll detail pane
 - `Left/Right`: Collapse/expand tree nodes
 - `a/r/d`: Accept/Refute/Address actions
+
+### Events and Timeline
+```bash
+jjj events                     # Recent events
+jjj events --problem p1        # Events for a problem
+jjj timeline p1                # Full timeline visualization
+```

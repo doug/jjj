@@ -127,3 +127,54 @@ jjj completion bash >> ~/.bashrc
 jjj completion zsh >> ~/.zshrc
 jjj completion fish > ~/.config/fish/completions/jjj.fish
 ```
+
+## `jjj events`
+
+Query the decision event log.
+
+```
+jjj events [OPTIONS]
+```
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `--from` | string | Filter by start date (YYYY-MM-DD or YYYY-MM) |
+| `--to` | string | Filter by end date |
+| `--problem` | string | Filter by problem ID |
+| `--solution` | string | Filter by solution ID |
+| `--type` | string | Filter by event type |
+| `--search` | string | Full-text search in rationales |
+| `--json` | bool | Output as JSON |
+| `--limit` | integer | Number of events (default: 20) |
+
+```bash
+jjj events
+jjj events --from 2024-01 --to 2024-06
+jjj events --problem p1
+jjj events --type solution_accepted
+jjj events --search "cache"
+```
+
+### `jjj events rebuild`
+
+Rebuild events.jsonl from commit history.
+
+### `jjj events validate`
+
+Validate event log against entity states.
+
+## `jjj timeline`
+
+Show timeline for a problem and all related entities.
+
+```
+jjj timeline <problem_id> [OPTIONS]
+```
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `--json` | bool | Output as JSON |
+
+```bash
+jjj timeline p1
+```
