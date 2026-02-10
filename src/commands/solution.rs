@@ -1,41 +1,40 @@
 use crate::cli::SolutionAction;
+use crate::context::CommandContext;
 use crate::error::Result;
-use crate::jj::JjClient;
 use crate::models::{Critique, CritiqueSeverity, CritiqueStatus, ProblemStatus, Solution, SolutionStatus};
-use crate::storage::MetadataStore;
 use std::io::{self, Write};
 
-pub fn execute(action: SolutionAction) -> Result<()> {
+pub fn execute(ctx: &CommandContext, action: SolutionAction) -> Result<()> {
     match action {
-        SolutionAction::New { title, problem, supersedes, reviewer } => new_solution(title, problem, supersedes, reviewer),
+        SolutionAction::New { title, problem, supersedes, reviewer } => new_solution(ctx, title, problem, supersedes, reviewer),
 
         SolutionAction::List {
             problem,
             status,
             json,
-        } => list_solutions(problem, status, json),
-        SolutionAction::Show { solution_id, json } => show_solution(solution_id, json),
+        } => list_solutions(ctx, problem, status, json),
+        SolutionAction::Show { solution_id, json } => show_solution(ctx, solution_id, json),
         SolutionAction::Edit {
             solution_id,
             title,
             status,
-        } => edit_solution(solution_id, title, status),
-        SolutionAction::Attach { solution_id } => attach_change(solution_id),
+        } => edit_solution(ctx, solution_id, title, status),
+        SolutionAction::Attach { solution_id } => attach_change(ctx, solution_id),
         SolutionAction::Detach {
             solution_id,
             change_id,
-        } => detach_change(solution_id, change_id),
-        SolutionAction::Test { solution_id } => test_solution(solution_id),
-        SolutionAction::Accept { solution_id, force } => accept_solution(solution_id, force),
-        SolutionAction::Refute { solution_id } => refute_solution(solution_id),
-        SolutionAction::Assign { solution_id, to } => assign_solution(solution_id, to),
-        SolutionAction::Resume { solution_id } => resume_solution(solution_id),
+        } => detach_change(ctx, solution_id, change_id),
+        SolutionAction::Test { solution_id } => test_solution(ctx, solution_id),
+        SolutionAction::Accept { solution_id, force } => accept_solution(ctx, solution_id, force),
+        SolutionAction::Refute { solution_id } => refute_solution(ctx, solution_id),
+        SolutionAction::Assign { solution_id, to } => assign_solution(ctx, solution_id, to),
+        SolutionAction::Resume { solution_id } => resume_solution(ctx, solution_id),
     }
 }
 
-fn new_solution(title: String, problem_id: Option<String>, supersedes: Option<String>, reviewer_critiques: Vec<String>) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client.clone())?;
+fn new_solution(ctx: &CommandContext, title: String, problem_id: Option<String>, supersedes: Option<String>, reviewer_critiques: Vec<String>) -> Result<()> {
+    let store = &ctx.store;
+    let jj_client = ctx.jj();
 
     // Resolve problem ID: use provided value or prompt interactively
     let problem_id = match problem_id {
@@ -154,12 +153,12 @@ fn parse_reviewer_spec(spec: &str) -> (String, CritiqueSeverity) {
 }
 
 fn list_solutions(
+    ctx: &CommandContext,
     problem_filter: Option<String>,
     status_filter: Option<String>,
     json: bool,
 ) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client)?;
+    let store = &ctx.store;
 
     let mut solutions = store.list_solutions()?;
 
@@ -207,9 +206,8 @@ fn list_solutions(
     Ok(())
 }
 
-fn show_solution(solution_id: String, json: bool) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client)?;
+fn show_solution(ctx: &CommandContext, solution_id: String, json: bool) -> Result<()> {
+    let store = &ctx.store;
 
     let solution = store.load_solution(&solution_id)?;
 
@@ -275,12 +273,12 @@ fn show_solution(solution_id: String, json: bool) -> Result<()> {
 }
 
 fn edit_solution(
+    ctx: &CommandContext,
     solution_id: String,
     title: Option<String>,
     status: Option<String>,
 ) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client)?;
+    let store = &ctx.store;
 
     store.with_metadata(&format!("Edit solution {}", solution_id), || {
         let mut solution = store.load_solution(&solution_id)?;
@@ -300,9 +298,9 @@ fn edit_solution(
     })
 }
 
-fn attach_change(solution_id: String) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client.clone())?;
+fn attach_change(ctx: &CommandContext, solution_id: String) -> Result<()> {
+    let store = &ctx.store;
+    let jj_client = ctx.jj();
 
     let change_id = jj_client.current_change_id()?;
 
@@ -315,9 +313,9 @@ fn attach_change(solution_id: String) -> Result<()> {
     })
 }
 
-fn detach_change(solution_id: String, change_id: Option<String>) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client.clone())?;
+fn detach_change(ctx: &CommandContext, solution_id: String, change_id: Option<String>) -> Result<()> {
+    let store = &ctx.store;
+    let jj_client = ctx.jj();
 
     let change_id = match change_id {
         Some(id) => id,
@@ -337,9 +335,8 @@ fn detach_change(solution_id: String, change_id: Option<String>) -> Result<()> {
     })
 }
 
-fn test_solution(solution_id: String) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client)?;
+fn test_solution(ctx: &CommandContext, solution_id: String) -> Result<()> {
+    let store = &ctx.store;
 
     store.with_metadata(&format!("Move solution {} to testing", solution_id), || {
         let mut solution = store.load_solution(&solution_id)?;
@@ -359,9 +356,8 @@ fn test_solution(solution_id: String) -> Result<()> {
     })
 }
 
-fn accept_solution(solution_id: String, force: bool) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client)?;
+fn accept_solution(ctx: &CommandContext, solution_id: String, force: bool) -> Result<()> {
+    let store = &ctx.store;
 
     let critiques = store.list_critiques()?;
 
@@ -432,9 +428,8 @@ fn accept_solution(solution_id: String, force: bool) -> Result<()> {
     })
 }
 
-fn refute_solution(solution_id: String) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client)?;
+fn refute_solution(ctx: &CommandContext, solution_id: String) -> Result<()> {
+    let store = &ctx.store;
 
     store.with_metadata(&format!("Refute solution {}", solution_id), || {
         let mut solution = store.load_solution(&solution_id)?;
@@ -448,9 +443,8 @@ fn refute_solution(solution_id: String) -> Result<()> {
     })
 }
 
-fn assign_solution(solution_id: String, assignee: Option<String>) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client)?;
+fn assign_solution(ctx: &CommandContext, solution_id: String, assignee: Option<String>) -> Result<()> {
+    let store = &ctx.store;
 
     let assignee_name = match assignee {
         Some(name) => name,
@@ -466,9 +460,9 @@ fn assign_solution(solution_id: String, assignee: Option<String>) -> Result<()> 
     })
 }
 
-fn resume_solution(solution_id: String) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client.clone())?;
+fn resume_solution(ctx: &CommandContext, solution_id: String) -> Result<()> {
+    let store = &ctx.store;
+    let jj_client = ctx.jj();
 
     let solution = store.load_solution(&solution_id)?;
     println!("Resuming solution {} ({})", solution.id, solution.title);

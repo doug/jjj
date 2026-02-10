@@ -1,5 +1,5 @@
+use crate::context::CommandContext;
 use crate::error::Result;
-use crate::jj::JjClient;
 use crate::models::{CritiqueStatus, ProblemStatus};
 use crate::storage::MetadataStore;
 use std::io::{self, Write};
@@ -20,13 +20,14 @@ fn prompt_yes_no(message: &str) -> bool {
 }
 
 pub fn execute(
+    ctx: &CommandContext,
     bookmarks: Vec<String>,
     remote: &str,
     no_prompt: bool,
     dry_run: bool,
 ) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client.clone())?;
+    let store = &ctx.store;
+    let jj_client = ctx.jj();
 
     if dry_run {
         println!("Would push to {}:", remote);

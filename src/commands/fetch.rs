@@ -1,14 +1,14 @@
+use crate::context::CommandContext;
 use crate::error::Result;
 use crate::jj::JjClient;
 use crate::storage::MetadataStore;
 
-pub fn execute(remote: &str) -> Result<()> {
-    let jj_client = JjClient::new()?;
+pub fn execute(ctx: &CommandContext, remote: &str) -> Result<()> {
+    let jj_client = ctx.jj();
 
     // Snapshot counts before fetch
-    let store_before = MetadataStore::new(jj_client.clone())?;
-    let solutions_before = store_before.list_solutions().unwrap_or_default().len();
-    let critiques_before = store_before.list_critiques().unwrap_or_default().len();
+    let solutions_before = ctx.store.list_solutions().unwrap_or_default().len();
+    let critiques_before = ctx.store.list_critiques().unwrap_or_default().len();
 
     // 1. Fetch from remote
     println!("Fetching from {}...", remote);
@@ -24,8 +24,8 @@ pub fn execute(remote: &str) -> Result<()> {
         }
     }
 
-    // 3. Show summary
-    let store_after = MetadataStore::new(jj_client)?;
+    // 3. Show summary - need fresh store to see changes after fetch
+    let store_after = MetadataStore::new(jj_client.clone())?;
     let solutions_after = store_after.list_solutions().unwrap_or_default().len();
     let critiques_after = store_after.list_critiques().unwrap_or_default().len();
 

@@ -1,10 +1,9 @@
 use crate::cli::CritiqueAction;
+use crate::context::CommandContext;
 use crate::error::Result;
-use crate::jj::JjClient;
 use crate::models::{Critique, CritiqueSeverity, CritiqueStatus, SolutionStatus};
-use crate::storage::MetadataStore;
 
-pub fn execute(action: CritiqueAction) -> Result<()> {
+pub fn execute(ctx: &CommandContext, action: CritiqueAction) -> Result<()> {
     match action {
         CritiqueAction::New {
             solution_id,
@@ -13,28 +12,29 @@ pub fn execute(action: CritiqueAction) -> Result<()> {
             file,
             line,
             reviewer,
-        } => new_critique(solution_id, title, severity, file, line, reviewer),
+        } => new_critique(ctx, solution_id, title, severity, file, line, reviewer),
         CritiqueAction::List {
             solution,
             status,
             reviewer,
             json,
-        } => list_critiques(solution, status, reviewer, json),
-        CritiqueAction::Show { critique_id, json } => show_critique(critique_id, json),
+        } => list_critiques(ctx, solution, status, reviewer, json),
+        CritiqueAction::Show { critique_id, json } => show_critique(ctx, critique_id, json),
         CritiqueAction::Edit {
             critique_id,
             title,
             severity,
             status,
-        } => edit_critique(critique_id, title, severity, status),
-        CritiqueAction::Address { critique_id } => address_critique(critique_id),
-        CritiqueAction::Validate { critique_id } => validate_critique(critique_id),
-        CritiqueAction::Dismiss { critique_id } => dismiss_critique(critique_id),
-        CritiqueAction::Reply { critique_id, body } => reply_to_critique(critique_id, body),
+        } => edit_critique(ctx, critique_id, title, severity, status),
+        CritiqueAction::Address { critique_id } => address_critique(ctx, critique_id),
+        CritiqueAction::Validate { critique_id } => validate_critique(ctx, critique_id),
+        CritiqueAction::Dismiss { critique_id } => dismiss_critique(ctx, critique_id),
+        CritiqueAction::Reply { critique_id, body } => reply_to_critique(ctx, critique_id, body),
     }
 }
 
 fn new_critique(
+    ctx: &CommandContext,
     solution_id: String,
     title: String,
     severity_str: String,
@@ -42,8 +42,7 @@ fn new_critique(
     line: Option<usize>,
     reviewer: Option<String>,
 ) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client)?;
+    let store = &ctx.store;
 
     // Parse severity
     let severity: CritiqueSeverity = severity_str.parse().map_err(|e: String| e)?;
@@ -112,13 +111,13 @@ fn new_critique(
 }
 
 fn list_critiques(
+    ctx: &CommandContext,
     solution_filter: Option<String>,
     status_filter: Option<String>,
     reviewer_filter: Option<String>,
     json: bool,
 ) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client)?;
+    let store = &ctx.store;
 
     let mut critiques = store.list_critiques()?;
 
@@ -177,9 +176,8 @@ fn list_critiques(
     Ok(())
 }
 
-fn show_critique(critique_id: String, json: bool) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client)?;
+fn show_critique(ctx: &CommandContext, critique_id: String, json: bool) -> Result<()> {
+    let store = &ctx.store;
 
     let critique = store.load_critique(&critique_id)?;
 
@@ -223,13 +221,13 @@ fn show_critique(critique_id: String, json: bool) -> Result<()> {
 }
 
 fn edit_critique(
+    ctx: &CommandContext,
     critique_id: String,
     title: Option<String>,
     severity: Option<String>,
     status: Option<String>,
 ) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client)?;
+    let store = &ctx.store;
 
     store.with_metadata(&format!("Edit critique {}", critique_id), || {
         let mut critique = store.load_critique(&critique_id)?;
@@ -254,9 +252,8 @@ fn edit_critique(
     })
 }
 
-fn address_critique(critique_id: String) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client)?;
+fn address_critique(ctx: &CommandContext, critique_id: String) -> Result<()> {
+    let store = &ctx.store;
 
     store.with_metadata(&format!("Address critique {}", critique_id), || {
         let mut critique = store.load_critique(&critique_id)?;
@@ -270,9 +267,8 @@ fn address_critique(critique_id: String) -> Result<()> {
     })
 }
 
-fn validate_critique(critique_id: String) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client)?;
+fn validate_critique(ctx: &CommandContext, critique_id: String) -> Result<()> {
+    let store = &ctx.store;
 
     store.with_metadata(&format!("Validate critique {}", critique_id), || {
         let mut critique = store.load_critique(&critique_id)?;
@@ -300,9 +296,8 @@ fn validate_critique(critique_id: String) -> Result<()> {
     })
 }
 
-fn dismiss_critique(critique_id: String) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client)?;
+fn dismiss_critique(ctx: &CommandContext, critique_id: String) -> Result<()> {
+    let store = &ctx.store;
 
     store.with_metadata(&format!("Dismiss critique {}", critique_id), || {
         let mut critique = store.load_critique(&critique_id)?;
@@ -316,9 +311,8 @@ fn dismiss_critique(critique_id: String) -> Result<()> {
     })
 }
 
-fn reply_to_critique(critique_id: String, body: String) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client)?;
+fn reply_to_critique(ctx: &CommandContext, critique_id: String, body: String) -> Result<()> {
+    let store = &ctx.store;
 
     store.with_metadata(&format!("Reply to critique {}", critique_id), || {
         let mut critique = store.load_critique(&critique_id)?;
