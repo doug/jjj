@@ -9,6 +9,11 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineConfig({
   integrations: [starlight({
     title: 'jjj',
+    logo: {
+      src: './public/logo.svg',
+      alt: 'jjj',
+    },
+    favicon: '/favicon.svg',
     description: 'Distributed project management for Jujutsu',
     social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/doug/jjj' }],
     customCss: ['./src/styles/custom.css'],
