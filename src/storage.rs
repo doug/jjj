@@ -5,6 +5,7 @@ use crate::models::{
     Problem, ProblemFrontmatter, ProblemStatus,
     ProjectConfig, Solution, SolutionFrontmatter, SolutionStatus,
 };
+use std::cell::RefCell;
 use std::fs;
 use std::path::PathBuf;
 
@@ -26,6 +27,9 @@ pub struct MetadataStore {
 
     /// JJ client for the metadata workspace
     pub meta_client: JjClient,
+
+    /// Event to append during commit
+    pending_event: RefCell<Option<Event>>,
 }
 
 // =============================================================================
@@ -111,6 +115,7 @@ impl MetadataStore {
             meta_path,
             jj_client,
             meta_client,
+            pending_event: RefCell::new(None),
         })
     }
 
@@ -752,6 +757,11 @@ impl MetadataStore {
     // Event Operations
     // =========================================================================
 
+    /// Set an event to be logged during the next commit
+    pub fn set_pending_event(&self, event: Event) {
+        *self.pending_event.borrow_mut() = Some(event);
+    }
+
     /// Append an event to the event log
     pub fn append_event(&self, event: &Event) -> Result<()> {
         self.ensure_meta_checkout()?;
@@ -875,8 +885,18 @@ impl MetadataStore {
 
     /// Commit changes to the metadata
     fn commit_changes(&self, message: &str) -> Result<()> {
+        // Handle pending event
+        let event_suffix = if let Some(event) = self.pending_event.borrow_mut().take() {
+            self.append_event(&event)?;
+            format!("\n\n{}", event.to_commit_suffix()?)
+        } else {
+            String::new()
+        };
+
+        let full_message = format!("{}{}", message, event_suffix);
+
         // Create a new change in the metadata workspace
-        self.meta_client.new_empty_change(message)?;
+        self.meta_client.new_empty_change(&full_message)?;
 
         // Update the bookmark to point to the new change
         let meta_change = self.meta_client.current_change_id()?;
