@@ -1,4 +1,5 @@
 use crate::context::CommandContext;
+use crate::db::{self, Database};
 use crate::error::Result;
 use crate::models::{CritiqueStatus, ProblemStatus};
 use crate::storage::MetadataStore;
@@ -29,6 +30,29 @@ pub fn execute(
     let store = &ctx.store;
     let jj_client = ctx.jj();
 
+    // Sync SQLite to markdown and validate before pushing
+    let db_path = jj_client.repo_root().join(".jj").join("jjj.db");
+    if db_path.exists() {
+        let db = Database::open(&db_path)?;
+
+        println!("Syncing database to files...");
+        db::dump_to_markdown(&db, store)?;
+
+        println!("Validating metadata...");
+        let errors = db::validate(&db)?;
+        if !errors.is_empty() {
+            println!("Validation errors:");
+            for error in &errors {
+                println!("  \u{2717} {}", error);
+            }
+            return Err("Push aborted. Fix errors and retry.".into());
+        }
+        println!("  \u{2713} All checks passed");
+
+        // Commit the changes from dump_to_markdown
+        store.commit_changes("jjj: sync database before push")?;
+    }
+
     if dry_run {
         println!("Would push to {}:", remote);
         for b in &bookmarks {
@@ -44,7 +68,15 @@ pub fn execute(
         let result = jj_client.execute(&["git", "push", "-b", bookmark, "--remote", remote]);
         if result.is_err() {
             // Retry with --allow-new for new bookmarks
-            jj_client.execute(&["git", "push", "-b", bookmark, "--remote", remote, "--allow-new"])?;
+            jj_client.execute(&[
+                "git",
+                "push",
+                "-b",
+                bookmark,
+                "--remote",
+                remote,
+                "--allow-new",
+            ])?;
         }
     }
 
@@ -53,10 +85,24 @@ pub fn execute(
     let result = jj_client.execute(&["git", "push", "-b", "jjj/meta", "--remote", remote]);
     if result.is_err() {
         // Retry with --allow-new for new bookmarks
-        jj_client.execute(&["git", "push", "-b", "jjj/meta", "--remote", remote, "--allow-new"])?;
+        jj_client.execute(&[
+            "git",
+            "push",
+            "-b",
+            "jjj/meta",
+            "--remote",
+            remote,
+            "--allow-new",
+        ])?;
     }
 
     println!("Pushed to {}.", remote);
+
+    // Clear dirty flag after successful push
+    if db_path.exists() {
+        let db = Database::open(&db_path)?;
+        db::set_dirty(&db, false)?;
+    }
 
     // 3. Smart prompts (unless --no-prompt)
     if !no_prompt {
@@ -71,9 +117,10 @@ fn check_and_prompt_accept_solve(store: &MetadataStore) -> Result<()> {
     let solutions = store.list_solutions()?;
     let user = store.jj_client.user_name().unwrap_or_default();
 
-    for solution in solutions.iter().filter(|s| {
-        s.is_active() && s.assignee.as_deref() == Some(&user)
-    }) {
+    for solution in solutions
+        .iter()
+        .filter(|s| s.is_active() && s.assignee.as_deref() == Some(&user))
+    {
         // Check if all critiques are resolved
         let critiques = store.get_critiques_for_solution(&solution.id)?;
         let open_critiques: Vec<_> = critiques
@@ -94,11 +141,17 @@ fn check_and_prompt_accept_solve(store: &MetadataStore) -> Result<()> {
 
                 // Check if problem can be solved
                 let problem = store.load_problem(&solution.problem_id)?;
-                if problem.status == ProblemStatus::Open || problem.status == ProblemStatus::InProgress {
+                if problem.status == ProblemStatus::Open
+                    || problem.status == ProblemStatus::InProgress
+                {
                     // Check for other active solutions
                     let other_active: Vec<_> = solutions
                         .iter()
-                        .filter(|s| s.problem_id == solution.problem_id && s.is_active() && s.id != solution.id)
+                        .filter(|s| {
+                            s.problem_id == solution.problem_id
+                                && s.is_active()
+                                && s.id != solution.id
+                        })
                         .collect();
 
                     if other_active.is_empty()
