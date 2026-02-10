@@ -1,7 +1,7 @@
 use crate::error::{JjjError, Result};
 use crate::jj::JjClient;
 use crate::models::{
-    Critique, CritiqueFrontmatter, CritiqueStatus, Milestone, MilestoneFrontmatter,
+    Critique, CritiqueFrontmatter, CritiqueStatus, Event, Milestone, MilestoneFrontmatter,
     Problem, ProblemFrontmatter, ProblemStatus,
     ProjectConfig, Solution, SolutionFrontmatter, SolutionStatus,
 };
@@ -10,6 +10,7 @@ use std::path::PathBuf;
 
 const META_BOOKMARK: &str = "jjj/meta";
 const CONFIG_FILE: &str = "config.toml";
+const EVENTS_FILE: &str = "events.jsonl";
 const PROBLEMS_DIR: &str = "problems";
 const SOLUTIONS_DIR: &str = "solutions";
 const CRITIQUES_DIR: &str = "critiques";
@@ -745,6 +746,56 @@ impl MetadataStore {
             .unwrap_or(0);
 
         Ok(format!("m{}", max_id + 1))
+    }
+
+    // =========================================================================
+    // Event Operations
+    // =========================================================================
+
+    /// Append an event to the event log
+    pub fn append_event(&self, event: &Event) -> Result<()> {
+        self.ensure_meta_checkout()?;
+
+        let events_path = self.meta_path.join(EVENTS_FILE);
+
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&events_path)?;
+
+        use std::io::Write;
+        writeln!(file, "{}", event.to_json_line()?)?;
+
+        Ok(())
+    }
+
+    /// Load all events from the event log
+    pub fn list_events(&self) -> Result<Vec<Event>> {
+        self.ensure_meta_checkout()?;
+
+        let events_path = self.meta_path.join(EVENTS_FILE);
+
+        if !events_path.exists() {
+            return Ok(Vec::new());
+        }
+
+        let content = std::fs::read_to_string(&events_path)?;
+        let mut events = Vec::new();
+
+        for line in content.lines() {
+            if line.trim().is_empty() {
+                continue;
+            }
+            let event: Event = serde_json::from_str(line)?;
+            events.push(event);
+        }
+
+        Ok(events)
+    }
+
+    /// Get the current user name from jj config
+    pub fn get_current_user(&self) -> Result<String> {
+        self.jj_client.user_name()
     }
 
     // =========================================================================
