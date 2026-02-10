@@ -6,6 +6,7 @@ pub mod commands;
 pub mod context;
 pub mod db;
 pub mod error;
+pub mod id;
 pub mod jj;
 pub mod models;
 pub mod storage;
