@@ -6,6 +6,7 @@ pub mod init;
 pub mod milestone;
 pub mod problem;
 pub mod push;
+pub mod search;
 pub mod solution;
 pub mod status;
 pub mod timeline;
@@ -42,13 +43,21 @@ fn execute_with_context(ctx: &CommandContext, command: Commands) -> Result<()> {
         Commands::Submit { force } => workflow::submit(ctx, force),
 
         // Status (replaces dashboard + next)
-        Commands::Status { all, mine, limit, json } => status::execute(ctx, all, mine, limit, json),
+        Commands::Status {
+            all,
+            mine,
+            limit,
+            json,
+        } => status::execute(ctx, all, mine, limit, json),
 
         // Sync commands
         Commands::Fetch { remote } => fetch::execute(ctx, &remote),
-        Commands::Push { bookmarks, remote, no_prompt, dry_run } => {
-            push::execute(ctx, bookmarks, &remote, no_prompt, dry_run)
-        }
+        Commands::Push {
+            bookmarks,
+            remote,
+            no_prompt,
+            dry_run,
+        } => push::execute(ctx, bookmarks, &remote, no_prompt, dry_run),
 
         // These are handled by execute() before calling this function
         Commands::Init | Commands::Ui | Commands::Completion { .. } => {
@@ -56,10 +65,26 @@ fn execute_with_context(ctx: &CommandContext, command: Commands) -> Result<()> {
         }
 
         // Event log
-        Commands::Events { action, from, to, problem, solution, event_type, search, json, limit } =>
-            events::execute(action, from, to, problem, solution, event_type, search, json, limit),
+        Commands::Events {
+            action,
+            from,
+            to,
+            problem,
+            solution,
+            event_type,
+            search,
+            json,
+            limit,
+        } => events::execute(
+            action, from, to, problem, solution, event_type, search, json, limit,
+        ),
 
         // Timeline
         Commands::Timeline { problem_id, json } => timeline::execute(problem_id, json),
+
+        // Search
+        Commands::Search { query, r#type, json } => {
+            search::execute(ctx, &query, r#type.as_deref(), json)
+        }
     }
 }

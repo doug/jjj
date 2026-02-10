@@ -72,6 +72,20 @@ pub enum Commands {
         json: bool,
     },
 
+    /// Search across all entities
+    Search {
+        /// Search query
+        query: String,
+
+        /// Filter by entity type (problem, solution, critique, milestone, event)
+        #[arg(long, short = 't')]
+        r#type: Option<String>,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
     /// Fetch code and metadata from remote
     Fetch {
         /// Remote to fetch from (default: origin)
@@ -602,4 +616,3 @@ pub enum MilestoneAction {
         to: Option<String>,
     },
 }
-
