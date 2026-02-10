@@ -1,0 +1,37 @@
+<svg viewBox="0 0 600 200" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#a78bfa"/>
+    </marker>
+    <marker id="arrowhead-dashed" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#a78bfa"/>
+    </marker>
+  </defs>
+
+  <!-- Problem Box -->
+  <rect x="30" y="60" width="140" height="80" rx="8" ry="8" fill="#1a1a24" stroke="#a78bfa" stroke-width="2"/>
+  <text x="100" y="95" text-anchor="middle" fill="#e8e6f0" font-family="system-ui, sans-serif" font-size="16" font-weight="600">PROBLEM</text>
+  <text x="100" y="120" text-anchor="middle" fill="#9690b0" font-family="system-ui, sans-serif" font-size="11">What to solve</text>
+
+  <!-- Arrow: Problem to Solution -->
+  <line x1="170" y1="100" x2="215" y2="100" stroke="#a78bfa" stroke-width="2" marker-end="url(#arrowhead)"/>
+
+  <!-- Solution Box -->
+  <rect x="230" y="60" width="140" height="80" rx="8" ry="8" fill="#1a1a24" stroke="#a78bfa" stroke-width="2"/>
+  <text x="300" y="95" text-anchor="middle" fill="#e8e6f0" font-family="system-ui, sans-serif" font-size="16" font-weight="600">SOLUTION</text>
+  <text x="300" y="120" text-anchor="middle" fill="#9690b0" font-family="system-ui, sans-serif" font-size="11">Conjecture to try</text>
+
+  <!-- Arrow: Solution to Critique -->
+  <line x1="370" y1="100" x2="415" y2="100" stroke="#a78bfa" stroke-width="2" marker-end="url(#arrowhead)"/>
+
+  <!-- Critique Box -->
+  <rect x="430" y="60" width="140" height="80" rx="8" ry="8" fill="#1a1a24" stroke="#a78bfa" stroke-width="2"/>
+  <text x="500" y="95" text-anchor="middle" fill="#e8e6f0" font-family="system-ui, sans-serif" font-size="16" font-weight="600">CRITIQUE</text>
+  <text x="500" y="120" text-anchor="middle" fill="#9690b0" font-family="system-ui, sans-serif" font-size="11">Error elimination</text>
+
+  <!-- Dashed curved arrow: Critique back to Solution -->
+  <path d="M 500 145 Q 500 175, 400 175 Q 300 175, 300 145" fill="none" stroke="#a78bfa" stroke-width="2" stroke-dasharray="6,4" marker-end="url(#arrowhead-dashed)"/>
+
+  <!-- Refine label -->
+  <text x="400" y="192" text-anchor="middle" fill="#9690b0" font-family="system-ui, sans-serif" font-size="11" font-style="italic">refine</text>
+</svg>
