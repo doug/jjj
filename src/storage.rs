@@ -119,6 +119,11 @@ impl MetadataStore {
         })
     }
 
+    /// Get the path to the metadata directory
+    pub fn meta_path(&self) -> &std::path::Path {
+        &self.meta_path
+    }
+
     /// Initialize the metadata store (create jjj/meta bookmark)
     pub fn init(&self) -> Result<()> {
         // Check if already initialized

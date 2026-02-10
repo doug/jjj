@@ -77,6 +77,9 @@ pub enum JjjError {
     #[error("TUI error: {0}")]
     Tui(String),
 
+    #[error("Database error: {0}")]
+    Database(#[from] rusqlite::Error),
+
     #[error("{0}")]
     Other(String),
 }
