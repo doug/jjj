@@ -1,4 +1,17 @@
 [book]
-authors = ["Doug"]
+title = "jjj - Jujutsu Project Manager"
+authors = ["jjj Contributors"]
+description = "Distributed project management and code review for Jujutsu"
 language = "en"
 src = "docs"
+
+[output.html]
+default-theme = "coal"
+preferred-dark-theme = "coal"
+git-repository-url = "https://github.com/doug/jjj"
+edit-url-template = "https://github.com/doug/jjj/edit/main/{path}"
+additional-css = ["theme/css/custom.css"]
+
+[output.html.playground]
+editable = false
+copyable = true
