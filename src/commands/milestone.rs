@@ -1,5 +1,6 @@
 use crate::cli::MilestoneAction;
 use crate::context::CommandContext;
+use crate::display::truncated_prefixes;
 use crate::error::Result;
 use crate::models::{Milestone, MilestoneStatus, ProblemStatus, SolutionStatus};
 use chrono::NaiveDate;
@@ -104,10 +105,14 @@ fn list_milestones(ctx: &CommandContext, json: bool) -> Result<()> {
         return Ok(());
     }
 
-    println!("{:<8} {:<12} {:<12} {:<6} TITLE", "ID", "STATUS", "TARGET", "PROBS");
-    println!("{}", "-".repeat(60));
+    // Calculate truncated prefixes
+    let uuids: Vec<&str> = milestones.iter().map(|m| m.id.as_str()).collect();
+    let prefixes = truncated_prefixes(&uuids);
 
-    for milestone in &milestones {
+    println!("{:<10} {:<12} {:<12} {:<6} TITLE", "ID", "STATUS", "TARGET", "PROBS");
+    println!("{}", "-".repeat(70));
+
+    for (milestone, (_, prefix)) in milestones.iter().zip(prefixes.iter()) {
         let date_str = milestone
             .target_date
             .map(|d| d.format("%Y-%m-%d").to_string())
@@ -121,8 +126,8 @@ fn list_milestones(ctx: &CommandContext, json: bool) -> Result<()> {
         };
 
         println!(
-            "{:<8} {}{:<11} {:<12} {:<6} {}",
-            milestone.id,
+            "{:<10} {}{:<11} {:<12} {:<6} {}",
+            prefix,
             status_icon,
             milestone.status,
             date_str,

@@ -1,6 +1,7 @@
 use crate::cli::ProblemAction;
 use crate::context::CommandContext;
 use crate::db::{search, Database};
+use crate::display::truncated_prefixes;
 use crate::error::Result;
 use crate::models::{Event, EventType, Priority, Problem, ProblemStatus};
 use crate::storage::MetadataStore;
@@ -156,10 +157,14 @@ fn list_problems(
             return Ok(());
         }
 
-        println!("{:<8} {:<12} TITLE", "ID", "STATUS");
+        // Calculate truncated prefixes
+        let uuids: Vec<&str> = problems.iter().map(|p| p.id.as_str()).collect();
+        let prefixes = truncated_prefixes(&uuids);
+
+        println!("{:<10} {:<12} TITLE", "ID", "STATUS");
         println!("{}", "-".repeat(60));
 
-        for problem in &problems {
+        for (problem, (_, prefix)) in problems.iter().zip(prefixes.iter()) {
             let status_icon = match problem.status {
                 ProblemStatus::Open => " ",
                 ProblemStatus::InProgress => ">",
@@ -167,8 +172,8 @@ fn list_problems(
                 ProblemStatus::Dissolved => "~",
             };
             println!(
-                "{:<8} {}{:<11} {}",
-                problem.id, status_icon, problem.status, problem.title
+                "{:<10} {}{:<11} {}",
+                prefix, status_icon, problem.status, problem.title
             );
         }
     }

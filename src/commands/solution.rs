@@ -1,6 +1,7 @@
 use crate::cli::SolutionAction;
 use crate::context::CommandContext;
 use crate::db::{search, Database};
+use crate::display::truncated_prefixes;
 use crate::error::Result;
 use crate::models::{
     Critique, CritiqueSeverity, CritiqueStatus, Event, EventExtra, EventType, ProblemStatus,
@@ -250,10 +251,22 @@ fn list_solutions(
         return Ok(());
     }
 
-    println!("{:<8} {:<12} {:<10} TITLE", "ID", "STATUS", "PROBLEM",);
+    // Calculate truncated prefixes for solutions
+    let solution_uuids: Vec<&str> = solutions.iter().map(|s| s.id.as_str()).collect();
+    let solution_prefixes = truncated_prefixes(&solution_uuids);
+
+    // Calculate truncated prefixes for problems (for display)
+    let problem_uuids: Vec<&str> = solutions.iter().map(|s| s.problem_id.as_str()).collect();
+    let problem_prefixes = truncated_prefixes(&problem_uuids);
+
+    println!("{:<10} {:<12} {:<10} TITLE", "ID", "STATUS", "PROBLEM");
     println!("{}", "-".repeat(70));
 
-    for solution in &solutions {
+    for ((solution, (_, sol_prefix)), (_, prob_prefix)) in solutions
+        .iter()
+        .zip(solution_prefixes.iter())
+        .zip(problem_prefixes.iter())
+    {
         let status_icon = match solution.status {
             SolutionStatus::Proposed => " ",
             SolutionStatus::Testing => ">",
@@ -262,8 +275,8 @@ fn list_solutions(
         };
 
         println!(
-            "{:<8} {}{:<11} {:<10} {}",
-            solution.id, status_icon, solution.status, solution.problem_id, solution.title
+            "{:<10} {}{:<11} {:<10} {}",
+            sol_prefix, status_icon, solution.status, prob_prefix, solution.title
         );
     }
 
