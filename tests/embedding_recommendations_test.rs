@@ -21,10 +21,12 @@ fn test_find_similar_filters_low_similarity() {
     upsert_problem(conn, &p3).expect("insert p3");
 
     // p1 and p2 have similar embeddings, p3 is different
-    embeddings::upsert_embedding(conn, "problem", "p1", "test", &[1.0, 0.0, 0.0]).expect("embed p1");
+    embeddings::upsert_embedding(conn, "problem", "p1", "test", &[1.0, 0.0, 0.0])
+        .expect("embed p1");
     embeddings::upsert_embedding(conn, "problem", "p2", "test", &[0.95, 0.05, 0.0])
         .expect("embed p2");
-    embeddings::upsert_embedding(conn, "problem", "p3", "test", &[0.0, 0.0, 1.0]).expect("embed p3");
+    embeddings::upsert_embedding(conn, "problem", "p3", "test", &[0.0, 0.0, 1.0])
+        .expect("embed p3");
 
     // Find similar to p1
     let results = find_similar(conn, "problem", "p1", None, 10).expect("search");
@@ -34,7 +36,10 @@ fn test_find_similar_filters_low_similarity() {
 
     // p2 should be first (most similar)
     assert_eq!(results[0].entity_id, "p2");
-    assert!(results[0].similarity > 0.9, "p2 should have high similarity");
+    assert!(
+        results[0].similarity > 0.9,
+        "p2 should have high similarity"
+    );
 
     // p3 should be last (dissimilar)
     assert_eq!(results[1].entity_id, "p3");
@@ -82,8 +87,8 @@ fn test_similarity_search_respects_entity_type_filter() {
         .expect("embed solution");
 
     // Search only for problems - should not return the solution
-    let results = similarity_search(conn, &[1.0, 0.0, 0.0], Some("problem"), None, 10)
-        .expect("search");
+    let results =
+        similarity_search(conn, &[1.0, 0.0, 0.0], Some("problem"), None, 10).expect("search");
 
     // Should only find problems
     assert!(results.iter().all(|r| r.entity_type == "problem"));

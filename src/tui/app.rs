@@ -391,10 +391,8 @@ impl App {
         // Try to load related items from database
         if let Some(ref db) = self.db {
             if let Ok(results) = find_similar(db.conn(), &entity_type, &entity_id, None, 5) {
-                self.ui.related_items = results
-                    .into_iter()
-                    .filter(|r| r.similarity > 0.5)
-                    .collect();
+                self.ui.related_items =
+                    results.into_iter().filter(|r| r.similarity > 0.5).collect();
             }
         }
     }

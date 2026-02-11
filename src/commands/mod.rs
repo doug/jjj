@@ -97,7 +97,11 @@ fn execute_with_context(ctx: &CommandContext, command: Commands) -> Result<()> {
     }
 }
 
-pub(crate) fn show_related_items(ctx: &CommandContext, entity_type: &str, entity_id: &str) -> Result<()> {
+pub(crate) fn show_related_items(
+    ctx: &CommandContext,
+    entity_type: &str,
+    entity_id: &str,
+) -> Result<()> {
     let jj_client = ctx.jj();
     let repo_root = jj_client.repo_root();
     let db_path = repo_root.join(".jj").join("jjj.db");
@@ -110,8 +114,8 @@ pub(crate) fn show_related_items(ctx: &CommandContext, entity_type: &str, entity
     let conn = db.conn();
 
     // Check if this entity has an embedding
-    let has_embedding = crate::db::embeddings::load_embedding(conn, entity_type, entity_id)?
-        .is_some();
+    let has_embedding =
+        crate::db::embeddings::load_embedding(conn, entity_type, entity_id)?.is_some();
 
     if !has_embedding {
         return Ok(());

@@ -1,4 +1,5 @@
 use crate::cli::ProblemAction;
+use crate::commands::show_related_items;
 use crate::context::CommandContext;
 use crate::db::{search, Database};
 use crate::display::truncated_prefixes;
@@ -7,7 +8,6 @@ use crate::error::Result;
 use crate::local_config::LocalConfig;
 use crate::models::{Event, EventType, Priority, Problem, ProblemStatus};
 use crate::storage::MetadataStore;
-use crate::commands::show_related_items;
 
 pub fn execute(ctx: &CommandContext, action: ProblemAction) -> Result<()> {
     match action {
@@ -488,7 +488,10 @@ fn assign_problem(
     )
 }
 
-fn check_for_duplicates(ctx: &CommandContext, title: &str) -> Result<Option<Vec<search::SimilarityResult>>> {
+fn check_for_duplicates(
+    ctx: &CommandContext,
+    title: &str,
+) -> Result<Option<Vec<search::SimilarityResult>>> {
     let jj_client = ctx.jj();
     let repo_root = jj_client.repo_root();
     let db_path = repo_root.join(".jj").join("jjj.db");
@@ -519,7 +522,10 @@ fn check_for_duplicates(ctx: &CommandContext, title: &str) -> Result<Option<Vec<
     // Find similar problems
     let threshold = local_config.duplicate_threshold();
     let results = search::similarity_search(conn, &embedding, Some("problem"), None, 5)?;
-    let similar: Vec<_> = results.into_iter().filter(|r| r.similarity >= threshold).collect();
+    let similar: Vec<_> = results
+        .into_iter()
+        .filter(|r| r.similarity >= threshold)
+        .collect();
 
     if similar.is_empty() {
         Ok(None)
@@ -536,9 +542,7 @@ fn prompt_create_anyway(similar: &[search::SimilarityResult]) -> Result<bool> {
         let short_id = &result.entity_id[..6.min(result.entity_id.len())];
         println!(
             "  p/{}  [{:.2}]  \"{}\"",
-            short_id,
-            result.similarity,
-            result.title
+            short_id, result.similarity, result.title
         );
     }
     println!();

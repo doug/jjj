@@ -208,8 +208,8 @@ fn draw_detail(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Min(5),     // Detail content
-                Constraint::Length(7),  // Related panel (5 items + 2 for border)
+                Constraint::Min(5),    // Detail content
+                Constraint::Length(7), // Related panel (5 items + 2 for border)
             ])
             .split(area);
         (chunks[0], Some(chunks[1]))
@@ -256,7 +256,10 @@ fn draw_related_panel(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
             let short_id = &r.entity_id[..6.min(r.entity_id.len())];
             let type_char = r.entity_type.chars().next().unwrap_or('?');
             ListItem::new(Line::from(Span::styled(
-                format!("{}/{}  [{:.2}]  {}", type_char, short_id, r.similarity, r.title),
+                format!(
+                    "{}/{}  [{:.2}]  {}",
+                    type_char, short_id, r.similarity, r.title
+                ),
                 style,
             )))
         })
