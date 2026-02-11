@@ -90,6 +90,12 @@ pub enum Commands {
         json: bool,
     },
 
+    /// Database management commands
+    Db {
+        #[command(subcommand)]
+        action: DbAction,
+    },
+
     /// Fetch code and metadata from remote
     Fetch {
         /// Remote to fetch from (default: origin)
@@ -171,6 +177,19 @@ pub enum Shell {
     Fish,
     PowerShell,
     Elvish,
+}
+
+// =============================================================================
+// Db Commands
+// =============================================================================
+
+#[derive(Subcommand)]
+pub enum DbAction {
+    /// Show database status
+    Status,
+
+    /// Rebuild database from markdown (includes FTS and embeddings)
+    Rebuild,
 }
 
 // =============================================================================
