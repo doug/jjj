@@ -42,7 +42,12 @@ mod tests {
         let id1 = generate_id();
         std::thread::sleep(std::time::Duration::from_millis(1));
         let id2 = generate_id();
-        assert!(id1 < id2, "UUIDs should sort chronologically: {} vs {}", id1, id2);
+        assert!(
+            id1 < id2,
+            "UUIDs should sort chronologically: {} vs {}",
+            id1,
+            id2
+        );
     }
 
     #[test]

@@ -19,7 +19,7 @@ jjj problem new <title> [OPTIONS]
 ```bash,test
 jjj init
 jjj problem new "App crashes on startup" --priority high
-jjj problem new "Null pointer in auth module" --parent p1
+jjj problem new "Null pointer in auth module" --parent "App crashes"
 jjj problem new "Improve test coverage"
 ```
 
@@ -58,8 +58,8 @@ jjj problem show <problem_id> [OPTIONS]
 | `--json` | bool | Output in JSON format |
 
 ```bash,test
-jjj problem show p1
-jjj problem show p1 --json
+jjj problem show "App crashes"
+jjj problem show "App crashes" --json
 ```
 
 ## `jjj problem edit`
@@ -78,7 +78,7 @@ jjj problem edit <problem_id> [OPTIONS]
 | `--parent` | string | Set parent problem |
 
 ```bash,test
-jjj problem edit p1 --title "App crashes on cold startup" --priority critical
+jjj problem edit "App crashes" --title "App crashes on cold startup" --priority critical
 ```
 
 ## `jjj problem tree`
@@ -93,7 +93,7 @@ If no problem ID is given, shows all root problems and their children.
 
 ```bash,test
 jjj problem tree
-jjj problem tree p1
+jjj problem tree "App crashes"
 ```
 
 ## `jjj problem solve`

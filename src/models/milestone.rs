@@ -142,12 +142,16 @@ impl Milestone {
 
     /// Get days until target date (negative if overdue)
     pub fn days_until_target(&self) -> Option<i64> {
-        self.target_date.map(|target| (target - Utc::now()).num_days())
+        self.target_date
+            .map(|target| (target - Utc::now()).num_days())
     }
 
     /// Check if milestone is active
     pub fn is_active(&self) -> bool {
-        matches!(self.status, MilestoneStatus::Planning | MilestoneStatus::Active)
+        matches!(
+            self.status,
+            MilestoneStatus::Planning | MilestoneStatus::Active
+        )
     }
 }
 
@@ -243,9 +247,21 @@ mod tests {
 
     #[test]
     fn test_status_parsing() {
-        assert_eq!("planning".parse::<MilestoneStatus>().unwrap(), MilestoneStatus::Planning);
-        assert_eq!("active".parse::<MilestoneStatus>().unwrap(), MilestoneStatus::Active);
-        assert_eq!("completed".parse::<MilestoneStatus>().unwrap(), MilestoneStatus::Completed);
-        assert_eq!("cancelled".parse::<MilestoneStatus>().unwrap(), MilestoneStatus::Cancelled);
+        assert_eq!(
+            "planning".parse::<MilestoneStatus>().unwrap(),
+            MilestoneStatus::Planning
+        );
+        assert_eq!(
+            "active".parse::<MilestoneStatus>().unwrap(),
+            MilestoneStatus::Active
+        );
+        assert_eq!(
+            "completed".parse::<MilestoneStatus>().unwrap(),
+            MilestoneStatus::Completed
+        );
+        assert_eq!(
+            "cancelled".parse::<MilestoneStatus>().unwrap(),
+            MilestoneStatus::Cancelled
+        );
     }
 }

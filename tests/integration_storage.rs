@@ -7,10 +7,7 @@ use tempfile::TempDir;
 
 /// Helper to check if jj is installed
 fn jj_available() -> bool {
-    Command::new("jj")
-        .arg("--version")
-        .output()
-        .is_ok()
+    Command::new("jj").arg("--version").output().is_ok()
 }
 
 /// Helper to create a test jj repository

@@ -10,8 +10,8 @@ pub mod error;
 pub mod id;
 pub mod jj;
 pub mod models;
-pub mod resolve;
 pub mod picker;
+pub mod resolve;
 pub mod storage;
 pub mod tui;
 pub mod utils;
@@ -19,7 +19,6 @@ pub mod utils;
 // Re-export commonly used types
 pub use error::{JjjError, Result};
 pub use models::{
-    Critique, CritiqueSeverity, CritiqueStatus, Milestone,
-    MilestoneStatus, Problem, ProblemStatus, ProjectConfig,
-    Solution, SolutionStatus,
+    Critique, CritiqueSeverity, CritiqueStatus, Milestone, MilestoneStatus, Problem, ProblemStatus,
+    ProjectConfig, Solution, SolutionStatus,
 };

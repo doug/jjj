@@ -161,12 +161,18 @@ impl Solution {
 
     /// Check if solution is active (can be worked on)
     pub fn is_active(&self) -> bool {
-        matches!(self.status, SolutionStatus::Proposed | SolutionStatus::Testing)
+        matches!(
+            self.status,
+            SolutionStatus::Proposed | SolutionStatus::Testing
+        )
     }
 
     /// Check if solution is finalized (accepted or refuted)
     pub fn is_finalized(&self) -> bool {
-        matches!(self.status, SolutionStatus::Accepted | SolutionStatus::Refuted)
+        matches!(
+            self.status,
+            SolutionStatus::Accepted | SolutionStatus::Refuted
+        )
     }
 
     /// Check if solution is in proposed status
@@ -264,11 +270,7 @@ mod tests {
 
     #[test]
     fn test_status_transitions() {
-        let mut solution = Solution::new(
-            "S-1".to_string(),
-            "Test".to_string(),
-            "P-1".to_string(),
-        );
+        let mut solution = Solution::new("S-1".to_string(), "Test".to_string(), "P-1".to_string());
 
         assert_eq!(solution.status, SolutionStatus::Proposed);
         assert!(solution.is_active());
@@ -284,11 +286,7 @@ mod tests {
 
     #[test]
     fn test_refutation() {
-        let mut solution = Solution::new(
-            "S-1".to_string(),
-            "Test".to_string(),
-            "P-1".to_string(),
-        );
+        let mut solution = Solution::new("S-1".to_string(), "Test".to_string(), "P-1".to_string());
 
         solution.start_testing();
         solution.refute();
@@ -299,11 +297,7 @@ mod tests {
 
     #[test]
     fn test_attach_change() {
-        let mut solution = Solution::new(
-            "S-1".to_string(),
-            "Test".to_string(),
-            "P-1".to_string(),
-        );
+        let mut solution = Solution::new("S-1".to_string(), "Test".to_string(), "P-1".to_string());
 
         solution.attach_change("kpqxywon".to_string());
         solution.attach_change("zmxptlnw".to_string());
@@ -314,11 +308,7 @@ mod tests {
 
     #[test]
     fn test_add_critique() {
-        let mut solution = Solution::new(
-            "S-1".to_string(),
-            "Test".to_string(),
-            "P-1".to_string(),
-        );
+        let mut solution = Solution::new("S-1".to_string(), "Test".to_string(), "P-1".to_string());
 
         solution.add_critique("CQ-1".to_string());
         solution.add_critique("CQ-2".to_string());
@@ -329,10 +319,22 @@ mod tests {
 
     #[test]
     fn test_status_parsing() {
-        assert_eq!("proposed".parse::<SolutionStatus>().unwrap(), SolutionStatus::Proposed);
-        assert_eq!("testing".parse::<SolutionStatus>().unwrap(), SolutionStatus::Testing);
-        assert_eq!("refuted".parse::<SolutionStatus>().unwrap(), SolutionStatus::Refuted);
-        assert_eq!("accepted".parse::<SolutionStatus>().unwrap(), SolutionStatus::Accepted);
+        assert_eq!(
+            "proposed".parse::<SolutionStatus>().unwrap(),
+            SolutionStatus::Proposed
+        );
+        assert_eq!(
+            "testing".parse::<SolutionStatus>().unwrap(),
+            SolutionStatus::Testing
+        );
+        assert_eq!(
+            "refuted".parse::<SolutionStatus>().unwrap(),
+            SolutionStatus::Refuted
+        );
+        assert_eq!(
+            "accepted".parse::<SolutionStatus>().unwrap(),
+            SolutionStatus::Accepted
+        );
     }
 
     #[test]
@@ -348,5 +350,4 @@ mod tests {
         s2.supersedes = Some("S-1".to_string());
         assert_eq!(s2.supersedes.as_deref(), Some("S-1"));
     }
-
 }

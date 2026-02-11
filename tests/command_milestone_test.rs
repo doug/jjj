@@ -26,7 +26,13 @@ fn test_milestone_new_with_date() {
 
     run_jjj_success(
         &dir,
-        &["milestone", "new", "Dated Milestone", "--date", "2025-06-15"],
+        &[
+            "milestone",
+            "new",
+            "Dated Milestone",
+            "--date",
+            "2025-06-15",
+        ],
     );
 
     let stdout = run_jjj_success(&dir, &["milestone", "show", "Dated Milestone"]);
@@ -63,9 +69,21 @@ fn test_milestone_list_shows_all() {
     run_jjj_success(&dir, &["milestone", "new", "Milestone 3"]);
 
     let stdout = run_jjj_success(&dir, &["milestone", "list"]);
-    assert!(stdout.contains("Milestone 1"), "Expected Milestone 1: {}", stdout);
-    assert!(stdout.contains("Milestone 2"), "Expected Milestone 2: {}", stdout);
-    assert!(stdout.contains("Milestone 3"), "Expected Milestone 3: {}", stdout);
+    assert!(
+        stdout.contains("Milestone 1"),
+        "Expected Milestone 1: {}",
+        stdout
+    );
+    assert!(
+        stdout.contains("Milestone 2"),
+        "Expected Milestone 2: {}",
+        stdout
+    );
+    assert!(
+        stdout.contains("Milestone 3"),
+        "Expected Milestone 3: {}",
+        stdout
+    );
 }
 
 #[test]
@@ -78,8 +96,7 @@ fn test_milestone_list_json_output() {
     run_jjj_success(&dir, &["milestone", "new", "JSON Milestone"]);
 
     let stdout = run_jjj_success(&dir, &["milestone", "list", "--json"]);
-    let json: serde_json::Value =
-        serde_json::from_str(&stdout).expect("Failed to parse JSON");
+    let json: serde_json::Value = serde_json::from_str(&stdout).expect("Failed to parse JSON");
     assert!(json.is_array());
     let arr = json.as_array().unwrap();
     assert_eq!(arr.len(), 1);
@@ -97,7 +114,13 @@ fn test_milestone_show_details() {
 
     run_jjj_success(
         &dir,
-        &["milestone", "new", "Detailed Milestone", "--date", "2025-12-31"],
+        &[
+            "milestone",
+            "new",
+            "Detailed Milestone",
+            "--date",
+            "2025-12-31",
+        ],
     );
 
     let stdout = run_jjj_success(&dir, &["milestone", "show", "Detailed Milestone"]);
@@ -106,11 +129,7 @@ fn test_milestone_show_details() {
         "Expected title: {}",
         stdout
     );
-    assert!(
-        stdout.contains("2025-12-31"),
-        "Expected date: {}",
-        stdout
-    );
+    assert!(stdout.contains("2025-12-31"), "Expected date: {}", stdout);
     assert!(
         stdout.contains("Status") || stdout.contains("planning") || stdout.contains("Planning"),
         "Expected status: {}",
@@ -128,8 +147,7 @@ fn test_milestone_show_json_output() {
     run_jjj_success(&dir, &["milestone", "new", "JSON Show"]);
 
     let stdout = run_jjj_success(&dir, &["milestone", "show", "JSON Show", "--json"]);
-    let json: serde_json::Value =
-        serde_json::from_str(&stdout).expect("Failed to parse JSON");
+    let json: serde_json::Value = serde_json::from_str(&stdout).expect("Failed to parse JSON");
     // ID should exist but we don't assert specific value
     assert!(json["id"].is_string(), "Expected id to be a string");
     assert_eq!(json["title"], "JSON Show");
@@ -145,7 +163,15 @@ fn test_milestone_add_problem() {
     run_jjj_success(&dir, &["milestone", "new", "Project Milestone"]);
     run_jjj_success(&dir, &["problem", "new", "Important Problem"]);
 
-    let stdout = run_jjj_success(&dir, &["milestone", "add-problem", "Project Milestone", "Important Problem"]);
+    let stdout = run_jjj_success(
+        &dir,
+        &[
+            "milestone",
+            "add-problem",
+            "Project Milestone",
+            "Important Problem",
+        ],
+    );
     assert!(
         stdout.contains("Added") || stdout.contains("Important Problem"),
         "Expected add confirmation: {}",
@@ -189,7 +215,10 @@ fn test_milestone_remove_problem() {
     run_jjj_success(&dir, &["milestone", "new", "Milestone"]);
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
     run_jjj_success(&dir, &["milestone", "add-problem", "Milestone", "Problem"]);
-    run_jjj_success(&dir, &["milestone", "remove-problem", "Milestone", "Problem"]);
+    run_jjj_success(
+        &dir,
+        &["milestone", "remove-problem", "Milestone", "Problem"],
+    );
 
     let show = run_jjj_success(&dir, &["milestone", "show", "Milestone"]);
     // Problem count should be 0 or problems section empty
@@ -210,7 +239,16 @@ fn test_milestone_edit_title() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["milestone", "new", "Original Title"]);
-    run_jjj_success(&dir, &["milestone", "edit", "Original Title", "--title", "Updated Title"]);
+    run_jjj_success(
+        &dir,
+        &[
+            "milestone",
+            "edit",
+            "Original Title",
+            "--title",
+            "Updated Title",
+        ],
+    );
 
     let stdout = run_jjj_success(&dir, &["milestone", "show", "Updated Title"]);
     assert!(
@@ -228,7 +266,10 @@ fn test_milestone_edit_date() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["milestone", "new", "Milestone"]);
-    run_jjj_success(&dir, &["milestone", "edit", "Milestone", "--date", "2026-01-01"]);
+    run_jjj_success(
+        &dir,
+        &["milestone", "edit", "Milestone", "--date", "2026-01-01"],
+    );
 
     let stdout = run_jjj_success(&dir, &["milestone", "show", "Milestone"]);
     assert!(
@@ -246,7 +287,10 @@ fn test_milestone_edit_status() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["milestone", "new", "Milestone"]);
-    run_jjj_success(&dir, &["milestone", "edit", "Milestone", "--status", "active"]);
+    run_jjj_success(
+        &dir,
+        &["milestone", "edit", "Milestone", "--status", "active"],
+    );
 
     let stdout = run_jjj_success(&dir, &["milestone", "show", "Milestone"]);
     assert!(
@@ -301,8 +345,7 @@ fn test_milestone_roadmap_json() {
     run_jjj_success(&dir, &["milestone", "new", "Milestone 2"]);
 
     let stdout = run_jjj_success(&dir, &["milestone", "roadmap", "--json"]);
-    let json: serde_json::Value =
-        serde_json::from_str(&stdout).expect("Failed to parse JSON");
+    let json: serde_json::Value = serde_json::from_str(&stdout).expect("Failed to parse JSON");
     assert!(json.is_array());
     let arr = json.as_array().unwrap();
     assert_eq!(arr.len(), 2);
@@ -316,7 +359,10 @@ fn test_milestone_assign() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["milestone", "new", "Assignable"]);
-    run_jjj_success(&dir, &["milestone", "assign", "Assignable", "--to", "alice"]);
+    run_jjj_success(
+        &dir,
+        &["milestone", "assign", "Assignable", "--to", "alice"],
+    );
 
     let stdout = run_jjj_success(&dir, &["milestone", "show", "Assignable"]);
     assert!(
@@ -336,8 +382,24 @@ fn test_milestone_with_problem_progress() {
     run_jjj_success(&dir, &["milestone", "new", "Progress Milestone"]);
     run_jjj_success(&dir, &["problem", "new", "Problem 1"]);
     run_jjj_success(&dir, &["problem", "new", "Problem 2"]);
-    run_jjj_success(&dir, &["milestone", "add-problem", "Progress Milestone", "Problem 1"]);
-    run_jjj_success(&dir, &["milestone", "add-problem", "Progress Milestone", "Problem 2"]);
+    run_jjj_success(
+        &dir,
+        &[
+            "milestone",
+            "add-problem",
+            "Progress Milestone",
+            "Problem 1",
+        ],
+    );
+    run_jjj_success(
+        &dir,
+        &[
+            "milestone",
+            "add-problem",
+            "Progress Milestone",
+            "Problem 2",
+        ],
+    );
 
     // Solve one problem
     run_jjj_success(&dir, &["solution", "new", "Fix", "--problem", "Problem 1"]);
@@ -377,7 +439,13 @@ fn test_problem_new_with_milestone() {
     run_jjj_success(&dir, &["milestone", "new", "Linked Milestone"]);
     run_jjj_success(
         &dir,
-        &["problem", "new", "Linked Problem", "--milestone", "Linked Milestone"],
+        &[
+            "problem",
+            "new",
+            "Linked Problem",
+            "--milestone",
+            "Linked Milestone",
+        ],
     );
 
     let problem_show = run_jjj_success(&dir, &["problem", "show", "Linked Problem"]);

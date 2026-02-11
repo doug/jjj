@@ -62,19 +62,15 @@ impl Database {
             [],
             |row| row.get(0),
         )?;
-        version
-            .parse()
-            .map_err(|_| rusqlite::Error::InvalidQuery)
+        version.parse().map_err(|_| rusqlite::Error::InvalidQuery)
     }
 
     /// Check if the dirty flag is set (indicating interrupted sync).
     fn is_dirty(&self) -> bool {
         self.conn
-            .query_row(
-                "SELECT value FROM meta WHERE key = 'dirty'",
-                [],
-                |row| row.get::<_, String>(0),
-            )
+            .query_row("SELECT value FROM meta WHERE key = 'dirty'", [], |row| {
+                row.get::<_, String>(0)
+            })
             .map(|v| v == "true" || v == "1")
             .unwrap_or(false)
     }
@@ -160,7 +156,9 @@ mod tests {
         let db = Database::open_in_memory().expect("Failed to open database");
 
         // Schema version should be set
-        let version = db.get_schema_version().expect("Failed to get schema version");
+        let version = db
+            .get_schema_version()
+            .expect("Failed to get schema version");
         assert_eq!(version, SCHEMA_VERSION);
 
         // Should not need rebuild on fresh database
@@ -238,10 +236,7 @@ mod tests {
         {
             let db = Database::open(&db_path).expect("Failed to reopen database");
             assert!(!db.needs_rebuild());
-            assert_eq!(
-                db.get_schema_version().unwrap(),
-                SCHEMA_VERSION
-            );
+            assert_eq!(db.get_schema_version().unwrap(), SCHEMA_VERSION);
         }
     }
 }

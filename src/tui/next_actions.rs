@@ -85,18 +85,22 @@ pub fn build_next_actions(
                 title: solution.title.clone(),
                 summary: format!("{} open critique(s)", open_critiques.len()),
                 priority,
-                details: open_critiques.iter().map(|c| ActionDetail {
-                    id: c.id.clone(),
-                    text: c.title.clone(),
-                    severity: Some(format!("{}", c.severity)),
-                }).collect(),
+                details: open_critiques
+                    .iter()
+                    .map(|c| ActionDetail {
+                        id: c.id.clone(),
+                        text: c.title.clone(),
+                        severity: Some(format!("{}", c.severity)),
+                    })
+                    .collect(),
             });
         }
     }
 
     // 2. READY: Solutions ready to accept
     for solution in solutions.iter().filter(|s| s.is_active()) {
-        let has_open = critiques.iter()
+        let has_open = critiques
+            .iter()
             .any(|c| c.solution_id == solution.id && c.status == CritiqueStatus::Open);
 
         if !has_open && !solution.critique_ids.is_empty() {
@@ -116,7 +120,10 @@ pub fn build_next_actions(
     }
 
     // 3. REVIEW: Critiques assigned to user
-    for critique in critiques.iter().filter(|c| c.status == CritiqueStatus::Open) {
+    for critique in critiques
+        .iter()
+        .filter(|c| c.status == CritiqueStatus::Open)
+    {
         if let Some(reviewer) = &critique.reviewer {
             if user.contains(reviewer) || reviewer.contains(user) {
                 let solution = solutions.iter().find(|s| s.id == critique.solution_id);
@@ -138,7 +145,8 @@ pub fn build_next_actions(
 
     // 4. TODO: Open problems with no active solutions
     for problem in problems.iter().filter(|p| p.is_open()) {
-        let has_active = solutions.iter()
+        let has_active = solutions
+            .iter()
             .any(|s| s.problem_id == problem.id && s.is_active());
 
         if !has_active {

@@ -36,8 +36,8 @@ jjj milestone edit <milestone_id> [OPTIONS]
 | `--status` | string | New status (planning, active, completed, cancelled) |
 
 ```bash,test
-jjj milestone edit m1 --status active
-jjj milestone edit m1 --title "v1.0 GA Release" --date 2025-07-01
+jjj milestone edit "v1.0 Release" --status active
+jjj milestone edit "v1.0 Release" --title "v1.0 GA Release" --date 2025-07-01
 ```
 
 ## `jjj milestone list`
@@ -70,8 +70,8 @@ jjj milestone show <milestone_id> [OPTIONS]
 | `--json` | bool | Output in JSON format |
 
 ```bash,test
-jjj milestone show m1
-jjj milestone show m1 --json
+jjj milestone show "v1.0"
+jjj milestone show "v1.0" --json
 ```
 
 ## `jjj milestone add-problem`
@@ -84,7 +84,7 @@ jjj milestone add-problem <milestone_id> <problem_id>
 
 ```bash,test
 jjj problem new "Improve performance"
-jjj milestone add-problem m1 p1
+jjj milestone add-problem "v1.0" "Improve performance"
 ```
 
 ## `jjj milestone remove-problem`

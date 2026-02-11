@@ -65,7 +65,7 @@ pub fn list_problems(conn: &Connection) -> SqliteResult<Vec<Problem>> {
          FROM problems ORDER BY created_at DESC",
     )?;
 
-    let rows = stmt.query_map([], |row| row_to_problem(row))?;
+    let rows = stmt.query_map([], row_to_problem)?;
 
     rows.collect()
 }
@@ -111,7 +111,8 @@ fn row_to_problem(row: &rusqlite::Row) -> SqliteResult<Problem> {
 
 /// Insert or update a solution in the database.
 pub fn upsert_solution(conn: &Connection, solution: &Solution) -> SqliteResult<()> {
-    let change_ids_json = serde_json::to_string(&solution.change_ids).unwrap_or_else(|_| "[]".to_string());
+    let change_ids_json =
+        serde_json::to_string(&solution.change_ids).unwrap_or_else(|_| "[]".to_string());
 
     conn.execute(
         "INSERT OR REPLACE INTO solutions (
@@ -161,20 +162,23 @@ pub fn list_solutions(conn: &Connection) -> SqliteResult<Vec<Solution>> {
          FROM solutions ORDER BY created_at DESC",
     )?;
 
-    let rows = stmt.query_map([], |row| row_to_solution(row))?;
+    let rows = stmt.query_map([], row_to_solution)?;
 
     rows.collect()
 }
 
 /// List solutions for a specific problem.
-pub fn list_solutions_for_problem(conn: &Connection, problem_id: &str) -> SqliteResult<Vec<Solution>> {
+pub fn list_solutions_for_problem(
+    conn: &Connection,
+    problem_id: &str,
+) -> SqliteResult<Vec<Solution>> {
     let mut stmt = conn.prepare(
         "SELECT id, title, status, problem_id, change_ids, supersedes, assignee,
                 force_accepted, created_at, updated_at, approach, tradeoffs
          FROM solutions WHERE problem_id = ?1 ORDER BY created_at DESC",
     )?;
 
-    let rows = stmt.query_map(params![problem_id], |row| row_to_solution(row))?;
+    let rows = stmt.query_map(params![problem_id], row_to_solution)?;
 
     rows.collect()
 }
@@ -187,7 +191,9 @@ pub fn delete_solution(conn: &Connection, id: &str) -> SqliteResult<bool> {
 
 fn row_to_solution(row: &rusqlite::Row) -> SqliteResult<Solution> {
     let status_str: String = row.get(2)?;
-    let change_ids_json: String = row.get::<_, Option<String>>(4)?.unwrap_or_else(|| "[]".to_string());
+    let change_ids_json: String = row
+        .get::<_, Option<String>>(4)?
+        .unwrap_or_else(|| "[]".to_string());
     let created_at_str: String = row.get(8)?;
     let updated_at_str: String = row.get(9)?;
 
@@ -221,14 +227,18 @@ fn row_to_solution(row: &rusqlite::Row) -> SqliteResult<Solution> {
 
 /// Insert or update a critique in the database.
 pub fn upsert_critique(conn: &Connection, critique: &Critique) -> SqliteResult<()> {
-    let replies_json = serde_json::to_string(&critique.replies).unwrap_or_else(|_| "[]".to_string());
+    let replies_json =
+        serde_json::to_string(&critique.replies).unwrap_or_else(|_| "[]".to_string());
 
     // The schema uses 'reviewer' but we also have 'author' - map author to reviewer for now
     // since the DB schema only has 'reviewer'. The body field combines argument and evidence.
     let body = if critique.evidence.is_empty() {
         critique.argument.clone()
     } else {
-        format!("{}\n\n## Evidence\n\n{}", critique.argument, critique.evidence)
+        format!(
+            "{}\n\n## Evidence\n\n{}",
+            critique.argument, critique.evidence
+        )
     };
 
     conn.execute(
@@ -279,20 +289,23 @@ pub fn list_critiques(conn: &Connection) -> SqliteResult<Vec<Critique>> {
          FROM critiques ORDER BY created_at DESC",
     )?;
 
-    let rows = stmt.query_map([], |row| row_to_critique(row))?;
+    let rows = stmt.query_map([], row_to_critique)?;
 
     rows.collect()
 }
 
 /// List critiques for a specific solution.
-pub fn list_critiques_for_solution(conn: &Connection, solution_id: &str) -> SqliteResult<Vec<Critique>> {
+pub fn list_critiques_for_solution(
+    conn: &Connection,
+    solution_id: &str,
+) -> SqliteResult<Vec<Critique>> {
     let mut stmt = conn.prepare(
         "SELECT id, title, status, solution_id, severity, reviewer, file_path,
                 line_number, created_at, updated_at, body, replies
          FROM critiques WHERE solution_id = ?1 ORDER BY created_at DESC",
     )?;
 
-    let rows = stmt.query_map(params![solution_id], |row| row_to_critique(row))?;
+    let rows = stmt.query_map(params![solution_id], row_to_critique)?;
 
     rows.collect()
 }
@@ -309,14 +322,19 @@ fn row_to_critique(row: &rusqlite::Row) -> SqliteResult<Critique> {
     let created_at_str: String = row.get(8)?;
     let updated_at_str: String = row.get(9)?;
     let body: String = row.get::<_, Option<String>>(10)?.unwrap_or_default();
-    let replies_json: String = row.get::<_, Option<String>>(11)?.unwrap_or_else(|| "[]".to_string());
+    let replies_json: String = row
+        .get::<_, Option<String>>(11)?
+        .unwrap_or_else(|| "[]".to_string());
 
     let replies: Vec<Reply> = serde_json::from_str(&replies_json).unwrap_or_default();
 
     // Parse body back into argument and evidence
     const EVIDENCE_SEPARATOR: &str = "\n\n## Evidence\n\n";
     let (argument, evidence) = if let Some(idx) = body.find(EVIDENCE_SEPARATOR) {
-        (body[..idx].to_string(), body[idx + EVIDENCE_SEPARATOR.len()..].to_string())
+        (
+            body[..idx].to_string(),
+            body[idx + EVIDENCE_SEPARATOR.len()..].to_string(),
+        )
     } else {
         (body, String::new())
     };
@@ -351,7 +369,8 @@ fn row_to_critique(row: &rusqlite::Row) -> SqliteResult<Critique> {
 
 /// Insert or update a milestone in the database.
 pub fn upsert_milestone(conn: &Connection, milestone: &Milestone) -> SqliteResult<()> {
-    let problem_ids_json = serde_json::to_string(&milestone.problem_ids).unwrap_or_else(|_| "[]".to_string());
+    let problem_ids_json =
+        serde_json::to_string(&milestone.problem_ids).unwrap_or_else(|_| "[]".to_string());
 
     conn.execute(
         "INSERT OR REPLACE INTO milestones (
@@ -370,7 +389,10 @@ pub fn upsert_milestone(conn: &Connection, milestone: &Milestone) -> SqliteResul
             if milestone.success_criteria.is_empty() {
                 milestone.goals.clone()
             } else {
-                format!("{}\n\n## Success Criteria\n\n{}", milestone.goals, milestone.success_criteria)
+                format!(
+                    "{}\n\n## Success Criteria\n\n{}",
+                    milestone.goals, milestone.success_criteria
+                )
             },
             problem_ids_json,
         ],
@@ -403,7 +425,7 @@ pub fn list_milestones(conn: &Connection) -> SqliteResult<Vec<Milestone>> {
          FROM milestones ORDER BY created_at DESC",
     )?;
 
-    let rows = stmt.query_map([], |row| row_to_milestone(row))?;
+    let rows = stmt.query_map([], row_to_milestone)?;
 
     rows.collect()
 }
@@ -420,14 +442,19 @@ fn row_to_milestone(row: &rusqlite::Row) -> SqliteResult<Milestone> {
     let created_at_str: String = row.get(5)?;
     let updated_at_str: String = row.get(6)?;
     let description: String = row.get::<_, Option<String>>(7)?.unwrap_or_default();
-    let problem_ids_json: String = row.get::<_, Option<String>>(8)?.unwrap_or_else(|| "[]".to_string());
+    let problem_ids_json: String = row
+        .get::<_, Option<String>>(8)?
+        .unwrap_or_else(|| "[]".to_string());
 
     let problem_ids: Vec<String> = serde_json::from_str(&problem_ids_json).unwrap_or_default();
 
     // Parse description back into goals and success_criteria
     const CRITERIA_SEPARATOR: &str = "\n\n## Success Criteria\n\n";
     let (goals, success_criteria) = if let Some(idx) = description.find(CRITERIA_SEPARATOR) {
-        (description[..idx].to_string(), description[idx + CRITERIA_SEPARATOR.len()..].to_string())
+        (
+            description[..idx].to_string(),
+            description[idx + CRITERIA_SEPARATOR.len()..].to_string(),
+        )
     } else {
         (description, String::new())
     };
@@ -529,7 +556,11 @@ mod tests {
         upsert_problem(conn, &problem).expect("Failed to upsert problem");
 
         // Create solution
-        let mut solution = Solution::new("s1".to_string(), "Test solution".to_string(), "p1".to_string());
+        let mut solution = Solution::new(
+            "s1".to_string(),
+            "Test solution".to_string(),
+            "p1".to_string(),
+        );
         solution.approach = "Use this approach".to_string();
         solution.tradeoffs = "Some tradeoffs".to_string();
         solution.change_ids = vec!["abc123".to_string(), "def456".to_string()];
@@ -547,7 +578,10 @@ mod tests {
         assert_eq!(loaded.problem_id, "p1");
         assert_eq!(loaded.approach, "Use this approach");
         assert_eq!(loaded.tradeoffs, "Some tradeoffs");
-        assert_eq!(loaded.change_ids, vec!["abc123".to_string(), "def456".to_string()]);
+        assert_eq!(
+            loaded.change_ids,
+            vec!["abc123".to_string(), "def456".to_string()]
+        );
         assert_eq!(loaded.assignee, Some("bob".to_string()));
         assert_eq!(loaded.status, SolutionStatus::Proposed);
 
@@ -563,7 +597,11 @@ mod tests {
         assert_eq!(loaded.change_ids.len(), 3);
 
         // List for problem
-        let solution2 = Solution::new("s2".to_string(), "Another solution".to_string(), "p1".to_string());
+        let solution2 = Solution::new(
+            "s2".to_string(),
+            "Another solution".to_string(),
+            "p1".to_string(),
+        );
         upsert_solution(conn, &solution2).expect("Failed to upsert");
 
         let solutions = list_solutions_for_problem(conn, "p1").expect("Failed to list");
@@ -590,11 +628,19 @@ mod tests {
         let problem = Problem::new("p1".to_string(), "Test problem".to_string());
         upsert_problem(conn, &problem).expect("Failed to upsert problem");
 
-        let solution = Solution::new("s1".to_string(), "Test solution".to_string(), "p1".to_string());
+        let solution = Solution::new(
+            "s1".to_string(),
+            "Test solution".to_string(),
+            "p1".to_string(),
+        );
         upsert_solution(conn, &solution).expect("Failed to upsert solution");
 
         // Create critique
-        let mut critique = Critique::new("c1".to_string(), "Test critique".to_string(), "s1".to_string());
+        let mut critique = Critique::new(
+            "c1".to_string(),
+            "Test critique".to_string(),
+            "s1".to_string(),
+        );
         critique.argument = "This is problematic".to_string();
         critique.evidence = "Here is the evidence".to_string();
         critique.severity = CritiqueSeverity::High;
@@ -635,7 +681,11 @@ mod tests {
         assert_eq!(loaded.replies[0].body, "I disagree");
 
         // List for solution
-        let critique2 = Critique::new("c2".to_string(), "Another critique".to_string(), "s1".to_string());
+        let critique2 = Critique::new(
+            "c2".to_string(),
+            "Another critique".to_string(),
+            "s1".to_string(),
+        );
         upsert_critique(conn, &critique2).expect("Failed to upsert");
 
         let critiques = list_critiques_for_solution(conn, "s1").expect("Failed to list");
@@ -723,7 +773,10 @@ mod tests {
             .expect("Not found");
 
         assert_eq!(loaded.status, ProblemStatus::Dissolved);
-        assert_eq!(loaded.dissolved_reason, Some("No longer relevant".to_string()));
+        assert_eq!(
+            loaded.dissolved_reason,
+            Some("No longer relevant".to_string())
+        );
     }
 
     #[test]
@@ -734,10 +787,18 @@ mod tests {
         let problem = Problem::new("p1".to_string(), "Test problem".to_string());
         upsert_problem(conn, &problem).expect("Failed to upsert problem");
 
-        let s1 = Solution::new("s1".to_string(), "First solution".to_string(), "p1".to_string());
+        let s1 = Solution::new(
+            "s1".to_string(),
+            "First solution".to_string(),
+            "p1".to_string(),
+        );
         upsert_solution(conn, &s1).expect("Failed to upsert");
 
-        let mut s2 = Solution::new("s2".to_string(), "Better solution".to_string(), "p1".to_string());
+        let mut s2 = Solution::new(
+            "s2".to_string(),
+            "Better solution".to_string(),
+            "p1".to_string(),
+        );
         s2.supersedes = Some("s1".to_string());
         upsert_solution(conn, &s2).expect("Failed to upsert");
 

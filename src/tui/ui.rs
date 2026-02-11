@@ -54,25 +54,32 @@ fn draw_next_actions(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
         Style::default().fg(Color::DarkGray)
     };
 
-    let items: Vec<ListItem> = app.cache.next_actions.iter().map(|action| {
-        let cat_span = Span::styled(
-            format!("[{}] ", action.category.label()),
-            Style::default().fg(category_color(action.category)),
-        );
-        let id_span = Span::styled(
-            format!("{}: ", action.entity_id),
-            Style::default().fg(Color::DarkGray),
-        );
-        let title_span = Span::raw(&action.title);
+    let items: Vec<ListItem> = app
+        .cache
+        .next_actions
+        .iter()
+        .map(|action| {
+            let cat_span = Span::styled(
+                format!("[{}] ", action.category.label()),
+                Style::default().fg(category_color(action.category)),
+            );
+            let id_span = Span::styled(
+                format!("{}: ", action.entity_id),
+                Style::default().fg(Color::DarkGray),
+            );
+            let title_span = Span::raw(&action.title);
 
-        ListItem::new(Line::from(vec![cat_span, id_span, title_span]))
-    }).collect();
+            ListItem::new(Line::from(vec![cat_span, id_span, title_span]))
+        })
+        .collect();
 
     let list = List::new(items)
-        .block(Block::default()
-            .title("Next Actions")
-            .borders(Borders::ALL)
-            .border_style(border_style))
+        .block(
+            Block::default()
+                .title("Next Actions")
+                .borders(Borders::ALL)
+                .border_style(border_style),
+        )
         .highlight_style(Style::default().add_modifier(Modifier::REVERSED))
         .highlight_symbol("> ");
 
@@ -123,40 +130,64 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
         Style::default().fg(Color::DarkGray)
     };
 
-    let items: Vec<ListItem> = app.cache.tree_items.iter().map(|item| {
-        let indent = "  ".repeat(item.depth);
-        let expand_char = if item.has_children {
-            if item.node.is_expanded() { "▼ " } else { "▶ " }
-        } else {
-            "○ "
-        };
+    let items: Vec<ListItem> = app
+        .cache
+        .tree_items
+        .iter()
+        .map(|item| {
+            let indent = "  ".repeat(item.depth);
+            let expand_char = if item.has_children {
+                if item.node.is_expanded() {
+                    "▼ "
+                } else {
+                    "▶ "
+                }
+            } else {
+                "○ "
+            };
 
-        let (label, color) = match &item.node {
-            TreeNode::Milestone { title, .. } => {
-                (format!("{}{}{}", indent, expand_char, title), Color::Magenta)
-            }
-            TreeNode::Backlog { .. } => {
-                (format!("{}{}Backlog", indent, expand_char), Color::DarkGray)
-            }
-            TreeNode::Problem { id, title, status, .. } => {
-                (format!("{}{}{}: {}", indent, expand_char, id, title), status_color_problem(&status))
-            }
-            TreeNode::Solution { id, title, status, .. } => {
-                (format!("{}{}{}: {}", indent, expand_char, id, title), status_color_solution(&status))
-            }
-            TreeNode::Critique { id, title, status, severity } => {
-                (format!("{}○ {}: {} [{}]", indent, id, title, severity), status_color_critique(&status))
-            }
-        };
+            let (label, color) = match &item.node {
+                TreeNode::Milestone { title, .. } => (
+                    format!("{}{}{}", indent, expand_char, title),
+                    Color::Magenta,
+                ),
+                TreeNode::Backlog { .. } => {
+                    (format!("{}{}Backlog", indent, expand_char), Color::DarkGray)
+                }
+                TreeNode::Problem {
+                    id, title, status, ..
+                } => (
+                    format!("{}{}{}: {}", indent, expand_char, id, title),
+                    status_color_problem(status),
+                ),
+                TreeNode::Solution {
+                    id, title, status, ..
+                } => (
+                    format!("{}{}{}: {}", indent, expand_char, id, title),
+                    status_color_solution(status),
+                ),
+                TreeNode::Critique {
+                    id,
+                    title,
+                    status,
+                    severity,
+                } => (
+                    format!("{}○ {}: {} [{}]", indent, id, title, severity),
+                    status_color_critique(status),
+                ),
+            };
 
-        ListItem::new(Line::from(Span::styled(label, Style::default().fg(color))))
-    }).collect();
+            ListItem::new(Line::from(Span::styled(label, Style::default().fg(color))))
+        })
+        .collect();
 
     let list = List::new(items)
-        .block(Block::default()
-            .title("Project Tree")
-            .borders(Borders::ALL)
-            .border_style(border_style))
+        .block(
+            Block::default()
+                .title("Project Tree")
+                .borders(Borders::ALL)
+                .border_style(border_style),
+        )
         .highlight_style(Style::default().add_modifier(Modifier::REVERSED))
         .highlight_symbol("> ");
 
@@ -170,16 +201,19 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
 
 fn draw_detail(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     let lines = app.cache.selected_detail.to_lines();
-    let text: Vec<Line> = lines.iter()
+    let text: Vec<Line> = lines
+        .iter()
         .skip(app.ui.detail_scroll as usize)
         .map(|s| Line::from(s.as_str()))
         .collect();
 
     let detail = Paragraph::new(text)
-        .block(Block::default()
-            .title("Detail")
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::DarkGray)))
+        .block(
+            Block::default()
+                .title("Detail")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::DarkGray)),
+        )
         .wrap(ratatui::widgets::Wrap { trim: false });
 
     f.render_widget(detail, area);

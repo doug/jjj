@@ -12,7 +12,10 @@ use std::io::IsTerminal;
 /// Otherwise, returns an error with suggestions.
 pub fn pick_one(matches: &[ResolveMatch], entity_type: &str) -> Result<String> {
     if matches.is_empty() {
-        return Err(JjjError::EntityNotFound(format!("No {}s found", entity_type)));
+        return Err(JjjError::EntityNotFound(format!(
+            "No {}s found",
+            entity_type
+        )));
     }
 
     if matches.len() == 1 {
@@ -43,7 +46,7 @@ fn pick_interactive(matches: &[ResolveMatch], entity_type: &str) -> Result<Strin
         .items(&items)
         .default(0)
         .interact_opt()
-        .map_err(|e| JjjError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
+        .map_err(|e| JjjError::Io(std::io::Error::other(e)))?;
 
     match selection {
         Some(index) => Ok(matches[index].id.clone()),
@@ -56,7 +59,10 @@ fn pick_non_interactive(matches: &[ResolveMatch], entity_type: &str) -> Result<S
     let uuids: Vec<&str> = matches.iter().map(|m| m.id.as_str()).collect();
     let prefixes = truncated_prefixes(&uuids);
 
-    let mut msg = format!("Multiple {}s match. Be more specific or use the short ID:\n", entity_type);
+    let mut msg = format!(
+        "Multiple {}s match. Be more specific or use the short ID:\n",
+        entity_type
+    );
 
     let display_count = matches.len().min(10);
     for (m, (_, prefix)) in matches.iter().zip(prefixes.iter()).take(display_count) {

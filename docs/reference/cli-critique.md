@@ -22,9 +22,9 @@ When `--reviewer` is specified, the critique is created as a review request. The
 ```bash,test
 jjj init
 jjj problem new "Fix login flow"
-jjj solution new "Refactor auth handler" --problem p1
-jjj critique new s1 "Missing error handling" --severity high
-jjj critique new s1 "Unused import" --severity low --file src/auth.rs --line 3
+jjj solution new "Refactor auth handler" --problem "Fix login"
+jjj critique new "Refactor auth" "Missing error handling" --severity high
+jjj critique new "Refactor auth" "Unused import" --severity low --file src/auth.rs --line 3
 jjj critique list
 ```
 
@@ -44,7 +44,7 @@ jjj critique list [OPTIONS]
 | `--json` | bool | Output in JSON format |
 
 ```bash,test
-jjj critique list --solution s1
+jjj critique list --solution "Refactor auth"
 jjj critique list --status open
 jjj critique list --json
 ```
@@ -62,8 +62,8 @@ jjj critique show <critique_id> [OPTIONS]
 | `--json` | bool | Output in JSON format |
 
 ```bash,test
-jjj critique show c1
-jjj critique show c1 --json
+jjj critique show "Missing error"
+jjj critique show "Missing error" --json
 ```
 
 ## `jjj critique edit`
@@ -93,7 +93,7 @@ jjj critique address <critique_id>
 ```
 
 ```bash,test
-jjj critique address c1
+jjj critique address "Missing error"
 ```
 
 ## `jjj critique validate`

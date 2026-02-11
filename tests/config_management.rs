@@ -19,13 +19,22 @@ fn test_custom_project_settings() {
     let mut config = ProjectConfig::default();
 
     // When: I add custom settings
-    config.settings.insert("auto_assign".to_string(), "true".to_string());
-    config.settings.insert("max_wip".to_string(), "3".to_string());
-    config.settings.insert("require_approval".to_string(), "2".to_string());
+    config
+        .settings
+        .insert("auto_assign".to_string(), "true".to_string());
+    config
+        .settings
+        .insert("max_wip".to_string(), "3".to_string());
+    config
+        .settings
+        .insert("require_approval".to_string(), "2".to_string());
 
     // Then: Settings should be stored
     assert_eq!(config.settings.len(), 3);
-    assert_eq!(config.settings.get("auto_assign"), Some(&"true".to_string()));
+    assert_eq!(
+        config.settings.get("auto_assign"),
+        Some(&"true".to_string())
+    );
     assert_eq!(config.settings.get("max_wip"), Some(&"3".to_string()));
 }
 
@@ -69,7 +78,9 @@ fn test_config_serialization_toml() {
     let mut config = ProjectConfig::default();
     config.name = Some("Test Project".to_string());
     config.default_reviewers = vec!["alice".to_string(), "bob".to_string()];
-    config.settings.insert("require_approval".to_string(), "true".to_string());
+    config
+        .settings
+        .insert("require_approval".to_string(), "true".to_string());
 
     // When: I serialize to TOML
     let toml_string = toml::to_string(&config).expect("Failed to serialize");
@@ -83,7 +94,10 @@ fn test_config_serialization_toml() {
 
     // Then: All data should be preserved
     assert_eq!(deserialized.name, config.name);
-    assert_eq!(deserialized.default_reviewers.len(), config.default_reviewers.len());
+    assert_eq!(
+        deserialized.default_reviewers.len(),
+        config.default_reviewers.len()
+    );
 }
 
 /// Behavior: Config with extensive settings
@@ -92,18 +106,26 @@ fn test_extensive_project_settings() {
     // Given: A config with many custom settings
     let mut config = ProjectConfig::default();
 
-    config.settings.insert("auto_assign_reviewers".to_string(), "true".to_string());
-    config.settings.insert("min_approvals".to_string(), "2".to_string());
-    config.settings.insert("allow_self_review".to_string(), "false".to_string());
-    config.settings.insert("wip_limit".to_string(), "5".to_string());
-    config.settings.insert("notification_email".to_string(), "team@example.com".to_string());
+    config
+        .settings
+        .insert("auto_assign_reviewers".to_string(), "true".to_string());
+    config
+        .settings
+        .insert("min_approvals".to_string(), "2".to_string());
+    config
+        .settings
+        .insert("allow_self_review".to_string(), "false".to_string());
+    config
+        .settings
+        .insert("wip_limit".to_string(), "5".to_string());
+    config.settings.insert(
+        "notification_email".to_string(),
+        "team@example.com".to_string(),
+    );
 
     // Then: All settings should be retrievable
     assert_eq!(config.settings.len(), 5);
-    assert_eq!(
-        config.settings.get("min_approvals"),
-        Some(&"2".to_string())
-    );
+    assert_eq!(config.settings.get("min_approvals"), Some(&"2".to_string()));
     assert_eq!(
         config.settings.get("notification_email"),
         Some(&"team@example.com".to_string())

@@ -12,16 +12,16 @@ pub fn setup_test_repo() -> TempDir {
         .expect("Failed to run jj git init");
     assert!(output.status.success(), "jj git init failed: {:?}", output);
 
-    // Configure user for jj
+    // Configure user for jj (use --repo to avoid polluting global config)
     Command::new("jj")
         .current_dir(dir.path())
-        .args(["config", "set", "--user", "user.name", "Test User"])
+        .args(["config", "set", "--repo", "user.name", "Test User"])
         .status()
         .expect("Failed to set user name");
 
     Command::new("jj")
         .current_dir(dir.path())
-        .args(["config", "set", "--user", "user.email", "test@example.com"])
+        .args(["config", "set", "--repo", "user.email", "test@example.com"])
         .status()
         .expect("Failed to set user email");
 

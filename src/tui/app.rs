@@ -42,6 +42,12 @@ pub struct UiState {
     pub flash_message: Option<(String, Instant)>,
 }
 
+impl Default for UiState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl UiState {
     pub fn new() -> Self {
         let mut expanded_nodes = HashSet::new();
@@ -87,9 +93,14 @@ impl App {
         }
 
         let user = store.jj_client.user_identity().unwrap_or_default();
-        let next_actions = super::build_next_actions(&data.problems, &data.solutions, &data.critiques, &user);
+        let next_actions =
+            super::build_next_actions(&data.problems, &data.solutions, &data.critiques, &user);
         let tree_items = super::build_flat_tree(
-            &data.milestones, &data.problems, &data.solutions, &data.critiques, &ui.expanded_nodes
+            &data.milestones,
+            &data.problems,
+            &data.solutions,
+            &data.critiques,
+            &ui.expanded_nodes,
         );
 
         let cache = RenderCache {
@@ -227,7 +238,12 @@ impl App {
         if let Some(solution) = self.data.solutions.iter().find(|s| s.id == target_id) {
             self.ui.expanded_nodes.insert(solution.problem_id.clone());
 
-            if let Some(problem) = self.data.problems.iter().find(|p| p.id == solution.problem_id) {
+            if let Some(problem) = self
+                .data
+                .problems
+                .iter()
+                .find(|p| p.id == solution.problem_id)
+            {
                 if let Some(milestone_id) = &problem.milestone_id {
                     self.ui.expanded_nodes.insert(milestone_id.clone());
                 } else {
@@ -249,10 +265,20 @@ impl App {
         if let Some(critique) = self.data.critiques.iter().find(|c| c.id == target_id) {
             self.ui.expanded_nodes.insert(critique.solution_id.clone());
 
-            if let Some(solution) = self.data.solutions.iter().find(|s| s.id == critique.solution_id) {
+            if let Some(solution) = self
+                .data
+                .solutions
+                .iter()
+                .find(|s| s.id == critique.solution_id)
+            {
                 self.ui.expanded_nodes.insert(solution.problem_id.clone());
 
-                if let Some(problem) = self.data.problems.iter().find(|p| p.id == solution.problem_id) {
+                if let Some(problem) = self
+                    .data
+                    .problems
+                    .iter()
+                    .find(|p| p.id == solution.problem_id)
+                {
                     if let Some(milestone_id) = &problem.milestone_id {
                         self.ui.expanded_nodes.insert(milestone_id.clone());
                     } else {
@@ -342,10 +368,16 @@ impl App {
                 if let Some(action) = self.cache.next_actions.get(self.ui.next_actions_index) {
                     match action.entity_type {
                         super::next_actions::EntityType::Problem => {
-                            format!("{}: [n]ew solution [s]olve [d]issolve [e]dit", action.entity_id)
+                            format!(
+                                "{}: [n]ew solution [s]olve [d]issolve [e]dit",
+                                action.entity_id
+                            )
                         }
                         super::next_actions::EntityType::Solution => {
-                            format!("{}: [a]ccept [r]efute [n]ew critique [e]dit", action.entity_id)
+                            format!(
+                                "{}: [a]ccept [r]efute [n]ew critique [e]dit",
+                                action.entity_id
+                            )
                         }
                         super::next_actions::EntityType::Critique => {
                             format!("{}: [a]ddress [d]ismiss [e]dit", action.entity_id)
@@ -361,9 +393,7 @@ impl App {
                         TreeNode::Milestone { id, .. } => {
                             format!("{}: [e]dit", id)
                         }
-                        TreeNode::Backlog { .. } => {
-                            "[p]roblem new".to_string()
-                        }
+                        TreeNode::Backlog { .. } => "[p]roblem new".to_string(),
                         TreeNode::Problem { id, .. } => {
                             format!("{}: [n]ew solution [s]olve [d]issolve [e]dit", id)
                         }
@@ -389,62 +419,69 @@ impl App {
             FocusedPane::NextActions => {
                 if let Some(action) = self.cache.next_actions.get(self.ui.next_actions_index) {
                     self.cache.selected_detail = match action.entity_type {
-                        super::next_actions::EntityType::Problem => {
-                            self.data.problems.iter()
-                                .find(|p| p.id == action.entity_id)
-                                .cloned()
-                                .map(super::DetailContent::Problem)
-                                .unwrap_or(super::DetailContent::None)
-                        }
-                        super::next_actions::EntityType::Solution => {
-                            self.data.solutions.iter()
-                                .find(|s| s.id == action.entity_id)
-                                .cloned()
-                                .map(super::DetailContent::Solution)
-                                .unwrap_or(super::DetailContent::None)
-                        }
-                        super::next_actions::EntityType::Critique => {
-                            self.data.critiques.iter()
-                                .find(|c| c.id == action.entity_id)
-                                .cloned()
-                                .map(super::DetailContent::Critique)
-                                .unwrap_or(super::DetailContent::None)
-                        }
+                        super::next_actions::EntityType::Problem => self
+                            .data
+                            .problems
+                            .iter()
+                            .find(|p| p.id == action.entity_id)
+                            .cloned()
+                            .map(super::DetailContent::Problem)
+                            .unwrap_or(super::DetailContent::None),
+                        super::next_actions::EntityType::Solution => self
+                            .data
+                            .solutions
+                            .iter()
+                            .find(|s| s.id == action.entity_id)
+                            .cloned()
+                            .map(super::DetailContent::Solution)
+                            .unwrap_or(super::DetailContent::None),
+                        super::next_actions::EntityType::Critique => self
+                            .data
+                            .critiques
+                            .iter()
+                            .find(|c| c.id == action.entity_id)
+                            .cloned()
+                            .map(super::DetailContent::Critique)
+                            .unwrap_or(super::DetailContent::None),
                     };
                 }
             }
             FocusedPane::ProjectTree => {
                 if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
                     self.cache.selected_detail = match &item.node {
-                        TreeNode::Milestone { id, .. } => {
-                            self.data.milestones.iter()
-                                .find(|m| m.id == *id)
-                                .cloned()
-                                .map(super::DetailContent::Milestone)
-                                .unwrap_or(super::DetailContent::None)
-                        }
+                        TreeNode::Milestone { id, .. } => self
+                            .data
+                            .milestones
+                            .iter()
+                            .find(|m| m.id == *id)
+                            .cloned()
+                            .map(super::DetailContent::Milestone)
+                            .unwrap_or(super::DetailContent::None),
                         TreeNode::Backlog { .. } => super::DetailContent::None,
-                        TreeNode::Problem { id, .. } => {
-                            self.data.problems.iter()
-                                .find(|p| p.id == *id)
-                                .cloned()
-                                .map(super::DetailContent::Problem)
-                                .unwrap_or(super::DetailContent::None)
-                        }
-                        TreeNode::Solution { id, .. } => {
-                            self.data.solutions.iter()
-                                .find(|s| s.id == *id)
-                                .cloned()
-                                .map(super::DetailContent::Solution)
-                                .unwrap_or(super::DetailContent::None)
-                        }
-                        TreeNode::Critique { id, .. } => {
-                            self.data.critiques.iter()
-                                .find(|c| c.id == *id)
-                                .cloned()
-                                .map(super::DetailContent::Critique)
-                                .unwrap_or(super::DetailContent::None)
-                        }
+                        TreeNode::Problem { id, .. } => self
+                            .data
+                            .problems
+                            .iter()
+                            .find(|p| p.id == *id)
+                            .cloned()
+                            .map(super::DetailContent::Problem)
+                            .unwrap_or(super::DetailContent::None),
+                        TreeNode::Solution { id, .. } => self
+                            .data
+                            .solutions
+                            .iter()
+                            .find(|s| s.id == *id)
+                            .cloned()
+                            .map(super::DetailContent::Solution)
+                            .unwrap_or(super::DetailContent::None),
+                        TreeNode::Critique { id, .. } => self
+                            .data
+                            .critiques
+                            .iter()
+                            .find(|c| c.id == *id)
+                            .cloned()
+                            .map(super::DetailContent::Critique)
+                            .unwrap_or(super::DetailContent::None),
                     };
                 }
             }
@@ -456,19 +493,27 @@ impl App {
         use super::tree::TreeNode;
 
         match self.ui.focused_pane {
-            FocusedPane::NextActions => {
-                self.cache.next_actions.get(self.ui.next_actions_index)
-                    .map(|a| (a.entity_id.clone(), a.entity_type))
-            }
+            FocusedPane::NextActions => self
+                .cache
+                .next_actions
+                .get(self.ui.next_actions_index)
+                .map(|a| (a.entity_id.clone(), a.entity_type)),
             FocusedPane::ProjectTree => {
-                self.cache.tree_items.get(self.ui.tree_index).and_then(|item| {
-                    match &item.node {
-                        TreeNode::Problem { id, .. } => Some((id.clone(), super::next_actions::EntityType::Problem)),
-                        TreeNode::Solution { id, .. } => Some((id.clone(), super::next_actions::EntityType::Solution)),
-                        TreeNode::Critique { id, .. } => Some((id.clone(), super::next_actions::EntityType::Critique)),
+                self.cache
+                    .tree_items
+                    .get(self.ui.tree_index)
+                    .and_then(|item| match &item.node {
+                        TreeNode::Problem { id, .. } => {
+                            Some((id.clone(), super::next_actions::EntityType::Problem))
+                        }
+                        TreeNode::Solution { id, .. } => {
+                            Some((id.clone(), super::next_actions::EntityType::Solution))
+                        }
+                        TreeNode::Critique { id, .. } => {
+                            Some((id.clone(), super::next_actions::EntityType::Critique))
+                        }
                         _ => None,
-                    }
-                })
+                    })
             }
         }
     }
@@ -511,12 +556,14 @@ impl App {
 
     fn accept_solution(&mut self, solution_id: &str) -> Result<()> {
         let id = solution_id.to_string();
-        match self.store.with_metadata(&format!("Accept solution {}", solution_id), || {
-            let mut solution = self.store.load_solution(solution_id)?;
-            solution.accept();
-            self.store.save_solution(&solution)?;
-            Ok(())
-        }) {
+        match self
+            .store
+            .with_metadata(&format!("Accept solution {}", solution_id), || {
+                let mut solution = self.store.load_solution(solution_id)?;
+                solution.accept();
+                self.store.save_solution(&solution)?;
+                Ok(())
+            }) {
             Ok(_) => {
                 self.show_flash(&format!("{} accepted", id));
                 self.refresh_data()?;
@@ -530,12 +577,14 @@ impl App {
 
     fn refute_solution(&mut self, solution_id: &str) -> Result<()> {
         let id = solution_id.to_string();
-        match self.store.with_metadata(&format!("Refute solution {}", solution_id), || {
-            let mut solution = self.store.load_solution(solution_id)?;
-            solution.refute();
-            self.store.save_solution(&solution)?;
-            Ok(())
-        }) {
+        match self
+            .store
+            .with_metadata(&format!("Refute solution {}", solution_id), || {
+                let mut solution = self.store.load_solution(solution_id)?;
+                solution.refute();
+                self.store.save_solution(&solution)?;
+                Ok(())
+            }) {
             Ok(_) => {
                 self.show_flash(&format!("{} refuted", id));
                 self.refresh_data()?;
@@ -549,12 +598,14 @@ impl App {
 
     fn address_critique(&mut self, critique_id: &str) -> Result<()> {
         let id = critique_id.to_string();
-        match self.store.with_metadata(&format!("Address critique {}", critique_id), || {
-            let mut critique = self.store.load_critique(critique_id)?;
-            critique.address();
-            self.store.save_critique(&critique)?;
-            Ok(())
-        }) {
+        match self
+            .store
+            .with_metadata(&format!("Address critique {}", critique_id), || {
+                let mut critique = self.store.load_critique(critique_id)?;
+                critique.address();
+                self.store.save_critique(&critique)?;
+                Ok(())
+            }) {
             Ok(_) => {
                 self.show_flash(&format!("{} addressed", id));
                 self.refresh_data()?;
@@ -568,12 +619,14 @@ impl App {
 
     fn dismiss_critique(&mut self, critique_id: &str) -> Result<()> {
         let id = critique_id.to_string();
-        match self.store.with_metadata(&format!("Dismiss critique {}", critique_id), || {
-            let mut critique = self.store.load_critique(critique_id)?;
-            critique.dismiss();
-            self.store.save_critique(&critique)?;
-            Ok(())
-        }) {
+        match self
+            .store
+            .with_metadata(&format!("Dismiss critique {}", critique_id), || {
+                let mut critique = self.store.load_critique(critique_id)?;
+                critique.dismiss();
+                self.store.save_critique(&critique)?;
+                Ok(())
+            }) {
             Ok(_) => {
                 self.show_flash(&format!("{} dismissed", id));
                 self.refresh_data()?;

@@ -32,10 +32,10 @@ Solutions are conjectures -- proposed ways to solve a problem. They start in
 `proposed` status and must survive criticism before acceptance.
 
 ```bash,test
-jjj solution new "Add search index" --problem p1
+jjj solution new "Add search index" --problem "Search is slow"
 ```
 
-This creates `s1`, linked to problem `p1`. A single problem can have
+This creates a solution linked to the problem. A single problem can have
 multiple competing solutions.
 
 ## Start Working

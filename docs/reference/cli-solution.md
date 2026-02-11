@@ -21,8 +21,8 @@ When `--problem` is not provided, lists open problems and prompts you to select 
 ```bash,test
 jjj init
 jjj problem new "Login is too slow"
-jjj solution new "Add connection pooling" --problem p1
-jjj solution new "Use async auth" --problem p1 --supersedes s1
+jjj solution new "Add connection pooling" --problem "Login is too slow"
+jjj solution new "Use async auth" --problem "Login is too slow" --supersedes "Add connection"
 jjj solution list
 ```
 
@@ -49,7 +49,7 @@ jjj solution list [OPTIONS]
 | `--json` | bool | Output in JSON format |
 
 ```bash,test
-jjj solution list --problem p1
+jjj solution list --problem "Login is too slow"
 jjj solution list --status testing
 jjj solution list --json
 ```
@@ -67,8 +67,8 @@ jjj solution show <solution_id> [OPTIONS]
 | `--json` | bool | Output in JSON format |
 
 ```bash,test
-jjj solution show s1
-jjj solution show s1 --json
+jjj solution show "Add connection"
+jjj solution show "Add connection" --json
 ```
 
 ## `jjj solution edit`

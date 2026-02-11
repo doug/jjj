@@ -16,7 +16,8 @@ pub fn execute(ctx: &CommandContext, remote: &str) -> Result<()> {
         if db::is_dirty(&db)? {
             println!("Saving local changes before fetch...");
             db::dump_to_markdown(&db, &ctx.store)?;
-            ctx.store.commit_changes("Sync local changes before fetch")?;
+            ctx.store
+                .commit_changes("Sync local changes before fetch")?;
         }
     }
 

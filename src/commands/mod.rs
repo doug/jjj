@@ -83,8 +83,10 @@ fn execute_with_context(ctx: &CommandContext, command: Commands) -> Result<()> {
         Commands::Timeline { problem_id, json } => timeline::execute(problem_id, json),
 
         // Search
-        Commands::Search { query, r#type, json } => {
-            search::execute(ctx, &query, r#type.as_deref(), json)
-        }
+        Commands::Search {
+            query,
+            r#type,
+            json,
+        } => search::execute(ctx, &query, r#type.as_deref(), json),
     }
 }

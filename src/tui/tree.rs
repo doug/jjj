@@ -1,12 +1,37 @@
-use crate::models::{Critique, CritiqueStatus, Milestone, MilestoneStatus, Problem, ProblemStatus, Solution, SolutionStatus};
+use crate::models::{
+    Critique, CritiqueStatus, Milestone, MilestoneStatus, Problem, ProblemStatus, Solution,
+    SolutionStatus,
+};
 
 #[derive(Debug, Clone)]
 pub enum TreeNode {
-    Milestone { id: String, title: String, status: MilestoneStatus, expanded: bool },
-    Backlog { expanded: bool },
-    Problem { id: String, title: String, status: ProblemStatus, expanded: bool },
-    Solution { id: String, title: String, status: SolutionStatus, expanded: bool },
-    Critique { id: String, title: String, status: CritiqueStatus, severity: String },
+    Milestone {
+        id: String,
+        title: String,
+        status: MilestoneStatus,
+        expanded: bool,
+    },
+    Backlog {
+        expanded: bool,
+    },
+    Problem {
+        id: String,
+        title: String,
+        status: ProblemStatus,
+        expanded: bool,
+    },
+    Solution {
+        id: String,
+        title: String,
+        status: SolutionStatus,
+        expanded: bool,
+    },
+    Critique {
+        id: String,
+        title: String,
+        status: CritiqueStatus,
+        severity: String,
+    },
 }
 
 impl TreeNode {
@@ -63,7 +88,8 @@ pub fn build_flat_tree(
 
     // Add milestones
     for milestone in milestones {
-        let milestone_problems: Vec<_> = problems.iter()
+        let milestone_problems: Vec<_> = problems
+            .iter()
             .filter(|p| p.milestone_id.as_ref() == Some(&milestone.id))
             .collect();
 
@@ -80,24 +106,41 @@ pub fn build_flat_tree(
         });
 
         if expanded {
-            add_problems(&mut items, &milestone_problems, solutions, critiques, expanded_nodes, 1);
+            add_problems(
+                &mut items,
+                &milestone_problems,
+                solutions,
+                critiques,
+                expanded_nodes,
+                1,
+            );
         }
     }
 
     // Add backlog (problems without milestone)
-    let backlog_problems: Vec<_> = problems.iter()
+    let backlog_problems: Vec<_> = problems
+        .iter()
         .filter(|p| p.milestone_id.is_none())
         .collect();
 
     let backlog_expanded = expanded_nodes.contains("backlog");
     items.push(FlatTreeItem {
-        node: TreeNode::Backlog { expanded: backlog_expanded },
+        node: TreeNode::Backlog {
+            expanded: backlog_expanded,
+        },
         depth: 0,
         has_children: !backlog_problems.is_empty(),
     });
 
     if backlog_expanded {
-        add_problems(&mut items, &backlog_problems, solutions, critiques, expanded_nodes, 1);
+        add_problems(
+            &mut items,
+            &backlog_problems,
+            solutions,
+            critiques,
+            expanded_nodes,
+            1,
+        );
     }
 
     items
@@ -112,7 +155,8 @@ fn add_problems(
     depth: usize,
 ) {
     for problem in problems {
-        let problem_solutions: Vec<_> = solutions.iter()
+        let problem_solutions: Vec<_> = solutions
+            .iter()
             .filter(|s| s.problem_id == problem.id)
             .collect();
 
@@ -130,7 +174,8 @@ fn add_problems(
 
         if expanded {
             for solution in problem_solutions {
-                let solution_critiques: Vec<_> = critiques.iter()
+                let solution_critiques: Vec<_> = critiques
+                    .iter()
                     .filter(|c| c.solution_id == solution.id)
                     .collect();
 

@@ -8,7 +8,7 @@
 
 use chrono::Utc;
 use jjj::db::{self, Database};
-use jjj::models::{Problem, ProblemStatus, Priority, Solution, SolutionStatus};
+use jjj::models::{Priority, Problem, ProblemStatus, Solution, SolutionStatus};
 
 /// Test a full sync cycle: insert entities, validate, and search.
 #[test]
@@ -54,7 +54,11 @@ fn test_full_sync_cycle() {
 
     // Validate - should pass since all references are valid
     let errors = db::validate(&db).unwrap();
-    assert!(errors.is_empty(), "Expected no validation errors, got: {:?}", errors);
+    assert!(
+        errors.is_empty(),
+        "Expected no validation errors, got: {:?}",
+        errors
+    );
 
     // Manually populate FTS for search testing
     // (In production, this would be done via rebuild_fts after load_from_markdown)
@@ -67,7 +71,12 @@ fn test_full_sync_cycle() {
 
     // Search for the problem
     let results = db::search(db.conn(), "test", None).unwrap();
-    assert_eq!(results.len(), 1, "Expected 1 search result, got {}", results.len());
+    assert_eq!(
+        results.len(),
+        1,
+        "Expected 1 search result, got {}",
+        results.len()
+    );
     assert_eq!(results[0].entity_id, "p1");
     assert_eq!(results[0].entity_type, "problem");
 }
@@ -79,9 +88,7 @@ fn test_validation_catches_invalid_refs() {
 
     // Disable foreign key constraints so we can insert invalid data
     // (simulates data loaded from corrupted markdown files)
-    db.conn()
-        .execute("PRAGMA foreign_keys = OFF", [])
-        .unwrap();
+    db.conn().execute("PRAGMA foreign_keys = OFF", []).unwrap();
 
     // Create solution with invalid problem reference
     let solution = Solution {
@@ -103,7 +110,12 @@ fn test_validation_catches_invalid_refs() {
 
     // Validation should catch the invalid reference
     let errors = db::validate(&db).unwrap();
-    assert_eq!(errors.len(), 1, "Expected 1 validation error, got {:?}", errors);
+    assert_eq!(
+        errors.len(),
+        1,
+        "Expected 1 validation error, got {:?}",
+        errors
+    );
     assert!(
         errors[0].message.contains("p_invalid"),
         "Error message should mention the invalid reference: {}",

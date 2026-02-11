@@ -10,9 +10,7 @@ pub fn submit(ctx: &CommandContext, force: bool) -> Result<()> {
 
     // Find solution for current change
     let solutions = store.list_solutions()?;
-    let solution = solutions
-        .iter()
-        .find(|s| s.change_ids.contains(&change_id));
+    let solution = solutions.iter().find(|s| s.change_ids.contains(&change_id));
 
     let solution = match solution {
         Some(s) => s.clone(),
