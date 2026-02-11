@@ -35,13 +35,7 @@ pub fn execute(
 
     // Check if query is an entity reference (e.g., "p/01957d")
     if let Some((ref_type, ref_id)) = parse_entity_reference(query) {
-        return execute_similarity_search(
-            &db,
-            ref_type,
-            ref_id,
-            entity_type,
-            json,
-        );
+        return execute_similarity_search(&db, ref_type, ref_id, entity_type, json);
     }
 
     // Hybrid text search
@@ -75,7 +69,11 @@ fn execute_similarity_search(
             .collect();
         println!("{}", serde_json::to_string_pretty(&json_results)?);
     } else if results.is_empty() {
-        println!("No similar entities found for {}/{}", entity_type.chars().next().unwrap(), entity_id_prefix);
+        println!(
+            "No similar entities found for {}/{}",
+            entity_type.chars().next().unwrap(),
+            entity_id_prefix
+        );
         println!("\nNote: Embeddings may not be computed. Run 'jjj db rebuild' with an embedding service running.");
     } else {
         println!(
@@ -145,7 +143,11 @@ fn execute_hybrid_search(
     } else if final_results.is_empty() {
         println!("No results found for \"{}\"", query);
     } else {
-        let hybrid_note = if embedding_client.is_some() { " (hybrid)" } else { "" };
+        let hybrid_note = if embedding_client.is_some() {
+            " (hybrid)"
+        } else {
+            ""
+        };
         println!(
             "Found {} result(s) for \"{}\"{}:\n",
             final_results.len(),

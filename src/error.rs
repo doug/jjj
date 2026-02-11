@@ -92,7 +92,10 @@ pub enum JjjError {
     EntityNotFound(String),
 
     #[error("Ambiguous ID prefix '{prefix}' matches multiple entities: {matches:?}")]
-    AmbiguousId { prefix: String, matches: Vec<String> },
+    AmbiguousId {
+        prefix: String,
+        matches: Vec<String>,
+    },
 
     #[error("{0}")]
     Other(String),

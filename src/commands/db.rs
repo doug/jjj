@@ -47,8 +47,7 @@ fn status(ctx: &CommandContext) -> Result<()> {
 
     // Get embedding info
     let (embedding_count, embedding_model) = {
-        let count: i64 =
-            conn.query_row("SELECT COUNT(*) FROM embeddings", [], |row| row.get(0))?;
+        let count: i64 = conn.query_row("SELECT COUNT(*) FROM embeddings", [], |row| row.get(0))?;
         let model: Option<String> = conn
             .query_row("SELECT model FROM embeddings LIMIT 1", [], |row| row.get(0))
             .ok();

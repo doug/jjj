@@ -355,10 +355,7 @@ pub fn merge_with_rrf(
 
     // Sort by combined score
     let mut merged: Vec<_> = scores.into_iter().collect();
-    merged.sort_by(|a, b| {
-        b.1.partial_cmp(&a.1)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
+    merged.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
     // Convert to SearchResult
     merged

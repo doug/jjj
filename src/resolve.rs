@@ -211,14 +211,8 @@ mod tests {
             parse_entity_reference("s/abc123"),
             Some(("solution", "abc123"))
         );
-        assert_eq!(
-            parse_entity_reference("c/xyz"),
-            Some(("critique", "xyz"))
-        );
-        assert_eq!(
-            parse_entity_reference("m/123"),
-            Some(("milestone", "123"))
-        );
+        assert_eq!(parse_entity_reference("c/xyz"), Some(("critique", "xyz")));
+        assert_eq!(parse_entity_reference("m/123"), Some(("milestone", "123")));
     }
 
     #[test]

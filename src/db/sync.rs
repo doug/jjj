@@ -188,8 +188,7 @@ pub fn rebuild_embeddings(
     // Process solutions
     let solutions = list_solutions(conn)?;
     for solution in &solutions {
-        let text =
-            prepare_solution_text(&solution.title, &solution.approach, &solution.tradeoffs);
+        let text = prepare_solution_text(&solution.title, &solution.approach, &solution.tradeoffs);
         if let Ok(embedding) = client.embed(&text) {
             upsert_embedding(conn, "solution", &solution.id, model, &embedding)?;
         }
@@ -198,8 +197,7 @@ pub fn rebuild_embeddings(
     // Process critiques
     let critiques = list_critiques(conn)?;
     for critique in &critiques {
-        let text =
-            prepare_critique_text(&critique.title, &critique.argument, &critique.evidence);
+        let text = prepare_critique_text(&critique.title, &critique.argument, &critique.evidence);
         if let Ok(embedding) = client.embed(&text) {
             upsert_embedding(conn, "critique", &critique.id, model, &embedding)?;
         }

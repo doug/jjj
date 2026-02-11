@@ -100,11 +100,7 @@ pub fn list_embeddings(
 }
 
 /// Delete an embedding for an entity.
-pub fn delete_embedding(
-    conn: &Connection,
-    entity_type: &str,
-    entity_id: &str,
-) -> SqliteResult<()> {
+pub fn delete_embedding(conn: &Connection, entity_type: &str, entity_id: &str) -> SqliteResult<()> {
     conn.execute(
         "DELETE FROM embeddings WHERE entity_type = ?1 AND entity_id = ?2",
         params![entity_type, entity_id],
@@ -137,11 +133,7 @@ pub fn count_embeddings(conn: &Connection, model: Option<&str>) -> SqliteResult<
 
 /// Get the current embedding model (if any embeddings exist).
 pub fn get_embedding_model(conn: &Connection) -> SqliteResult<Option<String>> {
-    let result = conn.query_row(
-        "SELECT model FROM embeddings LIMIT 1",
-        [],
-        |row| row.get(0),
-    );
+    let result = conn.query_row("SELECT model FROM embeddings LIMIT 1", [], |row| row.get(0));
 
     match result {
         Ok(model) => Ok(Some(model)),
