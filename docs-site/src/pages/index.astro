@@ -1,0 +1,21 @@
+---
+import Landing from '../layouts/Landing.astro';
+import { Hero } from '../components/Hero';
+import { Features } from '../components/Features';
+import { HowItWorks } from '../components/HowItWorks';
+import { QuickInstall } from '../components/QuickInstall';
+import { ComparisonTable } from '../components/ComparisonTable';
+import { FooterCTA } from '../components/FooterCTA';
+---
+
+<Landing
+  title="jjj - Distributed Project Management for Jujutsu"
+  description="Problems, solutions, and critiques — all in your repo. No server. No database. Works offline."
+>
+  <Hero client:load />
+  <Features client:visible />
+  <HowItWorks client:visible />
+  <QuickInstall client:visible />
+  <ComparisonTable client:visible />
+  <FooterCTA client:visible />
+</Landing>
