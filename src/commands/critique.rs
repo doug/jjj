@@ -278,6 +278,8 @@ fn show_critique(ctx: &CommandContext, critique_input: String, json: bool) -> Re
     );
     println!("Updated: {}", critique.updated_at.format("%Y-%m-%d %H:%M"));
 
+    crate::commands::show_related_items(ctx, "critique", &critique.id)?;
+
     Ok(())
 }
 

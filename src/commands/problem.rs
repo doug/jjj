@@ -5,6 +5,7 @@ use crate::display::truncated_prefixes;
 use crate::error::Result;
 use crate::models::{Event, EventType, Priority, Problem, ProblemStatus};
 use crate::storage::MetadataStore;
+use crate::commands::show_related_items;
 
 pub fn execute(ctx: &CommandContext, action: ProblemAction) -> Result<()> {
     match action {
@@ -471,61 +472,4 @@ fn assign_problem(
             Ok(())
         },
     )
-}
-
-fn show_related_items(ctx: &CommandContext, entity_type: &str, entity_id: &str) -> Result<()> {
-    let jj_client = ctx.jj();
-    let repo_root = jj_client.repo_root();
-    let db_path = repo_root.join(".jj").join("jjj.db");
-
-    if !db_path.exists() {
-        return Ok(());
-    }
-
-    let db = Database::open(&db_path)?;
-    let conn = db.conn();
-
-    // Check if this entity has an embedding
-    let has_embedding = crate::db::embeddings::load_embedding(conn, entity_type, entity_id)?
-        .is_some();
-
-    if !has_embedding {
-        return Ok(());
-    }
-
-    let results = search::find_similar(conn, entity_type, entity_id, None, 5)?;
-
-    if results.is_empty() {
-        return Ok(());
-    }
-
-    // Filter to similarity > 0.5
-    let results: Vec<_> = results.into_iter().filter(|r| r.similarity > 0.5).collect();
-
-    if results.is_empty() {
-        return Ok(());
-    }
-
-    println!("\n{}", "─".repeat(50));
-    println!("\nRelated:");
-    for result in results {
-        let short_id = &result.entity_id[..6.min(result.entity_id.len())];
-        println!(
-            "  {}/{}  [{:.2}]  \"{}\"",
-            result.entity_type.chars().next().unwrap(),
-            short_id,
-            result.similarity,
-            truncate_title(&result.title, 50)
-        );
-    }
-
-    Ok(())
-}
-
-fn truncate_title(s: &str, max_len: usize) -> String {
-    if s.len() <= max_len {
-        s.to_string()
-    } else {
-        format!("{}...", &s[..max_len - 3])
-    }
 }

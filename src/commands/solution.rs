@@ -350,6 +350,8 @@ fn show_solution(ctx: &CommandContext, solution_input: String, json: bool) -> Re
     );
     println!("Updated: {}", solution.updated_at.format("%Y-%m-%d %H:%M"));
 
+    crate::commands::show_related_items(ctx, "solution", &solution.id)?;
+
     Ok(())
 }
 

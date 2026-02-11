@@ -242,6 +242,8 @@ fn show_milestone(ctx: &CommandContext, milestone_input: String, json: bool) -> 
     );
     println!("Updated: {}", milestone.updated_at.format("%Y-%m-%d %H:%M"));
 
+    crate::commands::show_related_items(ctx, "milestone", &milestone.id)?;
+
     Ok(())
 }
 
