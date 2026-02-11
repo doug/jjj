@@ -157,6 +157,70 @@ pub fn rebuild_fts(db: &Database) -> Result<()> {
     Ok(())
 }
 
+/// Rebuild all embeddings from entities.
+///
+/// This computes embeddings for all problems, solutions, critiques, and milestones.
+/// Uses batch processing for efficiency.
+pub fn rebuild_embeddings(
+    db: &Database,
+    client: &crate::embeddings::EmbeddingClient,
+) -> Result<()> {
+    use crate::db::embeddings::{clear_embeddings, upsert_embedding};
+    use crate::embeddings::{
+        prepare_critique_text, prepare_milestone_text, prepare_problem_text, prepare_solution_text,
+    };
+
+    let conn = db.conn();
+    let model = client.model();
+
+    // Clear existing embeddings
+    clear_embeddings(conn)?;
+
+    // Process problems
+    let problems = list_problems(conn)?;
+    for problem in &problems {
+        let text = prepare_problem_text(&problem.title, &problem.description, &problem.context);
+        if let Ok(embedding) = client.embed(&text) {
+            upsert_embedding(conn, "problem", &problem.id, model, &embedding)?;
+        }
+    }
+
+    // Process solutions
+    let solutions = list_solutions(conn)?;
+    for solution in &solutions {
+        let text =
+            prepare_solution_text(&solution.title, &solution.approach, &solution.tradeoffs);
+        if let Ok(embedding) = client.embed(&text) {
+            upsert_embedding(conn, "solution", &solution.id, model, &embedding)?;
+        }
+    }
+
+    // Process critiques
+    let critiques = list_critiques(conn)?;
+    for critique in &critiques {
+        let text =
+            prepare_critique_text(&critique.title, &critique.argument, &critique.evidence);
+        if let Ok(embedding) = client.embed(&text) {
+            upsert_embedding(conn, "critique", &critique.id, model, &embedding)?;
+        }
+    }
+
+    // Process milestones
+    let milestones = list_milestones(conn)?;
+    for milestone in &milestones {
+        let text = prepare_milestone_text(
+            &milestone.title,
+            &milestone.goals,
+            &milestone.success_criteria,
+        );
+        if let Ok(embedding) = client.embed(&text) {
+            upsert_embedding(conn, "milestone", &milestone.id, model, &embedding)?;
+        }
+    }
+
+    Ok(())
+}
+
 /// Check if the database has uncommitted changes (dirty flag is set).
 pub fn is_dirty(db: &Database) -> Result<bool> {
     is_dirty_internal(db.conn())
@@ -174,6 +238,7 @@ pub fn set_dirty(db: &Database, dirty: bool) -> Result<()> {
 /// Clear all entity tables (problems, solutions, critiques, milestones, events).
 fn clear_all_tables(conn: &Connection) -> Result<()> {
     // Clear in reverse order of dependencies
+    conn.execute("DELETE FROM embeddings", [])?;
     conn.execute("DELETE FROM critiques", [])?;
     conn.execute("DELETE FROM solutions", [])?;
     conn.execute("DELETE FROM problems", [])?;
