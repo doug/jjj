@@ -10,7 +10,16 @@ fn test_solution_new_creates_solution() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Test Problem"]);
-    let stdout = run_jjj_success(&dir, &["solution", "new", "Test Solution", "--problem", "Test Problem"]);
+    let stdout = run_jjj_success(
+        &dir,
+        &[
+            "solution",
+            "new",
+            "Test Solution",
+            "--problem",
+            "Test Problem",
+        ],
+    );
 
     assert!(
         stdout.contains("Test Solution"),
@@ -27,7 +36,16 @@ fn test_solution_new_links_to_problem() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Linked Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Linked Solution", "--problem", "Linked Problem"]);
+    run_jjj_success(
+        &dir,
+        &[
+            "solution",
+            "new",
+            "Linked Solution",
+            "--problem",
+            "Linked Problem",
+        ],
+    );
 
     let stdout = run_jjj_success(&dir, &["solution", "show", "Linked Solution"]);
     // Output shows "Addresses:" field with the problem UUID
@@ -46,7 +64,10 @@ fn test_solution_new_auto_attaches_change() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "Problem"]);
+    run_jjj_success(
+        &dir,
+        &["solution", "new", "Solution", "--problem", "Problem"],
+    );
 
     let stdout = run_jjj_success(&dir, &["solution", "show", "Solution"]);
     // Solution new auto-attaches and moves to testing
@@ -66,12 +87,26 @@ fn test_solution_list_shows_all() {
 
     run_jjj_success(&dir, &["problem", "new", "Problem 1"]);
     run_jjj_success(&dir, &["problem", "new", "Problem 2"]);
-    run_jjj_success(&dir, &["solution", "new", "Solution 1", "--problem", "Problem 1"]);
-    run_jjj_success(&dir, &["solution", "new", "Solution 2", "--problem", "Problem 2"]);
+    run_jjj_success(
+        &dir,
+        &["solution", "new", "Solution 1", "--problem", "Problem 1"],
+    );
+    run_jjj_success(
+        &dir,
+        &["solution", "new", "Solution 2", "--problem", "Problem 2"],
+    );
 
     let stdout = run_jjj_success(&dir, &["solution", "list"]);
-    assert!(stdout.contains("Solution 1"), "Expected Solution 1: {}", stdout);
-    assert!(stdout.contains("Solution 2"), "Expected Solution 2: {}", stdout);
+    assert!(
+        stdout.contains("Solution 1"),
+        "Expected Solution 1: {}",
+        stdout
+    );
+    assert!(
+        stdout.contains("Solution 2"),
+        "Expected Solution 2: {}",
+        stdout
+    );
 }
 
 #[test]
@@ -83,8 +118,26 @@ fn test_solution_list_filter_by_problem() {
 
     run_jjj_success(&dir, &["problem", "new", "Problem 1"]);
     run_jjj_success(&dir, &["problem", "new", "Problem 2"]);
-    run_jjj_success(&dir, &["solution", "new", "Solution for P1", "--problem", "Problem 1"]);
-    run_jjj_success(&dir, &["solution", "new", "Solution for P2", "--problem", "Problem 2"]);
+    run_jjj_success(
+        &dir,
+        &[
+            "solution",
+            "new",
+            "Solution for P1",
+            "--problem",
+            "Problem 1",
+        ],
+    );
+    run_jjj_success(
+        &dir,
+        &[
+            "solution",
+            "new",
+            "Solution for P2",
+            "--problem",
+            "Problem 2",
+        ],
+    );
 
     let stdout = run_jjj_success(&dir, &["solution", "list", "--problem", "Problem 1"]);
     assert!(
@@ -107,8 +160,26 @@ fn test_solution_list_filter_by_status() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Testing Solution", "--problem", "Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Accepted Solution", "--problem", "Problem"]);
+    run_jjj_success(
+        &dir,
+        &[
+            "solution",
+            "new",
+            "Testing Solution",
+            "--problem",
+            "Problem",
+        ],
+    );
+    run_jjj_success(
+        &dir,
+        &[
+            "solution",
+            "new",
+            "Accepted Solution",
+            "--problem",
+            "Problem",
+        ],
+    );
     run_jjj_success(&dir, &["solution", "accept", "Accepted Solution"]);
 
     let stdout = run_jjj_success(&dir, &["solution", "list", "--status", "accepted"]);
@@ -132,11 +203,13 @@ fn test_solution_list_json_output() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "JSON Solution", "--problem", "Problem"]);
+    run_jjj_success(
+        &dir,
+        &["solution", "new", "JSON Solution", "--problem", "Problem"],
+    );
 
     let stdout = run_jjj_success(&dir, &["solution", "list", "--json"]);
-    let json: serde_json::Value =
-        serde_json::from_str(&stdout).expect("Failed to parse JSON");
+    let json: serde_json::Value = serde_json::from_str(&stdout).expect("Failed to parse JSON");
     assert!(json.is_array());
     let arr = json.as_array().unwrap();
     assert_eq!(arr.len(), 1);
@@ -153,7 +226,16 @@ fn test_solution_show_details() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Detailed Solution", "--problem", "Problem"]);
+    run_jjj_success(
+        &dir,
+        &[
+            "solution",
+            "new",
+            "Detailed Solution",
+            "--problem",
+            "Problem",
+        ],
+    );
 
     let stdout = run_jjj_success(&dir, &["solution", "show", "Detailed Solution"]);
     assert!(
@@ -182,15 +264,20 @@ fn test_solution_show_json_output() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "JSON Show", "--problem", "Problem"]);
+    run_jjj_success(
+        &dir,
+        &["solution", "new", "JSON Show", "--problem", "Problem"],
+    );
 
     let stdout = run_jjj_success(&dir, &["solution", "show", "JSON Show", "--json"]);
-    let json: serde_json::Value =
-        serde_json::from_str(&stdout).expect("Failed to parse JSON");
+    let json: serde_json::Value = serde_json::from_str(&stdout).expect("Failed to parse JSON");
     // ID should exist but we don't assert specific value
     assert!(json["id"].is_string(), "Expected id to be a string");
     assert_eq!(json["title"], "JSON Show");
-    assert!(json["problem_id"].is_string(), "Expected problem_id to be a string");
+    assert!(
+        json["problem_id"].is_string(),
+        "Expected problem_id to be a string"
+    );
 }
 
 #[test]
@@ -201,7 +288,10 @@ fn test_solution_accept() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Acceptable", "--problem", "Problem"]);
+    run_jjj_success(
+        &dir,
+        &["solution", "new", "Acceptable", "--problem", "Problem"],
+    );
 
     let stdout = run_jjj_success(&dir, &["solution", "accept", "Acceptable"]);
     assert!(
@@ -226,7 +316,16 @@ fn test_solution_accept_blocked_by_critiques() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Blocked Solution", "--problem", "Problem"]);
+    run_jjj_success(
+        &dir,
+        &[
+            "solution",
+            "new",
+            "Blocked Solution",
+            "--problem",
+            "Problem",
+        ],
+    );
     run_jjj_success(&dir, &["critique", "new", "Blocked Solution", "Major flaw"]);
 
     let output = run_jjj(&dir, &["solution", "accept", "Blocked Solution"]);
@@ -250,7 +349,10 @@ fn test_solution_accept_force() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Force Accept", "--problem", "Problem"]);
+    run_jjj_success(
+        &dir,
+        &["solution", "new", "Force Accept", "--problem", "Problem"],
+    );
     run_jjj_success(&dir, &["critique", "new", "Force Accept", "Minor issue"]);
 
     let stdout = run_jjj_success(&dir, &["solution", "accept", "Force Accept", "--force"]);
@@ -269,7 +371,10 @@ fn test_solution_refute() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Bad Solution", "--problem", "Problem"]);
+    run_jjj_success(
+        &dir,
+        &["solution", "new", "Bad Solution", "--problem", "Problem"],
+    );
 
     let stdout = run_jjj_success(&dir, &["solution", "refute", "Bad Solution"]);
     assert!(
@@ -294,7 +399,16 @@ fn test_solution_supersedes() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Original Solution", "--problem", "Problem"]);
+    run_jjj_success(
+        &dir,
+        &[
+            "solution",
+            "new",
+            "Original Solution",
+            "--problem",
+            "Problem",
+        ],
+    );
     run_jjj_success(&dir, &["solution", "refute", "Original Solution"]);
     run_jjj_success(
         &dir,
@@ -325,7 +439,10 @@ fn test_solution_test_status() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Test Status", "--problem", "Problem"]);
+    run_jjj_success(
+        &dir,
+        &["solution", "new", "Test Status", "--problem", "Problem"],
+    );
 
     // solution new auto-attaches and moves to testing
     let show = run_jjj_success(&dir, &["solution", "show", "Test Status"]);
@@ -344,7 +461,10 @@ fn test_solution_assign() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Assigned", "--problem", "Problem"]);
+    run_jjj_success(
+        &dir,
+        &["solution", "new", "Assigned", "--problem", "Problem"],
+    );
     run_jjj_success(&dir, &["solution", "assign", "Assigned", "--to", "bob"]);
 
     let stdout = run_jjj_success(&dir, &["solution", "show", "Assigned"]);
@@ -359,8 +479,14 @@ fn test_solution_edit() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Original", "--problem", "Problem"]);
-    run_jjj_success(&dir, &["solution", "edit", "Original", "--title", "Updated Title"]);
+    run_jjj_success(
+        &dir,
+        &["solution", "new", "Original", "--problem", "Problem"],
+    );
+    run_jjj_success(
+        &dir,
+        &["solution", "edit", "Original", "--title", "Updated Title"],
+    );
 
     let stdout = run_jjj_success(&dir, &["solution", "show", "Updated Title"]);
     assert!(

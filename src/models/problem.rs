@@ -228,7 +228,10 @@ impl Problem {
 
     /// Check if problem is resolved (solved or dissolved)
     pub fn is_resolved(&self) -> bool {
-        matches!(self.status, ProblemStatus::Solved | ProblemStatus::Dissolved)
+        matches!(
+            self.status,
+            ProblemStatus::Solved | ProblemStatus::Dissolved
+        )
     }
 
     /// Check if problem is in progress
@@ -350,10 +353,22 @@ mod tests {
 
     #[test]
     fn test_status_parsing() {
-        assert_eq!("open".parse::<ProblemStatus>().unwrap(), ProblemStatus::Open);
-        assert_eq!("in_progress".parse::<ProblemStatus>().unwrap(), ProblemStatus::InProgress);
-        assert_eq!("solved".parse::<ProblemStatus>().unwrap(), ProblemStatus::Solved);
-        assert_eq!("dissolved".parse::<ProblemStatus>().unwrap(), ProblemStatus::Dissolved);
+        assert_eq!(
+            "open".parse::<ProblemStatus>().unwrap(),
+            ProblemStatus::Open
+        );
+        assert_eq!(
+            "in_progress".parse::<ProblemStatus>().unwrap(),
+            ProblemStatus::InProgress
+        );
+        assert_eq!(
+            "solved".parse::<ProblemStatus>().unwrap(),
+            ProblemStatus::Solved
+        );
+        assert_eq!(
+            "dissolved".parse::<ProblemStatus>().unwrap(),
+            ProblemStatus::Dissolved
+        );
     }
 
     #[test]
@@ -395,6 +410,9 @@ mod tests {
         assert_eq!(p.dissolved_reason, None);
         p.dissolve("The data was correct; our test was wrong".to_string());
         assert_eq!(p.status, ProblemStatus::Dissolved);
-        assert_eq!(p.dissolved_reason.as_deref(), Some("The data was correct; our test was wrong"));
+        assert_eq!(
+            p.dissolved_reason.as_deref(),
+            Some("The data was correct; our test was wrong")
+        );
     }
 }

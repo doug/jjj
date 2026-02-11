@@ -109,7 +109,10 @@ fn list_milestones(ctx: &CommandContext, json: bool) -> Result<()> {
     let uuids: Vec<&str> = milestones.iter().map(|m| m.id.as_str()).collect();
     let prefixes = truncated_prefixes(&uuids);
 
-    println!("{:<10} {:<12} {:<12} {:<6} TITLE", "ID", "STATUS", "TARGET", "PROBS");
+    println!(
+        "{:<10} {:<12} {:<12} {:<6} TITLE",
+        "ID", "STATUS", "TARGET", "PROBS"
+    );
     println!("{}", "-".repeat(70));
 
     for (milestone, (_, prefix)) in milestones.iter().zip(prefixes.iter()) {
@@ -190,7 +193,9 @@ fn show_milestone(ctx: &CommandContext, milestone_input: String, json: bool) -> 
 
         for problem_id in &milestone.problem_ids {
             if let Ok(problem) = store.load_problem(problem_id) {
-                let solutions = store.get_solutions_for_problem(problem_id).unwrap_or_default();
+                let solutions = store
+                    .get_solutions_for_problem(problem_id)
+                    .unwrap_or_default();
                 let accepted_solutions = solutions
                     .iter()
                     .filter(|s| s.status == SolutionStatus::Accepted)
@@ -231,7 +236,10 @@ fn show_milestone(ctx: &CommandContext, milestone_input: String, json: bool) -> 
         );
     }
 
-    println!("\nCreated: {}", milestone.created_at.format("%Y-%m-%d %H:%M"));
+    println!(
+        "\nCreated: {}",
+        milestone.created_at.format("%Y-%m-%d %H:%M")
+    );
     println!("Updated: {}", milestone.updated_at.format("%Y-%m-%d %H:%M"));
 
     Ok(())
@@ -254,22 +262,26 @@ fn add_problem(ctx: &CommandContext, milestone_input: String, problem_input: Str
             problem.set_milestone(Some(milestone_id.clone()));
             store.save_problem(&problem)?;
 
-            println!(
-                "Added problem {} to milestone {}",
-                problem_id, milestone_id
-            );
+            println!("Added problem {} to milestone {}", problem_id, milestone_id);
             Ok(())
         },
     )
 }
 
-fn remove_problem(ctx: &CommandContext, milestone_input: String, problem_input: String) -> Result<()> {
+fn remove_problem(
+    ctx: &CommandContext,
+    milestone_input: String,
+    problem_input: String,
+) -> Result<()> {
     let milestone_id = ctx.resolve_milestone(&milestone_input)?;
     let problem_id = ctx.resolve_problem(&problem_input)?;
     let store = &ctx.store;
 
     store.with_metadata(
-        &format!("Remove problem {} from milestone {}", problem_id, milestone_id),
+        &format!(
+            "Remove problem {} from milestone {}",
+            problem_id, milestone_id
+        ),
         || {
             let mut milestone = store.load_milestone(&milestone_id)?;
             let mut problem = store.load_problem(&problem_id)?;
@@ -366,7 +378,11 @@ fn show_roadmap(ctx: &CommandContext, json: bool) -> Result<()> {
     Ok(())
 }
 
-fn assign_milestone(ctx: &CommandContext, milestone_input: String, assignee: Option<String>) -> Result<()> {
+fn assign_milestone(
+    ctx: &CommandContext,
+    milestone_input: String,
+    assignee: Option<String>,
+) -> Result<()> {
     let milestone_id = ctx.resolve_milestone(&milestone_input)?;
     let store = &ctx.store;
 

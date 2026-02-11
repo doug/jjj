@@ -16,4 +16,3 @@ pub struct ProjectConfig {
     #[serde(default)]
     pub settings: HashMap<String, String>,
 }
-

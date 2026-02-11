@@ -26,13 +26,24 @@ pub fn execute(problem_id: String, json: bool) -> Result<()> {
     }
 
     // Filter events related to this problem
-    let mut events: Vec<&Event> = all_events.iter().filter(|e| {
-        if e.entity == problem_id { return true; }
-        if solution_ids.contains(&e.entity) { return true; }
-        if critique_ids.contains(&e.entity) { return true; }
-        if e.refs.contains(&problem_id) { return true; }
-        false
-    }).collect();
+    let mut events: Vec<&Event> = all_events
+        .iter()
+        .filter(|e| {
+            if e.entity == problem_id {
+                return true;
+            }
+            if solution_ids.contains(&e.entity) {
+                return true;
+            }
+            if critique_ids.contains(&e.entity) {
+                return true;
+            }
+            if e.refs.contains(&problem_id) {
+                return true;
+            }
+            false
+        })
+        .collect();
 
     // Sort by timestamp
     events.sort_by_key(|e| e.when);
@@ -71,7 +82,10 @@ fn format_event_description(event: &Event) -> String {
         EventType::ProblemDissolved => "problem dissolved".to_string(),
         EventType::ProblemReopened => "problem reopened".to_string(),
         EventType::SolutionCreated => {
-            let supersedes = event.extra.supersedes.as_ref()
+            let supersedes = event
+                .extra
+                .supersedes
+                .as_ref()
                 .map(|s| format!(" (supersedes {})", s))
                 .unwrap_or_default();
             format!("{} proposed{}", event.entity, supersedes)
@@ -79,7 +93,10 @@ fn format_event_description(event: &Event) -> String {
         EventType::SolutionAccepted => format!("{} accepted", event.entity),
         EventType::SolutionRefuted => format!("{} refuted", event.entity),
         EventType::CritiqueRaised => {
-            let title = event.extra.title.as_ref()
+            let title = event
+                .extra
+                .title
+                .as_ref()
                 .map(|t| format!(": \"{}\"", truncate(t, 25)))
                 .unwrap_or_default();
             format!("{} raised{}", event.entity, title)

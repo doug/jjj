@@ -24,7 +24,10 @@ impl JjClient {
 
     pub fn with_root(root: PathBuf) -> Result<Self> {
         let jj_path = which::which("jj").map_err(|_| JjjError::JjNotFound)?;
-        Ok(Self { jj_path, repo_root: root })
+        Ok(Self {
+            jj_path,
+            repo_root: root,
+        })
     }
 
     /// Find the repository root by looking for .jj directory
@@ -182,7 +185,6 @@ impl JjClient {
 
 #[cfg(test)]
 mod tests {
-    
 
     #[test]
     fn test_jj_detection() {

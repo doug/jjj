@@ -192,7 +192,11 @@ pub fn search(
 /// Create a snippet from entity content, prioritizing fields that contain the query.
 fn create_snippet(primary: &str, secondary: &str, fallback: &str, query: &str) -> String {
     // Extract first word for simple matching
-    let first_word = query.split_whitespace().next().unwrap_or(query).to_lowercase();
+    let first_word = query
+        .split_whitespace()
+        .next()
+        .unwrap_or(query)
+        .to_lowercase();
 
     let text = if primary.to_lowercase().contains(&first_word) {
         primary
@@ -243,13 +247,17 @@ pub fn search_events(conn: &Connection, query: &str) -> SqliteResult<Vec<Event>>
 /// Convert a database row to an Event.
 /// This is a copy of the function from events.rs to avoid circular dependencies.
 fn row_to_event(row: &rusqlite::Row) -> SqliteResult<Event> {
-    use chrono::{DateTime, Utc};
     use crate::models::EventExtra;
+    use chrono::{DateTime, Utc};
 
     let timestamp_str: String = row.get(1)?;
     let event_type_str: String = row.get(2)?;
-    let refs_json: String = row.get::<_, Option<String>>(6)?.unwrap_or_else(|| "[]".to_string());
-    let extra_json: String = row.get::<_, Option<String>>(7)?.unwrap_or_else(|| "{}".to_string());
+    let refs_json: String = row
+        .get::<_, Option<String>>(6)?
+        .unwrap_or_else(|| "[]".to_string());
+    let extra_json: String = row
+        .get::<_, Option<String>>(7)?
+        .unwrap_or_else(|| "{}".to_string());
 
     let event_type = parse_event_type(&event_type_str);
     let refs: Vec<String> = serde_json::from_str(&refs_json).unwrap_or_default();
@@ -298,9 +306,9 @@ fn parse_event_type(s: &str) -> crate::models::EventType {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::Database;
     use crate::db::entities::{upsert_problem, upsert_solution};
     use crate::db::sync::rebuild_fts;
+    use crate::db::Database;
     use crate::models::{Problem, Solution};
 
     #[test]
@@ -310,14 +318,22 @@ mod tests {
 
         // Insert test entities into actual tables
         let mut p1 = Problem::new("p1".to_string(), "Fix login authentication".to_string());
-        p1.description = "Users cannot login when using OAuth. Need to fix the authentication flow.".to_string();
+        p1.description =
+            "Users cannot login when using OAuth. Need to fix the authentication flow.".to_string();
         upsert_problem(conn, &p1).expect("Failed to insert problem");
 
-        let mut p2 = Problem::new("p2".to_string(), "Performance issues on dashboard".to_string());
+        let mut p2 = Problem::new(
+            "p2".to_string(),
+            "Performance issues on dashboard".to_string(),
+        );
         p2.description = "The dashboard loads slowly due to N+1 queries.".to_string();
         upsert_problem(conn, &p2).expect("Failed to insert problem");
 
-        let mut s1 = Solution::new("s1".to_string(), "Implement OAuth2 login flow".to_string(), "p1".to_string());
+        let mut s1 = Solution::new(
+            "s1".to_string(),
+            "Implement OAuth2 login flow".to_string(),
+            "p1".to_string(),
+        );
         s1.approach = "Use the standard OAuth2 flow with refresh tokens.".to_string();
         upsert_solution(conn, &s1).expect("Failed to insert solution");
 
@@ -326,12 +342,25 @@ mod tests {
 
         // Search for "login" - should find both problem and solution
         let results = search(conn, "login", None).expect("Failed to search");
-        assert_eq!(results.len(), 2, "Expected 2 results for 'login', got {}", results.len());
+        assert_eq!(
+            results.len(),
+            2,
+            "Expected 2 results for 'login', got {}",
+            results.len()
+        );
 
         // Verify we found the right entities
         let entity_ids: Vec<&str> = results.iter().map(|r| r.entity_id.as_str()).collect();
-        assert!(entity_ids.contains(&"p1"), "Expected p1 in results: {:?}", entity_ids);
-        assert!(entity_ids.contains(&"s1"), "Expected s1 in results: {:?}", entity_ids);
+        assert!(
+            entity_ids.contains(&"p1"),
+            "Expected p1 in results: {:?}",
+            entity_ids
+        );
+        assert!(
+            entity_ids.contains(&"s1"),
+            "Expected s1 in results: {:?}",
+            entity_ids
+        );
 
         // Verify entity types
         let p1_result = results.iter().find(|r| r.entity_id == "p1").unwrap();

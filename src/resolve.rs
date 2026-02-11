@@ -44,7 +44,9 @@ pub fn resolve(input: &str, entities: &[(String, String)]) -> ResolveResult {
             .iter()
             .filter(|(id, _)| {
                 let normalized_id: String = id.chars().filter(|c| *c != '-').collect();
-                normalized_id.to_lowercase().starts_with(&normalized_input.to_lowercase())
+                normalized_id
+                    .to_lowercase()
+                    .starts_with(&normalized_input.to_lowercase())
             })
             .map(|(id, title)| ResolveMatch {
                 id: id.clone(),
@@ -83,9 +85,18 @@ mod tests {
 
     fn test_entities() -> Vec<(String, String)> {
         vec![
-            ("01957d3e-a8b2-7def-8c3a-9f4e5d6c7b8a".to_string(), "Fix auth timeout bug".to_string()),
-            ("01957d3e-b1c4-7abc-9d2e-3f4a5b6c7d8e".to_string(), "Auth token refresh fails".to_string()),
-            ("02957d3e-c2d5-7fed-ae4b-5c6d7e8f9a0b".to_string(), "Database connection pooling".to_string()),
+            (
+                "01957d3e-a8b2-7def-8c3a-9f4e5d6c7b8a".to_string(),
+                "Fix auth timeout bug".to_string(),
+            ),
+            (
+                "01957d3e-b1c4-7abc-9d2e-3f4a5b6c7d8e".to_string(),
+                "Auth token refresh fails".to_string(),
+            ),
+            (
+                "02957d3e-c2d5-7fed-ae4b-5c6d7e8f9a0b".to_string(),
+                "Database connection pooling".to_string(),
+            ),
         ]
     }
 

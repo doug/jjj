@@ -47,7 +47,10 @@ fn test_status_shows_solutions_needing_attention() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "Problem"]);
+    run_jjj_success(
+        &dir,
+        &["solution", "new", "Solution", "--problem", "Problem"],
+    );
     run_jjj_success(&dir, &["critique", "new", "Solution", "Blocker"]);
 
     let stdout = run_jjj_success(&dir, &["status"]);
@@ -67,7 +70,10 @@ fn test_status_shows_ready_solutions() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "Problem"]);
+    run_jjj_success(
+        &dir,
+        &["solution", "new", "Solution", "--problem", "Problem"],
+    );
     run_jjj_success(&dir, &["critique", "new", "Solution", "Issue"]);
     run_jjj_success(&dir, &["critique", "address", "Issue"]);
 
@@ -90,8 +96,7 @@ fn test_status_json_output() {
     run_jjj_success(&dir, &["problem", "new", "Test Problem"]);
 
     let stdout = run_jjj_success(&dir, &["status", "--json"]);
-    let json: serde_json::Value =
-        serde_json::from_str(&stdout).expect("Failed to parse JSON");
+    let json: serde_json::Value = serde_json::from_str(&stdout).expect("Failed to parse JSON");
 
     // Should have items, summary, and other fields
     assert!(json.get("items").is_some(), "Expected items field");
@@ -107,12 +112,14 @@ fn test_status_json_summary() {
 
     run_jjj_success(&dir, &["problem", "new", "Problem 1"]);
     run_jjj_success(&dir, &["problem", "new", "Problem 2"]);
-    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "Problem 1"]);
+    run_jjj_success(
+        &dir,
+        &["solution", "new", "Solution", "--problem", "Problem 1"],
+    );
     run_jjj_success(&dir, &["critique", "new", "Solution", "Critique"]);
 
     let stdout = run_jjj_success(&dir, &["status", "--json"]);
-    let json: serde_json::Value =
-        serde_json::from_str(&stdout).expect("Failed to parse JSON");
+    let json: serde_json::Value = serde_json::from_str(&stdout).expect("Failed to parse JSON");
 
     let summary = &json["summary"];
     assert!(
@@ -177,7 +184,10 @@ fn test_status_mine_option() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "My Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "My Solution", "--problem", "My Problem"]);
+    run_jjj_success(
+        &dir,
+        &["solution", "new", "My Solution", "--problem", "My Problem"],
+    );
     // Assign to current user (default)
     run_jjj_success(&dir, &["solution", "assign", "My Solution"]);
 
@@ -198,7 +208,10 @@ fn test_status_shows_active_solution() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Active Solution", "--problem", "Problem"]);
+    run_jjj_success(
+        &dir,
+        &["solution", "new", "Active Solution", "--problem", "Problem"],
+    );
 
     let stdout = run_jjj_success(&dir, &["status"]);
     // Should show the active solution at the top
@@ -222,8 +235,7 @@ fn test_status_priority_sorting() {
     run_jjj_success(&dir, &["problem", "new", "High", "--priority", "P1"]);
 
     let stdout = run_jjj_success(&dir, &["status", "--json", "--all"]);
-    let json: serde_json::Value =
-        serde_json::from_str(&stdout).expect("Failed to parse JSON");
+    let json: serde_json::Value = serde_json::from_str(&stdout).expect("Failed to parse JSON");
 
     let items = json["items"].as_array().expect("Expected items array");
     let todo_items: Vec<_> = items
@@ -252,12 +264,17 @@ fn test_status_shows_summary_counts() {
 
     run_jjj_success(&dir, &["problem", "new", "Problem 1"]);
     run_jjj_success(&dir, &["problem", "new", "Problem 2"]);
-    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "Problem 1"]);
+    run_jjj_success(
+        &dir,
+        &["solution", "new", "Solution", "--problem", "Problem 1"],
+    );
 
     let stdout = run_jjj_success(&dir, &["status"]);
     // Should show summary with counts
     assert!(
-        stdout.contains("Summary") || stdout.contains("open problems") || stdout.contains("testing"),
+        stdout.contains("Summary")
+            || stdout.contains("open problems")
+            || stdout.contains("testing"),
         "Expected summary counts: {}",
         stdout
     );
@@ -307,8 +324,7 @@ fn test_status_json_active_solution() {
     run_jjj_success(&dir, &["solution", "new", "Active", "--problem", "Problem"]);
 
     let stdout = run_jjj_success(&dir, &["status", "--json"]);
-    let json: serde_json::Value =
-        serde_json::from_str(&stdout).expect("Failed to parse JSON");
+    let json: serde_json::Value = serde_json::from_str(&stdout).expect("Failed to parse JSON");
 
     // Should have active_solution field
     let active = &json["active_solution"];
@@ -329,12 +345,20 @@ fn test_status_category_ordering() {
     // Create items in different categories
     run_jjj_success(&dir, &["problem", "new", "TODO Problem"]); // Will be TODO (no solution)
     run_jjj_success(&dir, &["problem", "new", "Blocked Problem"]);
-    run_jjj_success(&dir, &["solution", "new", "Blocked Solution", "--problem", "Blocked Problem"]);
+    run_jjj_success(
+        &dir,
+        &[
+            "solution",
+            "new",
+            "Blocked Solution",
+            "--problem",
+            "Blocked Problem",
+        ],
+    );
     run_jjj_success(&dir, &["critique", "new", "Blocked Solution", "Blocker"]); // Makes solution BLOCKED
 
     let stdout = run_jjj_success(&dir, &["status", "--json", "--all"]);
-    let json: serde_json::Value =
-        serde_json::from_str(&stdout).expect("Failed to parse JSON");
+    let json: serde_json::Value = serde_json::from_str(&stdout).expect("Failed to parse JSON");
 
     let items = json["items"].as_array().expect("Expected items array");
 

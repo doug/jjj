@@ -83,8 +83,16 @@ mod tests {
         ];
         let result = truncated_prefixes(&uuids);
         // Both start with "a3f8c2d", need to extend to 8 chars
-        assert!(result[0].1.len() > MIN_PREFIX_LEN, "Prefix should extend: {}", result[0].1);
-        assert!(result[1].1.len() > MIN_PREFIX_LEN, "Prefix should extend: {}", result[1].1);
+        assert!(
+            result[0].1.len() > MIN_PREFIX_LEN,
+            "Prefix should extend: {}",
+            result[0].1
+        );
+        assert!(
+            result[1].1.len() > MIN_PREFIX_LEN,
+            "Prefix should extend: {}",
+            result[1].1
+        );
         assert_ne!(result[0].1, result[1].1);
     }
 

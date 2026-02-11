@@ -14,7 +14,9 @@ pub enum JjjError {
     #[error("Not in a jj repository.\n\nPlease run this command from within a jj repository,\nor initialize one with: jj git init")]
     NotInRepository,
 
-    #[error("jjj not initialized in this repository.\n\nRun 'jjj init' to set up project management.")]
+    #[error(
+        "jjj not initialized in this repository.\n\nRun 'jjj init' to set up project management."
+    )]
     MetaBranchNotFound,
 
     #[error("Problem {0} not found.\n\nUse 'jjj problem list' to see all problems.")]

@@ -148,7 +148,7 @@ fn list_problems(
         // Show as tree structure
         let root_problems: Vec<_> = problems.iter().filter(|p| p.parent_id.is_none()).collect();
         for problem in root_problems {
-            print_problem_tree(&store, problem, 0)?;
+            print_problem_tree(store, problem, 0)?;
         }
     } else {
         // Show as flat list
@@ -350,7 +350,7 @@ fn show_tree(ctx: &CommandContext, problem_input: Option<String>) -> Result<()> 
     if let Some(ref input) = problem_input {
         let problem_id = ctx.resolve_problem(input)?;
         let problem = store.load_problem(&problem_id)?;
-        print_problem_tree(&store, &problem, 0)?;
+        print_problem_tree(store, &problem, 0)?;
     } else {
         let root_problems = store.get_root_problems()?;
         if root_problems.is_empty() {
@@ -358,7 +358,7 @@ fn show_tree(ctx: &CommandContext, problem_input: Option<String>) -> Result<()> 
             return Ok(());
         }
         for problem in &root_problems {
-            print_problem_tree(&store, problem, 0)?;
+            print_problem_tree(store, problem, 0)?;
         }
     }
 

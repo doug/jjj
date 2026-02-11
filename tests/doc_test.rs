@@ -54,8 +54,11 @@ fn setup_doc_test_repo() -> tempfile::TempDir {
         .current_dir(dir.path())
         .output()
         .expect("jj must be installed for doc tests");
-    assert!(output.status.success(), "jj git init failed: {}",
-        String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "jj git init failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 
     // Configure user
     Command::new("jj")
@@ -177,7 +180,11 @@ fn test_documentation_examples() {
 
                 // Handle expect assertions (check against previous command's stdout)
                 if trimmed.starts_with("# expect:") {
-                    let expected = trimmed.strip_prefix("# expect:").unwrap().trim().trim_matches('"');
+                    let expected = trimmed
+                        .strip_prefix("# expect:")
+                        .unwrap()
+                        .trim()
+                        .trim_matches('"');
                     if !last_stdout.contains(expected) {
                         failures.push(format!(
                             "{}:{} -- expected '{}' in output\nstdout: {}",
@@ -215,7 +222,10 @@ fn test_documentation_examples() {
         }
     }
 
-    eprintln!("Doc tests: {} files, {} commands tested", tested_files, tested_commands);
+    eprintln!(
+        "Doc tests: {} files, {} commands tested",
+        tested_files, tested_commands
+    );
 
     if !failures.is_empty() {
         panic!(

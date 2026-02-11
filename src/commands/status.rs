@@ -1,7 +1,7 @@
 use crate::context::CommandContext;
 use crate::display::{format_with_type_prefix, truncated_prefixes};
 use crate::error::Result;
-use crate::models::{CritiqueStatus, Critique, Priority, ProblemStatus, SolutionStatus};
+use crate::models::{Critique, CritiqueStatus, Priority, ProblemStatus, SolutionStatus};
 use std::collections::HashMap;
 
 fn priority_sort_value(priority: &Priority) -> i32 {
@@ -13,7 +13,13 @@ fn priority_sort_value(priority: &Priority) -> i32 {
     }
 }
 
-pub fn execute(ctx: &CommandContext, all: bool, mine: bool, limit: Option<usize>, json: bool) -> Result<()> {
+pub fn execute(
+    ctx: &CommandContext,
+    all: bool,
+    mine: bool,
+    limit: Option<usize>,
+    json: bool,
+) -> Result<()> {
     let store = &ctx.store;
     let jj_client = ctx.jj();
     let user = store.jj_client.user_identity().unwrap_or_default();
@@ -25,9 +31,9 @@ pub fn execute(ctx: &CommandContext, all: bool, mine: bool, limit: Option<usize>
     if json {
         // Build JSON output with active_solution, next_actions, summary
         let current_change = jj_client.current_change_id().ok();
-        let active_solution = current_change.as_ref().and_then(|change_id| {
-            solutions.iter().find(|s| s.change_ids.contains(change_id))
-        });
+        let active_solution = current_change
+            .as_ref()
+            .and_then(|change_id| solutions.iter().find(|s| s.change_ids.contains(change_id)));
 
         let active_json = active_solution.map(|s| {
             serde_json::json!({
@@ -44,8 +50,14 @@ pub fn execute(ctx: &CommandContext, all: bool, mine: bool, limit: Option<usize>
         items.truncate(effective_limit);
 
         let open_problems = problems.iter().filter(|p| p.is_open()).count();
-        let testing_solutions = solutions.iter().filter(|s| s.status == SolutionStatus::Testing).count();
-        let open_critiques = critiques.iter().filter(|c| c.status == CritiqueStatus::Open).count();
+        let testing_solutions = solutions
+            .iter()
+            .filter(|s| s.status == SolutionStatus::Testing)
+            .count();
+        let open_critiques = critiques
+            .iter()
+            .filter(|c| c.status == CritiqueStatus::Open)
+            .count();
 
         let output = serde_json::json!({
             "active_solution": active_json,
@@ -75,7 +87,7 @@ pub fn execute(ctx: &CommandContext, all: bool, mine: bool, limit: Option<usize>
 
         // Helper to get display ID with type prefix
         let display_id = |entity_type: &str, id: &str| -> String {
-            let prefix = prefix_map.get(id).map(|s| *s).unwrap_or(id);
+            let prefix = prefix_map.get(id).copied().unwrap_or(id);
             format_with_type_prefix(entity_type, prefix)
         };
 
@@ -161,12 +173,23 @@ pub fn execute(ctx: &CommandContext, all: bool, mine: bool, limit: Option<usize>
         }
 
         // 3. Summary section
-        let open_problems = problems.iter().filter(|p| p.status == ProblemStatus::Open || p.status == ProblemStatus::InProgress).count();
-        let testing_solutions = solutions.iter().filter(|s| s.status == SolutionStatus::Testing).count();
-        let open_critiques = critiques.iter().filter(|c| c.status == CritiqueStatus::Open).count();
+        let open_problems = problems
+            .iter()
+            .filter(|p| p.status == ProblemStatus::Open || p.status == ProblemStatus::InProgress)
+            .count();
+        let testing_solutions = solutions
+            .iter()
+            .filter(|s| s.status == SolutionStatus::Testing)
+            .count();
+        let open_critiques = critiques
+            .iter()
+            .filter(|c| c.status == CritiqueStatus::Open)
+            .count();
 
-        println!("\nSummary: {} open problems, {} testing solutions, {} open critiques",
-            open_problems, testing_solutions, open_critiques);
+        println!(
+            "\nSummary: {} open problems, {} testing solutions, {} open critiques",
+            open_problems, testing_solutions, open_critiques
+        );
     }
 
     Ok(())
@@ -189,7 +212,8 @@ fn build_next_actions(
             .collect();
 
         if !open_critiques.is_empty() {
-            let top_critique = open_critiques.iter()
+            let top_critique = open_critiques
+                .iter()
                 .max_by_key(|c| c.severity.clone())
                 .unwrap();
 
@@ -216,7 +240,8 @@ fn build_next_actions(
 
     // 2. READY: Solutions with all critiques resolved + review satisfied
     for solution in solutions.iter().filter(|s| s.is_active()) {
-        let has_open = critiques.iter()
+        let has_open = critiques
+            .iter()
             .any(|c| c.solution_id == solution.id && c.status == CritiqueStatus::Open);
 
         if !has_open && !solution.critique_ids.is_empty() {
@@ -239,11 +264,15 @@ fn build_next_actions(
 
     // 3. REVIEW: Critiques assigned to user that need response
     if !mine {
-        for critique in critiques.iter().filter(|c| c.status == CritiqueStatus::Open) {
+        for critique in critiques
+            .iter()
+            .filter(|c| c.status == CritiqueStatus::Open)
+        {
             if let Some(reviewer) = &critique.reviewer {
                 if user.contains(reviewer) || reviewer.contains(user) {
                     let solution = solutions.iter().find(|s| s.id == critique.solution_id);
-                    let problem = solution.and_then(|s| problems.iter().find(|p| p.id == s.problem_id));
+                    let problem =
+                        solution.and_then(|s| problems.iter().find(|p| p.id == s.problem_id));
                     let priority = problem.map(|p| &p.priority).cloned().unwrap_or_default();
 
                     items.push(serde_json::json!({
@@ -264,17 +293,29 @@ fn build_next_actions(
 
     // 4. WAITING: User's solutions with pending review critiques (assigned to others)
     for solution in solutions.iter().filter(|s| s.is_active()) {
-        let is_mine = solution.assignee.as_ref().map(|a| user == *a).unwrap_or(false);
+        let is_mine = solution
+            .assignee
+            .as_ref()
+            .map(|a| user == *a)
+            .unwrap_or(false);
         if is_mine {
-            let pending_reviews: Vec<_> = critiques.iter()
+            let pending_reviews: Vec<_> = critiques
+                .iter()
                 .filter(|c| c.solution_id == solution.id && c.status == CritiqueStatus::Open)
-                .filter(|c| c.reviewer.is_some() && c.reviewer.as_ref().map(|r| !user.contains(r)).unwrap_or(false))
+                .filter(|c| {
+                    c.reviewer.is_some()
+                        && c.reviewer
+                            .as_ref()
+                            .map(|r| !user.contains(r))
+                            .unwrap_or(false)
+                })
                 .collect();
 
             if !pending_reviews.is_empty() {
                 let problem = problems.iter().find(|p| p.id == solution.problem_id);
                 let priority = problem.map(|p| &p.priority).cloned().unwrap_or_default();
-                let reviewers: Vec<_> = pending_reviews.iter()
+                let reviewers: Vec<_> = pending_reviews
+                    .iter()
                     .filter_map(|c| c.reviewer.as_ref())
                     .map(|r| format!("@{}", r))
                     .collect();
@@ -296,7 +337,8 @@ fn build_next_actions(
 
     // 5. TODO: Open problems with no active solutions
     for problem in problems.iter().filter(|p| p.is_open()) {
-        let has_active_solution = solutions.iter()
+        let has_active_solution = solutions
+            .iter()
             .any(|s| s.problem_id == problem.id && s.is_active());
 
         if !has_active_solution {

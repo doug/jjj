@@ -329,11 +329,7 @@ mod tests {
 
     #[test]
     fn test_status_transitions() {
-        let mut critique = Critique::new(
-            "c1".to_string(),
-            "Test".to_string(),
-            "s1".to_string(),
-        );
+        let mut critique = Critique::new("c1".to_string(), "Test".to_string(), "s1".to_string());
 
         assert_eq!(critique.status, CritiqueStatus::Open);
         assert!(critique.is_active());
@@ -381,18 +377,42 @@ mod tests {
 
     #[test]
     fn test_status_parsing() {
-        assert_eq!("open".parse::<CritiqueStatus>().unwrap(), CritiqueStatus::Open);
-        assert_eq!("addressed".parse::<CritiqueStatus>().unwrap(), CritiqueStatus::Addressed);
-        assert_eq!("valid".parse::<CritiqueStatus>().unwrap(), CritiqueStatus::Valid);
-        assert_eq!("dismissed".parse::<CritiqueStatus>().unwrap(), CritiqueStatus::Dismissed);
+        assert_eq!(
+            "open".parse::<CritiqueStatus>().unwrap(),
+            CritiqueStatus::Open
+        );
+        assert_eq!(
+            "addressed".parse::<CritiqueStatus>().unwrap(),
+            CritiqueStatus::Addressed
+        );
+        assert_eq!(
+            "valid".parse::<CritiqueStatus>().unwrap(),
+            CritiqueStatus::Valid
+        );
+        assert_eq!(
+            "dismissed".parse::<CritiqueStatus>().unwrap(),
+            CritiqueStatus::Dismissed
+        );
     }
 
     #[test]
     fn test_severity_parsing() {
-        assert_eq!("low".parse::<CritiqueSeverity>().unwrap(), CritiqueSeverity::Low);
-        assert_eq!("medium".parse::<CritiqueSeverity>().unwrap(), CritiqueSeverity::Medium);
-        assert_eq!("high".parse::<CritiqueSeverity>().unwrap(), CritiqueSeverity::High);
-        assert_eq!("critical".parse::<CritiqueSeverity>().unwrap(), CritiqueSeverity::Critical);
+        assert_eq!(
+            "low".parse::<CritiqueSeverity>().unwrap(),
+            CritiqueSeverity::Low
+        );
+        assert_eq!(
+            "medium".parse::<CritiqueSeverity>().unwrap(),
+            CritiqueSeverity::Medium
+        );
+        assert_eq!(
+            "high".parse::<CritiqueSeverity>().unwrap(),
+            CritiqueSeverity::High
+        );
+        assert_eq!(
+            "critical".parse::<CritiqueSeverity>().unwrap(),
+            CritiqueSeverity::Critical
+        );
     }
 
     #[test]

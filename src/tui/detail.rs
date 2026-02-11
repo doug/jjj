@@ -86,7 +86,10 @@ impl DetailContent {
                     lines.push(String::new());
                     lines.push("Replies:".to_string());
                     for reply in &c.replies {
-                        lines.push(format!("  {} ({}): {}", reply.author, reply.created_at, reply.body));
+                        lines.push(format!(
+                            "  {} ({}): {}",
+                            reply.author, reply.created_at, reply.body
+                        ));
                     }
                 }
                 lines

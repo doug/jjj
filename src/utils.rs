@@ -33,12 +33,10 @@ pub fn format_change_id(change_id: &str) -> String {
     }
 }
 
-
 /// Parse a user mention (e.g., "@alice" -> "alice")
 pub fn parse_mention(mention: &str) -> String {
     mention.trim_start_matches('@').to_string()
 }
-
 
 /// Format a relative time (e.g., "2 hours ago")
 pub fn format_relative_time(timestamp: &chrono::DateTime<chrono::Utc>) -> String {
@@ -101,7 +99,6 @@ mod tests {
         assert_eq!(format_change_id("abc123"), "abc123");
         assert_eq!(format_change_id("abc123def456"), "abc123d...");
     }
-
 
     #[test]
     fn test_parse_mention() {

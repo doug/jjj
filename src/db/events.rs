@@ -77,7 +77,7 @@ pub fn list_events(
 pub fn list_events_for_timeline(conn: &Connection, entity_id: &str) -> SqliteResult<Vec<Event>> {
     // Use LIKE to search refs JSON for the entity_id
     // The refs field is stored as a JSON array like '["p1", "s2"]'
-    let like_pattern = format!("%\"{}\"%" , entity_id);
+    let like_pattern = format!("%\"{}\"%", entity_id);
 
     let mut stmt = conn.prepare(
         "SELECT id, timestamp, event_type, entity_id, actor, rationale, refs, extra
@@ -101,8 +101,12 @@ pub fn clear_events(conn: &Connection) -> SqliteResult<()> {
 fn row_to_event(row: &rusqlite::Row) -> SqliteResult<Event> {
     let timestamp_str: String = row.get(1)?;
     let event_type_str: String = row.get(2)?;
-    let refs_json: String = row.get::<_, Option<String>>(6)?.unwrap_or_else(|| "[]".to_string());
-    let extra_json: String = row.get::<_, Option<String>>(7)?.unwrap_or_else(|| "{}".to_string());
+    let refs_json: String = row
+        .get::<_, Option<String>>(6)?
+        .unwrap_or_else(|| "[]".to_string());
+    let extra_json: String = row
+        .get::<_, Option<String>>(7)?
+        .unwrap_or_else(|| "{}".to_string());
 
     let event_type = parse_event_type(&event_type_str);
     let refs: Vec<String> = serde_json::from_str(&refs_json).unwrap_or_default();
@@ -177,7 +181,10 @@ mod tests {
         assert_eq!(loaded.entity, "p1");
         assert_eq!(loaded.by, "alice");
         assert_eq!(loaded.event_type, EventType::ProblemCreated);
-        assert_eq!(loaded.rationale, Some("Initial problem creation".to_string()));
+        assert_eq!(
+            loaded.rationale,
+            Some("Initial problem creation".to_string())
+        );
         assert_eq!(loaded.refs, vec!["m1".to_string()]);
 
         // List by entity_id
@@ -189,7 +196,8 @@ mod tests {
         assert_eq!(events.len(), 1);
 
         // List by both
-        let events = list_events(conn, Some("p1"), Some("problem_created"), 100).expect("Failed to list");
+        let events =
+            list_events(conn, Some("p1"), Some("problem_created"), 100).expect("Failed to list");
         assert_eq!(events.len(), 1);
 
         // List with no matches
@@ -247,8 +255,16 @@ mod tests {
         let conn = db.conn();
 
         // Insert some events
-        let event1 = Event::new(EventType::ProblemCreated, "p1".to_string(), "alice".to_string());
-        let event2 = Event::new(EventType::SolutionCreated, "s1".to_string(), "bob".to_string());
+        let event1 = Event::new(
+            EventType::ProblemCreated,
+            "p1".to_string(),
+            "alice".to_string(),
+        );
+        let event2 = Event::new(
+            EventType::SolutionCreated,
+            "s1".to_string(),
+            "bob".to_string(),
+        );
 
         insert_event(conn, &event1).expect("Failed to insert");
         insert_event(conn, &event2).expect("Failed to insert");

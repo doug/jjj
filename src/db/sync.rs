@@ -337,7 +337,11 @@ mod tests {
         let problem = Problem::new("p1".to_string(), "Test Problem".to_string());
         upsert_problem(conn, &problem).expect("Failed to insert problem");
 
-        let solution = Solution::new("s1".to_string(), "Test Solution".to_string(), "p1".to_string());
+        let solution = Solution::new(
+            "s1".to_string(),
+            "Test Solution".to_string(),
+            "p1".to_string(),
+        );
         upsert_solution(conn, &solution).expect("Failed to insert solution");
 
         // Verify data exists

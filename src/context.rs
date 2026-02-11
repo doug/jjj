@@ -22,8 +22,8 @@ impl CommandContext {
 
     /// Resolve a problem ID from user input.
     pub fn resolve_problem(&self, input: &str) -> Result<String> {
-        use crate::resolve::{resolve, ResolveResult};
         use crate::picker::pick_one;
+        use crate::resolve::{resolve, ResolveResult};
 
         let problems = self.store.list_problems()?;
         let entities: Vec<(String, String)> = problems
@@ -40,8 +40,8 @@ impl CommandContext {
 
     /// Resolve a solution ID from user input.
     pub fn resolve_solution(&self, input: &str) -> Result<String> {
-        use crate::resolve::{resolve, ResolveResult};
         use crate::picker::pick_one;
+        use crate::resolve::{resolve, ResolveResult};
 
         let solutions = self.store.list_solutions()?;
         let entities: Vec<(String, String)> = solutions
@@ -58,8 +58,8 @@ impl CommandContext {
 
     /// Resolve a critique ID from user input.
     pub fn resolve_critique(&self, input: &str) -> Result<String> {
-        use crate::resolve::{resolve, ResolveResult};
         use crate::picker::pick_one;
+        use crate::resolve::{resolve, ResolveResult};
 
         let critiques = self.store.list_critiques()?;
         let entities: Vec<(String, String)> = critiques
@@ -76,8 +76,8 @@ impl CommandContext {
 
     /// Resolve a milestone ID from user input.
     pub fn resolve_milestone(&self, input: &str) -> Result<String> {
-        use crate::resolve::{resolve, ResolveResult};
         use crate::picker::pick_one;
+        use crate::resolve::{resolve, ResolveResult};
 
         let milestones = self.store.list_milestones()?;
         let entities: Vec<(String, String)> = milestones
@@ -88,7 +88,9 @@ impl CommandContext {
         match resolve(input, &entities) {
             ResolveResult::Single(id) => Ok(id),
             ResolveResult::Multiple(matches) => pick_one(&matches, "milestone"),
-            ResolveResult::None => Err(crate::error::JjjError::MilestoneNotFound(input.to_string())),
+            ResolveResult::None => {
+                Err(crate::error::JjjError::MilestoneNotFound(input.to_string()))
+            }
         }
     }
 }

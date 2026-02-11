@@ -106,7 +106,7 @@ pub fn execute(
 
     // 3. Smart prompts (unless --no-prompt)
     if !no_prompt {
-        check_and_prompt_accept_solve(&store)?;
+        check_and_prompt_accept_solve(store)?;
     }
 
     Ok(())

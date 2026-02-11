@@ -30,7 +30,10 @@ fn test_problem_new_with_priority() {
     }
     let dir = setup_test_repo();
 
-    run_jjj_success(&dir, &["problem", "new", "Critical Bug", "--priority", "P0"]);
+    run_jjj_success(
+        &dir,
+        &["problem", "new", "Critical Bug", "--priority", "P0"],
+    );
 
     let stdout = run_jjj_success(&dir, &["problem", "show", "Critical Bug"]);
     assert!(
@@ -48,7 +51,16 @@ fn test_problem_new_with_parent() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Parent Problem"]);
-    run_jjj_success(&dir, &["problem", "new", "Child Problem", "--parent", "Parent Problem"]);
+    run_jjj_success(
+        &dir,
+        &[
+            "problem",
+            "new",
+            "Child Problem",
+            "--parent",
+            "Parent Problem",
+        ],
+    );
 
     let stdout = run_jjj_success(&dir, &["problem", "show", "Child Problem"]);
     assert!(
@@ -70,9 +82,21 @@ fn test_problem_list_shows_all_problems() {
     run_jjj_success(&dir, &["problem", "new", "Third Problem"]);
 
     let stdout = run_jjj_success(&dir, &["problem", "list"]);
-    assert!(stdout.contains("First Problem"), "Expected First Problem: {}", stdout);
-    assert!(stdout.contains("Second Problem"), "Expected Second Problem: {}", stdout);
-    assert!(stdout.contains("Third Problem"), "Expected Third Problem: {}", stdout);
+    assert!(
+        stdout.contains("First Problem"),
+        "Expected First Problem: {}",
+        stdout
+    );
+    assert!(
+        stdout.contains("Second Problem"),
+        "Expected Second Problem: {}",
+        stdout
+    );
+    assert!(
+        stdout.contains("Third Problem"),
+        "Expected Third Problem: {}",
+        stdout
+    );
 }
 
 #[test]
@@ -85,16 +109,31 @@ fn test_problem_list_filter_by_status() {
     run_jjj_success(&dir, &["problem", "new", "Open Problem"]);
     run_jjj_success(&dir, &["problem", "new", "Solved Problem"]);
     // Create a solution and accept it to solve Solved Problem
-    run_jjj_success(&dir, &["solution", "new", "Solution", "--problem", "Solved Problem"]);
+    run_jjj_success(
+        &dir,
+        &["solution", "new", "Solution", "--problem", "Solved Problem"],
+    );
     run_jjj_success(&dir, &["solution", "accept", "Solution"]);
     run_jjj_success(&dir, &["problem", "solve", "Solved Problem"]);
 
     let stdout = run_jjj_success(&dir, &["problem", "list", "--status", "open"]);
-    assert!(stdout.contains("Open Problem"), "Expected Open Problem in open list: {}", stdout);
-    assert!(!stdout.contains("Solved Problem"), "Solved Problem should not be in open list: {}", stdout);
+    assert!(
+        stdout.contains("Open Problem"),
+        "Expected Open Problem in open list: {}",
+        stdout
+    );
+    assert!(
+        !stdout.contains("Solved Problem"),
+        "Solved Problem should not be in open list: {}",
+        stdout
+    );
 
     let stdout = run_jjj_success(&dir, &["problem", "list", "--status", "solved"]);
-    assert!(stdout.contains("Solved Problem"), "Expected Solved Problem in solved list: {}", stdout);
+    assert!(
+        stdout.contains("Solved Problem"),
+        "Expected Solved Problem in solved list: {}",
+        stdout
+    );
 }
 
 #[test]
@@ -187,7 +226,16 @@ fn test_problem_edit_title() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Original Title"]);
-    run_jjj_success(&dir, &["problem", "edit", "Original Title", "--title", "Updated Title"]);
+    run_jjj_success(
+        &dir,
+        &[
+            "problem",
+            "edit",
+            "Original Title",
+            "--title",
+            "Updated Title",
+        ],
+    );
 
     let stdout = run_jjj_success(&dir, &["problem", "show", "Updated Title"]);
     assert!(
@@ -205,7 +253,10 @@ fn test_problem_edit_priority() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Low Priority"]);
-    run_jjj_success(&dir, &["problem", "edit", "Low Priority", "--priority", "P0"]);
+    run_jjj_success(
+        &dir,
+        &["problem", "edit", "Low Priority", "--priority", "P0"],
+    );
 
     let stdout = run_jjj_success(&dir, &["problem", "show", "Low Priority"]);
     assert!(
@@ -225,7 +276,13 @@ fn test_problem_dissolve() {
     run_jjj_success(&dir, &["problem", "new", "False Problem"]);
     run_jjj_success(
         &dir,
-        &["problem", "dissolve", "False Problem", "--reason", "Based on misunderstanding"],
+        &[
+            "problem",
+            "dissolve",
+            "False Problem",
+            "--reason",
+            "Based on misunderstanding",
+        ],
     );
 
     let stdout = run_jjj_success(&dir, &["problem", "show", "False Problem"]);
@@ -249,16 +306,18 @@ fn test_problem_tree_view() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Root Problem"]);
-    run_jjj_success(&dir, &["problem", "new", "Child 1", "--parent", "Root Problem"]);
-    run_jjj_success(&dir, &["problem", "new", "Child 2", "--parent", "Root Problem"]);
+    run_jjj_success(
+        &dir,
+        &["problem", "new", "Child 1", "--parent", "Root Problem"],
+    );
+    run_jjj_success(
+        &dir,
+        &["problem", "new", "Child 2", "--parent", "Root Problem"],
+    );
 
     let stdout = run_jjj_success(&dir, &["problem", "list", "--tree"]);
     // Tree view should show hierarchy
-    assert!(
-        stdout.contains("Root Problem"),
-        "Expected root: {}",
-        stdout
-    );
+    assert!(stdout.contains("Root Problem"), "Expected root: {}", stdout);
     assert!(stdout.contains("Child 1"), "Expected child 1: {}", stdout);
     assert!(stdout.contains("Child 2"), "Expected child 2: {}", stdout);
 }
@@ -280,7 +339,10 @@ fn test_problem_solve_requires_accepted_solution() {
     );
 
     // Add a solution and accept it
-    run_jjj_success(&dir, &["solution", "new", "Fix", "--problem", "Need Solution"]);
+    run_jjj_success(
+        &dir,
+        &["solution", "new", "Fix", "--problem", "Need Solution"],
+    );
     run_jjj_success(&dir, &["solution", "accept", "Fix"]);
 
     // Now solve should work
@@ -299,5 +361,9 @@ fn test_problem_assign() {
     run_jjj_success(&dir, &["problem", "assign", "Assign Me", "--to", "alice"]);
 
     let stdout = run_jjj_success(&dir, &["problem", "show", "Assign Me"]);
-    assert!(stdout.contains("alice"), "Expected assignee alice: {}", stdout);
+    assert!(
+        stdout.contains("alice"),
+        "Expected assignee alice: {}",
+        stdout
+    );
 }

@@ -4,6 +4,7 @@ use crate::jj::JjClient;
 use crate::storage::MetadataStore;
 use chrono::{NaiveDate, TimeZone, Utc};
 
+#[allow(clippy::too_many_arguments)]
 pub fn execute(
     action: Option<EventsAction>,
     from: Option<String>,
@@ -22,6 +23,7 @@ pub fn execute(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn list_events(
     from: Option<String>,
     to: Option<String>,
@@ -77,7 +79,9 @@ fn list_events(
         // Search filter
         if let Some(ref q) = search {
             let q_lower = q.to_lowercase();
-            let matches = e.rationale.as_ref()
+            let matches = e
+                .rationale
+                .as_ref()
                 .map(|r| r.to_lowercase().contains(&q_lower))
                 .unwrap_or(false);
             if !matches {
@@ -104,11 +108,14 @@ fn list_events(
 
     for event in &events {
         let date = event.when.format("%Y-%m-%d %H:%M");
-        let rationale = event.rationale.as_ref()
+        let rationale = event
+            .rationale
+            .as_ref()
             .map(|r| format!(" - {}", truncate(r, 50)))
             .unwrap_or_default();
 
-        println!("{} {:20} {:8} {}{}",
+        println!(
+            "{} {:20} {:8} {}{}",
             date,
             event.event_type.to_string(),
             event.entity,
