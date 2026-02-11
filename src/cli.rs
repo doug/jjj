@@ -227,6 +227,10 @@ pub enum ProblemAction {
         /// Milestone to target
         #[arg(long)]
         milestone: Option<String>,
+
+        /// Skip duplicate checking
+        #[arg(long, short = 'f')]
+        force: bool,
     },
 
     /// List all problems
