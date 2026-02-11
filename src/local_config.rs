@@ -28,6 +28,14 @@ pub struct EmbeddingsConfig {
     /// API key for remote services
     #[serde(default)]
     pub api_key: Option<String>,
+
+    /// Similarity threshold for duplicate warnings (default: 0.85)
+    #[serde(default)]
+    pub duplicate_threshold: Option<f32>,
+
+    /// Enable duplicate checking on create (default: true when embeddings enabled)
+    #[serde(default)]
+    pub duplicate_check_enabled: Option<bool>,
 }
 
 /// Local configuration stored in .jj/jjj.toml
@@ -76,11 +84,29 @@ impl LocalConfig {
         if let Ok(val) = std::env::var("JJJ_EMBEDDINGS_API_KEY") {
             self.embeddings.api_key = Some(val);
         }
+        if let Ok(val) = std::env::var("JJJ_EMBEDDINGS_DUPLICATE_THRESHOLD") {
+            if let Ok(threshold) = val.parse() {
+                self.embeddings.duplicate_threshold = Some(threshold);
+            }
+        }
+        if let Ok(val) = std::env::var("JJJ_EMBEDDINGS_DUPLICATE_CHECK") {
+            self.embeddings.duplicate_check_enabled = Some(val == "true" || val == "1");
+        }
     }
 
     /// Check if embeddings are explicitly enabled in config.
     pub fn embeddings_explicitly_enabled(&self) -> bool {
         self.embeddings.enabled == Some(true)
+    }
+
+    /// Get the duplicate detection threshold (default: 0.85)
+    pub fn duplicate_threshold(&self) -> f32 {
+        self.embeddings.duplicate_threshold.unwrap_or(0.85)
+    }
+
+    /// Check if duplicate detection is enabled (default: true)
+    pub fn duplicate_check_enabled(&self) -> bool {
+        self.embeddings.duplicate_check_enabled.unwrap_or(true)
     }
 }
 
@@ -144,5 +170,24 @@ dimensions = 4096
             Some("qwen3-embedding:8b".to_string())
         );
         assert_eq!(config.embeddings.dimensions, Some(4096));
+    }
+
+    #[test]
+    fn test_duplicate_threshold_default() {
+        let config = LocalConfig::default();
+        assert_eq!(config.duplicate_threshold(), 0.85);
+        assert!(config.duplicate_check_enabled());
+    }
+
+    #[test]
+    fn test_duplicate_config_from_toml() {
+        let toml_str = r#"
+[embeddings]
+duplicate_threshold = 0.9
+duplicate_check_enabled = false
+"#;
+        let config: LocalConfig = toml::from_str(toml_str).expect("Failed to parse");
+        assert_eq!(config.duplicate_threshold(), 0.9);
+        assert!(!config.duplicate_check_enabled());
     }
 }
