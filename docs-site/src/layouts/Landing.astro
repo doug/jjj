@@ -1,4 +1,6 @@
 ---
+import { ThemeToggle } from '../components/ThemeToggle';
+
 interface Props {
   title: string;
   description: string;
@@ -68,6 +70,25 @@ const { title, description } = Astro.props;
     </style>
   </head>
   <body>
-    <slot />
+    <header class="fixed top-0 left-0 right-0 z-50 bg-[var(--background)]/80 backdrop-blur-sm border-b border-[var(--border)]">
+      <div class="container mx-auto px-6 h-16 flex items-center justify-between">
+        <a href="/" class="flex items-center gap-2 font-bold" style="color: var(--text-primary);">
+          <span class="w-8 h-8 rounded-lg bg-[var(--accent)] text-white flex items-center justify-center text-sm">jjj</span>
+          <span>jjj</span>
+        </a>
+        <nav class="flex items-center gap-4">
+          <a href="/getting-started/installation" class="hover:text-[var(--accent)] transition-colors" style="color: var(--text-secondary);">
+            Docs
+          </a>
+          <a href="https://github.com/doug/jjj" class="hover:text-[var(--accent)] transition-colors" style="color: var(--text-secondary);" target="_blank">
+            GitHub
+          </a>
+          <ThemeToggle client:load />
+        </nav>
+      </div>
+    </header>
+    <div class="pt-16">
+      <slot />
+    </div>
   </body>
 </html>
