@@ -79,6 +79,37 @@ pub fn resolve(input: &str, entities: &[(String, String)]) -> ResolveResult {
     }
 }
 
+/// Parse an entity reference like "p/01957d" or "s/abc123".
+///
+/// Returns (entity_type, id_prefix) if valid, None otherwise.
+pub fn parse_entity_reference(input: &str) -> Option<(&str, &str)> {
+    // Must be at least 3 chars: "p/" + 1 char
+    if input.len() < 3 {
+        return None;
+    }
+
+    // Check for type prefix followed by /
+    let (type_char, rest) = input.split_at(1);
+    if !rest.starts_with('/') {
+        return None;
+    }
+
+    let id = &rest[1..];
+    if id.is_empty() {
+        return None;
+    }
+
+    let entity_type = match type_char {
+        "p" => "problem",
+        "s" => "solution",
+        "c" => "critique",
+        "m" => "milestone",
+        _ => return None,
+    };
+
+    Some((entity_type, id))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -168,5 +199,35 @@ mod tests {
             ResolveResult::None => {}
             other => panic!("Expected None, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn test_parse_entity_reference_valid() {
+        assert_eq!(
+            parse_entity_reference("p/01957d"),
+            Some(("problem", "01957d"))
+        );
+        assert_eq!(
+            parse_entity_reference("s/abc123"),
+            Some(("solution", "abc123"))
+        );
+        assert_eq!(
+            parse_entity_reference("c/xyz"),
+            Some(("critique", "xyz"))
+        );
+        assert_eq!(
+            parse_entity_reference("m/123"),
+            Some(("milestone", "123"))
+        );
+    }
+
+    #[test]
+    fn test_parse_entity_reference_invalid() {
+        assert_eq!(parse_entity_reference("p/"), None);
+        assert_eq!(parse_entity_reference("x/123"), None);
+        assert_eq!(parse_entity_reference("problem"), None);
+        assert_eq!(parse_entity_reference("p123"), None);
+        assert_eq!(parse_entity_reference(""), None);
+        assert_eq!(parse_entity_reference("p"), None);
     }
 }
