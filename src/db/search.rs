@@ -244,6 +244,154 @@ pub fn search_events(conn: &Connection, query: &str) -> SqliteResult<Vec<Event>>
     rows.collect()
 }
 
+/// A similarity search result with score.
+#[derive(Debug, Clone)]
+pub struct SimilarityResult {
+    pub entity_type: String,
+    pub entity_id: String,
+    pub title: String,
+    pub similarity: f32,
+}
+
+/// Find entities similar to a given embedding.
+///
+/// Returns top-k results sorted by cosine similarity (descending).
+pub fn similarity_search(
+    conn: &Connection,
+    query_embedding: &[f32],
+    entity_type: Option<&str>,
+    exclude_id: Option<&str>,
+    top_k: usize,
+) -> SqliteResult<Vec<SimilarityResult>> {
+    use crate::db::embeddings::list_embeddings;
+    use crate::embeddings::cosine_similarity;
+
+    let embeddings = list_embeddings(conn, entity_type)?;
+
+    let mut results: Vec<SimilarityResult> = embeddings
+        .into_iter()
+        .filter(|e| {
+            // Exclude the source entity if specified
+            exclude_id.is_none_or(|id| e.entity_id != id)
+        })
+        .map(|e| {
+            let similarity = cosine_similarity(query_embedding, &e.embedding);
+            SimilarityResult {
+                entity_type: e.entity_type,
+                entity_id: e.entity_id,
+                title: String::new(), // Will be filled in below
+                similarity,
+            }
+        })
+        .collect();
+
+    // Sort by similarity descending
+    results.sort_by(|a, b| {
+        b.similarity
+            .partial_cmp(&a.similarity)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    // Take top-k
+    results.truncate(top_k);
+
+    // Fill in titles
+    for result in &mut results {
+        result.title = get_entity_title(conn, &result.entity_type, &result.entity_id)?;
+    }
+
+    Ok(results)
+}
+
+/// Find entities similar to a given entity.
+pub fn find_similar(
+    conn: &Connection,
+    entity_type: &str,
+    entity_id: &str,
+    filter_type: Option<&str>,
+    top_k: usize,
+) -> SqliteResult<Vec<SimilarityResult>> {
+    use crate::db::embeddings::load_embedding;
+
+    let embedding = load_embedding(conn, entity_type, entity_id)?;
+
+    match embedding {
+        Some(record) => {
+            similarity_search(conn, &record.embedding, filter_type, Some(entity_id), top_k)
+        }
+        None => Ok(Vec::new()),
+    }
+}
+
+/// Merge FTS and semantic results using Reciprocal Rank Fusion.
+///
+/// RRF score = Σ 1/(k + rank) for each result across both lists.
+/// Higher scores indicate better combined relevance.
+pub fn merge_with_rrf(
+    fts_results: Vec<SearchResult>,
+    semantic_results: Vec<SimilarityResult>,
+    k: usize,
+) -> Vec<SearchResult> {
+    use std::collections::HashMap;
+
+    let mut scores: HashMap<(String, String), f32> = HashMap::new();
+    let mut titles: HashMap<(String, String), String> = HashMap::new();
+
+    // Add FTS scores
+    for (rank, result) in fts_results.iter().enumerate() {
+        let key = (result.entity_type.clone(), result.entity_id.clone());
+        let rrf_score = 1.0 / (k as f32 + rank as f32 + 1.0);
+        *scores.entry(key.clone()).or_insert(0.0) += rrf_score;
+        titles.insert(key, result.title.clone());
+    }
+
+    // Add semantic scores
+    for (rank, result) in semantic_results.iter().enumerate() {
+        let key = (result.entity_type.clone(), result.entity_id.clone());
+        let rrf_score = 1.0 / (k as f32 + rank as f32 + 1.0);
+        *scores.entry(key.clone()).or_insert(0.0) += rrf_score;
+        titles.entry(key).or_insert_with(|| result.title.clone());
+    }
+
+    // Sort by combined score
+    let mut merged: Vec<_> = scores.into_iter().collect();
+    merged.sort_by(|a, b| {
+        b.1.partial_cmp(&a.1)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    // Convert to SearchResult
+    merged
+        .into_iter()
+        .map(|((entity_type, entity_id), _score)| {
+            let title = titles
+                .get(&(entity_type.clone(), entity_id.clone()))
+                .cloned()
+                .unwrap_or_default();
+            SearchResult {
+                entity_type,
+                entity_id,
+                title,
+                snippet: String::new(), // RRF results don't have snippets
+            }
+        })
+        .collect()
+}
+
+/// Get the title of an entity by type and ID.
+fn get_entity_title(conn: &Connection, entity_type: &str, entity_id: &str) -> SqliteResult<String> {
+    let sql = match entity_type {
+        "problem" => "SELECT title FROM problems WHERE id = ?1",
+        "solution" => "SELECT title FROM solutions WHERE id = ?1",
+        "critique" => "SELECT title FROM critiques WHERE id = ?1",
+        "milestone" => "SELECT title FROM milestones WHERE id = ?1",
+        _ => return Ok(String::new()),
+    };
+
+    conn.query_row(sql, params![entity_id], |row| row.get(0))
+        .or(Ok(String::new()))
+}
+
 /// Convert a database row to an Event.
 /// This is a copy of the function from events.rs to avoid circular dependencies.
 fn row_to_event(row: &rusqlite::Row) -> SqliteResult<Event> {
@@ -462,5 +610,96 @@ mod tests {
             "Snippet should be truncated: len={}",
             results[0].snippet.len()
         );
+    }
+
+    #[test]
+    fn test_similarity_search() {
+        use crate::db::embeddings::upsert_embedding;
+
+        let db = Database::open_in_memory().expect("Failed to open database");
+        let conn = db.conn();
+
+        // Insert problems with embeddings
+        let p1 = Problem::new("p1".to_string(), "Auth problem".to_string());
+        upsert_problem(conn, &p1).expect("Failed to insert");
+        upsert_embedding(conn, "problem", "p1", "test", &[1.0, 0.0, 0.0]).expect("Failed");
+
+        let p2 = Problem::new("p2".to_string(), "Similar auth issue".to_string());
+        upsert_problem(conn, &p2).expect("Failed to insert");
+        upsert_embedding(conn, "problem", "p2", "test", &[0.9, 0.1, 0.0]).expect("Failed");
+
+        let p3 = Problem::new("p3".to_string(), "Unrelated problem".to_string());
+        upsert_problem(conn, &p3).expect("Failed to insert");
+        upsert_embedding(conn, "problem", "p3", "test", &[0.0, 0.0, 1.0]).expect("Failed");
+
+        // Search for similar to p1's embedding
+        let results = similarity_search(conn, &[1.0, 0.0, 0.0], None, Some("p1"), 10)
+            .expect("Failed to search");
+
+        assert_eq!(results.len(), 2);
+        // p2 should be more similar than p3
+        assert_eq!(results[0].entity_id, "p2");
+        assert_eq!(results[1].entity_id, "p3");
+        assert!(results[0].similarity > results[1].similarity);
+    }
+
+    #[test]
+    fn test_find_similar() {
+        use crate::db::embeddings::upsert_embedding;
+
+        let db = Database::open_in_memory().expect("Failed to open database");
+        let conn = db.conn();
+
+        let p1 = Problem::new("p1".to_string(), "Problem one".to_string());
+        upsert_problem(conn, &p1).expect("Failed to insert");
+        upsert_embedding(conn, "problem", "p1", "test", &[1.0, 0.0]).expect("Failed");
+
+        let p2 = Problem::new("p2".to_string(), "Problem two".to_string());
+        upsert_problem(conn, &p2).expect("Failed to insert");
+        upsert_embedding(conn, "problem", "p2", "test", &[0.8, 0.2]).expect("Failed");
+
+        let results = find_similar(conn, "problem", "p1", None, 10).expect("Failed");
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].entity_id, "p2");
+    }
+
+    #[test]
+    fn test_merge_with_rrf() {
+        let fts_results = vec![
+            SearchResult {
+                entity_type: "problem".to_string(),
+                entity_id: "p1".to_string(),
+                title: "First".to_string(),
+                snippet: "".to_string(),
+            },
+            SearchResult {
+                entity_type: "problem".to_string(),
+                entity_id: "p2".to_string(),
+                title: "Second".to_string(),
+                snippet: "".to_string(),
+            },
+        ];
+
+        let semantic_results = vec![
+            SimilarityResult {
+                entity_type: "problem".to_string(),
+                entity_id: "p2".to_string(),
+                title: "Second".to_string(),
+                similarity: 0.9,
+            },
+            SimilarityResult {
+                entity_type: "problem".to_string(),
+                entity_id: "p3".to_string(),
+                title: "Third".to_string(),
+                similarity: 0.8,
+            },
+        ];
+
+        let merged = merge_with_rrf(fts_results, semantic_results, 60);
+
+        // p2 appears in both, should rank highest
+        assert_eq!(merged.len(), 3);
+        assert_eq!(merged[0].entity_id, "p2");
     }
 }
