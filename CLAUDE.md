@@ -35,8 +35,8 @@ npm run install-ext            # Install locally
 
 ### Documentation
 ```bash
-mdbook build                   # Build docs
-mdbook serve                   # Serve locally
+cd docs-site && npm run dev    # Serve locally
+cd docs-site && npm run build  # Build docs
 ```
 
 ## Architecture
