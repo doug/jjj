@@ -1,0 +1,73 @@
+---
+interface Props {
+  title: string;
+  description: string;
+}
+
+const { title, description } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content={description} />
+    <title>{title}</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        --background: #FDFBF7;
+        --surface: #F7F5F0;
+        --border: #E5E2DC;
+        --text-primary: #2D2A26;
+        --text-secondary: #6B6660;
+        --accent: #D946EF;
+        --accent-hover: #E879F9;
+        --success: #6B9080;
+      }
+
+      [data-theme='dark'] {
+        --background: #1A1918;
+        --surface: #252322;
+        --border: #3D3A36;
+        --text-primary: #F5F3EF;
+        --text-secondary: #A8A49E;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme='light']) {
+          --background: #1A1918;
+          --surface: #252322;
+          --border: #3D3A36;
+          --text-primary: #F5F3EF;
+          --text-secondary: #A8A49E;
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        background-color: var(--background);
+        color: var(--text-primary);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+    </style>
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>
