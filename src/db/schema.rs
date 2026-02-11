@@ -8,7 +8,7 @@ use rusqlite::{Connection, Result as SqliteResult};
 use std::path::Path;
 
 /// Current schema version. Increment when schema changes require rebuild.
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
 
 /// Database wrapper providing connection management and schema initialization.
 pub struct Database {
@@ -112,6 +112,7 @@ impl Database {
         // Drop in reverse order of dependencies
         self.conn.execute_batch(
             "
+            DROP TABLE IF EXISTS embeddings;
             DROP TABLE IF EXISTS fts;
             DROP TABLE IF EXISTS events;
             DROP TABLE IF EXISTS critiques;
@@ -219,6 +220,35 @@ mod tests {
             .unwrap();
 
         assert!(fts_exists);
+    }
+
+    #[test]
+    fn test_embeddings_table_exists() {
+        let db = Database::open_in_memory().expect("Failed to open database");
+
+        // Embeddings table should exist
+        let embeddings_exists: bool = db
+            .conn
+            .query_row(
+                "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='embeddings'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        assert!(embeddings_exists);
+
+        // Check index exists
+        let index_exists: bool = db
+            .conn
+            .query_row(
+                "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='index' AND name='idx_embeddings_model'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        assert!(index_exists);
     }
 
     #[test]

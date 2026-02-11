@@ -1,5 +1,6 @@
 pub mod completion;
 pub mod critique;
+pub mod db;
 pub mod events;
 pub mod fetch;
 pub mod init;
@@ -86,7 +87,11 @@ fn execute_with_context(ctx: &CommandContext, command: Commands) -> Result<()> {
         Commands::Search {
             query,
             r#type,
+            text_only,
             json,
-        } => search::execute(ctx, &query, r#type.as_deref(), json),
+        } => search::execute(ctx, &query, r#type.as_deref(), text_only, json),
+
+        // Database management
+        Commands::Db { action } => db::execute(ctx, action),
     }
 }
