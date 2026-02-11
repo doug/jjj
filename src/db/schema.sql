@@ -103,3 +103,16 @@ CREATE INDEX IF NOT EXISTS idx_solutions_problem_id ON solutions(problem_id);
 CREATE INDEX IF NOT EXISTS idx_critiques_solution_id ON critiques(solution_id);
 CREATE INDEX IF NOT EXISTS idx_problems_milestone_id ON problems(milestone_id);
 CREATE INDEX IF NOT EXISTS idx_problems_parent_id ON problems(parent_id);
+
+-- Embeddings table for semantic search
+CREATE TABLE IF NOT EXISTS embeddings (
+    entity_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    model TEXT NOT NULL,
+    dimensions INTEGER NOT NULL,
+    embedding BLOB NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (entity_type, entity_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_embeddings_model ON embeddings(model);
