@@ -6,6 +6,7 @@ pub mod commands;
 pub mod context;
 pub mod db;
 pub mod display;
+pub mod embeddings;
 pub mod error;
 pub mod id;
 pub mod local_config;
