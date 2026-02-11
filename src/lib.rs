@@ -8,6 +8,7 @@ pub mod db;
 pub mod display;
 pub mod error;
 pub mod id;
+pub mod local_config;
 pub mod jj;
 pub mod models;
 pub mod picker;
