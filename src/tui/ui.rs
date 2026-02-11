@@ -200,6 +200,23 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
 }
 
 fn draw_detail(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
+    // Decide if we should show the related panel
+    let show_related = app.ui.show_related && !app.ui.related_items.is_empty();
+
+    // Split area if showing related panel
+    let (detail_area, related_area) = if show_related {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Min(5),    // Detail content
+                Constraint::Length(7), // Related panel (5 items + 2 for border)
+            ])
+            .split(area);
+        (chunks[0], Some(chunks[1]))
+    } else {
+        (area, None)
+    };
+
     let lines = app.cache.selected_detail.to_lines();
     let text: Vec<Line> = lines
         .iter()
@@ -216,7 +233,46 @@ fn draw_detail(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
         )
         .wrap(ratatui::widgets::Wrap { trim: false });
 
-    f.render_widget(detail, area);
+    f.render_widget(detail, detail_area);
+
+    // Draw related panel if enabled
+    if let Some(related_area) = related_area {
+        draw_related_panel(f, app, related_area);
+    }
+}
+
+fn draw_related_panel(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
+    let items: Vec<ListItem> = app
+        .ui
+        .related_items
+        .iter()
+        .enumerate()
+        .map(|(i, r)| {
+            let style = if i == app.ui.related_selected {
+                Style::default().bg(Color::DarkGray)
+            } else {
+                Style::default()
+            };
+            let short_id = &r.entity_id[..6.min(r.entity_id.len())];
+            let type_char = r.entity_type.chars().next().unwrap_or('?');
+            ListItem::new(Line::from(Span::styled(
+                format!(
+                    "{}/{}  [{:.2}]  {}",
+                    type_char, short_id, r.similarity, r.title
+                ),
+                style,
+            )))
+        })
+        .collect();
+
+    let list = List::new(items).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title("Related [R to toggle]")
+            .border_style(Style::default().fg(Color::DarkGray)),
+    );
+
+    f.render_widget(list, area);
 }
 
 fn draw_footer(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
@@ -240,7 +296,7 @@ fn draw_footer(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     f.render_widget(context, chunks[0]);
 
     // Global shortcuts (bottom)
-    let global = Paragraph::new("[Tab] pane | [/] commands | [j/k] scroll | [?] help | [q] quit")
+    let global = Paragraph::new("[Tab] pane | [R] related | [j/k] scroll | [?] help | [q] quit")
         .style(Style::default().fg(Color::DarkGray));
     f.render_widget(global, chunks[1]);
 }

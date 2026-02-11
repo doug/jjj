@@ -1,3 +1,5 @@
+use crate::db::search::SimilarityResult;
+use crate::db::Database;
 use crate::error::Result;
 use crate::jj::JjClient;
 use crate::models::{Critique, Milestone, Problem, Solution};
@@ -40,6 +42,9 @@ pub struct UiState {
     pub expanded_nodes: HashSet<String>,
     pub detail_scroll: u16,
     pub flash_message: Option<(String, Instant)>,
+    pub show_related: bool,
+    pub related_items: Vec<SimilarityResult>,
+    pub related_selected: usize,
 }
 
 impl Default for UiState {
@@ -59,6 +64,9 @@ impl UiState {
             expanded_nodes,
             detail_scroll: 0,
             flash_message: None,
+            show_related: true,
+            related_items: Vec::new(),
+            related_selected: 0,
         }
     }
 }
@@ -78,6 +86,7 @@ pub struct App {
     #[allow(dead_code)] // Prepared for future cache invalidation
     dirty: bool,
     store: MetadataStore,
+    db: Option<Database>,
 }
 
 impl App {
@@ -109,6 +118,14 @@ impl App {
             selected_detail: super::DetailContent::None,
         };
 
+        // Try to open the database for related items
+        let db_path = store.jj_client.repo_root().join(".jj").join("jjj.db");
+        let db = if db_path.exists() {
+            Database::open(&db_path).ok()
+        } else {
+            None
+        };
+
         let mut app = Self {
             should_quit: false,
             data,
@@ -116,8 +133,10 @@ impl App {
             cache,
             dirty: false,
             store,
+            db,
         };
         app.update_selected_detail();
+        app.load_related_for_selected();
         Ok(app)
     }
 
@@ -163,6 +182,7 @@ impl App {
             KeyCode::Char('a') => self.handle_action_a()?,
             KeyCode::Char('r') => self.handle_action_r()?,
             KeyCode::Char('d') => self.handle_action_d()?,
+            KeyCode::Char('R') => self.toggle_related_panel(),
             _ => {}
         }
         Ok(())
@@ -350,6 +370,66 @@ impl App {
         self.ui.detail_scroll = self.ui.detail_scroll.saturating_add(10);
     }
 
+    fn toggle_related_panel(&mut self) {
+        self.ui.show_related = !self.ui.show_related;
+    }
+
+    /// Load related items for the currently selected entity
+    pub fn load_related_for_selected(&mut self) {
+        use crate::db::search::find_similar;
+
+        // Clear existing
+        self.ui.related_items.clear();
+        self.ui.related_selected = 0;
+
+        // Get current selected entity info
+        let (entity_type, entity_id) = match self.get_selected_entity_info() {
+            Some(info) => info,
+            None => return,
+        };
+
+        // Try to load related items from database
+        if let Some(ref db) = self.db {
+            if let Ok(results) = find_similar(db.conn(), &entity_type, &entity_id, None, 5) {
+                self.ui.related_items =
+                    results.into_iter().filter(|r| r.similarity > 0.5).collect();
+            }
+        }
+    }
+
+    fn get_selected_entity_info(&self) -> Option<(String, String)> {
+        use super::tree::TreeNode;
+
+        match self.ui.focused_pane {
+            FocusedPane::NextActions => self
+                .cache
+                .next_actions
+                .get(self.ui.next_actions_index)
+                .map(|a| {
+                    let entity_type = match a.entity_type {
+                        super::next_actions::EntityType::Problem => "problem",
+                        super::next_actions::EntityType::Solution => "solution",
+                        super::next_actions::EntityType::Critique => "critique",
+                    };
+                    (entity_type.to_string(), a.entity_id.clone())
+                }),
+            FocusedPane::ProjectTree => {
+                self.cache
+                    .tree_items
+                    .get(self.ui.tree_index)
+                    .and_then(|item| match &item.node {
+                        TreeNode::Problem { id, .. } => Some(("problem".to_string(), id.clone())),
+                        TreeNode::Solution { id, .. } => Some(("solution".to_string(), id.clone())),
+                        TreeNode::Critique { id, .. } => Some(("critique".to_string(), id.clone())),
+                        TreeNode::Milestone { id, .. } => {
+                            Some(("milestone".to_string(), id.clone()))
+                        }
+                        TreeNode::Backlog { .. } => None,
+                    })
+            }
+        }
+    }
+
     pub fn rebuild_tree(&mut self) {
         self.cache.tree_items = super::build_flat_tree(
             &self.data.milestones,
@@ -487,6 +567,7 @@ impl App {
             }
         }
         self.ui.detail_scroll = 0; // Reset scroll on new selection
+        self.load_related_for_selected(); // Load related items for new selection
     }
 
     fn get_selected_entity(&self) -> Option<(String, super::next_actions::EntityType)> {

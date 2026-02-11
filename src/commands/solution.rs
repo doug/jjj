@@ -2,7 +2,9 @@ use crate::cli::SolutionAction;
 use crate::context::CommandContext;
 use crate::db::{search, Database};
 use crate::display::truncated_prefixes;
+use crate::embeddings::EmbeddingClient;
 use crate::error::Result;
+use crate::local_config::LocalConfig;
 use crate::models::{
     Critique, CritiqueSeverity, CritiqueStatus, Event, EventExtra, EventType, ProblemStatus,
     Solution, SolutionStatus,
@@ -16,7 +18,8 @@ pub fn execute(ctx: &CommandContext, action: SolutionAction) -> Result<()> {
             problem,
             supersedes,
             reviewer,
-        } => new_solution(ctx, title, problem, supersedes, reviewer),
+            force,
+        } => new_solution(ctx, title, problem, supersedes, reviewer, force),
 
         SolutionAction::List {
             problem,
@@ -58,9 +61,20 @@ fn new_solution(
     problem_input: Option<String>,
     supersedes_input: Option<String>,
     reviewer_critiques: Vec<String>,
+    force: bool,
 ) -> Result<()> {
     let store = &ctx.store;
     let jj_client = ctx.jj();
+
+    // If not forcing, check for duplicates
+    if !force {
+        if let Some(similar) = check_for_similar_solutions(ctx, &title)? {
+            if !prompt_create_solution_anyway(&similar)? {
+                println!("Cancelled.");
+                return Ok(());
+            }
+        }
+    }
 
     // Resolve problem ID: use provided value or prompt interactively
     let problem_id = match problem_input {
@@ -349,6 +363,8 @@ fn show_solution(ctx: &CommandContext, solution_input: String, json: bool) -> Re
         solution.created_at.format("%Y-%m-%d %H:%M")
     );
     println!("Updated: {}", solution.updated_at.format("%Y-%m-%d %H:%M"));
+
+    crate::commands::show_related_items(ctx, "solution", &solution.id)?;
 
     Ok(())
 }
@@ -693,4 +709,71 @@ fn resume_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn check_for_similar_solutions(
+    ctx: &CommandContext,
+    title: &str,
+) -> Result<Option<Vec<search::SimilarityResult>>> {
+    let jj_client = ctx.jj();
+    let repo_root = jj_client.repo_root();
+    let db_path = repo_root.join(".jj").join("jjj.db");
+
+    if !db_path.exists() {
+        return Ok(None);
+    }
+
+    let local_config = LocalConfig::load(repo_root);
+    if !local_config.duplicate_check_enabled() {
+        return Ok(None);
+    }
+
+    let client = match EmbeddingClient::from_config(&local_config, false) {
+        Some(c) => c,
+        None => return Ok(None),
+    };
+
+    let db = Database::open(&db_path)?;
+    let conn = db.conn();
+
+    // Embed the title
+    let embedding = match client.embed(title) {
+        Ok(e) => e,
+        Err(_) => return Ok(None),
+    };
+
+    // Find similar solutions
+    let threshold = local_config.duplicate_threshold();
+    let results = search::similarity_search(conn, &embedding, Some("solution"), None, 5)?;
+    let similar: Vec<_> = results
+        .into_iter()
+        .filter(|r| r.similarity >= threshold)
+        .collect();
+
+    if similar.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(similar))
+    }
+}
+
+fn prompt_create_solution_anyway(similar: &[search::SimilarityResult]) -> Result<bool> {
+    println!("\nSimilar existing solutions found:\n");
+    for result in similar {
+        let short_id = &result.entity_id[..6.min(result.entity_id.len())];
+        println!(
+            "  s/{}  [{:.2}]  \"{}\"",
+            short_id, result.similarity, result.title
+        );
+    }
+    println!();
+
+    print!("Create anyway? [y/N] ");
+    io::stdout().flush()?;
+
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+    let input = input.trim().to_lowercase();
+
+    Ok(input == "y" || input == "yes")
 }

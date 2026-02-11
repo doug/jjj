@@ -227,6 +227,10 @@ pub enum ProblemAction {
         /// Milestone to target
         #[arg(long)]
         milestone: Option<String>,
+
+        /// Skip duplicate checking
+        #[arg(long, short = 'f')]
+        force: bool,
     },
 
     /// List all problems
@@ -340,6 +344,10 @@ pub enum SolutionAction {
         /// Use @name or name:severity (e.g., @bob, alice:high)
         #[arg(long, value_name = "REVIEWER")]
         reviewer: Vec<String>,
+
+        /// Skip duplicate checking
+        #[arg(long, short = 'f')]
+        force: bool,
     },
 
     /// List all solutions
