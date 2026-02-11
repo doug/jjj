@@ -74,12 +74,16 @@ pub enum Commands {
 
     /// Search across all entities
     Search {
-        /// Search query
+        /// Search query (or entity reference like p/01957d for similarity search)
         query: String,
 
         /// Filter by entity type (problem, solution, critique, milestone, event)
         #[arg(long, short = 't')]
         r#type: Option<String>,
+
+        /// Force text-only search (disable semantic/embedding features)
+        #[arg(long)]
+        text_only: bool,
 
         /// Output as JSON
         #[arg(long)]
