@@ -1,10 +1,10 @@
-use super::app::{App, FocusedPane};
+use super::app::{App, FocusedPane, InputMode};
 use super::next_actions::Category;
 use ratatui::{
-    layout::{Constraint, Direction, Layout},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
+    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph},
     Frame,
 };
 
@@ -34,6 +34,11 @@ pub fn draw(f: &mut Frame, app: &App) {
     draw_project_tree(f, app, main_chunks[1]);
     draw_detail(f, app, main_chunks[2]);
     draw_footer(f, app, vertical_chunks[1]);
+
+    // Draw overlays last (on top)
+    if matches!(app.ui.input_mode, InputMode::Help) {
+        draw_help_overlay(f, app);
+    }
 }
 
 fn category_color(cat: Category) -> Color {
@@ -299,4 +304,108 @@ fn draw_footer(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     let global = Paragraph::new("[Tab] pane | [R] related | [j/k] scroll | [?] help | [q] quit")
         .style(Style::default().fg(Color::DarkGray));
     f.render_widget(global, chunks[1]);
+}
+
+fn draw_help_overlay(f: &mut Frame, app: &App) {
+    let area = f.area();
+
+    // Calculate centered popup (40 wide, 18 tall)
+    let popup_width = 40u16;
+    let popup_height = 18u16;
+    let popup_x = area.width.saturating_sub(popup_width) / 2;
+    let popup_y = area.height.saturating_sub(popup_height) / 2;
+    let popup_area = Rect::new(popup_x, popup_y, popup_width, popup_height);
+
+    // Build help text based on context
+    let mut lines = vec![
+        Line::from(""),
+        Line::from(Span::styled("  Navigation", Style::default().add_modifier(Modifier::BOLD))),
+        Line::from("    ↑/↓     Move selection"),
+        Line::from("    ←/→     Collapse/Expand"),
+        Line::from("    Tab     Switch pane"),
+        Line::from("    j/k     Scroll detail"),
+        Line::from("    R       Toggle related"),
+        Line::from(""),
+    ];
+
+    // Context-sensitive actions
+    let action_lines = get_context_actions(app);
+    lines.extend(action_lines);
+
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "  Press any key to close",
+        Style::default().fg(Color::DarkGray),
+    )));
+
+    // Clear the area and draw popup
+    f.render_widget(Clear, popup_area);
+
+    let help = Paragraph::new(lines)
+        .block(
+            Block::default()
+                .title(" Help ")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Cyan)),
+        );
+
+    f.render_widget(help, popup_area);
+}
+
+fn get_context_actions(app: &App) -> Vec<Line<'static>> {
+    use super::next_actions::EntityType;
+    use super::tree::TreeNode;
+
+    let mut lines = vec![
+        Line::from(Span::styled("  Actions", Style::default().add_modifier(Modifier::BOLD))),
+    ];
+
+    // Determine what's selected
+    let entity_type = match app.ui.focused_pane {
+        FocusedPane::NextActions => {
+            app.cache.next_actions.get(app.ui.next_actions_index)
+                .map(|a| a.entity_type)
+        }
+        FocusedPane::ProjectTree => {
+            app.cache.tree_items.get(app.ui.tree_index)
+                .and_then(|item| match &item.node {
+                    TreeNode::Problem { .. } => Some(EntityType::Problem),
+                    TreeNode::Solution { .. } => Some(EntityType::Solution),
+                    TreeNode::Critique { .. } => Some(EntityType::Critique),
+                    TreeNode::Milestone { .. } | TreeNode::Backlog { .. } => None,
+                })
+        }
+    };
+
+    match entity_type {
+        Some(EntityType::Problem) => {
+            lines.push(Line::from("    n       New solution"));
+            lines.push(Line::from("    s       Mark solved"));
+            lines.push(Line::from("    d       Dissolve"));
+            lines.push(Line::from("    e       Edit title"));
+            lines.push(Line::from("    E       Edit in $EDITOR"));
+        }
+        Some(EntityType::Solution) => {
+            lines.push(Line::from("    n       New critique"));
+            lines.push(Line::from("    a       Accept"));
+            lines.push(Line::from("    r       Refute"));
+            lines.push(Line::from("    e       Edit title"));
+            lines.push(Line::from("    E       Edit in $EDITOR"));
+        }
+        Some(EntityType::Critique) => {
+            lines.push(Line::from("    a       Address"));
+            lines.push(Line::from("    d       Dismiss"));
+            lines.push(Line::from("    v       Validate"));
+            lines.push(Line::from("    e       Edit title"));
+            lines.push(Line::from("    E       Edit in $EDITOR"));
+        }
+        None => {
+            // Milestone or Backlog
+            lines.push(Line::from("    n       New problem"));
+            lines.push(Line::from("    e       Edit title"));
+            lines.push(Line::from("    E       Edit in $EDITOR"));
+        }
+    }
+
+    lines
 }
