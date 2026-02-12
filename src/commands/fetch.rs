@@ -29,6 +29,11 @@ pub fn execute(ctx: &CommandContext, remote: &str) -> Result<()> {
     println!("Fetching from {}...", remote);
     jj_client.execute(&["git", "fetch", "--remote", remote])?;
 
+    // Track the jjj bookmark from the remote if it exists
+    // This allows push to update the bookmark without conflicts
+    let _ = jj_client.execute(&["bookmark", "track", "jjj", "--remote", remote]);
+    // Bookmark might already be tracked or might not exist on remote, that's OK
+
     // 2. Update jjj-meta workspace if it exists
     let meta_path = jj_client.repo_root().join(".jj").join("jjj-meta");
     if meta_path.exists() {

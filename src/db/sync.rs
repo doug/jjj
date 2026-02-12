@@ -275,7 +275,8 @@ fn dump_events_to_jsonl(conn: &Connection, meta_path: &Path) -> Result<()> {
     let events_path = meta_path.join(EVENTS_FILE);
 
     // List all events (they come in DESC order, we want ASC for the file)
-    let mut events = list_events(conn, None, None, usize::MAX)?;
+    // Use a reasonable limit instead of usize::MAX to avoid SQLite integer overflow
+    let mut events = list_events(conn, None, None, 1_000_000)?;
     events.sort_by(|a, b| a.when.cmp(&b.when));
 
     let mut file = fs::File::create(&events_path)?;

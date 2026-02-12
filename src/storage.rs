@@ -885,8 +885,16 @@ impl MetadataStore {
         let meta_change = self.meta_client.current_change_id()?;
 
         // Update bookmark in the main repo (bookmarks are shared)
-        self.jj_client
-            .execute(&["bookmark", "set", META_BOOKMARK, "-r", &meta_change])?;
+        // Use --allow-backwards since after fetch the bookmark may track a remote
+        // and moving to our new local commit would be considered "sideways"
+        self.jj_client.execute(&[
+            "bookmark",
+            "set",
+            META_BOOKMARK,
+            "-r",
+            &meta_change,
+            "--allow-backwards",
+        ])?;
 
         Ok(())
     }
