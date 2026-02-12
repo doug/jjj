@@ -409,6 +409,7 @@ fn get_context_actions(app: &App) -> Vec<Line<'static>> {
         Some(EntityType::Problem) => {
             lines.push(Line::from("    n       New solution"));
             lines.push(Line::from("    s       Mark solved"));
+            lines.push(Line::from("    o       Reopen"));
             lines.push(Line::from("    d       Dissolve"));
             lines.push(Line::from("    e       Edit title"));
             lines.push(Line::from("    E       Edit in $EDITOR"));

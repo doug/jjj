@@ -247,6 +247,7 @@ impl App {
             KeyCode::Char('n') => self.start_new_item()?,
             KeyCode::Char('e') => self.start_edit_title()?,
             KeyCode::Char('s') => self.handle_action_s()?,
+            KeyCode::Char('o') => self.handle_action_o()?,
             KeyCode::Char('v') => self.handle_action_v()?,
             KeyCode::Char('R') => self.toggle_related_panel(),
             KeyCode::Char('E') => self.open_in_editor()?,
@@ -979,6 +980,30 @@ impl App {
                 }) {
                     Ok(_) => {
                         self.show_flash(&format!("{} solved", id_clone));
+                        self.refresh_data()?;
+                    }
+                    Err(e) => {
+                        self.show_flash(&format!("Error: {}", e));
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn handle_action_o(&mut self) -> Result<()> {
+        use crate::models::ProblemStatus;
+
+        if let Some((id, entity_type)) = self.get_selected_entity() {
+            if entity_type == EntityType::Problem {
+                let id_clone = id.clone();
+                match self.store.with_metadata(&format!("Reopen problem {}", id), || {
+                    let mut problem = self.store.load_problem(&id)?;
+                    problem.set_status(ProblemStatus::Open);
+                    self.store.save_problem(&problem)
+                }) {
+                    Ok(_) => {
+                        self.show_flash(&format!("{} reopened", id_clone));
                         self.refresh_data()?;
                     }
                     Err(e) => {
