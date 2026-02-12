@@ -5,6 +5,10 @@
   "version": "0.1.0",
   "publisher": "jjj",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/doug/jjj"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },

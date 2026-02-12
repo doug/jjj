@@ -267,14 +267,14 @@ pause
 # ============================================================================
 print_section "15. EXPLORING THE METADATA"
 
-echo "jjj stores all data in the jjj/meta bookmark."
+echo "jjj stores all data in the jjj bookmark."
 echo "Let's explore what's there:"
 echo
 
 run_command jj bookmark list
 
 echo
-echo "The jjj/meta bookmark contains all tasks and reviews."
+echo "The jjj bookmark contains all tasks and reviews."
 echo "This data is synced with 'jj push/pull' just like code!"
 echo
 
@@ -293,7 +293,7 @@ echo "  ✅ Tracked task progress"
 echo "  ✅ Used the personal dashboard"
 echo
 echo "Key concepts:"
-echo "  • All metadata is stored in the jjj/meta bookmark"
+echo "  • All metadata is stored in the jjj bookmark"
 echo "  • Tasks and reviews are version-controlled files"
 echo "  • Everything is distributed and offline-capable"
 echo "  • Changes are tracked by stable Change IDs"

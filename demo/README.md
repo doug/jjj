@@ -160,7 +160,7 @@ demo-repo/
 
 ### Metadata Location
 
-All jjj metadata lives in the `jjj/meta` bookmark:
+All jjj metadata lives in the `jjj` bookmark:
 - Tasks: `tasks/T-*.json`
 - Reviews: `reviews/<change-id>/manifest.toml`
 - Comments: `reviews/<change-id>/comments/c-*.json`
@@ -169,8 +169,8 @@ All jjj metadata lives in the `jjj/meta` bookmark:
 To view the metadata:
 
 ```bash
-jj bookmark list  # See jjj/meta bookmark
-jj log -r 'jjj/meta'  # View metadata history
+jj bookmark list  # See jjj bookmark
+jj log -r 'jjj'  # View metadata history
 ```
 
 ### Demo Data
@@ -262,7 +262,7 @@ After exploring the demo:
 
 - Use `jj log` to see your change history
 - Use `jj diff` to see what changed in each commit
-- The `jjj/meta` bookmark syncs with `jj push/pull`
+- The `jjj` bookmark syncs with `jj push/pull`
 - All jjj operations work offline
 - Task IDs and Change IDs are stable across rebases
 

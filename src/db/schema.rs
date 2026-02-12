@@ -2,7 +2,7 @@
 //!
 //! The database is stored at `.jj/jjj.db` and serves as a runtime cache
 //! for fast queries and full-text search. The canonical data remains in
-//! the shadow graph (markdown files in jjj/meta bookmark).
+//! the shadow graph (markdown files in jjj bookmark).
 
 use rusqlite::{Connection, Result as SqliteResult};
 use std::path::Path;

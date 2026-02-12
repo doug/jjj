@@ -105,7 +105,7 @@ pub enum Commands {
 
     /// Push code and metadata to remote
     Push {
-        /// Bookmarks to push (in addition to jjj/meta)
+        /// Bookmarks to push (in addition to jjj)
         bookmarks: Vec<String>,
 
         /// Remote to push to (default: origin)

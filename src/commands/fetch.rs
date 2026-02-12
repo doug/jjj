@@ -33,7 +33,7 @@ pub fn execute(ctx: &CommandContext, remote: &str) -> Result<()> {
     let meta_path = jj_client.repo_root().join(".jj").join("jjj-meta");
     if meta_path.exists() {
         if let Ok(meta_client) = JjClient::with_root(meta_path) {
-            if let Err(e) = meta_client.execute(&["new", "jjj/meta@origin"]) {
+            if let Err(e) = meta_client.execute(&["new", "jjj@origin"]) {
                 eprintln!("Warning: could not update jjj-meta workspace: {}", e);
             }
         }

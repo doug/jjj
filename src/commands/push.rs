@@ -58,7 +58,7 @@ pub fn execute(
         for b in &bookmarks {
             println!("  {}", b);
         }
-        println!("  jjj/meta");
+        println!("  jjj");
         return Ok(());
     }
 
@@ -80,16 +80,16 @@ pub fn execute(
         }
     }
 
-    // 2. Always push jjj/meta
-    println!("Pushing jjj/meta...");
-    let result = jj_client.execute(&["git", "push", "-b", "jjj/meta", "--remote", remote]);
+    // 2. Always push jjj bookmark
+    println!("Pushing jjj...");
+    let result = jj_client.execute(&["git", "push", "-b", "jjj", "--remote", remote]);
     if result.is_err() {
         // Retry with --allow-new for new bookmarks
         jj_client.execute(&[
             "git",
             "push",
             "-b",
-            "jjj/meta",
+            "jjj",
             "--remote",
             remote,
             "--allow-new",

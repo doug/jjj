@@ -19,7 +19,7 @@ const MILESTONES_DIR: &str = "milestones";
 
 /// Storage layer for jjj metadata
 pub struct MetadataStore {
-    /// Path to the metadata directory (checked out from jjj/meta)
+    /// Path to the metadata directory (checked out from jjj bookmark)
     meta_path: PathBuf,
 
     /// JJ client for interacting with the repository
@@ -127,7 +127,7 @@ impl MetadataStore {
         &self.meta_path
     }
 
-    /// Initialize the metadata store (create jjj/meta bookmark)
+    /// Initialize the metadata store (create jjj bookmark)
     pub fn init(&self) -> Result<()> {
         // Check if already initialized
         if self.jj_client.bookmark_exists(META_BOOKMARK)? {

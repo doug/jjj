@@ -12,7 +12,7 @@ jjj init
 ```
 
 This creates a shadow graph -- an orphaned commit history that stores all
-project metadata separately from your code. The bookmark `jjj/meta` tracks it.
+project metadata separately from your code. The bookmark `jjj` tracks it.
 
 ## Create a Problem
 
@@ -126,7 +126,7 @@ references. They survive rebases and history rewrites, so metadata links never
 break.
 
 **Shadow Graph** -- All jjj metadata lives in a separate orphaned commit
-history (`jjj/meta`). It never pollutes your project history and can be
+history (`jjj`). It never pollutes your project history and can be
 pushed or fetched independently.
 
 **Critique Blocking** -- A solution cannot be accepted while it has open

@@ -226,8 +226,8 @@ jj bookmark track main@origin 2>/dev/null || jj bookmark track main --remote ori
 jjj_alice init
 
 # Push metadata using git directly
-echo "Pushing jjj/meta via git..."
-(cd "$ALICE_DIR" && git push origin jjj/meta 2>/dev/null || true)
+echo "Pushing jjj via git..."
+(cd "$ALICE_DIR" && git push origin jjj 2>/dev/null || true)
 
 # Create Bob's working directory (clone)
 echo "Creating Bob's working directory..."
@@ -239,8 +239,8 @@ git config user.email "bob@example.com"
 # Initialize jj for Bob (colocated)
 jj git init --colocate
 
-# Fetch jjj/meta and set up local bookmark
-(cd "$BOB_DIR" && git fetch origin jjj/meta && git checkout -b jjj/meta FETCH_HEAD 2>/dev/null && git checkout main || true)
+# Fetch jjj and set up local bookmark
+(cd "$BOB_DIR" && git fetch origin jjj && git checkout -b jjj FETCH_HEAD 2>/dev/null && git checkout main || true)
 
 # Import the bookmark into jj
 bob jj git import

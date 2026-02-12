@@ -49,7 +49,7 @@ jjj problem solve p1
 
 ### Workflow
 ```bash
-jjj init                    # Initialize jjj/meta bookmark
+jjj init                    # Initialize jjj bookmark
 jjj status                  # Show next actions (what to work on)
 jjj ui                      # Launch interactive TUI
 jjj submit                  # Squash changes and complete solution
@@ -97,7 +97,7 @@ jjj milestone roadmap
 
 ### Shadow Graph
 
-All metadata lives in an orphaned `jjj/meta` bookmark, separate from your project history:
+All metadata lives in an orphaned `jjj` bookmark, separate from your project history:
 
 ```
 .jjj/
@@ -124,13 +124,13 @@ This means:
 jjj push
 
 # Or manually:
-jj git push -b jjj/meta
+jj git push -b jjj
 
 # Fetch updates
 jjj fetch
 
 # One-time setup: track remote metadata
-jj bookmark track jjj/meta@origin
+jj bookmark track jjj@origin
 ```
 
 ## Installation
