@@ -243,6 +243,7 @@ impl App {
             KeyCode::Char('s') => self.handle_action_s()?,
             KeyCode::Char('o') => self.handle_action_o()?,
             KeyCode::Char('v') => self.handle_action_v()?,
+            KeyCode::Char('f') => self.toggle_filter(),
             KeyCode::Char('R') => self.toggle_related_panel(),
             KeyCode::Char('E') => self.open_in_editor()?,
             KeyCode::Char('?') => self.toggle_help(),
@@ -569,6 +570,12 @@ impl App {
 
     fn toggle_related_panel(&mut self) {
         self.ui.show_related = !self.ui.show_related;
+    }
+
+    fn toggle_filter(&mut self) {
+        self.ui.filter_actions_only = !self.ui.filter_actions_only;
+        let mode = if self.ui.filter_actions_only { "Actions only" } else { "Full tree" };
+        self.show_flash(mode);
     }
 
     fn toggle_help(&mut self) {
