@@ -75,6 +75,7 @@ pub struct FlatTreeItem {
     pub node: TreeNode,
     pub depth: usize,
     pub has_children: bool,
+    pub action_symbol: Option<String>, // e.g., "⚡", "🚫", "⏳", "📋", "👀"
 }
 
 pub fn build_flat_tree(
@@ -103,6 +104,7 @@ pub fn build_flat_tree(
             },
             depth: 0,
             has_children: !milestone_problems.is_empty(),
+            action_symbol: None,
         });
 
         if expanded {
@@ -130,6 +132,7 @@ pub fn build_flat_tree(
         },
         depth: 0,
         has_children: !backlog_problems.is_empty(),
+        action_symbol: None,
     });
 
     if backlog_expanded {
@@ -170,6 +173,7 @@ fn add_problems(
             },
             depth,
             has_children: !problem_solutions.is_empty(),
+            action_symbol: None,
         });
 
         if expanded {
@@ -189,6 +193,7 @@ fn add_problems(
                     },
                     depth: depth + 1,
                     has_children: !solution_critiques.is_empty(),
+                    action_symbol: None,
                 });
 
                 if sol_expanded {
@@ -202,6 +207,7 @@ fn add_problems(
                             },
                             depth: depth + 2,
                             has_children: false,
+                            action_symbol: None,
                         });
                     }
                 }
