@@ -21,19 +21,17 @@ pub fn draw(f: &mut Frame, app: &App) {
         ])
         .split(size);
 
-    // Main layout: three columns
+    // Main layout: two columns
     let main_chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Percentage(20), // Next Actions
-            Constraint::Percentage(35), // Project Tree
-            Constraint::Percentage(45), // Detail Pane
+            Constraint::Percentage(40), // Project Tree
+            Constraint::Percentage(60), // Detail Pane
         ])
         .split(vertical_chunks[0]);
 
-    draw_next_actions(f, app, main_chunks[0]);
-    draw_project_tree(f, app, main_chunks[1]);
-    draw_detail(f, app, main_chunks[2]);
+    draw_project_tree(f, app, main_chunks[0]);
+    draw_detail(f, app, main_chunks[1]);
 
     // Draw footer or input line
     match &app.ui.input_mode {
