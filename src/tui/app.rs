@@ -234,8 +234,142 @@ impl App {
         Ok(())
     }
 
-    fn handle_input_key(&mut self, _key: KeyCode) -> Result<()> {
-        // Will be implemented in Task 5
+    fn handle_input_key(&mut self, key: KeyCode) -> Result<()> {
+        // Extract current input state
+        let (prompt, buffer, action) = match &self.ui.input_mode {
+            InputMode::Input { prompt, buffer, action } => {
+                (prompt.clone(), buffer.clone(), action.clone())
+            }
+            _ => return Ok(()),
+        };
+
+        match key {
+            KeyCode::Esc => {
+                self.ui.input_mode = InputMode::Normal;
+            }
+            KeyCode::Enter => {
+                if !buffer.is_empty() {
+                    self.execute_input_action(&action, &buffer)?;
+                }
+                self.ui.input_mode = InputMode::Normal;
+            }
+            KeyCode::Backspace => {
+                let mut new_buffer = buffer;
+                new_buffer.pop();
+                self.ui.input_mode = InputMode::Input {
+                    prompt,
+                    buffer: new_buffer,
+                    action,
+                };
+            }
+            KeyCode::Char(c) => {
+                let mut new_buffer = buffer;
+                new_buffer.push(c);
+                self.ui.input_mode = InputMode::Input {
+                    prompt,
+                    buffer: new_buffer,
+                    action,
+                };
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn execute_input_action(&mut self, action: &InputAction, title: &str) -> Result<()> {
+        match action {
+            InputAction::NewProblem { milestone_id } => {
+                self.create_problem(title, milestone_id.clone())?;
+            }
+            InputAction::NewSolution { problem_id } => {
+                self.create_solution(title, problem_id)?;
+            }
+            InputAction::NewCritique { solution_id } => {
+                self.create_critique(title, solution_id)?;
+            }
+            InputAction::EditTitle { entity_type, entity_id } => {
+                self.update_title(entity_type, entity_id, title)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn create_problem(&mut self, title: &str, milestone_id: Option<String>) -> Result<()> {
+        use crate::id::generate_id;
+        use crate::models::Problem;
+
+        let id = generate_id();
+        let mut problem = Problem::new(id.clone(), title.to_string());
+        problem.milestone_id = milestone_id;
+
+        self.store.with_metadata(&format!("Create problem: {}", title), || {
+            self.store.save_problem(&problem)
+        })?;
+
+        self.show_flash(&format!("Created {}", id));
+        self.refresh_data()?;
+        Ok(())
+    }
+
+    fn create_solution(&mut self, title: &str, problem_id: &str) -> Result<()> {
+        use crate::id::generate_id;
+        use crate::models::Solution;
+
+        let id = generate_id();
+        let solution = Solution::new(id.clone(), title.to_string(), problem_id.to_string());
+
+        self.store.with_metadata(&format!("Create solution: {}", title), || {
+            self.store.save_solution(&solution)
+        })?;
+
+        self.show_flash(&format!("Created {}", id));
+        self.refresh_data()?;
+        Ok(())
+    }
+
+    fn create_critique(&mut self, title: &str, solution_id: &str) -> Result<()> {
+        use crate::id::generate_id;
+        use crate::models::Critique;
+
+        let id = generate_id();
+        let critique = Critique::new(id.clone(), title.to_string(), solution_id.to_string());
+
+        self.store.with_metadata(&format!("Create critique: {}", title), || {
+            self.store.save_critique(&critique)
+        })?;
+
+        self.show_flash(&format!("Created {}", id));
+        self.refresh_data()?;
+        Ok(())
+    }
+
+    fn update_title(&mut self, entity_type: &EntityType, entity_id: &str, new_title: &str) -> Result<()> {
+        match entity_type {
+            EntityType::Problem => {
+                self.store.with_metadata(&format!("Update problem title: {}", new_title), || {
+                    let mut problem = self.store.load_problem(entity_id)?;
+                    problem.title = new_title.to_string();
+                    self.store.save_problem(&problem)
+                })?;
+            }
+            EntityType::Solution => {
+                self.store.with_metadata(&format!("Update solution title: {}", new_title), || {
+                    let mut solution = self.store.load_solution(entity_id)?;
+                    solution.title = new_title.to_string();
+                    self.store.save_solution(&solution)
+                })?;
+            }
+            EntityType::Critique => {
+                self.store.with_metadata(&format!("Update critique title: {}", new_title), || {
+                    let mut critique = self.store.load_critique(entity_id)?;
+                    critique.title = new_title.to_string();
+                    self.store.save_critique(&critique)
+                })?;
+            }
+        }
+
+        self.show_flash(&format!("Updated {}", entity_id));
+        self.refresh_data()?;
         Ok(())
     }
 
