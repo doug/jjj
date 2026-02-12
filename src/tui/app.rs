@@ -36,6 +36,15 @@ pub enum InputAction {
     EditTitle { entity_type: EntityType, entity_id: String },
 }
 
+#[derive(Debug, Clone)]
+pub struct EditorRequest {
+    pub entity_type: EntityType,
+    pub entity_id: String,
+    pub temp_path: std::path::PathBuf,
+    pub original_content: String,
+    pub editor: String,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FocusedPane {
     NextActions,
@@ -116,6 +125,7 @@ pub struct App {
     dirty: bool,
     store: MetadataStore,
     db: Option<Database>,
+    pub editor_request: Option<EditorRequest>,
 }
 
 impl App {
@@ -163,14 +173,21 @@ impl App {
             dirty: false,
             store,
             db,
+            editor_request: None,
         };
         app.update_selected_detail();
         app.load_related_for_selected();
         Ok(app)
     }
 
-    pub fn run<B: Backend>(&mut self, terminal: &mut Terminal<B>) -> Result<()> {
+    pub fn run<B: Backend + std::io::Write>(&mut self, terminal: &mut Terminal<B>) -> Result<()> {
         while !self.should_quit {
+            // Check for editor request
+            if let Some(request) = self.editor_request.take() {
+                self.run_editor(terminal, request)?;
+                continue;
+            }
+
             self.clear_expired_flash();
             terminal.draw(|f| super::ui::draw(f, self))?;
 
@@ -232,6 +249,7 @@ impl App {
             KeyCode::Char('s') => self.handle_action_s()?,
             KeyCode::Char('v') => self.handle_action_v()?,
             KeyCode::Char('R') => self.toggle_related_panel(),
+            KeyCode::Char('E') => self.open_in_editor()?,
             KeyCode::Char('?') => self.toggle_help(),
             _ => {}
         }
@@ -1094,5 +1112,194 @@ impl App {
         );
         self.rebuild_tree();
         self.update_selected_detail();
+    }
+
+    fn open_in_editor(&mut self) -> Result<()> {
+        use super::tree::TreeNode;
+
+        // Get selected entity
+        let (entity_type, entity_id) = match self.ui.focused_pane {
+            FocusedPane::NextActions => {
+                if let Some(na) = self.cache.next_actions.get(self.ui.next_actions_index) {
+                    (na.entity_type, na.entity_id.clone())
+                } else {
+                    return Ok(());
+                }
+            }
+            FocusedPane::ProjectTree => {
+                if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
+                    match &item.node {
+                        TreeNode::Problem { id, .. } => (EntityType::Problem, id.clone()),
+                        TreeNode::Solution { id, .. } => (EntityType::Solution, id.clone()),
+                        TreeNode::Critique { id, .. } => (EntityType::Critique, id.clone()),
+                        _ => return Ok(()),
+                    }
+                } else {
+                    return Ok(());
+                }
+            }
+        };
+
+        // Serialize entity to temp file
+        let temp_path = std::env::temp_dir().join(format!("jjj-edit-{}.md", &entity_id[..8.min(entity_id.len())]));
+        let original_content = self.serialize_entity_for_edit(&entity_type, &entity_id)?;
+        std::fs::write(&temp_path, &original_content)?;
+
+        // Get editor
+        let editor = std::env::var("VISUAL")
+            .or_else(|_| std::env::var("EDITOR"))
+            .unwrap_or_else(|_| "vi".to_string());
+
+        // Signal that we need to suspend
+        self.editor_request = Some(EditorRequest {
+            entity_type,
+            entity_id,
+            temp_path,
+            original_content,
+            editor,
+        });
+
+        Ok(())
+    }
+
+    fn serialize_entity_for_edit(&self, entity_type: &EntityType, entity_id: &str) -> Result<String> {
+        match entity_type {
+            EntityType::Problem => {
+                let problem = self.store.load_problem(entity_id)?;
+                Ok(format!(
+                    "---\ntitle: {}\nstatus: {:?}\npriority: {}\n---\n\n## Description\n\n{}\n",
+                    problem.title,
+                    problem.status,
+                    problem.priority,
+                    if problem.description.is_empty() { "" } else { &problem.description }
+                ))
+            }
+            EntityType::Solution => {
+                let solution = self.store.load_solution(entity_id)?;
+                Ok(format!(
+                    "---\ntitle: {}\nstatus: {:?}\n---\n\n## Description\n\n{}\n",
+                    solution.title,
+                    solution.status,
+                    if solution.approach.is_empty() { "" } else { &solution.approach }
+                ))
+            }
+            EntityType::Critique => {
+                let critique = self.store.load_critique(entity_id)?;
+                Ok(format!(
+                    "---\ntitle: {}\nstatus: {:?}\nseverity: {}\n---\n\n## Description\n\n{}\n",
+                    critique.title,
+                    critique.status,
+                    critique.severity,
+                    if critique.argument.is_empty() { "" } else { &critique.argument }
+                ))
+            }
+        }
+    }
+
+    fn run_editor<B: Backend + std::io::Write>(&mut self, terminal: &mut Terminal<B>, request: EditorRequest) -> Result<()> {
+        use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
+        use crossterm::execute;
+        use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
+        use std::process::Command;
+
+        // Leave alternate screen
+        crossterm::terminal::disable_raw_mode()?;
+        execute!(
+            terminal.backend_mut(),
+            LeaveAlternateScreen,
+            DisableMouseCapture
+        )?;
+
+        // Run editor
+        let status = Command::new(&request.editor)
+            .arg(&request.temp_path)
+            .status();
+
+        // Re-enter alternate screen
+        crossterm::terminal::enable_raw_mode()?;
+        execute!(
+            terminal.backend_mut(),
+            EnterAlternateScreen,
+            EnableMouseCapture
+        )?;
+        terminal.clear()?;
+
+        // Process result
+        match status {
+            Ok(exit_status) if exit_status.success() => {
+                let new_content = std::fs::read_to_string(&request.temp_path)?;
+                if new_content == request.original_content {
+                    self.show_flash("No changes");
+                } else {
+                    self.apply_edited_content(&request.entity_type, &request.entity_id, &new_content)?;
+                    self.show_flash(&format!("Updated {}", request.entity_id));
+                }
+            }
+            Ok(_) => {
+                self.show_flash("Edit cancelled");
+            }
+            Err(e) => {
+                self.show_flash(&format!("Editor error: {}", e));
+            }
+        }
+
+        // Clean up temp file
+        let _ = std::fs::remove_file(&request.temp_path);
+
+        Ok(())
+    }
+
+    fn apply_edited_content(&mut self, entity_type: &EntityType, entity_id: &str, content: &str) -> Result<()> {
+        // Simple parsing: extract title from frontmatter, description from body
+        let parts: Vec<&str> = content.splitn(3, "---").collect();
+        if parts.len() < 3 {
+            return Err("Invalid format".into());
+        }
+
+        let frontmatter = parts[1].trim();
+        let body = parts[2].trim();
+
+        // Extract title from frontmatter
+        let title = frontmatter
+            .lines()
+            .find(|l| l.starts_with("title:"))
+            .map(|l| l.trim_start_matches("title:").trim().to_string())
+            .unwrap_or_default();
+
+        // Extract description from body (after ## Description header)
+        let description = body
+            .strip_prefix("## Description")
+            .map(|s| s.trim().to_string())
+            .unwrap_or_default();
+
+        match entity_type {
+            EntityType::Problem => {
+                self.store.with_metadata(&format!("Edit problem {}", entity_id), || {
+                    let mut problem = self.store.load_problem(entity_id)?;
+                    problem.title = title.clone();
+                    problem.description = description.clone();
+                    self.store.save_problem(&problem)
+                })?;
+            }
+            EntityType::Solution => {
+                self.store.with_metadata(&format!("Edit solution {}", entity_id), || {
+                    let mut solution = self.store.load_solution(entity_id)?;
+                    solution.title = title.clone();
+                    solution.approach = description.clone();
+                    self.store.save_solution(&solution)
+                })?;
+            }
+            EntityType::Critique => {
+                self.store.with_metadata(&format!("Edit critique {}", entity_id), || {
+                    let mut critique = self.store.load_critique(entity_id)?;
+                    critique.title = title.clone();
+                    critique.argument = description.clone();
+                    self.store.save_critique(&critique)
+                })?;
+            }
+        }
+
+        self.refresh_data()?;
+        Ok(())
     }
 }
