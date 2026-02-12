@@ -1,4 +1,4 @@
-use super::app::{App, FocusedPane, InputMode};
+use super::app::{App, InputMode};
 use super::next_actions::Category;
 use crate::models::Priority;
 use ratatui::{
@@ -62,12 +62,8 @@ fn category_color(cat: Category) -> Color {
 }
 
 fn draw_next_actions(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
-    let is_focused = app.ui.focused_pane == FocusedPane::NextActions;
-    let border_style = if is_focused {
-        Style::default().fg(Color::Cyan)
-    } else {
-        Style::default().fg(Color::DarkGray)
-    };
+    // Next Actions pane is no longer focused (tree-only view)
+    let border_style = Style::default().fg(Color::DarkGray);
 
     let items: Vec<ListItem> = app
         .cache
@@ -98,12 +94,8 @@ fn draw_next_actions(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
         .highlight_style(Style::default().add_modifier(Modifier::REVERSED))
         .highlight_symbol("> ");
 
-    let mut state = ListState::default();
-    if !app.cache.next_actions.is_empty() {
-        state.select(Some(app.ui.next_actions_index));
-    }
-
-    f.render_stateful_widget(list, area, &mut state);
+    // No selection state - this pane is now read-only
+    f.render_widget(list, area);
 }
 
 fn status_color_problem(status: &crate::models::ProblemStatus) -> Color {
@@ -146,12 +138,8 @@ fn priority_prefix(priority: &Priority) -> &'static str {
 fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     use super::tree::TreeNode;
 
-    let is_focused = app.ui.focused_pane == FocusedPane::ProjectTree;
-    let border_style = if is_focused {
-        Style::default().fg(Color::Cyan)
-    } else {
-        Style::default().fg(Color::DarkGray)
-    };
+    // Tree is always focused now (single-pane navigation)
+    let border_style = Style::default().fg(Color::Cyan);
 
     let items: Vec<ListItem> = app
         .cache
@@ -416,22 +404,14 @@ fn get_context_actions(app: &App) -> Vec<Line<'static>> {
         Line::from(Span::styled("  Actions", Style::default().add_modifier(Modifier::BOLD))),
     ];
 
-    // Determine what's selected
-    let entity_type = match app.ui.focused_pane {
-        FocusedPane::NextActions => {
-            app.cache.next_actions.get(app.ui.next_actions_index)
-                .map(|a| a.entity_type)
-        }
-        FocusedPane::ProjectTree => {
-            app.cache.tree_items.get(app.ui.tree_index)
-                .and_then(|item| match &item.node {
-                    TreeNode::Problem { .. } => Some(EntityType::Problem),
-                    TreeNode::Solution { .. } => Some(EntityType::Solution),
-                    TreeNode::Critique { .. } => Some(EntityType::Critique),
-                    TreeNode::Milestone { .. } | TreeNode::Backlog { .. } => None,
-                })
-        }
-    };
+    // Determine what's selected from tree
+    let entity_type = app.cache.tree_items.get(app.ui.tree_index)
+        .and_then(|item| match &item.node {
+            TreeNode::Problem { .. } => Some(EntityType::Problem),
+            TreeNode::Solution { .. } => Some(EntityType::Solution),
+            TreeNode::Critique { .. } => Some(EntityType::Critique),
+            TreeNode::Milestone { .. } | TreeNode::Backlog { .. } => None,
+        });
 
     match entity_type {
         Some(EntityType::Problem) => {

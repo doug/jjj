@@ -45,12 +45,6 @@ pub struct EditorRequest {
     pub editor: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FocusedPane {
-    NextActions,
-    ProjectTree,
-}
-
 /// Raw data from storage - single source of truth
 pub struct ProjectData {
     pub milestones: Vec<Milestone>,
@@ -72,8 +66,6 @@ impl ProjectData {
 
 /// UI navigation and display state
 pub struct UiState {
-    pub focused_pane: FocusedPane,
-    pub next_actions_index: usize,
     pub tree_index: usize,
     pub expanded_nodes: HashSet<String>,
     pub detail_scroll: u16,
@@ -95,8 +87,6 @@ impl UiState {
         let mut expanded_nodes = HashSet::new();
         expanded_nodes.insert("backlog".to_string());
         Self {
-            focused_pane: FocusedPane::NextActions,
-            next_actions_index: 0,
             tree_index: 0,
             expanded_nodes,
             detail_scroll: 0,
@@ -234,7 +224,7 @@ impl App {
     fn handle_normal_key(&mut self, key: KeyCode) -> Result<()> {
         match key {
             KeyCode::Char('q') => self.should_quit = true,
-            KeyCode::Tab => self.toggle_focus(),
+            KeyCode::Tab => {} // TODO: jump_to_next_action in Task 8
             KeyCode::Up => self.navigate_up(),
             KeyCode::Down => self.navigate_down(),
             KeyCode::Left => self.collapse_or_parent(),
@@ -397,69 +387,18 @@ impl App {
         Ok(())
     }
 
-    fn toggle_focus(&mut self) {
-        self.ui.focused_pane = match self.ui.focused_pane {
-            FocusedPane::NextActions => FocusedPane::ProjectTree,
-            FocusedPane::ProjectTree => FocusedPane::NextActions,
-        };
-        self.update_selected_detail();
-    }
-
     fn navigate_up(&mut self) {
-        match self.ui.focused_pane {
-            FocusedPane::NextActions => {
-                if self.ui.next_actions_index > 0 {
-                    self.ui.next_actions_index -= 1;
-                    self.sync_tree_to_selection();
-                }
-            }
-            FocusedPane::ProjectTree => {
-                if self.ui.tree_index > 0 {
-                    self.ui.tree_index -= 1;
-                }
-            }
+        if self.ui.tree_index > 0 {
+            self.ui.tree_index -= 1;
         }
         self.update_selected_detail();
     }
 
     fn navigate_down(&mut self) {
-        match self.ui.focused_pane {
-            FocusedPane::NextActions => {
-                if self.ui.next_actions_index < self.cache.next_actions.len().saturating_sub(1) {
-                    self.ui.next_actions_index += 1;
-                    self.sync_tree_to_selection();
-                }
-            }
-            FocusedPane::ProjectTree => {
-                if self.ui.tree_index < self.cache.tree_items.len().saturating_sub(1) {
-                    self.ui.tree_index += 1;
-                }
-            }
+        if self.ui.tree_index < self.cache.tree_items.len().saturating_sub(1) {
+            self.ui.tree_index += 1;
         }
         self.update_selected_detail();
-    }
-
-    fn sync_tree_to_selection(&mut self) {
-        if self.ui.focused_pane != FocusedPane::NextActions {
-            return;
-        }
-
-        let target_id = match self.cache.next_actions.get(self.ui.next_actions_index) {
-            Some(action) => action.entity_id.clone(),
-            None => return,
-        };
-
-        // Find which nodes need to be expanded to show this item
-        self.expand_to_reveal(&target_id);
-        self.rebuild_tree();
-
-        // Find the item in the tree
-        for (i, item) in self.cache.tree_items.iter().enumerate() {
-            if item.node.id() == target_id {
-                self.ui.tree_index = i;
-                break;
-            }
-        }
     }
 
     fn expand_to_reveal(&mut self, target_id: &str) {
@@ -519,10 +458,6 @@ impl App {
     }
 
     fn collapse_or_parent(&mut self) {
-        if self.ui.focused_pane != FocusedPane::ProjectTree {
-            return;
-        }
-
         if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
             let node_id = item.node.id().to_string();
 
@@ -543,10 +478,6 @@ impl App {
     }
 
     fn expand_or_child(&mut self) {
-        if self.ui.focused_pane != FocusedPane::ProjectTree {
-            return;
-        }
-
         if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
             if !item.has_children {
                 return;
@@ -616,34 +547,18 @@ impl App {
     fn get_selected_entity_info(&self) -> Option<(String, String)> {
         use super::tree::TreeNode;
 
-        match self.ui.focused_pane {
-            FocusedPane::NextActions => self
-                .cache
-                .next_actions
-                .get(self.ui.next_actions_index)
-                .map(|a| {
-                    let entity_type = match a.entity_type {
-                        super::next_actions::EntityType::Problem => "problem",
-                        super::next_actions::EntityType::Solution => "solution",
-                        super::next_actions::EntityType::Critique => "critique",
-                    };
-                    (entity_type.to_string(), a.entity_id.clone())
-                }),
-            FocusedPane::ProjectTree => {
-                self.cache
-                    .tree_items
-                    .get(self.ui.tree_index)
-                    .and_then(|item| match &item.node {
-                        TreeNode::Problem { id, .. } => Some(("problem".to_string(), id.clone())),
-                        TreeNode::Solution { id, .. } => Some(("solution".to_string(), id.clone())),
-                        TreeNode::Critique { id, .. } => Some(("critique".to_string(), id.clone())),
-                        TreeNode::Milestone { id, .. } => {
-                            Some(("milestone".to_string(), id.clone()))
-                        }
-                        TreeNode::Backlog { .. } => None,
-                    })
-            }
-        }
+        self.cache
+            .tree_items
+            .get(self.ui.tree_index)
+            .and_then(|item| match &item.node {
+                TreeNode::Problem { id, .. } => Some(("problem".to_string(), id.clone())),
+                TreeNode::Solution { id, .. } => Some(("solution".to_string(), id.clone())),
+                TreeNode::Critique { id, .. } => Some(("critique".to_string(), id.clone())),
+                TreeNode::Milestone { id, .. } => {
+                    Some(("milestone".to_string(), id.clone()))
+                }
+                TreeNode::Backlog { .. } => None,
+            })
     }
 
     pub fn rebuild_tree(&mut self) {
@@ -659,128 +574,66 @@ impl App {
     pub fn context_hints(&self) -> String {
         use super::tree::TreeNode;
 
-        match self.ui.focused_pane {
-            FocusedPane::NextActions => {
-                if let Some(action) = self.cache.next_actions.get(self.ui.next_actions_index) {
-                    match action.entity_type {
-                        super::next_actions::EntityType::Problem => {
-                            format!(
-                                "{}: [n]ew solution [s]olve [d]issolve [e]dit",
-                                action.entity_id
-                            )
-                        }
-                        super::next_actions::EntityType::Solution => {
-                            format!(
-                                "{}: [a]ccept [r]efute [n]ew critique [e]dit",
-                                action.entity_id
-                            )
-                        }
-                        super::next_actions::EntityType::Critique => {
-                            format!("{}: [a]ddress [d]ismiss [e]dit", action.entity_id)
-                        }
-                    }
-                } else {
-                    "No selection".to_string()
+        if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
+            match &item.node {
+                TreeNode::Milestone { id, .. } => {
+                    format!("{}: [e]dit", id)
+                }
+                TreeNode::Backlog { .. } => "[p]roblem new".to_string(),
+                TreeNode::Problem { id, .. } => {
+                    format!("{}: [n]ew solution [s]olve [d]issolve [e]dit", id)
+                }
+                TreeNode::Solution { id, .. } => {
+                    format!("{}: [a]ccept [r]efute [n]ew critique [e]dit", id)
+                }
+                TreeNode::Critique { id, .. } => {
+                    format!("{}: [a]ddress [d]ismiss [e]dit", id)
                 }
             }
-            FocusedPane::ProjectTree => {
-                if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
-                    match &item.node {
-                        TreeNode::Milestone { id, .. } => {
-                            format!("{}: [e]dit", id)
-                        }
-                        TreeNode::Backlog { .. } => "[p]roblem new".to_string(),
-                        TreeNode::Problem { id, .. } => {
-                            format!("{}: [n]ew solution [s]olve [d]issolve [e]dit", id)
-                        }
-                        TreeNode::Solution { id, .. } => {
-                            format!("{}: [a]ccept [r]efute [n]ew critique [e]dit", id)
-                        }
-                        TreeNode::Critique { id, .. } => {
-                            format!("{}: [a]ddress [d]ismiss [e]dit", id)
-                        }
-                    }
-                } else {
-                    "No selection".to_string()
-                }
-            }
+        } else {
+            "No selection".to_string()
         }
     }
 
     pub fn update_selected_detail(&mut self) {
         use super::tree::TreeNode;
 
-        // Check focused pane and get relevant selection
-        match self.ui.focused_pane {
-            FocusedPane::NextActions => {
-                if let Some(action) = self.cache.next_actions.get(self.ui.next_actions_index) {
-                    self.cache.selected_detail = match action.entity_type {
-                        super::next_actions::EntityType::Problem => self
-                            .data
-                            .problems
-                            .iter()
-                            .find(|p| p.id == action.entity_id)
-                            .cloned()
-                            .map(super::DetailContent::Problem)
-                            .unwrap_or(super::DetailContent::None),
-                        super::next_actions::EntityType::Solution => self
-                            .data
-                            .solutions
-                            .iter()
-                            .find(|s| s.id == action.entity_id)
-                            .cloned()
-                            .map(super::DetailContent::Solution)
-                            .unwrap_or(super::DetailContent::None),
-                        super::next_actions::EntityType::Critique => self
-                            .data
-                            .critiques
-                            .iter()
-                            .find(|c| c.id == action.entity_id)
-                            .cloned()
-                            .map(super::DetailContent::Critique)
-                            .unwrap_or(super::DetailContent::None),
-                    };
-                }
-            }
-            FocusedPane::ProjectTree => {
-                if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
-                    self.cache.selected_detail = match &item.node {
-                        TreeNode::Milestone { id, .. } => self
-                            .data
-                            .milestones
-                            .iter()
-                            .find(|m| m.id == *id)
-                            .cloned()
-                            .map(super::DetailContent::Milestone)
-                            .unwrap_or(super::DetailContent::None),
-                        TreeNode::Backlog { .. } => super::DetailContent::None,
-                        TreeNode::Problem { id, .. } => self
-                            .data
-                            .problems
-                            .iter()
-                            .find(|p| p.id == *id)
-                            .cloned()
-                            .map(super::DetailContent::Problem)
-                            .unwrap_or(super::DetailContent::None),
-                        TreeNode::Solution { id, .. } => self
-                            .data
-                            .solutions
-                            .iter()
-                            .find(|s| s.id == *id)
-                            .cloned()
-                            .map(super::DetailContent::Solution)
-                            .unwrap_or(super::DetailContent::None),
-                        TreeNode::Critique { id, .. } => self
-                            .data
-                            .critiques
-                            .iter()
-                            .find(|c| c.id == *id)
-                            .cloned()
-                            .map(super::DetailContent::Critique)
-                            .unwrap_or(super::DetailContent::None),
-                    };
-                }
-            }
+        if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
+            self.cache.selected_detail = match &item.node {
+                TreeNode::Milestone { id, .. } => self
+                    .data
+                    .milestones
+                    .iter()
+                    .find(|m| m.id == *id)
+                    .cloned()
+                    .map(super::DetailContent::Milestone)
+                    .unwrap_or(super::DetailContent::None),
+                TreeNode::Backlog { .. } => super::DetailContent::None,
+                TreeNode::Problem { id, .. } => self
+                    .data
+                    .problems
+                    .iter()
+                    .find(|p| p.id == *id)
+                    .cloned()
+                    .map(super::DetailContent::Problem)
+                    .unwrap_or(super::DetailContent::None),
+                TreeNode::Solution { id, .. } => self
+                    .data
+                    .solutions
+                    .iter()
+                    .find(|s| s.id == *id)
+                    .cloned()
+                    .map(super::DetailContent::Solution)
+                    .unwrap_or(super::DetailContent::None),
+                TreeNode::Critique { id, .. } => self
+                    .data
+                    .critiques
+                    .iter()
+                    .find(|c| c.id == *id)
+                    .cloned()
+                    .map(super::DetailContent::Critique)
+                    .unwrap_or(super::DetailContent::None),
+            };
         }
         self.ui.detail_scroll = 0; // Reset scroll on new selection
         self.load_related_for_selected(); // Load related items for new selection
@@ -789,30 +642,21 @@ impl App {
     fn get_selected_entity(&self) -> Option<(String, super::next_actions::EntityType)> {
         use super::tree::TreeNode;
 
-        match self.ui.focused_pane {
-            FocusedPane::NextActions => self
-                .cache
-                .next_actions
-                .get(self.ui.next_actions_index)
-                .map(|a| (a.entity_id.clone(), a.entity_type)),
-            FocusedPane::ProjectTree => {
-                self.cache
-                    .tree_items
-                    .get(self.ui.tree_index)
-                    .and_then(|item| match &item.node {
-                        TreeNode::Problem { id, .. } => {
-                            Some((id.clone(), super::next_actions::EntityType::Problem))
-                        }
-                        TreeNode::Solution { id, .. } => {
-                            Some((id.clone(), super::next_actions::EntityType::Solution))
-                        }
-                        TreeNode::Critique { id, .. } => {
-                            Some((id.clone(), super::next_actions::EntityType::Critique))
-                        }
-                        _ => None,
-                    })
-            }
-        }
+        self.cache
+            .tree_items
+            .get(self.ui.tree_index)
+            .and_then(|item| match &item.node {
+                TreeNode::Problem { id, .. } => {
+                    Some((id.clone(), super::next_actions::EntityType::Problem))
+                }
+                TreeNode::Solution { id, .. } => {
+                    Some((id.clone(), super::next_actions::EntityType::Solution))
+                }
+                TreeNode::Critique { id, .. } => {
+                    Some((id.clone(), super::next_actions::EntityType::Critique))
+                }
+                _ => None,
+            })
     }
 
     fn handle_action_a(&mut self) -> Result<()> {
@@ -854,49 +698,28 @@ impl App {
     fn start_new_item(&mut self) -> Result<()> {
         use super::tree::TreeNode;
 
-        let (prompt, action) = match self.ui.focused_pane {
-            FocusedPane::NextActions => {
-                if let Some(na) = self.cache.next_actions.get(self.ui.next_actions_index) {
-                    match na.entity_type {
-                        EntityType::Problem => (
-                            "New solution title: ".to_string(),
-                            InputAction::NewSolution { problem_id: na.entity_id.clone() },
-                        ),
-                        EntityType::Solution => (
-                            "New critique title: ".to_string(),
-                            InputAction::NewCritique { solution_id: na.entity_id.clone() },
-                        ),
-                        EntityType::Critique => return Ok(()), // Can't create child of critique
-                    }
-                } else {
-                    return Ok(());
-                }
+        let (prompt, action) = if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
+            match &item.node {
+                TreeNode::Milestone { id, .. } => (
+                    "New problem title: ".to_string(),
+                    InputAction::NewProblem { milestone_id: Some(id.clone()) },
+                ),
+                TreeNode::Backlog { .. } => (
+                    "New problem title: ".to_string(),
+                    InputAction::NewProblem { milestone_id: None },
+                ),
+                TreeNode::Problem { id, .. } => (
+                    "New solution title: ".to_string(),
+                    InputAction::NewSolution { problem_id: id.clone() },
+                ),
+                TreeNode::Solution { id, .. } => (
+                    "New critique title: ".to_string(),
+                    InputAction::NewCritique { solution_id: id.clone() },
+                ),
+                TreeNode::Critique { .. } => return Ok(()),
             }
-            FocusedPane::ProjectTree => {
-                if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
-                    match &item.node {
-                        TreeNode::Milestone { id, .. } => (
-                            "New problem title: ".to_string(),
-                            InputAction::NewProblem { milestone_id: Some(id.clone()) },
-                        ),
-                        TreeNode::Backlog { .. } => (
-                            "New problem title: ".to_string(),
-                            InputAction::NewProblem { milestone_id: None },
-                        ),
-                        TreeNode::Problem { id, .. } => (
-                            "New solution title: ".to_string(),
-                            InputAction::NewSolution { problem_id: id.clone() },
-                        ),
-                        TreeNode::Solution { id, .. } => (
-                            "New critique title: ".to_string(),
-                            InputAction::NewCritique { solution_id: id.clone() },
-                        ),
-                        TreeNode::Critique { .. } => return Ok(()),
-                    }
-                } else {
-                    return Ok(());
-                }
-            }
+        } else {
+            return Ok(());
         };
 
         self.ui.input_mode = InputMode::Input {
@@ -910,54 +733,36 @@ impl App {
     fn start_edit_title(&mut self) -> Result<()> {
         use super::tree::TreeNode;
 
-        let (prompt, action, current_title) = match self.ui.focused_pane {
-            FocusedPane::NextActions => {
-                if let Some(na) = self.cache.next_actions.get(self.ui.next_actions_index) {
-                    (
-                        "Edit title: ".to_string(),
-                        InputAction::EditTitle {
-                            entity_type: na.entity_type,
-                            entity_id: na.entity_id.clone(),
-                        },
-                        na.title.clone(),
-                    )
-                } else {
-                    return Ok(());
-                }
+        let (prompt, action, current_title) = if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
+            match &item.node {
+                TreeNode::Problem { id, title, .. } => (
+                    "Edit title: ".to_string(),
+                    InputAction::EditTitle {
+                        entity_type: EntityType::Problem,
+                        entity_id: id.clone(),
+                    },
+                    title.clone(),
+                ),
+                TreeNode::Solution { id, title, .. } => (
+                    "Edit title: ".to_string(),
+                    InputAction::EditTitle {
+                        entity_type: EntityType::Solution,
+                        entity_id: id.clone(),
+                    },
+                    title.clone(),
+                ),
+                TreeNode::Critique { id, title, .. } => (
+                    "Edit title: ".to_string(),
+                    InputAction::EditTitle {
+                        entity_type: EntityType::Critique,
+                        entity_id: id.clone(),
+                    },
+                    title.clone(),
+                ),
+                _ => return Ok(()),
             }
-            FocusedPane::ProjectTree => {
-                if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
-                    match &item.node {
-                        TreeNode::Problem { id, title, .. } => (
-                            "Edit title: ".to_string(),
-                            InputAction::EditTitle {
-                                entity_type: EntityType::Problem,
-                                entity_id: id.clone(),
-                            },
-                            title.clone(),
-                        ),
-                        TreeNode::Solution { id, title, .. } => (
-                            "Edit title: ".to_string(),
-                            InputAction::EditTitle {
-                                entity_type: EntityType::Solution,
-                                entity_id: id.clone(),
-                            },
-                            title.clone(),
-                        ),
-                        TreeNode::Critique { id, title, .. } => (
-                            "Edit title: ".to_string(),
-                            InputAction::EditTitle {
-                                entity_type: EntityType::Critique,
-                                entity_id: id.clone(),
-                            },
-                            title.clone(),
-                        ),
-                        _ => return Ok(()),
-                    }
-                } else {
-                    return Ok(());
-                }
-            }
+        } else {
+            return Ok(());
         };
 
         self.ui.input_mode = InputMode::Input {
@@ -1146,31 +951,19 @@ impl App {
         use super::tree::TreeNode;
 
         // Get selected entity
-        let (entity_type, entity_id) = match self.ui.focused_pane {
-            FocusedPane::NextActions => {
-                if let Some(na) = self.cache.next_actions.get(self.ui.next_actions_index) {
-                    (na.entity_type, na.entity_id.clone())
-                } else {
-                    self.show_flash("No item selected");
+        let (entity_type, entity_id) = if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
+            match &item.node {
+                TreeNode::Problem { id, .. } => (EntityType::Problem, id.clone()),
+                TreeNode::Solution { id, .. } => (EntityType::Solution, id.clone()),
+                TreeNode::Critique { id, .. } => (EntityType::Critique, id.clone()),
+                _ => {
+                    self.show_flash("Cannot edit this item type");
                     return Ok(());
                 }
             }
-            FocusedPane::ProjectTree => {
-                if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
-                    match &item.node {
-                        TreeNode::Problem { id, .. } => (EntityType::Problem, id.clone()),
-                        TreeNode::Solution { id, .. } => (EntityType::Solution, id.clone()),
-                        TreeNode::Critique { id, .. } => (EntityType::Critique, id.clone()),
-                        _ => {
-                            self.show_flash("Cannot edit this item type");
-                            return Ok(());
-                        }
-                    }
-                } else {
-                    self.show_flash("No item selected");
-                    return Ok(());
-                }
-            }
+        } else {
+            self.show_flash("No item selected");
+            return Ok(());
         };
 
         // Serialize entity to temp file
