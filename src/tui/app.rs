@@ -151,11 +151,12 @@ impl App {
             &ui.expanded_nodes,
         );
 
-        let cache = RenderCache {
+        let mut cache = RenderCache {
             next_actions,
             tree_items,
             selected_detail: super::DetailContent::None,
         };
+        super::annotate_tree_with_actions(&mut cache.tree_items, &cache.next_actions);
 
         // Try to open the database for related items
         let db_path = store.jj_client.repo_root().join(".jj").join("jjj.db");
@@ -1136,6 +1137,8 @@ impl App {
             &user,
         );
         self.rebuild_tree();
+        // Annotate tree with action symbols
+        super::annotate_tree_with_actions(&mut self.cache.tree_items, &self.cache.next_actions);
         self.update_selected_detail();
     }
 
