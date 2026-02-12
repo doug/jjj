@@ -118,7 +118,13 @@ fn test_push_to_bare_remote() {
 
     let output = run_jjj(
         dir,
-        &["solution", "new", "Test Solution", "--problem", "Test Problem for Push"],
+        &[
+            "solution",
+            "new",
+            "Test Solution",
+            "--problem",
+            "Test Problem for Push",
+        ],
     );
     assert!(
         output.status.success(),
@@ -134,12 +140,11 @@ fn test_push_to_bare_remote() {
     println!("Push stdout: {}", stdout);
     println!("Push stderr: {}", stderr);
 
+    assert!(output.status.success(), "jjj push failed: {}", stderr);
     assert!(
-        output.status.success(),
-        "jjj push failed: {}",
-        stderr
+        stdout.contains("Pushing jjj"),
+        "Should mention pushing jjj bookmark"
     );
-    assert!(stdout.contains("Pushing jjj"), "Should mention pushing jjj bookmark");
 
     // 6. Verify the jjj bookmark exists on the remote
     let output = Command::new("git")
@@ -172,7 +177,13 @@ fn test_fetch_from_remote() {
     run_jjj(alice_dir.path(), &["problem", "new", "Shared Problem"]);
     run_jjj(
         alice_dir.path(),
-        &["solution", "new", "Alice Solution", "--problem", "Shared Problem"],
+        &[
+            "solution",
+            "new",
+            "Alice Solution",
+            "--problem",
+            "Shared Problem",
+        ],
     );
 
     let output = run_jjj(alice_dir.path(), &["push", "--remote", "origin"]);
@@ -196,11 +207,7 @@ fn test_fetch_from_remote() {
     println!("Fetch stdout: {}", stdout);
     println!("Fetch stderr: {}", stderr);
 
-    assert!(
-        output.status.success(),
-        "jjj fetch failed: {}",
-        stderr
-    );
+    assert!(output.status.success(), "jjj fetch failed: {}", stderr);
 
     // 6. Verify Bob can see the problem and solution
     let output = run_jjj(bob_dir.path(), &["problem", "list"]);
@@ -248,7 +255,14 @@ fn test_push_fetch_roundtrip() {
     // 5. Bob adds a solution and pushes
     let output = run_jjj(
         bob_dir.path(),
-        &["solution", "new", "Token refresh fix", "--problem", "Auth timeout bug", "--force"],
+        &[
+            "solution",
+            "new",
+            "Token refresh fix",
+            "--problem",
+            "Auth timeout bug",
+            "--force",
+        ],
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -265,11 +279,7 @@ fn test_push_fetch_roundtrip() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     println!("Bob push stdout: {}", stdout);
     println!("Bob push stderr: {}", stderr);
-    assert!(
-        output.status.success(),
-        "Bob push failed: {}",
-        stderr
-    );
+    assert!(output.status.success(), "Bob push failed: {}", stderr);
 
     // 6. Alice fetches Bob's changes
     let output = run_jjj(alice_dir.path(), &["fetch", "--remote", "origin"]);

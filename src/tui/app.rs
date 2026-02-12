@@ -11,8 +11,9 @@ use std::time::{Duration, Instant};
 
 use super::next_actions::EntityType;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum InputMode {
+    #[default]
     Normal,
     Help,
     Input {
@@ -22,18 +23,21 @@ pub enum InputMode {
     },
 }
 
-impl Default for InputMode {
-    fn default() -> Self {
-        InputMode::Normal
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InputAction {
-    NewProblem { milestone_id: Option<String> },
-    NewSolution { problem_id: String },
-    NewCritique { solution_id: String },
-    EditTitle { entity_type: EntityType, entity_id: String },
+    NewProblem {
+        milestone_id: Option<String>,
+    },
+    NewSolution {
+        problem_id: String,
+    },
+    NewCritique {
+        solution_id: String,
+    },
+    EditTitle {
+        entity_type: EntityType,
+        entity_id: String,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -255,9 +259,11 @@ impl App {
     fn handle_input_key(&mut self, key: KeyCode) -> Result<()> {
         // Extract current input state
         let (prompt, buffer, action) = match &self.ui.input_mode {
-            InputMode::Input { prompt, buffer, action } => {
-                (prompt.clone(), buffer.clone(), action.clone())
-            }
+            InputMode::Input {
+                prompt,
+                buffer,
+                action,
+            } => (prompt.clone(), buffer.clone(), action.clone()),
             _ => return Ok(()),
         };
 
@@ -305,7 +311,10 @@ impl App {
             InputAction::NewCritique { solution_id } => {
                 self.create_critique(title, solution_id)?;
             }
-            InputAction::EditTitle { entity_type, entity_id } => {
+            InputAction::EditTitle {
+                entity_type,
+                entity_id,
+            } => {
                 self.update_title(entity_type, entity_id, title)?;
             }
         }
@@ -320,9 +329,10 @@ impl App {
         let mut problem = Problem::new(id.clone(), title.to_string());
         problem.milestone_id = milestone_id;
 
-        self.store.with_metadata(&format!("Create problem: {}", title), || {
-            self.store.save_problem(&problem)
-        })?;
+        self.store
+            .with_metadata(&format!("Create problem: {}", title), || {
+                self.store.save_problem(&problem)
+            })?;
 
         self.show_flash(&format!("Created {}", id));
         self.refresh_data()?;
@@ -336,9 +346,10 @@ impl App {
         let id = generate_id();
         let solution = Solution::new(id.clone(), title.to_string(), problem_id.to_string());
 
-        self.store.with_metadata(&format!("Create solution: {}", title), || {
-            self.store.save_solution(&solution)
-        })?;
+        self.store
+            .with_metadata(&format!("Create solution: {}", title), || {
+                self.store.save_solution(&solution)
+            })?;
 
         self.show_flash(&format!("Created {}", id));
         self.refresh_data()?;
@@ -352,37 +363,52 @@ impl App {
         let id = generate_id();
         let critique = Critique::new(id.clone(), title.to_string(), solution_id.to_string());
 
-        self.store.with_metadata(&format!("Create critique: {}", title), || {
-            self.store.save_critique(&critique)
-        })?;
+        self.store
+            .with_metadata(&format!("Create critique: {}", title), || {
+                self.store.save_critique(&critique)
+            })?;
 
         self.show_flash(&format!("Created {}", id));
         self.refresh_data()?;
         Ok(())
     }
 
-    fn update_title(&mut self, entity_type: &EntityType, entity_id: &str, new_title: &str) -> Result<()> {
+    fn update_title(
+        &mut self,
+        entity_type: &EntityType,
+        entity_id: &str,
+        new_title: &str,
+    ) -> Result<()> {
         match entity_type {
             EntityType::Problem => {
-                self.store.with_metadata(&format!("Update problem title: {}", new_title), || {
-                    let mut problem = self.store.load_problem(entity_id)?;
-                    problem.title = new_title.to_string();
-                    self.store.save_problem(&problem)
-                })?;
+                self.store.with_metadata(
+                    &format!("Update problem title: {}", new_title),
+                    || {
+                        let mut problem = self.store.load_problem(entity_id)?;
+                        problem.title = new_title.to_string();
+                        self.store.save_problem(&problem)
+                    },
+                )?;
             }
             EntityType::Solution => {
-                self.store.with_metadata(&format!("Update solution title: {}", new_title), || {
-                    let mut solution = self.store.load_solution(entity_id)?;
-                    solution.title = new_title.to_string();
-                    self.store.save_solution(&solution)
-                })?;
+                self.store.with_metadata(
+                    &format!("Update solution title: {}", new_title),
+                    || {
+                        let mut solution = self.store.load_solution(entity_id)?;
+                        solution.title = new_title.to_string();
+                        self.store.save_solution(&solution)
+                    },
+                )?;
             }
             EntityType::Critique => {
-                self.store.with_metadata(&format!("Update critique title: {}", new_title), || {
-                    let mut critique = self.store.load_critique(entity_id)?;
-                    critique.title = new_title.to_string();
-                    self.store.save_critique(&critique)
-                })?;
+                self.store.with_metadata(
+                    &format!("Update critique title: {}", new_title),
+                    || {
+                        let mut critique = self.store.load_critique(entity_id)?;
+                        critique.title = new_title.to_string();
+                        self.store.save_critique(&critique)
+                    },
+                )?;
             }
         }
 
@@ -574,7 +600,11 @@ impl App {
 
     fn toggle_filter(&mut self) {
         self.ui.filter_actions_only = !self.ui.filter_actions_only;
-        let mode = if self.ui.filter_actions_only { "Actions only" } else { "Full tree" };
+        let mode = if self.ui.filter_actions_only {
+            "Actions only"
+        } else {
+            "Full tree"
+        };
         self.show_flash(mode);
     }
 
@@ -618,9 +648,7 @@ impl App {
                 TreeNode::Problem { id, .. } => Some(("problem".to_string(), id.clone())),
                 TreeNode::Solution { id, .. } => Some(("solution".to_string(), id.clone())),
                 TreeNode::Critique { id, .. } => Some(("critique".to_string(), id.clone())),
-                TreeNode::Milestone { id, .. } => {
-                    Some(("milestone".to_string(), id.clone()))
-                }
+                TreeNode::Milestone { id, .. } => Some(("milestone".to_string(), id.clone())),
                 TreeNode::Backlog { .. } => None,
             })
     }
@@ -766,7 +794,9 @@ impl App {
             match &item.node {
                 TreeNode::Milestone { id, .. } => (
                     "New problem title: ".to_string(),
-                    InputAction::NewProblem { milestone_id: Some(id.clone()) },
+                    InputAction::NewProblem {
+                        milestone_id: Some(id.clone()),
+                    },
                 ),
                 TreeNode::Backlog { .. } => (
                     "New problem title: ".to_string(),
@@ -774,11 +804,15 @@ impl App {
                 ),
                 TreeNode::Problem { id, .. } => (
                     "New solution title: ".to_string(),
-                    InputAction::NewSolution { problem_id: id.clone() },
+                    InputAction::NewSolution {
+                        problem_id: id.clone(),
+                    },
                 ),
                 TreeNode::Solution { id, .. } => (
                     "New critique title: ".to_string(),
-                    InputAction::NewCritique { solution_id: id.clone() },
+                    InputAction::NewCritique {
+                        solution_id: id.clone(),
+                    },
                 ),
                 TreeNode::Critique { .. } => return Ok(()),
             }
@@ -797,37 +831,38 @@ impl App {
     fn start_edit_title(&mut self) -> Result<()> {
         use super::tree::TreeNode;
 
-        let (prompt, action, current_title) = if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
-            match &item.node {
-                TreeNode::Problem { id, title, .. } => (
-                    "Edit title: ".to_string(),
-                    InputAction::EditTitle {
-                        entity_type: EntityType::Problem,
-                        entity_id: id.clone(),
-                    },
-                    title.clone(),
-                ),
-                TreeNode::Solution { id, title, .. } => (
-                    "Edit title: ".to_string(),
-                    InputAction::EditTitle {
-                        entity_type: EntityType::Solution,
-                        entity_id: id.clone(),
-                    },
-                    title.clone(),
-                ),
-                TreeNode::Critique { id, title, .. } => (
-                    "Edit title: ".to_string(),
-                    InputAction::EditTitle {
-                        entity_type: EntityType::Critique,
-                        entity_id: id.clone(),
-                    },
-                    title.clone(),
-                ),
-                _ => return Ok(()),
-            }
-        } else {
-            return Ok(());
-        };
+        let (prompt, action, current_title) =
+            if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
+                match &item.node {
+                    TreeNode::Problem { id, title, .. } => (
+                        "Edit title: ".to_string(),
+                        InputAction::EditTitle {
+                            entity_type: EntityType::Problem,
+                            entity_id: id.clone(),
+                        },
+                        title.clone(),
+                    ),
+                    TreeNode::Solution { id, title, .. } => (
+                        "Edit title: ".to_string(),
+                        InputAction::EditTitle {
+                            entity_type: EntityType::Solution,
+                            entity_id: id.clone(),
+                        },
+                        title.clone(),
+                    ),
+                    TreeNode::Critique { id, title, .. } => (
+                        "Edit title: ".to_string(),
+                        InputAction::EditTitle {
+                            entity_type: EntityType::Critique,
+                            entity_id: id.clone(),
+                        },
+                        title.clone(),
+                    ),
+                    _ => return Ok(()),
+                }
+            } else {
+                return Ok(());
+            };
 
         self.ui.input_mode = InputMode::Input {
             prompt,
@@ -843,11 +878,13 @@ impl App {
         if let Some((id, entity_type)) = self.get_selected_entity() {
             if entity_type == EntityType::Problem {
                 let id_clone = id.clone();
-                match self.store.with_metadata(&format!("Solve problem {}", id), || {
-                    let mut problem = self.store.load_problem(&id)?;
-                    problem.set_status(ProblemStatus::Solved);
-                    self.store.save_problem(&problem)
-                }) {
+                match self
+                    .store
+                    .with_metadata(&format!("Solve problem {}", id), || {
+                        let mut problem = self.store.load_problem(&id)?;
+                        problem.set_status(ProblemStatus::Solved);
+                        self.store.save_problem(&problem)
+                    }) {
                     Ok(_) => {
                         self.show_flash(&format!("{} solved", id_clone));
                         self.refresh_data()?;
@@ -867,11 +904,13 @@ impl App {
         if let Some((id, entity_type)) = self.get_selected_entity() {
             if entity_type == EntityType::Problem {
                 let id_clone = id.clone();
-                match self.store.with_metadata(&format!("Reopen problem {}", id), || {
-                    let mut problem = self.store.load_problem(&id)?;
-                    problem.set_status(ProblemStatus::Open);
-                    self.store.save_problem(&problem)
-                }) {
+                match self
+                    .store
+                    .with_metadata(&format!("Reopen problem {}", id), || {
+                        let mut problem = self.store.load_problem(&id)?;
+                        problem.set_status(ProblemStatus::Open);
+                        self.store.save_problem(&problem)
+                    }) {
                     Ok(_) => {
                         self.show_flash(&format!("{} reopened", id_clone));
                         self.refresh_data()?;
@@ -889,11 +928,13 @@ impl App {
         if let Some((id, entity_type)) = self.get_selected_entity() {
             if entity_type == EntityType::Critique {
                 let id_clone = id.clone();
-                match self.store.with_metadata(&format!("Validate critique {}", id), || {
-                    let mut critique = self.store.load_critique(&id)?;
-                    critique.validate();
-                    self.store.save_critique(&critique)
-                }) {
+                match self
+                    .store
+                    .with_metadata(&format!("Validate critique {}", id), || {
+                        let mut critique = self.store.load_critique(&id)?;
+                        critique.validate();
+                        self.store.save_critique(&critique)
+                    }) {
                     Ok(_) => {
                         self.show_flash(&format!("{} validated", id_clone));
                         self.refresh_data()?;
@@ -1015,23 +1056,27 @@ impl App {
         use super::tree::TreeNode;
 
         // Get selected entity
-        let (entity_type, entity_id) = if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
-            match &item.node {
-                TreeNode::Problem { id, .. } => (EntityType::Problem, id.clone()),
-                TreeNode::Solution { id, .. } => (EntityType::Solution, id.clone()),
-                TreeNode::Critique { id, .. } => (EntityType::Critique, id.clone()),
-                _ => {
-                    self.show_flash("Cannot edit this item type");
-                    return Ok(());
+        let (entity_type, entity_id) =
+            if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
+                match &item.node {
+                    TreeNode::Problem { id, .. } => (EntityType::Problem, id.clone()),
+                    TreeNode::Solution { id, .. } => (EntityType::Solution, id.clone()),
+                    TreeNode::Critique { id, .. } => (EntityType::Critique, id.clone()),
+                    _ => {
+                        self.show_flash("Cannot edit this item type");
+                        return Ok(());
+                    }
                 }
-            }
-        } else {
-            self.show_flash("No item selected");
-            return Ok(());
-        };
+            } else {
+                self.show_flash("No item selected");
+                return Ok(());
+            };
 
         // Serialize entity to temp file
-        let temp_path = std::env::temp_dir().join(format!("jjj-edit-{}.md", &entity_id[..8.min(entity_id.len())]));
+        let temp_path = std::env::temp_dir().join(format!(
+            "jjj-edit-{}.md",
+            &entity_id[..8.min(entity_id.len())]
+        ));
         let original_content = match self.serialize_entity_for_edit(&entity_type, &entity_id) {
             Ok(content) => content,
             Err(e) => {
@@ -1062,7 +1107,11 @@ impl App {
         Ok(())
     }
 
-    fn serialize_entity_for_edit(&self, entity_type: &EntityType, entity_id: &str) -> Result<String> {
+    fn serialize_entity_for_edit(
+        &self,
+        entity_type: &EntityType,
+        entity_id: &str,
+    ) -> Result<String> {
         match entity_type {
             EntityType::Problem => {
                 let problem = self.store.load_problem(entity_id)?;
@@ -1071,7 +1120,11 @@ impl App {
                     problem.title,
                     problem.status,
                     problem.priority,
-                    if problem.description.is_empty() { "" } else { &problem.description }
+                    if problem.description.is_empty() {
+                        ""
+                    } else {
+                        &problem.description
+                    }
                 ))
             }
             EntityType::Solution => {
@@ -1080,7 +1133,11 @@ impl App {
                     "---\ntitle: {}\nstatus: {:?}\n---\n\n## Description\n\n{}\n",
                     solution.title,
                     solution.status,
-                    if solution.approach.is_empty() { "" } else { &solution.approach }
+                    if solution.approach.is_empty() {
+                        ""
+                    } else {
+                        &solution.approach
+                    }
                 ))
             }
             EntityType::Critique => {
@@ -1090,13 +1147,21 @@ impl App {
                     critique.title,
                     critique.status,
                     critique.severity,
-                    if critique.argument.is_empty() { "" } else { &critique.argument }
+                    if critique.argument.is_empty() {
+                        ""
+                    } else {
+                        &critique.argument
+                    }
                 ))
             }
         }
     }
 
-    fn run_editor<B: Backend + std::io::Write>(&mut self, terminal: &mut Terminal<B>, request: EditorRequest) -> Result<()> {
+    fn run_editor<B: Backend + std::io::Write>(
+        &mut self,
+        terminal: &mut Terminal<B>,
+        request: EditorRequest,
+    ) -> Result<()> {
         use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
         use crossterm::execute;
         use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
@@ -1131,7 +1196,11 @@ impl App {
                 if new_content == request.original_content {
                     self.show_flash("No changes");
                 } else {
-                    self.apply_edited_content(&request.entity_type, &request.entity_id, &new_content)?;
+                    self.apply_edited_content(
+                        &request.entity_type,
+                        &request.entity_id,
+                        &new_content,
+                    )?;
                     self.show_flash(&format!("Updated {}", request.entity_id));
                 }
             }
@@ -1149,7 +1218,12 @@ impl App {
         Ok(())
     }
 
-    fn apply_edited_content(&mut self, entity_type: &EntityType, entity_id: &str, content: &str) -> Result<()> {
+    fn apply_edited_content(
+        &mut self,
+        entity_type: &EntityType,
+        entity_id: &str,
+        content: &str,
+    ) -> Result<()> {
         // Simple parsing: extract title from frontmatter, description from body
         let parts: Vec<&str> = content.splitn(3, "---").collect();
         if parts.len() < 3 {
@@ -1174,28 +1248,31 @@ impl App {
 
         match entity_type {
             EntityType::Problem => {
-                self.store.with_metadata(&format!("Edit problem {}", entity_id), || {
-                    let mut problem = self.store.load_problem(entity_id)?;
-                    problem.title = title.clone();
-                    problem.description = description.clone();
-                    self.store.save_problem(&problem)
-                })?;
+                self.store
+                    .with_metadata(&format!("Edit problem {}", entity_id), || {
+                        let mut problem = self.store.load_problem(entity_id)?;
+                        problem.title = title.clone();
+                        problem.description = description.clone();
+                        self.store.save_problem(&problem)
+                    })?;
             }
             EntityType::Solution => {
-                self.store.with_metadata(&format!("Edit solution {}", entity_id), || {
-                    let mut solution = self.store.load_solution(entity_id)?;
-                    solution.title = title.clone();
-                    solution.approach = description.clone();
-                    self.store.save_solution(&solution)
-                })?;
+                self.store
+                    .with_metadata(&format!("Edit solution {}", entity_id), || {
+                        let mut solution = self.store.load_solution(entity_id)?;
+                        solution.title = title.clone();
+                        solution.approach = description.clone();
+                        self.store.save_solution(&solution)
+                    })?;
             }
             EntityType::Critique => {
-                self.store.with_metadata(&format!("Edit critique {}", entity_id), || {
-                    let mut critique = self.store.load_critique(entity_id)?;
-                    critique.title = title.clone();
-                    critique.argument = description.clone();
-                    self.store.save_critique(&critique)
-                })?;
+                self.store
+                    .with_metadata(&format!("Edit critique {}", entity_id), || {
+                        let mut critique = self.store.load_critique(entity_id)?;
+                        critique.title = title.clone();
+                        critique.argument = description.clone();
+                        self.store.save_critique(&critique)
+                    })?;
             }
         }
 

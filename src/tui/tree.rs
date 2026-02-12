@@ -270,7 +270,10 @@ pub fn filter_tree_to_actions(items: &[FlatTreeItem]) -> Vec<FlatTreeItem> {
 
         // Walk backwards to find ancestors
         let item_depth = item.depth;
-        let item_idx = items.iter().position(|i| i.node.id() == item.node.id()).unwrap();
+        let item_idx = items
+            .iter()
+            .position(|i| i.node.id() == item.node.id())
+            .unwrap();
 
         let mut current_depth = item_depth;
         for ancestor in items[..item_idx].iter().rev() {

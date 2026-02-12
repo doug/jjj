@@ -116,7 +116,7 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                     "▶ "
                 }
             } else {
-                "  "  // Changed from "○ " to align better
+                "  " // Changed from "○ " to align better
             };
 
             // Action symbol (if any)
@@ -134,12 +134,19 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                     false,
                 ),
                 TreeNode::Problem {
-                    id, title, status, priority, ..
+                    id,
+                    title,
+                    status,
+                    priority,
+                    ..
                 } => {
                     let priority_sym = priority_prefix(priority);
                     let dim = matches!(priority, Priority::Low);
                     (
-                        format!("{}{}{}{}{}: {}", indent, expand_char, priority_sym, action_sym, id, title),
+                        format!(
+                            "{}{}{}{}{}: {}",
+                            indent, expand_char, priority_sym, action_sym, id, title
+                        ),
                         status_color_problem(status),
                         dim,
                     )
@@ -157,7 +164,10 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                     status,
                     severity,
                 } => (
-                    format!("{}{}{}{}: {} [{}]", indent, expand_char, action_sym, id, title, severity),
+                    format!(
+                        "{}{}{}{}: {} [{}]",
+                        indent, expand_char, action_sym, id, title, severity
+                    ),
                     status_color_critique(status),
                     false,
                 ),
@@ -184,12 +194,14 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
         .highlight_symbol("> ");
 
     // Find selection in display items by matching ID
-    let selected_id = app.cache.tree_items
+    let selected_id = app
+        .cache
+        .tree_items
         .get(app.ui.tree_index)
         .map(|i| i.node.id());
 
-    let display_index = selected_id
-        .and_then(|id| display_items.iter().position(|i| i.node.id() == id));
+    let display_index =
+        selected_id.and_then(|id| display_items.iter().position(|i| i.node.id() == id));
 
     let mut state = ListState::default();
     if let Some(idx) = display_index {
@@ -282,7 +294,12 @@ fn draw_input_line(f: &mut Frame, prompt: &str, buffer: &str, area: Rect) {
     let input_area = Rect::new(area.x, area.y, area.width, 1);
 
     let prompt_span = Span::styled(prompt, Style::default().fg(Color::Yellow));
-    let buffer_span = Span::styled(buffer, Style::default().fg(Color::White).add_modifier(Modifier::BOLD));
+    let buffer_span = Span::styled(
+        buffer,
+        Style::default()
+            .fg(Color::White)
+            .add_modifier(Modifier::BOLD),
+    );
     let cursor_span = Span::styled("█", Style::default().fg(Color::Cyan));
 
     let line = Line::from(vec![prompt_span, buffer_span, cursor_span]);
@@ -290,8 +307,8 @@ fn draw_input_line(f: &mut Frame, prompt: &str, buffer: &str, area: Rect) {
     f.render_widget(input, input_area);
 
     // Second line: hint
-    let hint = Paragraph::new("[Enter] submit | [Esc] cancel")
-        .style(Style::default().fg(Color::DarkGray));
+    let hint =
+        Paragraph::new("[Enter] submit | [Esc] cancel").style(Style::default().fg(Color::DarkGray));
     let hint_area = Rect::new(area.x, area.y + 1, area.width, 1);
     f.render_widget(hint, hint_area);
 }
@@ -317,8 +334,9 @@ fn draw_footer(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     f.render_widget(context, chunks[0]);
 
     // Global shortcuts (bottom)
-    let global = Paragraph::new("[Tab] next action | [R] related | [j/k] scroll | [?] help | [q] quit")
-        .style(Style::default().fg(Color::DarkGray));
+    let global =
+        Paragraph::new("[Tab] next action | [R] related | [j/k] scroll | [?] help | [q] quit")
+            .style(Style::default().fg(Color::DarkGray));
     f.render_widget(global, chunks[1]);
 }
 
@@ -335,7 +353,10 @@ fn draw_help_overlay(f: &mut Frame, app: &App) {
     // Build help text based on context
     let mut lines = vec![
         Line::from(""),
-        Line::from(Span::styled("  Navigation", Style::default().add_modifier(Modifier::BOLD))),
+        Line::from(Span::styled(
+            "  Navigation",
+            Style::default().add_modifier(Modifier::BOLD),
+        )),
         Line::from("    ↑/↓     Move selection"),
         Line::from("    ←/→     Collapse/Expand"),
         Line::from("    Tab     Jump to next action"),
@@ -359,13 +380,12 @@ fn draw_help_overlay(f: &mut Frame, app: &App) {
     // Clear the area and draw popup
     f.render_widget(Clear, popup_area);
 
-    let help = Paragraph::new(lines)
-        .block(
-            Block::default()
-                .title(" Help ")
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Cyan)),
-        );
+    let help = Paragraph::new(lines).block(
+        Block::default()
+            .title(" Help ")
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Cyan)),
+    );
 
     f.render_widget(help, popup_area);
 }
@@ -374,12 +394,16 @@ fn get_context_actions(app: &App) -> Vec<Line<'static>> {
     use super::next_actions::EntityType;
     use super::tree::TreeNode;
 
-    let mut lines = vec![
-        Line::from(Span::styled("  Actions", Style::default().add_modifier(Modifier::BOLD))),
-    ];
+    let mut lines = vec![Line::from(Span::styled(
+        "  Actions",
+        Style::default().add_modifier(Modifier::BOLD),
+    ))];
 
     // Determine what's selected from tree
-    let entity_type = app.cache.tree_items.get(app.ui.tree_index)
+    let entity_type = app
+        .cache
+        .tree_items
+        .get(app.ui.tree_index)
         .and_then(|item| match &item.node {
             TreeNode::Problem { .. } => Some(EntityType::Problem),
             TreeNode::Solution { .. } => Some(EntityType::Solution),
