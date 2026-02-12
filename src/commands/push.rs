@@ -65,9 +65,18 @@ pub fn execute(
     // 1. Push specified bookmarks
     for bookmark in &bookmarks {
         println!("Pushing {}...", bookmark);
-        let result = jj_client.execute(&["git", "push", "-b", bookmark, "--remote", remote]);
+        // Use --allow-empty-description since metadata commits may lack descriptions
+        let result = jj_client.execute(&[
+            "git",
+            "push",
+            "-b",
+            bookmark,
+            "--remote",
+            remote,
+            "--allow-empty-description",
+        ]);
         if result.is_err() {
-            // Retry with --allow-new for new bookmarks
+            // Retry with --allow-new for new bookmarks (deprecated but still works)
             jj_client.execute(&[
                 "git",
                 "push",
@@ -75,6 +84,7 @@ pub fn execute(
                 bookmark,
                 "--remote",
                 remote,
+                "--allow-empty-description",
                 "--allow-new",
             ])?;
         }
@@ -82,9 +92,18 @@ pub fn execute(
 
     // 2. Always push jjj bookmark
     println!("Pushing jjj...");
-    let result = jj_client.execute(&["git", "push", "-b", "jjj", "--remote", remote]);
+    // The jjj bookmark points to orphan commits that may lack descriptions
+    let result = jj_client.execute(&[
+        "git",
+        "push",
+        "-b",
+        "jjj",
+        "--remote",
+        remote,
+        "--allow-empty-description",
+    ]);
     if result.is_err() {
-        // Retry with --allow-new for new bookmarks
+        // Retry with --allow-new for new bookmarks (deprecated but still works)
         jj_client.execute(&[
             "git",
             "push",
@@ -92,6 +111,7 @@ pub fn execute(
             "jjj",
             "--remote",
             remote,
+            "--allow-empty-description",
             "--allow-new",
         ])?;
     }
