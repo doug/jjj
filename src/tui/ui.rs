@@ -340,6 +340,7 @@ fn draw_help_overlay(f: &mut Frame, app: &App) {
         Line::from("    ←/→     Collapse/Expand"),
         Line::from("    Tab     Jump to next action"),
         Line::from("    S-Tab   Jump to prev action"),
+        Line::from("    f       Toggle filter (full/actions)"),
         Line::from("    j/k     Scroll detail"),
         Line::from("    R       Toggle related"),
         Line::from(""),
