@@ -198,6 +198,22 @@ impl App {
     }
 
     fn handle_key(&mut self, key: KeyCode) -> Result<()> {
+        match &self.ui.input_mode {
+            InputMode::Help => {
+                // Any key exits help
+                self.ui.input_mode = InputMode::Normal;
+            }
+            InputMode::Input { .. } => {
+                self.handle_input_key(key)?;
+            }
+            InputMode::Normal => {
+                self.handle_normal_key(key)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn handle_normal_key(&mut self, key: KeyCode) -> Result<()> {
         match key {
             KeyCode::Char('q') => self.should_quit = true,
             KeyCode::Tab => self.toggle_focus(),
@@ -212,8 +228,14 @@ impl App {
             KeyCode::Char('r') => self.handle_action_r()?,
             KeyCode::Char('d') => self.handle_action_d()?,
             KeyCode::Char('R') => self.toggle_related_panel(),
+            KeyCode::Char('?') => self.toggle_help(),
             _ => {}
         }
+        Ok(())
+    }
+
+    fn handle_input_key(&mut self, _key: KeyCode) -> Result<()> {
+        // Will be implemented in Task 5
         Ok(())
     }
 
@@ -401,6 +423,13 @@ impl App {
 
     fn toggle_related_panel(&mut self) {
         self.ui.show_related = !self.ui.show_related;
+    }
+
+    fn toggle_help(&mut self) {
+        self.ui.input_mode = match &self.ui.input_mode {
+            InputMode::Help => InputMode::Normal,
+            _ => InputMode::Help,
+        };
     }
 
     /// Load related items for the currently selected entity
