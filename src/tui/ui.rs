@@ -33,7 +33,16 @@ pub fn draw(f: &mut Frame, app: &App) {
     draw_next_actions(f, app, main_chunks[0]);
     draw_project_tree(f, app, main_chunks[1]);
     draw_detail(f, app, main_chunks[2]);
-    draw_footer(f, app, vertical_chunks[1]);
+
+    // Draw footer or input line
+    match &app.ui.input_mode {
+        InputMode::Input { prompt, buffer, .. } => {
+            draw_input_line(f, prompt, buffer, vertical_chunks[1]);
+        }
+        _ => {
+            draw_footer(f, app, vertical_chunks[1]);
+        }
+    }
 
     // Draw overlays last (on top)
     if matches!(app.ui.input_mode, InputMode::Help) {
@@ -278,6 +287,32 @@ fn draw_related_panel(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     );
 
     f.render_widget(list, area);
+}
+
+fn draw_input_line(f: &mut Frame, prompt: &str, buffer: &str, area: Rect) {
+    // Single line input at bottom
+    let input_area = Rect::new(area.x, area.y, area.width, 2);
+
+    let prompt_span = Span::styled(prompt, Style::default().fg(Color::DarkGray));
+    let buffer_span = Span::styled(buffer, Style::default().fg(Color::White));
+    let cursor_span = Span::styled("█", Style::default().fg(Color::Cyan));
+
+    let line = Line::from(vec![prompt_span, buffer_span, cursor_span]);
+
+    let input = Paragraph::new(line)
+        .block(
+            Block::default()
+                .borders(Borders::TOP)
+                .border_style(Style::default().fg(Color::Cyan)),
+        );
+
+    f.render_widget(input, input_area);
+
+    // Show hint below
+    let hint = Paragraph::new("[Enter] submit | [Esc] cancel")
+        .style(Style::default().fg(Color::DarkGray));
+    let hint_area = Rect::new(area.x, area.y + 1, area.width, 1);
+    f.render_widget(hint, hint_area);
 }
 
 fn draw_footer(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
