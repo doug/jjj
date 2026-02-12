@@ -9,6 +9,33 @@ use ratatui::{backend::Backend, Terminal};
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
 
+use super::next_actions::EntityType;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InputMode {
+    Normal,
+    Help,
+    Input {
+        prompt: String,
+        buffer: String,
+        action: InputAction,
+    },
+}
+
+impl Default for InputMode {
+    fn default() -> Self {
+        InputMode::Normal
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InputAction {
+    NewProblem { milestone_id: Option<String> },
+    NewSolution { problem_id: String },
+    NewCritique { solution_id: String },
+    EditTitle { entity_type: EntityType, entity_id: String },
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FocusedPane {
     NextActions,
@@ -45,6 +72,7 @@ pub struct UiState {
     pub show_related: bool,
     pub related_items: Vec<SimilarityResult>,
     pub related_selected: usize,
+    pub input_mode: InputMode,
 }
 
 impl Default for UiState {
@@ -67,6 +95,7 @@ impl UiState {
             show_related: true,
             related_items: Vec::new(),
             related_selected: 0,
+            input_mode: InputMode::Normal,
         }
     }
 }
