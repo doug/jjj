@@ -1,6 +1,6 @@
 use crate::models::{
-    Critique, CritiqueStatus, Milestone, MilestoneStatus, Problem, ProblemStatus, Solution,
-    SolutionStatus,
+    Critique, CritiqueStatus, Milestone, MilestoneStatus, Priority, Problem, ProblemStatus,
+    Solution, SolutionStatus,
 };
 
 #[derive(Debug, Clone)]
@@ -18,6 +18,7 @@ pub enum TreeNode {
         id: String,
         title: String,
         status: ProblemStatus,
+        priority: Priority,
         expanded: bool,
     },
     Solution {
@@ -169,6 +170,7 @@ fn add_problems(
                 id: problem.id.clone(),
                 title: problem.title.clone(),
                 status: problem.status.clone(),
+                priority: problem.priority.clone(),
                 expanded,
             },
             depth,
