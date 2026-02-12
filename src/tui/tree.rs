@@ -247,3 +247,47 @@ fn category_to_symbol(category: Category) -> &'static str {
         Category::Review => "👀",
     }
 }
+
+/// Filters tree to only show action items and their ancestors
+pub fn filter_tree_to_actions(items: &[FlatTreeItem]) -> Vec<FlatTreeItem> {
+    use std::collections::HashSet;
+
+    // First pass: collect IDs of items with action symbols
+    let action_ids: HashSet<&str> = items
+        .iter()
+        .filter(|item| item.action_symbol.is_some())
+        .map(|item| item.node.id())
+        .collect();
+
+    if action_ids.is_empty() {
+        return Vec::new();
+    }
+
+    // Second pass: for each action item, mark all ancestors as needed
+    let mut needed_ids: HashSet<String> = HashSet::new();
+    for item in items.iter().filter(|i| i.action_symbol.is_some()) {
+        needed_ids.insert(item.node.id().to_string());
+
+        // Walk backwards to find ancestors
+        let item_depth = item.depth;
+        let item_idx = items.iter().position(|i| i.node.id() == item.node.id()).unwrap();
+
+        let mut current_depth = item_depth;
+        for ancestor in items[..item_idx].iter().rev() {
+            if ancestor.depth < current_depth {
+                needed_ids.insert(ancestor.node.id().to_string());
+                current_depth = ancestor.depth;
+                if current_depth == 0 {
+                    break;
+                }
+            }
+        }
+    }
+
+    // Third pass: keep only needed items
+    items
+        .iter()
+        .filter(|item| needed_ids.contains(item.node.id()))
+        .cloned()
+        .collect()
+}
