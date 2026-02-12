@@ -74,6 +74,7 @@ pub struct UiState {
     pub related_items: Vec<SimilarityResult>,
     pub related_selected: usize,
     pub input_mode: InputMode,
+    pub filter_actions_only: bool,
 }
 
 impl Default for UiState {
@@ -95,6 +96,7 @@ impl UiState {
             related_items: Vec::new(),
             related_selected: 0,
             input_mode: InputMode::Normal,
+            filter_actions_only: false,
         }
     }
 }
