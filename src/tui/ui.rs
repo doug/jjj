@@ -88,12 +88,24 @@ fn priority_prefix(priority: &Priority) -> &'static str {
 fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     use super::tree::TreeNode;
 
+    // Apply filter if enabled
+    let display_items: Vec<_> = if app.ui.filter_actions_only {
+        super::filter_tree_to_actions(&app.cache.tree_items)
+    } else {
+        app.cache.tree_items.clone()
+    };
+
     // Tree is always focused now (single-pane navigation)
     let border_style = Style::default().fg(Color::Cyan);
 
-    let items: Vec<ListItem> = app
-        .cache
-        .tree_items
+    // Update title based on filter mode
+    let title = if app.ui.filter_actions_only {
+        "Project Tree [Actions]"
+    } else {
+        "Project Tree"
+    };
+
+    let items: Vec<ListItem> = display_items
         .iter()
         .map(|item| {
             let indent = "  ".repeat(item.depth);
@@ -164,16 +176,26 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     let list = List::new(items)
         .block(
             Block::default()
-                .title("Project Tree")
+                .title(title)
                 .borders(Borders::ALL)
                 .border_style(border_style),
         )
         .highlight_style(Style::default().add_modifier(Modifier::REVERSED))
         .highlight_symbol("> ");
 
+    // Find selection in display items by matching ID
+    let selected_id = app.cache.tree_items
+        .get(app.ui.tree_index)
+        .map(|i| i.node.id());
+
+    let display_index = selected_id
+        .and_then(|id| display_items.iter().position(|i| i.node.id() == id));
+
     let mut state = ListState::default();
-    if !app.cache.tree_items.is_empty() && app.ui.tree_index < app.cache.tree_items.len() {
-        state.select(Some(app.ui.tree_index));
+    if let Some(idx) = display_index {
+        state.select(Some(idx));
+    } else if !display_items.is_empty() {
+        state.select(Some(0));
     }
 
     f.render_stateful_widget(list, area, &mut state);
