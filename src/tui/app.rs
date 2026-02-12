@@ -227,6 +227,10 @@ impl App {
             KeyCode::Char('a') => self.handle_action_a()?,
             KeyCode::Char('r') => self.handle_action_r()?,
             KeyCode::Char('d') => self.handle_action_d()?,
+            KeyCode::Char('n') => self.start_new_item()?,
+            KeyCode::Char('e') => self.start_edit_title()?,
+            KeyCode::Char('s') => self.handle_action_s()?,
+            KeyCode::Char('v') => self.handle_action_v()?,
             KeyCode::Char('R') => self.toggle_related_panel(),
             KeyCode::Char('?') => self.toggle_help(),
             _ => {}
@@ -823,6 +827,169 @@ impl App {
                 self.dismiss_critique(&id)?;
             }
             // For problems, 'd' would be dissolve - add later with input
+        }
+        Ok(())
+    }
+
+    fn start_new_item(&mut self) -> Result<()> {
+        use super::tree::TreeNode;
+
+        let (prompt, action) = match self.ui.focused_pane {
+            FocusedPane::NextActions => {
+                if let Some(na) = self.cache.next_actions.get(self.ui.next_actions_index) {
+                    match na.entity_type {
+                        EntityType::Problem => (
+                            "New solution title: ".to_string(),
+                            InputAction::NewSolution { problem_id: na.entity_id.clone() },
+                        ),
+                        EntityType::Solution => (
+                            "New critique title: ".to_string(),
+                            InputAction::NewCritique { solution_id: na.entity_id.clone() },
+                        ),
+                        EntityType::Critique => return Ok(()), // Can't create child of critique
+                    }
+                } else {
+                    return Ok(());
+                }
+            }
+            FocusedPane::ProjectTree => {
+                if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
+                    match &item.node {
+                        TreeNode::Milestone { id, .. } => (
+                            "New problem title: ".to_string(),
+                            InputAction::NewProblem { milestone_id: Some(id.clone()) },
+                        ),
+                        TreeNode::Backlog { .. } => (
+                            "New problem title: ".to_string(),
+                            InputAction::NewProblem { milestone_id: None },
+                        ),
+                        TreeNode::Problem { id, .. } => (
+                            "New solution title: ".to_string(),
+                            InputAction::NewSolution { problem_id: id.clone() },
+                        ),
+                        TreeNode::Solution { id, .. } => (
+                            "New critique title: ".to_string(),
+                            InputAction::NewCritique { solution_id: id.clone() },
+                        ),
+                        TreeNode::Critique { .. } => return Ok(()),
+                    }
+                } else {
+                    return Ok(());
+                }
+            }
+        };
+
+        self.ui.input_mode = InputMode::Input {
+            prompt,
+            buffer: String::new(),
+            action,
+        };
+        Ok(())
+    }
+
+    fn start_edit_title(&mut self) -> Result<()> {
+        use super::tree::TreeNode;
+
+        let (prompt, action, current_title) = match self.ui.focused_pane {
+            FocusedPane::NextActions => {
+                if let Some(na) = self.cache.next_actions.get(self.ui.next_actions_index) {
+                    (
+                        "Edit title: ".to_string(),
+                        InputAction::EditTitle {
+                            entity_type: na.entity_type,
+                            entity_id: na.entity_id.clone(),
+                        },
+                        na.title.clone(),
+                    )
+                } else {
+                    return Ok(());
+                }
+            }
+            FocusedPane::ProjectTree => {
+                if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
+                    match &item.node {
+                        TreeNode::Problem { id, title, .. } => (
+                            "Edit title: ".to_string(),
+                            InputAction::EditTitle {
+                                entity_type: EntityType::Problem,
+                                entity_id: id.clone(),
+                            },
+                            title.clone(),
+                        ),
+                        TreeNode::Solution { id, title, .. } => (
+                            "Edit title: ".to_string(),
+                            InputAction::EditTitle {
+                                entity_type: EntityType::Solution,
+                                entity_id: id.clone(),
+                            },
+                            title.clone(),
+                        ),
+                        TreeNode::Critique { id, title, .. } => (
+                            "Edit title: ".to_string(),
+                            InputAction::EditTitle {
+                                entity_type: EntityType::Critique,
+                                entity_id: id.clone(),
+                            },
+                            title.clone(),
+                        ),
+                        _ => return Ok(()),
+                    }
+                } else {
+                    return Ok(());
+                }
+            }
+        };
+
+        self.ui.input_mode = InputMode::Input {
+            prompt,
+            buffer: current_title,
+            action,
+        };
+        Ok(())
+    }
+
+    fn handle_action_s(&mut self) -> Result<()> {
+        use crate::models::ProblemStatus;
+
+        if let Some((id, entity_type)) = self.get_selected_entity() {
+            if entity_type == EntityType::Problem {
+                let id_clone = id.clone();
+                match self.store.with_metadata(&format!("Solve problem {}", id), || {
+                    let mut problem = self.store.load_problem(&id)?;
+                    problem.set_status(ProblemStatus::Solved);
+                    self.store.save_problem(&problem)
+                }) {
+                    Ok(_) => {
+                        self.show_flash(&format!("{} solved", id_clone));
+                        self.refresh_data()?;
+                    }
+                    Err(e) => {
+                        self.show_flash(&format!("Error: {}", e));
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn handle_action_v(&mut self) -> Result<()> {
+        if let Some((id, entity_type)) = self.get_selected_entity() {
+            if entity_type == EntityType::Critique {
+                let id_clone = id.clone();
+                match self.store.with_metadata(&format!("Validate critique {}", id), || {
+                    let mut critique = self.store.load_critique(&id)?;
+                    critique.validate();
+                    self.store.save_critique(&critique)
+                }) {
+                    Ok(_) => {
+                        self.show_flash(&format!("{} validated", id_clone));
+                        self.refresh_data()?;
+                    }
+                    Err(e) => {
+                        self.show_flash(&format!("Error: {}", e));
+                    }
+                }
+            }
         }
         Ok(())
     }
