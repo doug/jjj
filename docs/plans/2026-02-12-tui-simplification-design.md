@@ -78,6 +78,28 @@ Indent guides show hierarchy:
 - Selected row: reverse video (white on cyan)
 - Clear visual distinction from non-selected items
 
+## Tree Filter Mode
+
+Toggle between two views with `f`:
+
+**Full Tree (default):** Shows all items with action symbols highlighting what needs attention.
+
+**Actions Only:** Shows only items requiring attention plus their parent nodes (to maintain hierarchy). Non-actionable items are hidden.
+
+```
+Full Tree Mode:                    Actions Only Mode:
+▼ Milestone Alpha                  ▼ Milestone Alpha
+│ ├─ 🔴 ⚡ Fix auth bug            │ └─ 🔴 ⚡ Fix auth bug
+│ │  └─ Proposed solution          ▼ Backlog
+│ │     └─ Open critique           │ └─ ⏳ Refactor API
+│ └─ 📋 Add logging
+│ └─ Completed task (no symbol)
+▼ Backlog
+│ └─ ⏳ Refactor API
+```
+
+Title bar shows current mode: `Project Tree` or `Project Tree [Actions]`
+
 ## Navigation
 
 | Key | Action |
@@ -86,6 +108,7 @@ Indent guides show hierarchy:
 | Shift+Tab | Jump to previous action item |
 | ↑/↓ | Normal tree navigation |
 | ←/→ | Collapse/expand nodes |
+| f | Toggle tree filter (full/actions only) |
 
 All other keys unchanged (n/e/E/s/o/a/r/d/v/?/q).
 
