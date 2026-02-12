@@ -6,7 +6,7 @@ mod ui;
 
 pub use app::App;
 pub use detail::DetailContent;
-pub use next_actions::{build_next_actions, NextAction};
+pub use next_actions::{build_next_actions, EntityType, NextAction};
 pub use tree::{build_flat_tree, FlatTreeItem, TreeNode};
 
 use crate::error::Result;
