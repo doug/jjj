@@ -3,6 +3,8 @@ use crate::models::{
     Solution, SolutionStatus,
 };
 
+use super::next_actions::{Category, NextAction};
+
 #[derive(Debug, Clone)]
 pub enum TreeNode {
     Milestone {
@@ -215,5 +217,33 @@ fn add_problems(
                 }
             }
         }
+    }
+}
+
+/// Annotates tree items with action symbols based on next_actions list
+pub fn annotate_tree_with_actions(items: &mut [FlatTreeItem], next_actions: &[NextAction]) {
+    use std::collections::HashMap;
+
+    // Build lookup from entity_id -> category
+    let action_map: HashMap<&str, Category> = next_actions
+        .iter()
+        .map(|a| (a.entity_id.as_str(), a.category))
+        .collect();
+
+    for item in items.iter_mut() {
+        let id = item.node.id();
+        if let Some(&category) = action_map.get(id) {
+            item.action_symbol = Some(category_to_symbol(category).to_string());
+        }
+    }
+}
+
+fn category_to_symbol(category: Category) -> &'static str {
+    match category {
+        Category::Ready => "⚡",
+        Category::Blocked => "🚫",
+        Category::Waiting => "⏳",
+        Category::Todo => "📋",
+        Category::Review => "👀",
     }
 }
