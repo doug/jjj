@@ -7,7 +7,7 @@ mod ui;
 pub use app::App;
 pub use detail::DetailContent;
 pub use next_actions::{build_next_actions, EntityType, NextAction};
-pub use tree::{build_flat_tree, FlatTreeItem, TreeNode};
+pub use tree::{annotate_tree_with_actions, build_flat_tree, FlatTreeItem, TreeNode};
 
 use crate::error::Result;
 use crossterm::{
