@@ -1,5 +1,4 @@
 use super::app::{App, InputMode};
-use super::next_actions::Category;
 use crate::models::Priority;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -47,53 +46,6 @@ pub fn draw(f: &mut Frame, app: &App) {
     if matches!(app.ui.input_mode, InputMode::Help) {
         draw_help_overlay(f, app);
     }
-}
-
-fn category_color(cat: Category) -> Color {
-    match cat {
-        Category::Blocked => Color::Red,
-        Category::Ready => Color::Green,
-        Category::Review => Color::Cyan,
-        Category::Waiting => Color::Yellow,
-        Category::Todo => Color::White,
-    }
-}
-
-fn draw_next_actions(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
-    // Next Actions pane is no longer focused (tree-only view)
-    let border_style = Style::default().fg(Color::DarkGray);
-
-    let items: Vec<ListItem> = app
-        .cache
-        .next_actions
-        .iter()
-        .map(|action| {
-            let cat_span = Span::styled(
-                format!("[{}] ", action.category.label()),
-                Style::default().fg(category_color(action.category)),
-            );
-            let id_span = Span::styled(
-                format!("{}: ", action.entity_id),
-                Style::default().fg(Color::DarkGray),
-            );
-            let title_span = Span::raw(&action.title);
-
-            ListItem::new(Line::from(vec![cat_span, id_span, title_span]))
-        })
-        .collect();
-
-    let list = List::new(items)
-        .block(
-            Block::default()
-                .title("Next Actions")
-                .borders(Borders::ALL)
-                .border_style(border_style),
-        )
-        .highlight_style(Style::default().add_modifier(Modifier::REVERSED))
-        .highlight_symbol("> ");
-
-    // No selection state - this pane is now read-only
-    f.render_widget(list, area);
 }
 
 fn status_color_problem(status: &crate::models::ProblemStatus) -> Color {
