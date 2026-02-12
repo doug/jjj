@@ -295,7 +295,7 @@ fn draw_footer(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     f.render_widget(context, chunks[0]);
 
     // Global shortcuts (bottom)
-    let global = Paragraph::new("[Tab] pane | [R] related | [j/k] scroll | [?] help | [q] quit")
+    let global = Paragraph::new("[Tab] next action | [R] related | [j/k] scroll | [?] help | [q] quit")
         .style(Style::default().fg(Color::DarkGray));
     f.render_widget(global, chunks[1]);
 }
