@@ -1123,6 +1123,7 @@ impl App {
                 if let Some(na) = self.cache.next_actions.get(self.ui.next_actions_index) {
                     (na.entity_type, na.entity_id.clone())
                 } else {
+                    self.show_flash("No item selected");
                     return Ok(());
                 }
             }
@@ -1132,9 +1133,13 @@ impl App {
                         TreeNode::Problem { id, .. } => (EntityType::Problem, id.clone()),
                         TreeNode::Solution { id, .. } => (EntityType::Solution, id.clone()),
                         TreeNode::Critique { id, .. } => (EntityType::Critique, id.clone()),
-                        _ => return Ok(()),
+                        _ => {
+                            self.show_flash("Cannot edit this item type");
+                            return Ok(());
+                        }
                     }
                 } else {
+                    self.show_flash("No item selected");
                     return Ok(());
                 }
             }
@@ -1142,8 +1147,18 @@ impl App {
 
         // Serialize entity to temp file
         let temp_path = std::env::temp_dir().join(format!("jjj-edit-{}.md", &entity_id[..8.min(entity_id.len())]));
-        let original_content = self.serialize_entity_for_edit(&entity_type, &entity_id)?;
-        std::fs::write(&temp_path, &original_content)?;
+        let original_content = match self.serialize_entity_for_edit(&entity_type, &entity_id) {
+            Ok(content) => content,
+            Err(e) => {
+                self.show_flash(&format!("Load error: {}", e));
+                return Ok(());
+            }
+        };
+
+        if let Err(e) = std::fs::write(&temp_path, &original_content) {
+            self.show_flash(&format!("Write error: {}", e));
+            return Ok(());
+        }
 
         // Get editor
         let editor = std::env::var("VISUAL")

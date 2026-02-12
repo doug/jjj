@@ -290,25 +290,18 @@ fn draw_related_panel(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
 }
 
 fn draw_input_line(f: &mut Frame, prompt: &str, buffer: &str, area: Rect) {
-    // Single line input at bottom
-    let input_area = Rect::new(area.x, area.y, area.width, 2);
+    // First line: prompt and input
+    let input_area = Rect::new(area.x, area.y, area.width, 1);
 
-    let prompt_span = Span::styled(prompt, Style::default().fg(Color::DarkGray));
-    let buffer_span = Span::styled(buffer, Style::default().fg(Color::White));
+    let prompt_span = Span::styled(prompt, Style::default().fg(Color::Yellow));
+    let buffer_span = Span::styled(buffer, Style::default().fg(Color::White).add_modifier(Modifier::BOLD));
     let cursor_span = Span::styled("█", Style::default().fg(Color::Cyan));
 
     let line = Line::from(vec![prompt_span, buffer_span, cursor_span]);
-
-    let input = Paragraph::new(line)
-        .block(
-            Block::default()
-                .borders(Borders::TOP)
-                .border_style(Style::default().fg(Color::Cyan)),
-        );
-
+    let input = Paragraph::new(line);
     f.render_widget(input, input_area);
 
-    // Show hint below
+    // Second line: hint
     let hint = Paragraph::new("[Enter] submit | [Esc] cancel")
         .style(Style::default().fg(Color::DarkGray));
     let hint_area = Rect::new(area.x, area.y + 1, area.width, 1);
