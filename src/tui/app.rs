@@ -224,7 +224,8 @@ impl App {
     fn handle_normal_key(&mut self, key: KeyCode) -> Result<()> {
         match key {
             KeyCode::Char('q') => self.should_quit = true,
-            KeyCode::Tab => {} // TODO: jump_to_next_action in Task 8
+            KeyCode::Tab => self.jump_to_next_action(false),
+            KeyCode::BackTab => self.jump_to_next_action(true),
             KeyCode::Up => self.navigate_up(),
             KeyCode::Down => self.navigate_down(),
             KeyCode::Left => self.collapse_or_parent(),
@@ -399,6 +400,60 @@ impl App {
             self.ui.tree_index += 1;
         }
         self.update_selected_detail();
+    }
+
+    fn jump_to_next_action(&mut self, reverse: bool) {
+        if self.cache.tree_items.is_empty() {
+            return;
+        }
+
+        // Find indices of items with action symbols
+        let action_indices: Vec<usize> = self
+            .cache
+            .tree_items
+            .iter()
+            .enumerate()
+            .filter(|(_, item)| item.action_symbol.is_some())
+            .map(|(i, _)| i)
+            .collect();
+
+        if action_indices.is_empty() {
+            return;
+        }
+
+        // Find next action item
+        let current = self.ui.tree_index;
+        let next_index = if reverse {
+            // Find previous action item (or wrap to last)
+            action_indices
+                .iter()
+                .rev()
+                .find(|&&i| i < current)
+                .or_else(|| action_indices.last())
+                .copied()
+        } else {
+            // Find next action item (or wrap to first)
+            action_indices
+                .iter()
+                .find(|&&i| i > current)
+                .or_else(|| action_indices.first())
+                .copied()
+        };
+
+        if let Some(idx) = next_index {
+            // Expand ancestors to reveal the item
+            let target_id = self.cache.tree_items[idx].node.id().to_string();
+            self.expand_to_reveal(&target_id);
+            self.rebuild_tree();
+            // Re-find the item after tree rebuild
+            for (i, item) in self.cache.tree_items.iter().enumerate() {
+                if item.node.id() == target_id {
+                    self.ui.tree_index = i;
+                    break;
+                }
+            }
+            self.update_selected_detail();
+        }
     }
 
     fn expand_to_reveal(&mut self, target_id: &str) {
