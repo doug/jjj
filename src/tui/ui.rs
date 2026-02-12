@@ -1,5 +1,6 @@
 use super::app::{App, FocusedPane, InputMode};
 use super::next_actions::Category;
+use crate::models::Priority;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
@@ -134,6 +135,14 @@ fn status_color_critique(status: &crate::models::CritiqueStatus) -> Color {
     }
 }
 
+fn priority_prefix(priority: &Priority) -> &'static str {
+    match priority {
+        Priority::Critical => "🔴 ",
+        Priority::High => "🟡 ",
+        Priority::Medium | Priority::Low => "",
+    }
+}
+
 fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     use super::tree::TreeNode;
 
@@ -157,28 +166,40 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                     "▶ "
                 }
             } else {
-                "○ "
+                "  "  // Changed from "○ " to align better
             };
 
-            let (label, color) = match &item.node {
+            // Action symbol (if any)
+            let action_sym = item.action_symbol.as_deref().unwrap_or("");
+
+            let (label, color, dim) = match &item.node {
                 TreeNode::Milestone { title, .. } => (
                     format!("{}{}{}", indent, expand_char, title),
                     Color::Magenta,
+                    false,
                 ),
-                TreeNode::Backlog { .. } => {
-                    (format!("{}{}Backlog", indent, expand_char), Color::DarkGray)
-                }
+                TreeNode::Backlog { .. } => (
+                    format!("{}{}Backlog", indent, expand_char),
+                    Color::DarkGray,
+                    false,
+                ),
                 TreeNode::Problem {
-                    id, title, status, ..
-                } => (
-                    format!("{}{}{}: {}", indent, expand_char, id, title),
-                    status_color_problem(status),
-                ),
+                    id, title, status, priority, ..
+                } => {
+                    let priority_sym = priority_prefix(priority);
+                    let dim = matches!(priority, Priority::Low);
+                    (
+                        format!("{}{}{}{}{}: {}", indent, expand_char, priority_sym, action_sym, id, title),
+                        status_color_problem(status),
+                        dim,
+                    )
+                }
                 TreeNode::Solution {
                     id, title, status, ..
                 } => (
-                    format!("{}{}{}: {}", indent, expand_char, id, title),
+                    format!("{}{}{}{}: {}", indent, expand_char, action_sym, id, title),
                     status_color_solution(status),
+                    false,
                 ),
                 TreeNode::Critique {
                     id,
@@ -186,12 +207,19 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                     status,
                     severity,
                 } => (
-                    format!("{}○ {}: {} [{}]", indent, id, title, severity),
+                    format!("{}{}{}{}: {} [{}]", indent, expand_char, action_sym, id, title, severity),
                     status_color_critique(status),
+                    false,
                 ),
             };
 
-            ListItem::new(Line::from(Span::styled(label, Style::default().fg(color))))
+            let style = if dim {
+                Style::default().fg(Color::DarkGray)
+            } else {
+                Style::default().fg(color)
+            };
+
+            ListItem::new(Line::from(Span::styled(label, style)))
         })
         .collect();
 
