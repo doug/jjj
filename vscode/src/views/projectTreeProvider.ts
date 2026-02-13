@@ -4,6 +4,18 @@ import { JjjCli, Problem, Solution, Critique, Milestone } from "../cli";
 
 type TreeNode = MilestoneNode | ProblemNode | SolutionNode | CritiqueNode;
 
+function isOpenProblem(p: Problem): boolean {
+  return p.status !== "solved" && p.status !== "dissolved";
+}
+
+function isOpenSolution(s: Solution): boolean {
+  return s.status !== "accepted" && s.status !== "refuted";
+}
+
+function isOpenCritique(c: Critique): boolean {
+  return c.status === "open";
+}
+
 class MilestoneNode extends vscode.TreeItem {
   constructor(public readonly milestone: Milestone | null, problemCount: number, solvedCount: number) {
     const label = milestone ? milestone.title : "Backlog";
@@ -115,35 +127,66 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode>, v
   }
 
   getChildren(element?: TreeNode): TreeNode[] {
+    const filterOpen = this._filterMode === "open";
+
     if (!element) {
       // Root: milestones + backlog
       const milestones = this.cache.getMilestones();
-      const nodes: TreeNode[] = milestones.map(m => {
+      const nodes: TreeNode[] = [];
+
+      for (const m of milestones) {
         const problems = this.cache.getProblemsForMilestone(m.id);
+        const openProblems = problems.filter(isOpenProblem);
         const solved = problems.filter(p => p.status === "solved").length;
-        return new MilestoneNode(m, problems.length, solved);
-      });
+
+        // In open mode, skip milestones with no open problems
+        if (filterOpen && openProblems.length === 0) {
+          continue;
+        }
+
+        nodes.push(new MilestoneNode(m, problems.length, solved));
+      }
+
       const backlog = this.cache.getBacklogProblems();
+      // Always show backlog (even if empty in open mode)
       nodes.push(new MilestoneNode(null, backlog.length, 0));
+
       return nodes;
     }
 
     if (element instanceof MilestoneNode) {
-      const problems = element.milestone
+      let problems = element.milestone
         ? this.cache.getProblemsForMilestone(element.milestone.id)
         : this.cache.getBacklogProblems();
+
+      if (filterOpen) {
+        problems = problems.filter(isOpenProblem);
+      }
+
       return problems.map(p => new ProblemNode(p));
     }
 
     if (element instanceof ProblemNode) {
-      return this.cache.getSolutionsForProblem(element.problem.id).map(s => {
+      let solutions = this.cache.getSolutionsForProblem(element.problem.id);
+
+      if (filterOpen) {
+        solutions = solutions.filter(isOpenSolution);
+      }
+
+      return solutions.map(s => {
         const critiques = this.cache.getCritiquesForSolution(s.id);
         return new SolutionNode(s, critiques.filter(c => c.status === "open").length);
       });
     }
 
     if (element instanceof SolutionNode) {
-      return this.cache.getCritiquesForSolution(element.solution.id).map(c => new CritiqueNode(c));
+      let critiques = this.cache.getCritiquesForSolution(element.solution.id);
+
+      if (filterOpen) {
+        critiques = critiques.filter(isOpenCritique);
+      }
+
+      return critiques.map(c => new CritiqueNode(c));
     }
 
     return [];
