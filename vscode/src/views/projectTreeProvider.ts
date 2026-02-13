@@ -192,6 +192,98 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode>, v
     return [];
   }
 
+  // --- Tab Navigation ---
+
+  /**
+   * Get all open (actionable) items in depth-first order.
+   * Milestones are skipped as they're containers, not actionable.
+   */
+  getAllOpenItems(): TreeNode[] {
+    const items: TreeNode[] = [];
+    const milestones = this.cache.getMilestones();
+
+    for (const m of milestones) {
+      const problems = this.cache.getProblemsForMilestone(m.id);
+      for (const p of problems) {
+        if (isOpenProblem(p)) {
+          items.push(new ProblemNode(p));
+        }
+        const solutions = this.cache.getSolutionsForProblem(p.id);
+        for (const s of solutions) {
+          const critiques = this.cache.getCritiquesForSolution(s.id);
+          if (isOpenSolution(s)) {
+            items.push(new SolutionNode(s, critiques.filter(c => c.status === "open").length));
+          }
+          for (const c of critiques) {
+            if (isOpenCritique(c)) {
+              items.push(new CritiqueNode(c));
+            }
+          }
+        }
+      }
+    }
+
+    // Backlog
+    const backlog = this.cache.getBacklogProblems();
+    for (const p of backlog) {
+      if (isOpenProblem(p)) {
+        items.push(new ProblemNode(p));
+      }
+      const solutions = this.cache.getSolutionsForProblem(p.id);
+      for (const s of solutions) {
+        const critiques = this.cache.getCritiquesForSolution(s.id);
+        if (isOpenSolution(s)) {
+          items.push(new SolutionNode(s, critiques.filter(c => c.status === "open").length));
+        }
+        for (const c of critiques) {
+          if (isOpenCritique(c)) {
+            items.push(new CritiqueNode(c));
+          }
+        }
+      }
+    }
+
+    return items;
+  }
+
+  private getItemId(node: TreeNode | undefined): string | undefined {
+    if (!node) return undefined;
+    if (node instanceof ProblemNode) return `p:${node.problem.id}`;
+    if (node instanceof SolutionNode) return `s:${node.solution.id}`;
+    if (node instanceof CritiqueNode) return `c:${node.critique.id}`;
+    return undefined;
+  }
+
+  getNextOpenItem(current: TreeNode | undefined): TreeNode | undefined {
+    const items = this.getAllOpenItems();
+    if (items.length === 0) return undefined;
+
+    if (!current) return items[0];
+
+    const currentId = this.getItemId(current);
+    const currentIndex = items.findIndex(item => this.getItemId(item) === currentId);
+
+    if (currentIndex === -1) return items[0];
+
+    const nextIndex = (currentIndex + 1) % items.length;
+    return items[nextIndex];
+  }
+
+  getPrevOpenItem(current: TreeNode | undefined): TreeNode | undefined {
+    const items = this.getAllOpenItems();
+    if (items.length === 0) return undefined;
+
+    if (!current) return items[items.length - 1];
+
+    const currentId = this.getItemId(current);
+    const currentIndex = items.findIndex(item => this.getItemId(item) === currentId);
+
+    if (currentIndex === -1) return items[items.length - 1];
+
+    const prevIndex = (currentIndex - 1 + items.length) % items.length;
+    return items[prevIndex];
+  }
+
   // --- Drag and Drop ---
 
   handleDrag(source: readonly TreeNode[], dataTransfer: vscode.DataTransfer): void {

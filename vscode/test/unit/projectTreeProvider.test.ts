@@ -152,3 +152,92 @@ function createTestProviderWithCritiques(): ProjectTreeProvider {
   } as any;
   return new ProjectTreeProvider(mockCache, {} as any);
 }
+
+describe("Tab navigation", () => {
+  it("getNextOpenItem returns first open item when no selection", () => {
+    const provider = createTestProviderWithNavData();
+    const next = provider.getNextOpenItem(undefined);
+    assert.ok(next);
+    assert.strictEqual((next as any).problem?.id, "p1");
+  });
+
+  it("getNextOpenItem skips closed items", () => {
+    const provider = createTestProviderWithNavData();
+    provider.toggleFilter(); // show all
+    const milestones = provider.getChildren(undefined);
+    const problems = provider.getChildren(milestones[0]);
+    // Start from first problem (open), should go to solution (skipping solved problem)
+    const next = provider.getNextOpenItem(problems[0]);
+    assert.ok(next);
+    // Should be the solution under p1, not the solved p2
+    assert.strictEqual((next as any).solution?.id, "s1");
+  });
+
+  it("getNextOpenItem wraps around to beginning", () => {
+    const provider = createTestProviderWithNavData();
+    // Get to last item and call next
+    const allItems = provider.getAllOpenItems();
+    const last = allItems[allItems.length - 1];
+    const next = provider.getNextOpenItem(last);
+    // Compare by id since getAllOpenItems creates new objects
+    const firstItem = allItems[0];
+    assert.strictEqual((next as any).problem?.id, (firstItem as any).problem?.id);
+  });
+
+  it("getPrevOpenItem returns last open item when no selection", () => {
+    const provider = createTestProviderWithNavData();
+    const prev = provider.getPrevOpenItem(undefined);
+    assert.ok(prev);
+  });
+
+  it("getPrevOpenItem wraps around to end", () => {
+    const provider = createTestProviderWithNavData();
+    const allItems = provider.getAllOpenItems();
+    const first = allItems[0];
+    const prev = provider.getPrevOpenItem(first);
+    // Compare by id since getAllOpenItems creates new objects
+    const lastItem = allItems[allItems.length - 1];
+    assert.strictEqual((prev as any).critique?.id, (lastItem as any).critique?.id);
+  });
+
+  it("returns undefined when no open items", () => {
+    const provider = createTestProviderNoOpenItems();
+    const next = provider.getNextOpenItem(undefined);
+    assert.strictEqual(next, undefined);
+  });
+});
+
+function createTestProviderWithNavData(): ProjectTreeProvider {
+  const mockCache = {
+    onDidChange: () => ({ dispose: () => {} }),
+    getMilestones: () => [{ id: "m1", title: "Sprint" }],
+    getProblemsForMilestone: () => [
+      { id: "p1", title: "Open", status: "open", priority: "medium" },
+      { id: "p2", title: "Solved", status: "solved", priority: "medium" },
+    ],
+    getBacklogProblems: () => [],
+    getSolutionsForProblem: (id: string) => id === "p1"
+      ? [{ id: "s1", title: "Solution", status: "proposed" }]
+      : [],
+    getCritiquesForSolution: () => [
+      { id: "c1", title: "Critique", status: "open", severity: "high" },
+    ],
+    getProblem: () => undefined,
+  } as any;
+  return new ProjectTreeProvider(mockCache, {} as any);
+}
+
+function createTestProviderNoOpenItems(): ProjectTreeProvider {
+  const mockCache = {
+    onDidChange: () => ({ dispose: () => {} }),
+    getMilestones: () => [{ id: "m1", title: "Done" }],
+    getProblemsForMilestone: () => [
+      { id: "p1", title: "Solved", status: "solved", priority: "medium" },
+    ],
+    getBacklogProblems: () => [],
+    getSolutionsForProblem: () => [],
+    getCritiquesForSolution: () => [],
+    getProblem: () => undefined,
+  } as any;
+  return new ProjectTreeProvider(mockCache, {} as any);
+}
