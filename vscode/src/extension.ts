@@ -20,12 +20,16 @@ export function activate(context: vscode.ExtensionContext) {
   });
   context.subscriptions.push(treeView, projectTree);
 
+  // Set initial context for filter icon
+  vscode.commands.executeCommand("setContext", "jjj.filterMode", "open");
+
   // Filter toggle command
   context.subscriptions.push(
     vscode.commands.registerCommand("jjj.toggleTreeFilter", () => {
       projectTree.toggleFilter();
-      // Update tree view title based on mode
-      treeView.title = projectTree.filterMode === "open" ? "Project (Open)" : "Project";
+      const mode = projectTree.filterMode;
+      treeView.title = mode === "open" ? "Project (Open)" : "Project";
+      vscode.commands.executeCommand("setContext", "jjj.filterMode", mode);
     }),
   );
 
