@@ -247,23 +247,23 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode>, v
   }
 
   private getItemId(node: TreeNode | undefined): string | undefined {
-    if (!node) return undefined;
-    if (node instanceof ProblemNode) return `p:${node.problem.id}`;
-    if (node instanceof SolutionNode) return `s:${node.solution.id}`;
-    if (node instanceof CritiqueNode) return `c:${node.critique.id}`;
+    if (!node) {return undefined;}
+    if (node instanceof ProblemNode) {return `p:${node.problem.id}`;}
+    if (node instanceof SolutionNode) {return `s:${node.solution.id}`;}
+    if (node instanceof CritiqueNode) {return `c:${node.critique.id}`;}
     return undefined;
   }
 
   getNextOpenItem(current: TreeNode | undefined): TreeNode | undefined {
     const items = this.getAllOpenItems();
-    if (items.length === 0) return undefined;
+    if (items.length === 0) {return undefined;}
 
-    if (!current) return items[0];
+    if (!current) {return items[0];}
 
     const currentId = this.getItemId(current);
     const currentIndex = items.findIndex(item => this.getItemId(item) === currentId);
 
-    if (currentIndex === -1) return items[0];
+    if (currentIndex === -1) {return items[0];}
 
     const nextIndex = (currentIndex + 1) % items.length;
     return items[nextIndex];
@@ -271,14 +271,14 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode>, v
 
   getPrevOpenItem(current: TreeNode | undefined): TreeNode | undefined {
     const items = this.getAllOpenItems();
-    if (items.length === 0) return undefined;
+    if (items.length === 0) {return undefined;}
 
-    if (!current) return items[items.length - 1];
+    if (!current) {return items[items.length - 1];}
 
     const currentId = this.getItemId(current);
     const currentIndex = items.findIndex(item => this.getItemId(item) === currentId);
 
-    if (currentIndex === -1) return items[items.length - 1];
+    if (currentIndex === -1) {return items[items.length - 1];}
 
     const prevIndex = (currentIndex - 1 + items.length) % items.length;
     return items[prevIndex];

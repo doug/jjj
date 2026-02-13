@@ -189,7 +189,7 @@ export class JjjCli {
     const args = ["critique", "new", solutionId, title, "--severity", severity];
     if (filePath) {
       args.push("--file", filePath);
-      if (line) args.push("--line", String(line));
+      if (line) {args.push("--line", String(line));}
     }
     if (reviewer) {
       args.push("--reviewer", reviewer);
