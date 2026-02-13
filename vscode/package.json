@@ -42,7 +42,10 @@
       { "command": "jjj.dismissCritique", "title": "JJJ: Dismiss Critique" },
       { "command": "jjj.addCritiqueHere", "title": "JJJ: Add Critique Here" },
       { "command": "jjj.resumeSolution", "title": "JJJ: Resume Solution" },
-      { "command": "jjj.openEntity", "title": "JJJ: Open Entity" }
+      { "command": "jjj.openEntity", "title": "JJJ: Open Entity" },
+      { "command": "jjj.toggleTreeFilter", "title": "JJJ: Toggle Filter", "icon": "$(filter)" },
+      { "command": "jjj.nextOpenItem", "title": "JJJ: Next Open Item" },
+      { "command": "jjj.prevOpenItem", "title": "JJJ: Previous Open Item" }
     ],
     "viewsContainers": {
       "activitybar": [
@@ -55,15 +58,15 @@
     },
     "views": {
       "jjj-sidebar": [
-        { "id": "jjj-next-actions", "name": "Next Actions" },
-        { "id": "jjj-project-tree", "name": "Project Tree" }
+        { "id": "jjj-project-tree", "name": "Project" }
       ]
     },
     "menus": {
       "view/title": [
-        { "command": "jjj.refreshAll", "when": "view == jjj-next-actions", "group": "navigation" },
-        { "command": "jjj.newProblem", "when": "view == jjj-project-tree", "group": "navigation" },
-        { "command": "jjj.newMilestone", "when": "view == jjj-project-tree", "group": "navigation" }
+        { "command": "jjj.toggleTreeFilter", "when": "view == jjj-project-tree", "group": "navigation@1" },
+        { "command": "jjj.refreshAll", "when": "view == jjj-project-tree", "group": "navigation@2" },
+        { "command": "jjj.newProblem", "when": "view == jjj-project-tree", "group": "navigation@3" },
+        { "command": "jjj.newMilestone", "when": "view == jjj-project-tree", "group": "navigation@4" }
       ],
       "view/item/context": [
         { "command": "jjj.newSolution", "when": "viewItem == problem", "group": "1_actions@1" },
@@ -82,7 +85,26 @@
       "editor/context": [
         { "command": "jjj.addCritiqueHere", "group": "jjj@1" }
       ]
-    }
+    },
+    "keybindings": [
+      {
+        "command": "jjj.toggleTreeFilter",
+        "key": "cmd+shift+o",
+        "mac": "cmd+shift+o",
+        "win": "ctrl+shift+o",
+        "linux": "ctrl+shift+o"
+      },
+      {
+        "command": "jjj.nextOpenItem",
+        "key": "tab",
+        "when": "focusedView == jjj-project-tree"
+      },
+      {
+        "command": "jjj.prevOpenItem",
+        "key": "shift+tab",
+        "when": "focusedView == jjj-project-tree"
+      }
+    ]
   },
   "scripts": {
     "compile": "tsc -p ./",
