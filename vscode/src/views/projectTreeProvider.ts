@@ -90,6 +90,17 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode>, v
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
   private cacheSubscription: vscode.Disposable;
 
+  private _filterMode: "all" | "open" = "open";
+
+  get filterMode(): "all" | "open" {
+    return this._filterMode;
+  }
+
+  toggleFilter(): void {
+    this._filterMode = this._filterMode === "all" ? "open" : "all";
+    this._onDidChangeTreeData.fire(undefined);
+  }
+
   constructor(private cache: DataCache, private cli: JjjCli) {
     this.cacheSubscription = cache.onDidChange(() => this._onDidChangeTreeData.fire(undefined));
   }
