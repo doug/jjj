@@ -13,8 +13,9 @@ export function registerCommands(
         try {
           await handler();
           await cache.refresh();
-        } catch (e: any) {
-          vscode.window.showErrorMessage(`JJJ: ${e.message}`);
+        } catch (e: unknown) {
+          const message = e instanceof Error ? e.message : String(e);
+          vscode.window.showErrorMessage(`JJJ: ${message}`);
         }
       }),
     );

@@ -4,6 +4,18 @@ import { JjjCli, Problem, Solution, Critique, Milestone } from "../cli";
 
 type TreeNode = MilestoneNode | ProblemNode | SolutionNode | CritiqueNode;
 
+function isOpenProblem(p: Problem): boolean {
+  return p.status !== "solved" && p.status !== "dissolved";
+}
+
+function isOpenSolution(s: Solution): boolean {
+  return s.status !== "accepted" && s.status !== "refuted";
+}
+
+function isOpenCritique(c: Critique): boolean {
+  return c.status === "open";
+}
+
 class MilestoneNode extends vscode.TreeItem {
   constructor(public readonly milestone: Milestone | null, problemCount: number, solvedCount: number) {
     const label = milestone ? milestone.title : "Backlog";
@@ -90,6 +102,17 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode>, v
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
   private cacheSubscription: vscode.Disposable;
 
+  private _filterMode: "all" | "open" = "open";
+
+  get filterMode(): "all" | "open" {
+    return this._filterMode;
+  }
+
+  toggleFilter(): void {
+    this._filterMode = this._filterMode === "all" ? "open" : "all";
+    this._onDidChangeTreeData.fire(undefined);
+  }
+
   constructor(private cache: DataCache, private cli: JjjCli) {
     this.cacheSubscription = cache.onDidChange(() => this._onDidChangeTreeData.fire(undefined));
   }
@@ -104,38 +127,161 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode>, v
   }
 
   getChildren(element?: TreeNode): TreeNode[] {
+    const filterOpen = this._filterMode === "open";
+
     if (!element) {
       // Root: milestones + backlog
       const milestones = this.cache.getMilestones();
-      const nodes: TreeNode[] = milestones.map(m => {
+      const nodes: TreeNode[] = [];
+
+      for (const m of milestones) {
         const problems = this.cache.getProblemsForMilestone(m.id);
+        const openProblems = problems.filter(isOpenProblem);
         const solved = problems.filter(p => p.status === "solved").length;
-        return new MilestoneNode(m, problems.length, solved);
-      });
+
+        // In open mode, skip milestones with no open problems
+        if (filterOpen && openProblems.length === 0) {
+          continue;
+        }
+
+        nodes.push(new MilestoneNode(m, problems.length, solved));
+      }
+
       const backlog = this.cache.getBacklogProblems();
+      // Always show backlog (even if empty in open mode)
       nodes.push(new MilestoneNode(null, backlog.length, 0));
+
       return nodes;
     }
 
     if (element instanceof MilestoneNode) {
-      const problems = element.milestone
+      let problems = element.milestone
         ? this.cache.getProblemsForMilestone(element.milestone.id)
         : this.cache.getBacklogProblems();
+
+      if (filterOpen) {
+        problems = problems.filter(isOpenProblem);
+      }
+
       return problems.map(p => new ProblemNode(p));
     }
 
     if (element instanceof ProblemNode) {
-      return this.cache.getSolutionsForProblem(element.problem.id).map(s => {
+      let solutions = this.cache.getSolutionsForProblem(element.problem.id);
+
+      if (filterOpen) {
+        solutions = solutions.filter(isOpenSolution);
+      }
+
+      return solutions.map(s => {
         const critiques = this.cache.getCritiquesForSolution(s.id);
         return new SolutionNode(s, critiques.filter(c => c.status === "open").length);
       });
     }
 
     if (element instanceof SolutionNode) {
-      return this.cache.getCritiquesForSolution(element.solution.id).map(c => new CritiqueNode(c));
+      let critiques = this.cache.getCritiquesForSolution(element.solution.id);
+
+      if (filterOpen) {
+        critiques = critiques.filter(isOpenCritique);
+      }
+
+      return critiques.map(c => new CritiqueNode(c));
     }
 
     return [];
+  }
+
+  // --- Tab Navigation ---
+
+  /**
+   * Get all open (actionable) items in depth-first order.
+   * Milestones are skipped as they're containers, not actionable.
+   */
+  getAllOpenItems(): TreeNode[] {
+    const items: TreeNode[] = [];
+    const milestones = this.cache.getMilestones();
+
+    for (const m of milestones) {
+      const problems = this.cache.getProblemsForMilestone(m.id);
+      for (const p of problems) {
+        if (isOpenProblem(p)) {
+          items.push(new ProblemNode(p));
+        }
+        const solutions = this.cache.getSolutionsForProblem(p.id);
+        for (const s of solutions) {
+          const critiques = this.cache.getCritiquesForSolution(s.id);
+          if (isOpenSolution(s)) {
+            items.push(new SolutionNode(s, critiques.filter(c => c.status === "open").length));
+          }
+          for (const c of critiques) {
+            if (isOpenCritique(c)) {
+              items.push(new CritiqueNode(c));
+            }
+          }
+        }
+      }
+    }
+
+    // Backlog
+    const backlog = this.cache.getBacklogProblems();
+    for (const p of backlog) {
+      if (isOpenProblem(p)) {
+        items.push(new ProblemNode(p));
+      }
+      const solutions = this.cache.getSolutionsForProblem(p.id);
+      for (const s of solutions) {
+        const critiques = this.cache.getCritiquesForSolution(s.id);
+        if (isOpenSolution(s)) {
+          items.push(new SolutionNode(s, critiques.filter(c => c.status === "open").length));
+        }
+        for (const c of critiques) {
+          if (isOpenCritique(c)) {
+            items.push(new CritiqueNode(c));
+          }
+        }
+      }
+    }
+
+    return items;
+  }
+
+  private getItemId(node: TreeNode | undefined): string | undefined {
+    if (!node) {return undefined;}
+    if (node instanceof ProblemNode) {return `p:${node.problem.id}`;}
+    if (node instanceof SolutionNode) {return `s:${node.solution.id}`;}
+    if (node instanceof CritiqueNode) {return `c:${node.critique.id}`;}
+    return undefined;
+  }
+
+  getNextOpenItem(current: TreeNode | undefined): TreeNode | undefined {
+    const items = this.getAllOpenItems();
+    if (items.length === 0) {return undefined;}
+
+    if (!current) {return items[0];}
+
+    const currentId = this.getItemId(current);
+    const currentIndex = items.findIndex(item => this.getItemId(item) === currentId);
+
+    if (currentIndex === -1) {return items[0];}
+
+    const nextIndex = (currentIndex + 1) % items.length;
+    return items[nextIndex];
+  }
+
+  getPrevOpenItem(current: TreeNode | undefined): TreeNode | undefined {
+    const items = this.getAllOpenItems();
+    if (items.length === 0) {return undefined;}
+
+    if (!current) {return items[items.length - 1];}
+
+    const currentId = this.getItemId(current);
+    const currentIndex = items.findIndex(item => this.getItemId(item) === currentId);
+
+    if (currentIndex === -1) {return items[items.length - 1];}
+
+    const prevIndex = (currentIndex - 1 + items.length) % items.length;
+    return items[prevIndex];
   }
 
   // --- Drag and Drop ---

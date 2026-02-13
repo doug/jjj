@@ -1,10 +1,8 @@
 import * as vscode from "vscode";
 import { JjjCli } from "./cli";
 import { DataCache } from "./cache";
-import { NextActionsProvider } from "./views/nextActionsProvider";
 import { ProjectTreeProvider } from "./views/projectTreeProvider";
 import { EntityDocumentProvider } from "./documents/entityDocumentProvider";
-import { StatusBar } from "./statusBar";
 import { CritiqueDecorationManager } from "./editor/critiqueDecorations";
 import { registerCommands } from "./commands";
 
@@ -14,10 +12,6 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(cache);
 
   // --- Views ---
-  const nextActions = new NextActionsProvider(cache);
-  vscode.window.registerTreeDataProvider("jjj-next-actions", nextActions);
-  context.subscriptions.push(nextActions);
-
   const projectTree = new ProjectTreeProvider(cache, cli);
   const treeView = vscode.window.createTreeView("jjj-project-tree", {
     treeDataProvider: projectTree,
@@ -25,6 +19,38 @@ export function activate(context: vscode.ExtensionContext) {
     canSelectMany: true,
   });
   context.subscriptions.push(treeView, projectTree);
+
+  // Set initial context for filter icon
+  vscode.commands.executeCommand("setContext", "jjj.filterMode", "open");
+
+  // Filter toggle command
+  context.subscriptions.push(
+    vscode.commands.registerCommand("jjj.toggleTreeFilter", () => {
+      projectTree.toggleFilter();
+      const mode = projectTree.filterMode;
+      treeView.title = mode === "open" ? "Project (Open)" : "Project";
+      vscode.commands.executeCommand("setContext", "jjj.filterMode", mode);
+    }),
+  );
+
+  // Tab navigation commands
+  context.subscriptions.push(
+    vscode.commands.registerCommand("jjj.nextOpenItem", async () => {
+      const nextItem = projectTree.getNextOpenItem(treeView.selection[0]);
+      if (nextItem) {
+        await treeView.reveal(nextItem, { select: true, focus: true });
+      }
+    }),
+    vscode.commands.registerCommand("jjj.prevOpenItem", async () => {
+      const prevItem = projectTree.getPrevOpenItem(treeView.selection[0]);
+      if (prevItem) {
+        await treeView.reveal(prevItem, { select: true, focus: true });
+      }
+    }),
+  );
+
+  // Set initial title
+  treeView.title = "Project (Open)";
 
   // --- Virtual Documents ---
   const docProvider = new EntityDocumentProvider(cache);
@@ -40,10 +66,6 @@ export function activate(context: vscode.ExtensionContext) {
       await vscode.window.showTextDocument(doc, { preview: false });
     }),
   );
-
-  // --- Status Bar ---
-  const statusBar = new StatusBar(cache);
-  context.subscriptions.push(statusBar);
 
   // --- Gutter Decorations ---
   const decorations = new CritiqueDecorationManager(cache);
