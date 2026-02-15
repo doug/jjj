@@ -1,3 +1,8 @@
+---
+title: Problem Commands
+description: CLI reference for creating, listing, editing, and resolving problems in jjj
+---
+
 # Problem Commands
 
 Problems represent what needs to be solved. They can be organized hierarchically with parent-child relationships and assigned to milestones.
@@ -25,6 +30,7 @@ jjj problem new <title> [OPTIONS]
 | `--priority` | string | `medium` | Priority: P0/critical, P1/high, P2/medium, P3/low |
 | `--parent` | string | | Parent problem (title, prefix, or UUID) |
 | `--milestone` | string | | Milestone to target (title, prefix, or UUID) |
+| `--force`, `-f` | flag | | Create even if a similar problem already exists |
 
 ```bash,test
 jjj init
@@ -46,6 +52,7 @@ jjj problem list [OPTIONS]
 | `--status` | string | Filter by status (open, in_progress, solved, dissolved) |
 | `--tree` | bool | Show hierarchical tree view |
 | `--milestone` | string | Filter by milestone |
+| `--search` | string | Search problems by title text |
 | `--json` | bool | Output in JSON format |
 
 ```bash,test

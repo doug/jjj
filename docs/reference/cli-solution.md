@@ -1,3 +1,8 @@
+---
+title: Solution Commands
+description: CLI reference for creating, listing, attaching, accepting, and refuting solutions
+---
+
 # Solution Commands
 
 Solutions are conjectures proposed to solve problems. They go through a lifecycle: proposed, testing, accepted, or refuted. Solutions can have jj changes attached, be critiqued, and have reviewers assigned whose sign-offs gate acceptance.
@@ -15,6 +20,7 @@ jjj solution new <title> [OPTIONS]
 | `--problem` | string | no | Problem this solution addresses (prompts interactively if not provided) |
 | `--supersedes` | string | no | Solution this supersedes (e.g., s1) |
 | `--reviewer` | string (repeatable) | no | Assign reviewers at creation (e.g., `@alice`) |
+| `--force`, `-f` | flag | no | Create even if a similar solution already exists |
 
 When `--problem` is not provided, lists open problems and prompts you to select one interactively. After creation, automatically creates a jj change, attaches it to the solution, and moves the solution to `testing` status.
 
@@ -46,6 +52,7 @@ jjj solution list [OPTIONS]
 |------|------|-------------|
 | `--problem` | string | Filter by problem |
 | `--status` | string | Filter by status (proposed, testing, refuted, accepted) |
+| `--search` | string | Search solutions by title text |
 | `--json` | bool | Output in JSON format |
 
 ```bash,test
@@ -138,6 +145,8 @@ jjj solution accept <solution_id> [OPTIONS]
 | Flag | Type | Description |
 |------|------|-------------|
 | `--force` | bool | Force accept even with open critiques (sets `force_accepted` flag) |
+| `--rationale` | string | Reason for accepting |
+| `--no-rationale` | flag | Skip the rationale prompt |
 
 The acceptance gate checks that all critiques are resolved (addressed, dismissed, or validated). This includes:
 
@@ -156,8 +165,13 @@ jjj solution accept s1 --force
 Refute a solution (criticism showed it will not work).
 
 ```
-jjj solution refute <solution_id>
+jjj solution refute <solution_id> [OPTIONS]
 ```
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `--rationale` | string | Reason for refuting |
+| `--no-rationale` | flag | Skip the rationale prompt |
 
 ```bash
 jjj solution refute s1

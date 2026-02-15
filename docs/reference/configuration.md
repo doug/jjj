@@ -1,3 +1,8 @@
+---
+title: Configuration
+description: jjj configuration file format, environment variables, and storage location
+---
+
 # Configuration
 
 jjj uses a TOML configuration file stored in `.jjj/config.toml` within the repository.

@@ -1,3 +1,8 @@
+---
+title: TUI and Status
+description: Using the terminal dashboard and status commands to monitor project progress
+---
+
 # TUI and Status
 
 jjj provides two views for understanding your project's state: the **TUI** shows an interactive view of next actions and the project tree, and **status** shows your personal context and prioritized next actions on the command line.

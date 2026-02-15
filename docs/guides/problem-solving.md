@@ -1,3 +1,8 @@
+---
+title: Problem Solving
+description: Workflow guide for defining problems, proposing solutions, and resolving critiques
+---
+
 # Problem Solving
 
 This guide covers the core of working with jjj: identifying problems, decomposing them, prioritizing work, and reaching resolution.

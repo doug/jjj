@@ -1,3 +1,8 @@
+---
+title: Entity Resolution
+description: How jjj resolves entity references via UUID, truncated prefix, and fuzzy title match
+---
+
 # Entity Resolution
 
 jjj uses flexible entity resolution that lets you reference problems, solutions, critiques, and milestones in multiple ways. You can use whichever method is most convenient for your workflow.

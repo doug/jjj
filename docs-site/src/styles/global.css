@@ -1,1 +1,52 @@
 @import "tailwindcss";
+
+:root {
+  --background: #fdfbf7;
+  --surface: #f7f5f0;
+  --border: #d1cdc7; /* Darkened border for visibility */
+  --text-primary: #2d2a26;
+  --text-secondary: #5a554f; /* Darkened for accessibility */
+  
+  --accent: #c026d3; /* Fuchsia 600 - passes 4.5:1 with white */
+  --accent-hover: #a21caf;
+  --accent-low: #fdf4ff;
+  --accent-high: #701a75;
+  --button-text: #ffffff;
+
+  --success: #166534;
+  --info: #155e75;
+}
+
+[data-theme='dark'] {
+  --background: #121212;
+  --surface: #1e1e1e;
+  --border: #333333;
+  --text-primary: #f5f3ef;
+  --text-secondary: #a8a49e;
+
+  --accent: #d946ef;
+  --accent-hover: #f0abfc;
+  --accent-low: #300d38;
+  --accent-high: #f5d0fe;
+  --button-text: #ffffff;
+}
+
+@theme {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-border: var(--border);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-low: var(--accent-low);
+  --color-accent-high: var(--accent-high);
+  --color-button-text: var(--button-text);
+
+  --color-success: var(--success);
+  --color-info: var(--info);
+
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "Geist Mono", "JetBrains Mono", monospace;
+}

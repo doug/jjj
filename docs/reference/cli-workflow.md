@@ -1,3 +1,8 @@
+---
+title: Workflow Commands
+description: CLI reference for init, submit, status, push, fetch, and other high-level jjj commands
+---
+
 # Workflow Commands
 
 Workflow commands provide high-level operations that combine multiple steps. These are the primary interface for day-to-day work with jjj.

@@ -24,10 +24,10 @@ export function Hero() {
         </h1>
 
         {/* Subtitle */}
-        <p className="text-xl text-text-secondary max-w-2xl mx-auto mb-10">
-          Problems, solutions, and critiques — all in your repo.
+        <p className="text-xl text-text-secondary max-w-3xl mx-auto mb-10">
+          The first project management tool built on <strong>Critical Rationalism</strong>.
           <br />
-          No server. No database. Works offline.
+          Problems, conjectures, and critiques — fully distributed, offline-first, and anchored to your code.
         </p>
 
         {/* CTA Buttons */}

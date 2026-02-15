@@ -1,3 +1,8 @@
+---
+title: Critique Commands
+description: CLI reference for creating, listing, editing, and resolving critiques
+---
+
 # Critique Commands
 
 Critiques are criticisms of solutions. They track issues found during review, with severity levels and a lifecycle: open, addressed, valid, or dismissed. Critiques can reference specific files and lines.
@@ -41,6 +46,7 @@ jjj critique list [OPTIONS]
 | `--solution` | string | Filter by solution |
 | `--status` | string | Filter by status (open, addressed, valid, dismissed) |
 | `--reviewer` | string | Filter by reviewer (e.g., `@alice`) |
+| `--search` | string | Search critiques by title text |
 | `--json` | bool | Output in JSON format |
 
 ```bash,test

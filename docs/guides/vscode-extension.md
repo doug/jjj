@@ -1,3 +1,8 @@
+---
+title: VS Code Extension
+description: Installing and using the jjj VS Code extension for IDE integration
+---
+
 # VSCode Extension
 
 The jjj VSCode extension provides IDE integration for managing problems, solutions, critiques, milestones, and code reviews directly within Visual Studio Code.
@@ -150,6 +155,26 @@ Displays pending code reviews.
 - View review details
 - See review status
 - Refresh reviews
+
+### The Unified Tree View (Core Vision)
+
+The defining feature of the `jjj` extension is the **Unified Tree**. This view maps the Popperian model directly onto your code structure.
+
+#### Hierarchical Problem Decomposition
+Problems are displayed as a DAG (Directed Acyclic Graph). Developing a complex feature involves breaking it down:
+1.  **Parent Problem**: "Scale API for 1M users"
+2.  **Child Problem A**: "Implement Redis caching"
+3.  **Child Problem B**: "Optimize SQL indices"
+
+#### Solution Attachment
+Each problem in the tree can be expanded to show its **Solutions**. 
+- Solutions are linked to your current **Jujutsu Change IDs**.
+- Clicking a solution performs a `jjj resume`, automatically switching your workspace context to the relevant code.
+
+#### Critique Integration
+Critiques appear as children of the solutions they target. 
+- **Severity Indicators**: Red for "Critical" (blocking) and Yellow for "Medium".
+- **Inline Preview**: Hovering over a critique shows the rationale without needing to open a new file.
 
 ### Command Palette
 

@@ -1,3 +1,8 @@
+---
+title: Milestone Commands
+description: CLI reference for creating, editing, and tracking milestones and roadmaps
+---
+
 # Milestone Commands
 
 Milestones group problems into time-boxed releases or goals. They track progress across problems and their solutions.

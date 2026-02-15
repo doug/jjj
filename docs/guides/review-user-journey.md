@@ -1,3 +1,8 @@
+---
+title: Review User Journey
+description: End-to-end walkthrough of a code review between two developers
+---
+
 # Code Review User Journey
 
 This guide walks through a complete code review scenario with two developers: Alice (author) and Bob (reviewer).

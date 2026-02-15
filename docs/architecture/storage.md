@@ -1,3 +1,8 @@
+---
+title: Storage and Metadata
+description: Shadow graph architecture and how jjj stores metadata without polluting commits
+---
+
 # Storage & Metadata
 
 jjj stores all project management metadata in a **shadow graph**—a separate, orphaned commit history in your Jujutsu repository.
@@ -8,17 +13,21 @@ jjj stores all project management metadata in a **shadow graph**—a separate, o
 
 A shadow graph is an orphaned commit history that exists in your repository but is completely separate from your project code:
 
-```
-Project History          Shadow Graph (jjj)
-─────────────────        ───────────────────────
-main                     jjj
- ◯ Feature C              ◯ Update metadata
- │                        │
- ◯ Feature B              ◯ Add tasks
- │                        │
- ◯ Feature A              ◯ Initialize jjj
- │                        │
- ◯ Initial commit         ◯ (orphaned root)
+```mermaid
+graph LR
+    subgraph "Project History"
+        A[Initial] --> B[Feature A]
+        B --> C[Feature B]
+        C --> D[Feature C]
+        D --> main((main))
+    end
+
+    subgraph "Shadow Graph (jjj)"
+        root[Orphaned Root] --> init[Initialize jjj]
+        init --> task[Add tasks]
+        task --> meta[Update metadata]
+        meta --> jjj_branch((jjj))
+    end
 ```
 
 These histories never merge. They coexist peacefully in the same repository.

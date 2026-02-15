@@ -1,3 +1,8 @@
+---
+title: Workflow Analysis
+description: A deep dive into the jjj workflow, philosophy, and areas for improvement.
+---
+
 # jjj Workflow Analysis
 
 ## The Complete User Journey

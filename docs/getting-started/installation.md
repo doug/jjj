@@ -1,3 +1,8 @@
+---
+title: Installation
+description: How to install jjj, configure shell completions, and set up editor integration
+---
+
 # Installation
 
 This guide will help you install jjj on your system.

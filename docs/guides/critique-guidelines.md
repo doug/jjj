@@ -1,3 +1,8 @@
+---
+title: Critique Guidelines
+description: Best practices for writing effective critiques with appropriate severity levels
+---
+
 # Critique Guidelines
 
 Critiques are the mechanism for error elimination in jjj. Every solution is a conjecture -- a tentative attempt to solve a problem. Critiques subject those conjectures to explicit criticism, which is how we make progress: by discovering and eliminating errors rather than by confirming what we already believe.

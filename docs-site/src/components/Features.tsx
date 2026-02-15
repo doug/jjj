@@ -19,7 +19,7 @@ const features = [
   {
     icon: '📦',
     title: 'No Server Required',
-    description: 'Sync via standard git push/pull.',
+    description: 'Sync metadata as easily as you sync code.',
   },
 ];
 

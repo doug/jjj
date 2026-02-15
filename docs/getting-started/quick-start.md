@@ -1,3 +1,8 @@
+---
+title: Quick Start
+description: Get up and running with jjj in 5 minutes — full Problem/Solution/Critique workflow
+---
+
 # Quick Start
 
 Get up and running with jjj in 5 minutes. This walkthrough covers the full
