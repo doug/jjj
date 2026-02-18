@@ -159,10 +159,12 @@ npm run install-ext
 
 ## Documentation
 
-Full documentation available via mdBook:
+Full documentation available at [doug.github.io/jjj](https://doug.github.io/jjj/), or serve locally:
 
 ```bash
-mdbook serve
+cd docs-site
+npm install
+npm run dev
 ```
 
 ## License
