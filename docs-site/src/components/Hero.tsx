@@ -11,8 +11,8 @@ export function Hero() {
       <div className="container mx-auto px-6 text-center">
         {/* Logo placeholder */}
         <div className="mb-8">
-          <span className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-accent text-white text-2xl font-bold">
-            jjj
+          <span className="inline-flex items-center justify-center w-64 h-14 rounded-2xl bg-accent text-white text-2xl font-bold">
+            jjj: Jujutsu Juggler
           </span>
         </div>
 
@@ -20,7 +20,7 @@ export function Hero() {
         <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-text-primary tracking-tight mb-6">
           Distributed Project Management
           <br />
-          <span className="text-accent">for Jujutsu</span>
+          <span className="text-accent text-3xl md:text-4xl lg:text-5xl">for Jujutsu</span>
         </h1>
 
         {/* Subtitle */}

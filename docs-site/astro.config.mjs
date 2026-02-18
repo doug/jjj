@@ -11,7 +11,7 @@ export default defineConfig({
     title: 'jjj',
     logo: {
       src: './public/logo.svg',
-      alt: 'jjj',
+      alt: 'Jujutsu Juggler',
     },
     favicon: '/favicon.svg',
     description: 'Distributed project management for Jujutsu',

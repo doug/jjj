@@ -3,8 +3,6 @@ title: Philosophy in Practice
 description: How Popperian epistemology improves software engineering through jjj.
 ---
 
-# Philosophy in Practice
-
 `jjj` is more than a tool; it's an implementation of **Critical Rationalism**, a philosophy of knowledge developed by Karl Popper. This guide explains how applying these principles to your daily work leads to better software.
 
 ## 1. All Work is Problem-Solving

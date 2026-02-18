@@ -8,7 +8,7 @@
   --sl-color-gray-4: #c0bcb5;
   --sl-color-gray-5: var(--surface);
   --sl-color-gray-6: var(--background);
-  --sl-color-black: #0f0e0d;
+  --sl-color-black: var(--background);
 
   --sl-color-accent-low: var(--accent-low);
   --sl-color-accent: var(--accent);
