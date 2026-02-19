@@ -12,10 +12,10 @@ import { FooterCTA } from "../components/FooterCTA";
   title="Jujutsu Juggler (jjj) - Distributed Project Management for Jujutsu"
   description="Problems, solutions, and critiques — all in your repo. No server. No database. Works offline."
 >
-  <Hero client:load />
+  <Hero client:load base={import.meta.env.BASE_URL} />
   <Features client:visible />
   <HowItWorks client:visible />
   <QuickInstall client:visible />
   <ComparisonTable client:visible />
-  <FooterCTA client:visible />
+  <FooterCTA client:visible base={import.meta.env.BASE_URL} />
 </Landing>

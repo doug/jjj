@@ -1,6 +1,6 @@
 import { Button } from './ui/button';
 
-export function Hero() {
+export function Hero({ base = '/' }: { base?: string }) {
   return (
     <section className="relative overflow-hidden py-24 lg:py-32">
       {/* Background gradient */}
@@ -32,7 +32,7 @@ export function Hero() {
 
         {/* CTA Buttons */}
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <a href="/getting-started/installation">
+          <a href={`${base}getting-started/installation`}>
             <Button size="lg">Get Started</Button>
           </a>
           <a href="https://github.com/doug/jjj" target="_blank" rel="noopener noreferrer">
