@@ -81,7 +81,7 @@ fn new_problem(
         let mut problem = Problem::new(problem_id.clone(), title.clone());
 
         // Set priority
-        problem.priority = priority.parse::<Priority>()?;
+        problem.priority = priority.parse::<Priority>().map_err(|e: String| crate::error::JjjError::Validation(e))?;
 
         // Set parent
         if let Some(ref parent_id) = resolved_parent {
@@ -131,7 +131,7 @@ fn list_problems(
 
     // Filter by status
     if let Some(status_str) = status_filter {
-        let status: ProblemStatus = status_str.parse().map_err(|e: String| e)?;
+        let status: ProblemStatus = status_str.parse().map_err(|e: String| crate::error::JjjError::Validation(e))?;
         problems.retain(|p| p.status == status);
     }
 
@@ -339,12 +339,12 @@ fn edit_problem(
         }
 
         if let Some(status_str) = status {
-            let new_status: ProblemStatus = status_str.parse().map_err(|e: String| e)?;
+            let new_status: ProblemStatus = status_str.parse().map_err(|e: String| crate::error::JjjError::Validation(e))?;
             problem.set_status(new_status);
         }
 
         if let Some(p_str) = priority {
-            problem.priority = p_str.parse::<Priority>()?;
+            problem.priority = p_str.parse::<Priority>().map_err(|e: String| crate::error::JjjError::Validation(e))?;
         }
 
         if let Some(ref new_parent) = resolved_parent {

@@ -51,7 +51,7 @@ fn new_critique(
     let store = &ctx.store;
 
     // Parse severity
-    let severity: CritiqueSeverity = severity_str.parse().map_err(|e: String| e)?;
+    let severity: CritiqueSeverity = severity_str.parse().map_err(|e: String| crate::error::JjjError::Validation(e))?;
 
     // Validate solution exists
     let solution = store.load_solution(&solution_id)?;
@@ -155,7 +155,7 @@ fn list_critiques(
 
     // Filter by status
     if let Some(status_str) = status_filter {
-        let status: CritiqueStatus = status_str.parse().map_err(|e: String| e)?;
+        let status: CritiqueStatus = status_str.parse().map_err(|e: String| crate::error::JjjError::Validation(e))?;
         critiques.retain(|c| c.status == status);
     }
 
@@ -301,12 +301,12 @@ fn edit_critique(
         }
 
         if let Some(severity_str) = severity {
-            let new_severity: CritiqueSeverity = severity_str.parse().map_err(|e: String| e)?;
+            let new_severity: CritiqueSeverity = severity_str.parse().map_err(|e: String| crate::error::JjjError::Validation(e))?;
             critique.set_severity(new_severity);
         }
 
         if let Some(status_str) = status {
-            let new_status: CritiqueStatus = status_str.parse().map_err(|e: String| e)?;
+            let new_status: CritiqueStatus = status_str.parse().map_err(|e: String| crate::error::JjjError::Validation(e))?;
             critique.set_status(new_status);
         }
 

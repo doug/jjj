@@ -109,13 +109,25 @@ fn row_to_event(row: &rusqlite::Row) -> SqliteResult<Event> {
         .unwrap_or_else(|| "{}".to_string());
 
     let event_type = parse_event_type(&event_type_str);
-    let refs: Vec<String> = serde_json::from_str(&refs_json).unwrap_or_default();
-    let extra: EventExtra = serde_json::from_str(&extra_json).unwrap_or_default();
+    let refs: Vec<String> = serde_json::from_str(&refs_json).unwrap_or_else(|e| {
+        eprintln!("Warning: invalid refs JSON for event row: {}", e);
+        Vec::new()
+    });
+    let extra: EventExtra = serde_json::from_str(&extra_json).unwrap_or_else(|e| {
+        eprintln!("Warning: invalid extra JSON for event row: {}", e);
+        EventExtra::default()
+    });
 
     Ok(Event {
         when: DateTime::parse_from_rfc3339(&timestamp_str)
             .map(|dt| dt.with_timezone(&Utc))
-            .unwrap_or_else(|_| Utc::now()),
+            .unwrap_or_else(|e| {
+                eprintln!(
+                    "Warning: invalid timestamp '{}' for event row: {}",
+                    timestamp_str, e
+                );
+                Utc::now()
+            }),
         event_type,
         entity: row.get(3)?,
         by: row.get::<_, Option<String>>(4)?.unwrap_or_default(),
@@ -141,8 +153,13 @@ fn parse_event_type(s: &str) -> EventType {
         "critique_validated" => EventType::CritiqueValidated,
         "milestone_created" => EventType::MilestoneCreated,
         "milestone_completed" => EventType::MilestoneCompleted,
-        // Default to ProblemCreated for unknown types
-        _ => EventType::ProblemCreated,
+        other => {
+            eprintln!(
+                "Warning: unknown event type '{}', defaulting to ProblemCreated",
+                other
+            );
+            EventType::ProblemCreated
+        }
     }
 }
 

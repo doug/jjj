@@ -85,17 +85,41 @@ fn row_to_problem(row: &rusqlite::Row) -> SqliteResult<Problem> {
     Ok(Problem {
         id: row.get(0)?,
         title: row.get(1)?,
-        status: status_str.parse().unwrap_or(ProblemStatus::Open),
-        priority: priority_str.parse().unwrap_or(Priority::Medium),
+        status: status_str.parse().unwrap_or_else(|_| {
+            eprintln!(
+                "Warning: invalid problem status '{}' for row, defaulting to Open",
+                status_str
+            );
+            ProblemStatus::Open
+        }),
+        priority: priority_str.parse().unwrap_or_else(|_| {
+            eprintln!(
+                "Warning: invalid priority '{}' for row, defaulting to Medium",
+                priority_str
+            );
+            Priority::Medium
+        }),
         parent_id: row.get(4)?,
         milestone_id: row.get(5)?,
         assignee: row.get(6)?,
         created_at: DateTime::parse_from_rfc3339(&created_at_str)
             .map(|dt| dt.with_timezone(&Utc))
-            .unwrap_or_else(|_| Utc::now()),
+            .unwrap_or_else(|e| {
+                eprintln!(
+                    "Warning: invalid created_at '{}' for problem row: {}",
+                    created_at_str, e
+                );
+                Utc::now()
+            }),
         updated_at: DateTime::parse_from_rfc3339(&updated_at_str)
             .map(|dt| dt.with_timezone(&Utc))
-            .unwrap_or_else(|_| Utc::now()),
+            .unwrap_or_else(|e| {
+                eprintln!(
+                    "Warning: invalid updated_at '{}' for problem row: {}",
+                    updated_at_str, e
+                );
+                Utc::now()
+            }),
         description: row.get::<_, Option<String>>(9)?.unwrap_or_default(),
         context: row.get::<_, Option<String>>(10)?.unwrap_or_default(),
         dissolved_reason: row.get(11)?,
@@ -197,12 +221,21 @@ fn row_to_solution(row: &rusqlite::Row) -> SqliteResult<Solution> {
     let created_at_str: String = row.get(8)?;
     let updated_at_str: String = row.get(9)?;
 
-    let change_ids: Vec<String> = serde_json::from_str(&change_ids_json).unwrap_or_default();
+    let change_ids: Vec<String> = serde_json::from_str(&change_ids_json).unwrap_or_else(|e| {
+        eprintln!("Warning: invalid change_ids JSON for solution row: {}", e);
+        Vec::new()
+    });
 
     Ok(Solution {
         id: row.get(0)?,
         title: row.get(1)?,
-        status: status_str.parse().unwrap_or(SolutionStatus::Proposed),
+        status: status_str.parse().unwrap_or_else(|_| {
+            eprintln!(
+                "Warning: invalid solution status '{}' for row, defaulting to Proposed",
+                status_str
+            );
+            SolutionStatus::Proposed
+        }),
         problem_id: row.get(3)?,
         change_ids,
         supersedes: row.get(5)?,
@@ -210,10 +243,22 @@ fn row_to_solution(row: &rusqlite::Row) -> SqliteResult<Solution> {
         force_accepted: row.get(7)?,
         created_at: DateTime::parse_from_rfc3339(&created_at_str)
             .map(|dt| dt.with_timezone(&Utc))
-            .unwrap_or_else(|_| Utc::now()),
+            .unwrap_or_else(|e| {
+                eprintln!(
+                    "Warning: invalid created_at '{}' for solution row: {}",
+                    created_at_str, e
+                );
+                Utc::now()
+            }),
         updated_at: DateTime::parse_from_rfc3339(&updated_at_str)
             .map(|dt| dt.with_timezone(&Utc))
-            .unwrap_or_else(|_| Utc::now()),
+            .unwrap_or_else(|e| {
+                eprintln!(
+                    "Warning: invalid updated_at '{}' for solution row: {}",
+                    updated_at_str, e
+                );
+                Utc::now()
+            }),
         approach: row.get::<_, Option<String>>(10)?.unwrap_or_default(),
         tradeoffs: row.get::<_, Option<String>>(11)?.unwrap_or_default(),
         // Computed field - leave empty, will be populated by relationships
@@ -326,7 +371,10 @@ fn row_to_critique(row: &rusqlite::Row) -> SqliteResult<Critique> {
         .get::<_, Option<String>>(11)?
         .unwrap_or_else(|| "[]".to_string());
 
-    let replies: Vec<Reply> = serde_json::from_str(&replies_json).unwrap_or_default();
+    let replies: Vec<Reply> = serde_json::from_str(&replies_json).unwrap_or_else(|e| {
+        eprintln!("Warning: invalid replies JSON for critique row: {}", e);
+        Vec::new()
+    });
 
     // Parse body back into argument and evidence
     const EVIDENCE_SEPARATOR: &str = "\n\n## Evidence\n\n";
@@ -342,9 +390,21 @@ fn row_to_critique(row: &rusqlite::Row) -> SqliteResult<Critique> {
     Ok(Critique {
         id: row.get(0)?,
         title: row.get(1)?,
-        status: status_str.parse().unwrap_or(CritiqueStatus::Open),
+        status: status_str.parse().unwrap_or_else(|_| {
+            eprintln!(
+                "Warning: invalid critique status '{}' for row, defaulting to Open",
+                status_str
+            );
+            CritiqueStatus::Open
+        }),
         solution_id: row.get(3)?,
-        severity: severity_str.parse().unwrap_or(CritiqueSeverity::Medium),
+        severity: severity_str.parse().unwrap_or_else(|_| {
+            eprintln!(
+                "Warning: invalid critique severity '{}' for row, defaulting to Medium",
+                severity_str
+            );
+            CritiqueSeverity::Medium
+        }),
         author: row.get(5)?, // Using reviewer as author
         reviewer: row.get(5)?,
         file_path: row.get(6)?,
@@ -352,10 +412,22 @@ fn row_to_critique(row: &rusqlite::Row) -> SqliteResult<Critique> {
         line_end: row.get::<_, Option<i64>>(7)?.map(|n| n as usize), // Same as line_start (DB only stores one)
         created_at: DateTime::parse_from_rfc3339(&created_at_str)
             .map(|dt| dt.with_timezone(&Utc))
-            .unwrap_or_else(|_| Utc::now()),
+            .unwrap_or_else(|e| {
+                eprintln!(
+                    "Warning: invalid created_at '{}' for critique row: {}",
+                    created_at_str, e
+                );
+                Utc::now()
+            }),
         updated_at: DateTime::parse_from_rfc3339(&updated_at_str)
             .map(|dt| dt.with_timezone(&Utc))
-            .unwrap_or_else(|_| Utc::now()),
+            .unwrap_or_else(|e| {
+                eprintln!(
+                    "Warning: invalid updated_at '{}' for critique row: {}",
+                    updated_at_str, e
+                );
+                Utc::now()
+            }),
         argument,
         evidence,
         code_context: Vec::new(), // Not stored in DB
@@ -446,7 +518,10 @@ fn row_to_milestone(row: &rusqlite::Row) -> SqliteResult<Milestone> {
         .get::<_, Option<String>>(8)?
         .unwrap_or_else(|| "[]".to_string());
 
-    let problem_ids: Vec<String> = serde_json::from_str(&problem_ids_json).unwrap_or_default();
+    let problem_ids: Vec<String> = serde_json::from_str(&problem_ids_json).unwrap_or_else(|e| {
+        eprintln!("Warning: invalid problem_ids JSON for milestone row: {}", e);
+        Vec::new()
+    });
 
     // Parse description back into goals and success_criteria
     const CRITERIA_SEPARATOR: &str = "\n\n## Success Criteria\n\n";
@@ -462,7 +537,13 @@ fn row_to_milestone(row: &rusqlite::Row) -> SqliteResult<Milestone> {
     Ok(Milestone {
         id: row.get(0)?,
         title: row.get(1)?,
-        status: status_str.parse().unwrap_or(MilestoneStatus::Planning),
+        status: status_str.parse().unwrap_or_else(|_| {
+            eprintln!(
+                "Warning: invalid milestone status '{}' for row, defaulting to Planning",
+                status_str
+            );
+            MilestoneStatus::Planning
+        }),
         target_date: target_date_str.and_then(|s| {
             DateTime::parse_from_rfc3339(&s)
                 .map(|dt| dt.with_timezone(&Utc))
@@ -471,10 +552,22 @@ fn row_to_milestone(row: &rusqlite::Row) -> SqliteResult<Milestone> {
         assignee: row.get(4)?,
         created_at: DateTime::parse_from_rfc3339(&created_at_str)
             .map(|dt| dt.with_timezone(&Utc))
-            .unwrap_or_else(|_| Utc::now()),
+            .unwrap_or_else(|e| {
+                eprintln!(
+                    "Warning: invalid created_at '{}' for milestone row: {}",
+                    created_at_str, e
+                );
+                Utc::now()
+            }),
         updated_at: DateTime::parse_from_rfc3339(&updated_at_str)
             .map(|dt| dt.with_timezone(&Utc))
-            .unwrap_or_else(|_| Utc::now()),
+            .unwrap_or_else(|e| {
+                eprintln!(
+                    "Warning: invalid updated_at '{}' for milestone row: {}",
+                    updated_at_str, e
+                );
+                Utc::now()
+            }),
         goals,
         success_criteria,
         problem_ids,

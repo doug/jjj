@@ -6,7 +6,7 @@ use crate::models::{Critique, Milestone, Problem, Solution};
 use crate::storage::MetadataStore;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{backend::Backend, Terminal};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
 use super::next_actions::EntityType;
@@ -79,6 +79,10 @@ pub struct UiState {
     pub related_selected: usize,
     pub input_mode: InputMode,
     pub filter_actions_only: bool,
+    /// Debounce timer for related items loading: (entity_type, entity_id, requested_at)
+    pub related_pending_load: Option<(String, String, Instant)>,
+    /// Cache of related items by (entity_type, entity_id)
+    pub related_cache: HashMap<(String, String), Vec<SimilarityResult>>,
 }
 
 impl Default for UiState {
@@ -101,6 +105,8 @@ impl UiState {
             related_selected: 0,
             input_mode: InputMode::Normal,
             filter_actions_only: false,
+            related_pending_load: None,
+            related_cache: HashMap::new(),
         }
     }
 }
@@ -186,6 +192,7 @@ impl App {
             }
 
             self.clear_expired_flash();
+            self.check_pending_related_load();
             terminal.draw(|f| super::ui::draw(f, self))?;
 
             if event::poll(Duration::from_millis(100))? {
@@ -615,27 +622,68 @@ impl App {
         };
     }
 
-    /// Load related items for the currently selected entity
+    /// Schedule a debounced load of related items for the currently selected entity
     pub fn load_related_for_selected(&mut self) {
-        use crate::db::search::find_similar;
-
-        // Clear existing
-        self.ui.related_items.clear();
         self.ui.related_selected = 0;
 
         // Get current selected entity info
         let (entity_type, entity_id) = match self.get_selected_entity_info() {
             Some(info) => info,
-            None => return,
+            None => {
+                self.ui.related_items.clear();
+                self.ui.related_pending_load = None;
+                return;
+            }
         };
 
-        // Try to load related items from database
+        // Check cache first
+        let cache_key = (entity_type.clone(), entity_id.clone());
+        if let Some(cached) = self.ui.related_cache.get(&cache_key) {
+            self.ui.related_items = cached.clone();
+            self.ui.related_pending_load = None;
+            return;
+        }
+
+        // Schedule debounced load
+        self.ui.related_pending_load = Some((entity_type, entity_id, Instant::now()));
+    }
+
+    /// Check if a pending related items load is ready (debounce expired)
+    fn check_pending_related_load(&mut self) {
+        use crate::db::search::find_similar;
+
+        let (entity_type, entity_id) = match &self.ui.related_pending_load {
+            Some((et, eid, requested_at))
+                if requested_at.elapsed() >= Duration::from_millis(300) =>
+            {
+                (et.clone(), eid.clone())
+            }
+            _ => return,
+        };
+
+        self.ui.related_pending_load = None;
+
+        // Verify selection hasn't changed
+        if let Some((current_type, current_id)) = self.get_selected_entity_info() {
+            if current_type != entity_type || current_id != entity_id {
+                return;
+            }
+        } else {
+            return;
+        }
+
+        // Load from database
+        let mut items = Vec::new();
         if let Some(ref db) = self.db {
             if let Ok(results) = find_similar(db.conn(), &entity_type, &entity_id, None, 5) {
-                self.ui.related_items =
-                    results.into_iter().filter(|r| r.similarity > 0.5).collect();
+                items = results.into_iter().filter(|r| r.similarity > 0.5).collect();
             }
         }
+
+        // Update cache and display
+        let cache_key = (entity_type, entity_id);
+        self.ui.related_cache.insert(cache_key, items.clone());
+        self.ui.related_items = items;
     }
 
     fn get_selected_entity_info(&self) -> Option<(String, String)> {
@@ -1034,6 +1082,7 @@ impl App {
 
     fn refresh_data(&mut self) -> Result<()> {
         self.data = ProjectData::load(&self.store)?;
+        self.ui.related_cache.clear();
         self.rebuild_cache();
         Ok(())
     }
@@ -1227,7 +1276,7 @@ impl App {
         // Simple parsing: extract title from frontmatter, description from body
         let parts: Vec<&str> = content.splitn(3, "---").collect();
         if parts.len() < 3 {
-            return Err("Invalid format".into());
+            return Err(crate::error::JjjError::Validation("Invalid format".to_string()));
         }
 
         let frontmatter = parts[1].trim();

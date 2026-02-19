@@ -1,6 +1,7 @@
 pub mod embeddings;
 pub mod entities;
 pub mod events;
+pub mod migrations;
 pub mod schema;
 pub mod search;
 pub mod sync;

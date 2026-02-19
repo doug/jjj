@@ -126,6 +126,12 @@ impl Event {
         self
     }
 
+    /// Override the timestamp
+    pub fn with_timestamp(mut self, when: DateTime<Utc>) -> Self {
+        self.when = when;
+        self
+    }
+
     /// Add extra fields
     pub fn with_extra(mut self, extra: EventExtra) -> Self {
         self.extra = extra;

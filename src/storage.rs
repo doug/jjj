@@ -42,23 +42,46 @@ fn parse_frontmatter<T: serde::de::DeserializeOwned>(content: &str) -> Result<(T
 
     // Check for frontmatter delimiter
     if !content.starts_with("---") {
-        return Err(JjjError::FrontmatterParse(
-            "File must start with YAML frontmatter (---)".to_string(),
-        ));
+        return Err(JjjError::FrontmatterParse {
+            entity_type: String::new(),
+            entity_id: String::new(),
+            message: "File must start with YAML frontmatter (---)".to_string(),
+        });
     }
 
     // Find the closing delimiter
     let rest = &content[3..];
-    let end_pos = rest.find("\n---").ok_or_else(|| {
-        JjjError::FrontmatterParse("Missing closing frontmatter delimiter".to_string())
-    })?;
+    let end_pos = rest
+        .find("\n---")
+        .ok_or_else(|| JjjError::FrontmatterParse {
+            entity_type: String::new(),
+            entity_id: String::new(),
+            message: "Missing closing frontmatter delimiter".to_string(),
+        })?;
 
     let yaml_str = &rest[..end_pos].trim();
     let body = rest[end_pos + 4..].trim().to_string();
 
-    let frontmatter: T = serde_yaml::from_str(yaml_str)?;
+    let frontmatter: T =
+        serde_yaml::from_str(yaml_str).map_err(|e| JjjError::FrontmatterParse {
+            entity_type: String::new(),
+            entity_id: String::new(),
+            message: e.to_string(),
+        })?;
 
     Ok((frontmatter, body))
+}
+
+/// Add entity context to a FrontmatterParse error
+fn add_frontmatter_context(err: JjjError, entity_type: &str, entity_id: &str) -> JjjError {
+    match err {
+        JjjError::FrontmatterParse { message, .. } => JjjError::FrontmatterParse {
+            entity_type: entity_type.to_string(),
+            entity_id: entity_id.to_string(),
+            message,
+        },
+        other => other,
+    }
 }
 
 /// Serialize entity to markdown with YAML frontmatter
@@ -131,7 +154,7 @@ impl MetadataStore {
     pub fn init(&self) -> Result<()> {
         // Check if already initialized
         if self.jj_client.bookmark_exists(META_BOOKMARK)? {
-            return Err("jjj is already initialized".into());
+            return Err(crate::error::JjjError::Validation("jjj is already initialized".to_string()));
         }
 
         // Create an empty orphan root
@@ -220,7 +243,8 @@ impl MetadataStore {
         }
 
         let content = fs::read_to_string(problem_path)?;
-        let (frontmatter, body): (ProblemFrontmatter, String) = parse_frontmatter(&content)?;
+        let (frontmatter, body): (ProblemFrontmatter, String) = parse_frontmatter(&content)
+            .map_err(|e| add_frontmatter_context(e, "problem", problem_id))?;
 
         // Parse body sections
         let sections = parse_body_sections(&body);
@@ -377,7 +401,8 @@ impl MetadataStore {
         }
 
         let content = fs::read_to_string(solution_path)?;
-        let (frontmatter, body): (SolutionFrontmatter, String) = parse_frontmatter(&content)?;
+        let (frontmatter, body): (SolutionFrontmatter, String) = parse_frontmatter(&content)
+            .map_err(|e| add_frontmatter_context(e, "solution", solution_id))?;
 
         let sections = parse_body_sections(&body);
 
@@ -504,7 +529,8 @@ impl MetadataStore {
         }
 
         let content = fs::read_to_string(critique_path)?;
-        let (frontmatter, body): (CritiqueFrontmatter, String) = parse_frontmatter(&content)?;
+        let (frontmatter, body): (CritiqueFrontmatter, String) = parse_frontmatter(&content)
+            .map_err(|e| add_frontmatter_context(e, "critique", critique_id))?;
 
         let sections = parse_body_sections(&body);
 
@@ -649,7 +675,8 @@ impl MetadataStore {
         }
 
         let content = fs::read_to_string(milestone_path)?;
-        let (frontmatter, body): (MilestoneFrontmatter, String) = parse_frontmatter(&content)?;
+        let (frontmatter, body): (MilestoneFrontmatter, String) = parse_frontmatter(&content)
+            .map_err(|e| add_frontmatter_context(e, "milestone", milestone_id))?;
 
         let sections = parse_body_sections(&body);
 
@@ -780,6 +807,22 @@ impl MetadataStore {
         }
 
         Ok(events)
+    }
+
+    /// Overwrite the entire event log with the given events
+    pub fn write_all_events(&self, events: &[Event]) -> Result<()> {
+        self.ensure_meta_checkout()?;
+
+        let events_path = self.meta_path.join(EVENTS_FILE);
+        let mut content = String::new();
+
+        for event in events {
+            use std::fmt::Write;
+            writeln!(content, "{}", event.to_json_line()?).unwrap();
+        }
+
+        std::fs::write(events_path, content)?;
+        Ok(())
     }
 
     /// Get the current user name from jj config

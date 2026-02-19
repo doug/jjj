@@ -33,11 +33,12 @@ pub fn execute(ctx: &CommandContext, action: SolutionAction) -> Result<()> {
             title,
             status,
         } => edit_solution(ctx, solution_id, title, status),
-        SolutionAction::Attach { solution_id } => attach_change(ctx, solution_id),
+        SolutionAction::Attach { solution_id, force } => attach_change(ctx, solution_id, force),
         SolutionAction::Detach {
             solution_id,
             change_id,
-        } => detach_change(ctx, solution_id, change_id),
+            force,
+        } => detach_change(ctx, solution_id, change_id, force),
         SolutionAction::Test { solution_id } => test_solution(ctx, solution_id),
         SolutionAction::Accept {
             solution_id,
@@ -85,7 +86,7 @@ fn new_solution(
             let open_problems: Vec<_> = problems.into_iter().filter(|p| p.is_open()).collect();
 
             if open_problems.is_empty() {
-                return Err("No open problems found. Create a problem first with: jjj problem new \"title\"".into());
+                return Err(crate::error::JjjError::Validation("No open problems found. Create a problem first with: jjj problem new \"title\"".to_string()));
             }
 
             println!("Select a problem to address:\n");
@@ -100,10 +101,10 @@ fn new_solution(
             let choice: usize = input
                 .trim()
                 .parse()
-                .map_err(|_| crate::error::JjjError::Other("Invalid choice".to_string()))?;
+                .map_err(|_| crate::error::JjjError::Validation("Invalid choice".to_string()))?;
 
             if choice < 1 || choice > open_problems.len() {
-                return Err("Invalid selection".into());
+                return Err(crate::error::JjjError::Validation("Invalid selection".to_string()));
             }
 
             open_problems[choice - 1].id.clone()
@@ -237,7 +238,7 @@ fn list_solutions(
 
     // Filter by status
     if let Some(status_str) = status_filter {
-        let status: SolutionStatus = status_str.parse().map_err(|e: String| e)?;
+        let status: SolutionStatus = status_str.parse().map_err(|e: String| crate::error::JjjError::Validation(e))?;
         solutions.retain(|s| s.status == status);
     }
 
@@ -386,7 +387,7 @@ fn edit_solution(
         }
 
         if let Some(status_str) = status {
-            let new_status: SolutionStatus = status_str.parse().map_err(|e: String| e)?;
+            let new_status: SolutionStatus = status_str.parse().map_err(|e: String| crate::error::JjjError::Validation(e))?;
             solution.set_status(new_status);
         }
 
@@ -396,12 +397,33 @@ fn edit_solution(
     })
 }
 
-fn attach_change(ctx: &CommandContext, solution_input: String) -> Result<()> {
+fn attach_change(ctx: &CommandContext, solution_input: String, force: bool) -> Result<()> {
     let solution_id = ctx.resolve_solution(&solution_input)?;
     let store = &ctx.store;
     let jj_client = ctx.jj();
 
     let change_id = jj_client.current_change_id()?;
+
+    // Validate change exists in jj
+    if !force {
+        if !jj_client.change_exists(&change_id)? {
+            return Err(crate::error::JjjError::Other(format!(
+                "Change '{}' not found in repository. Use --force to skip validation.",
+                change_id
+            )));
+        }
+
+        // Check no other solution already has this change attached
+        let all_solutions = store.list_solutions()?;
+        for other in &all_solutions {
+            if other.id != solution_id && other.change_ids.contains(&change_id) {
+                return Err(crate::error::JjjError::Other(format!(
+                    "Change '{}' is already attached to solution {}. Use --force to attach anyway.",
+                    change_id, other.id
+                )));
+            }
+        }
+    }
 
     store.with_metadata(
         &format!("Attach change {} to solution {}", change_id, solution_id),
@@ -419,6 +441,7 @@ fn detach_change(
     ctx: &CommandContext,
     solution_input: String,
     change_id: Option<String>,
+    force: bool,
 ) -> Result<()> {
     let solution_id = ctx.resolve_solution(&solution_input)?;
     let store = &ctx.store;
@@ -429,6 +452,27 @@ fn detach_change(
         None => jj_client.current_change_id()?,
     };
 
+    // Safety checks
+    if !force {
+        let solution = store.load_solution(&solution_id)?;
+
+        // Block detach from Testing solutions
+        if solution.status == SolutionStatus::Testing {
+            return Err(crate::error::JjjError::Other(format!(
+                "Cannot detach change from solution {} while in Testing state. Use --force to override.",
+                solution_id
+            )));
+        }
+
+        // Block detach of last change
+        if solution.change_ids.len() <= 1 && solution.change_ids.contains(&change_id) {
+            return Err(crate::error::JjjError::Other(format!(
+                "Cannot detach the last change from solution {}. Use --force to override.",
+                solution_id
+            )));
+        }
+    }
+
     store.with_metadata(
         &format!("Detach change {} from solution {}", change_id, solution_id),
         || {
@@ -437,8 +481,10 @@ fn detach_change(
             if solution.detach_change(&change_id) {
                 store.save_solution(&solution)?;
                 println!(
-                    "Detached change {} from solution {}",
-                    change_id, solution_id
+                    "Detached change {} from solution {} ({} change(s) remaining)",
+                    change_id,
+                    solution_id,
+                    solution.change_ids.len()
                 );
             } else {
                 println!(

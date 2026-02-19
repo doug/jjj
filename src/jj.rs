@@ -62,11 +62,11 @@ impl JjClient {
             .args(args)
             .current_dir(&self.repo_root)
             .output()
-            .map_err(|e| JjjError::JjExecution(e.to_string()))?;
+            .map_err(|e| crate::error::JjjError::JjIo { args: args.join(" "), source: e })?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(JjjError::JjExecution(stderr.to_string()));
+            return Err(crate::error::JjjError::JjCommandFailed { args: args.join(" "), stderr: stderr.to_string() });
         }
 
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
@@ -161,6 +161,14 @@ impl JjClient {
     pub fn edit(&self, change_id: &str) -> Result<()> {
         self.execute(&["edit", change_id])?;
         Ok(())
+    }
+
+    /// Check if a change ID exists in the repository
+    pub fn change_exists(&self, change_id: &str) -> Result<bool> {
+        match self.execute(&["log", "--no-graph", "-r", change_id, "-T", "change_id"]) {
+            Ok(_) => Ok(true),
+            Err(_) => Ok(false),
+        }
     }
 
     /// Get user name from config

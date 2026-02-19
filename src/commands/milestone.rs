@@ -38,7 +38,7 @@ fn create_milestone(ctx: &CommandContext, title: String, date: Option<String>) -
         // Parse date if provided
         let target_date = if let Some(date_str) = date {
             let naive_date = NaiveDate::parse_from_str(&date_str, "%Y-%m-%d")
-                .map_err(|_| format!("Invalid date format: {}. Use YYYY-MM-DD", date_str))?;
+                .map_err(|_| crate::error::JjjError::Validation(format!("Invalid date format: {}. Use YYYY-MM-DD", date_str)))?;
             Some(naive_date.and_hms_opt(0, 0, 0).unwrap().and_utc())
         } else {
             None
@@ -75,12 +75,12 @@ fn edit_milestone(
 
         if let Some(d) = date {
             let naive_date = NaiveDate::parse_from_str(&d, "%Y-%m-%d")
-                .map_err(|_| format!("Invalid date format: {}. Use YYYY-MM-DD", d))?;
+                .map_err(|_| crate::error::JjjError::Validation(format!("Invalid date format: {}. Use YYYY-MM-DD", d)))?;
             milestone.set_target_date(Some(naive_date.and_hms_opt(0, 0, 0).unwrap().and_utc()));
         }
 
         if let Some(s) = status {
-            let new_status: MilestoneStatus = s.parse().map_err(|e: String| e)?;
+            let new_status: MilestoneStatus = s.parse().map_err(|e: String| crate::error::JjjError::Validation(e))?;
             milestone.set_status(new_status);
         }
 

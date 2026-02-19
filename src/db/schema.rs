@@ -87,18 +87,39 @@ impl Database {
 
     /// Ensure the schema is created and up to date.
     fn ensure_schema(&mut self) -> SqliteResult<()> {
-        // Check if we need to rebuild
-        let needs_rebuild = self.needs_rebuild();
-
-        if needs_rebuild {
-            // Drop existing tables if rebuilding
-            self.drop_all_tables()?;
+        match self.get_schema_version() {
+            Ok(version) if version == SCHEMA_VERSION && !self.is_dirty() => {
+                // Schema is current and clean, nothing to do
+                return Ok(());
+            }
+            Ok(version) if version < SCHEMA_VERSION && !self.is_dirty() => {
+                // Try incremental migrations first
+                match super::migrations::run_migrations(&self.conn, version) {
+                    Ok(true) => {
+                        // Migrations succeeded, update version and ensure schema is complete
+                        self.conn.execute_batch(include_str!("schema.sql"))?;
+                        self.conn.execute(
+                            "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', ?1)",
+                            [SCHEMA_VERSION.to_string()],
+                        )?;
+                        return Ok(());
+                    }
+                    Ok(false) => {
+                        // Migration requires rebuild, fall through
+                    }
+                    Err(_) => {
+                        // Migration failed, fall through to rebuild
+                    }
+                }
+            }
+            _ => {
+                // New DB (version missing), dirty, or version > current: rebuild
+            }
         }
 
-        // Create schema
+        // Full rebuild: drop all tables and recreate
+        self.drop_all_tables()?;
         self.conn.execute_batch(include_str!("schema.sql"))?;
-
-        // Set schema version
         self.conn.execute(
             "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', ?1)",
             [SCHEMA_VERSION.to_string()],

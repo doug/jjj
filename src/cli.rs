@@ -397,6 +397,10 @@ pub enum SolutionAction {
     Attach {
         /// Solution ID (e.g., S-1)
         solution_id: String,
+
+        /// Skip validation checks (change existence, duplicate attachment)
+        #[arg(long)]
+        force: bool,
     },
 
     /// Detach a change from solution
@@ -406,6 +410,10 @@ pub enum SolutionAction {
 
         /// Change ID (if not specified, uses current change)
         change_id: Option<String>,
+
+        /// Skip safety checks (testing state, last change)
+        #[arg(long)]
+        force: bool,
     },
 
     /// Move solution to testing status

@@ -5,8 +5,18 @@ pub type Result<T> = std::result::Result<T, JjjError>;
 
 #[derive(Error, Debug)]
 pub enum JjjError {
-    #[error("Failed to execute jj command: {0}")]
-    JjExecution(String),
+    #[error("Failed to execute jj command '{args}': {source}")]
+    JjIo {
+        args: String,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error("jj command '{args}' failed:\n{stderr}")]
+    JjCommandFailed {
+        args: String,
+        stderr: String,
+    },
 
     #[error("jj executable not found in PATH.\n\nPlease install Jujutsu:\n  macOS: brew install jj\n  From source: cargo install --git https://github.com/martinvonz/jj jj-cli")]
     JjNotFound,
@@ -52,8 +62,12 @@ pub enum JjjError {
     #[error("Cannot accept solution: {0}")]
     CannotAcceptSolution(String),
 
-    #[error("Failed to parse frontmatter: {0}")]
-    FrontmatterParse(String),
+    #[error("Failed to parse {entity_type} '{entity_id}': {message}")]
+    FrontmatterParse {
+        entity_type: String,
+        entity_id: String,
+        message: String,
+    },
 
     #[error("Failed to parse {field}: {value}")]
     ParseError { field: String, value: String },
@@ -99,16 +113,10 @@ pub enum JjjError {
 
     #[error("{0}")]
     Other(String),
-}
 
-impl From<String> for JjjError {
-    fn from(s: String) -> Self {
-        JjjError::Other(s)
-    }
-}
+    #[error("Validation failed: {0}")]
+    Validation(String),
 
-impl From<&str> for JjjError {
-    fn from(s: &str) -> Self {
-        JjjError::Other(s.to_string())
-    }
+    #[error("Configuration error: {0}")]
+    Config(String),
 }
