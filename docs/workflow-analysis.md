@@ -28,11 +28,11 @@ jjj implements Popperian epistemology for software development:
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                              PROBLEM DAG                                     │
 │                                                                              │
-│  p1 (open) ─────┬──── p2 (open)      p5 (solved)                        │
-│                  │                                                           │
-│                  └──── p3 (in_progress)                                    │
-│                              │                                               │
-│                              └──── p4 (open)                               │
+│  "Auth issues" (open) ──┬── "Token refresh" (open)    "Perf" (solved)    │
+│                          │                                                   │
+│                          └── "Session mgmt" (in_progress)                  │
+│                                       │                                      │
+│                                       └── "Cookie handling" (open)         │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
                                           │
@@ -78,38 +78,34 @@ jjj init
 
 # 2. Identify a problem
 jjj problem new "User authentication is unreliable"
-# → p1 created
 
 # 3. Decompose into sub-problems (optional)
-jjj problem new "Token refresh fails silently" --parent p1
-# → p2 created as child of p1
+jjj problem new "Token refresh fails silently" --parent "authentication"
 
 # 4. Propose a solution
-jjj solution new "Use JWT with explicit refresh handling" --problem p2
-# → s1 created (status: proposed)
+jjj solution new "Use JWT with explicit refresh handling" --problem "Token refresh"
 
 # 5. Start working on the solution
-jjj start s1
-# → Creates jj change, attaches to s1, moves to "testing"
-# → p2 moves to "in_progress"
+jjj solution resume "JWT with explicit"
+# → Creates jj change, attaches to solution, moves to "testing"
+# → "Token refresh" moves to "in_progress"
 
 # 6. Write code...
 # Edit files, jj tracks changes
 
 # 7. Someone critiques the solution
-jjj critique new s1 "JWT tokens are vulnerable to XSS" --severity high
-# → c1 created
+jjj critique new "JWT with explicit" "JWT tokens are vulnerable to XSS" --severity high
 
 # 8. Address or refute the critique
 # Option A: Modify solution to address critique
-jjj critique address c1
+jjj critique address "vulnerable to XSS"
 
 # Option B: Dismiss critique as invalid
-jjj critique dismiss c1
+jjj critique dismiss "vulnerable to XSS"
 
 # Option C: Validate critique (solution is flawed)
-jjj critique validate c1
-jjj solution refute s1
+jjj critique validate "vulnerable to XSS"
+jjj solution refute "JWT with explicit"
 # → Need a new solution approach
 
 # 9. Request code review
@@ -119,11 +115,11 @@ jjj review request @alice @bob
 # 10. Get approved and submit
 jjj review approve
 jjj submit
-# → s1 accepted, prompts to solve p2
+# → Solution accepted, prompts to solve problem
 
 # 11. Mark problem solved
-jjj problem solve p2
-# → When all sub-problems solved, can solve p1
+jjj problem solve "Token refresh"
+# → When all sub-problems solved, can solve parent
 ```
 
 ---
@@ -139,8 +135,8 @@ jjj problem solve p2
 
 **Current State:**
 ```
-Solution s1
-├── Critiques: c1, c2 (conceptual)
+Solution "JWT with explicit refresh"
+├── Critiques: "XSS vulnerability", "No rate limiting" (conceptual)
 └── Changes: abc123, def456
     └── Reviews (code-level comments, separate system)
 ```
@@ -154,7 +150,7 @@ Solution s1
 Reviews should auto-create Critiques when "changes requested":
 ```bash
 jjj review request-changes --message "This approach won't scale"
-# → Automatically creates c-N linked to solution
+# → Automatically creates critique linked to solution
 # → Solution can't be accepted until critique addressed
 ```
 
@@ -168,7 +164,7 @@ jjj review request-changes --message "This approach won't scale"
 **Current State:**
 ```bash
 # This works but makes no sense:
-jjj solution new "Fix auth" --problem p1  # s1
+jjj solution new "Fix auth" --problem "authentication"
 # ... edit code without jjj start ...
 jjj submit --force  # What solution did this implement?
 ```
@@ -176,9 +172,9 @@ jjj submit --force  # What solution did this implement?
 **More Elegant:**
 The change's description could embed the solution ID:
 ```
-s1: Fix authentication by adding JWT refresh
+Use JWT with explicit refresh handling
 
-[Addresses p1: User authentication is unreliable]
+[Addresses: User authentication is unreliable]
 ```
 
 Then `submit` could auto-detect which solution this implements.
@@ -189,14 +185,14 @@ Then `submit` could auto-detect which solution this implements.
 The user must explicitly transition states that could be inferred:
 
 ```bash
-jjj solution test s1      # Why? I started working = testing
-jjj solution accept s1    # Why? My PR was approved = accepted
-jjj problem solve p1      # Why? All solutions accepted = solved
+jjj solution test "JWT refresh"    # Why? I started working = testing
+jjj solution accept "JWT refresh"  # Why? My PR was approved = accepted
+jjj problem solve "Token refresh"  # Why? All solutions accepted = solved
 ```
 
 **More Elegant:**
 Infer status from actions:
-- `jjj start s1` → auto `testing`
+- `jjj solution resume "JWT refresh"` → auto `testing`
 - `jjj submit` + review approved → auto `accept`
 - All sub-problems solved → auto-prompt to solve parent
 
@@ -205,7 +201,7 @@ Infer status from actions:
 **The Problem:**
 Open critiques warn but don't prevent acceptance:
 ```bash
-jjj solution accept s1
+jjj solution accept "JWT refresh"
 # Warning: Solution has 2 open critiques
 # (but proceeds anyway)
 ```
@@ -216,14 +212,14 @@ That's the whole point of critical rationalism.
 
 **More Elegant:**
 ```bash
-jjj solution accept s1
+jjj solution accept "JWT refresh"
 # Error: Cannot accept - 2 open critiques
-# c1: JWT tokens vulnerable to XSS [high]
-# c2: No rate limiting [medium]
+# "XSS vulnerability": JWT tokens vulnerable to XSS [high]
+# "No rate limiting": Missing rate limiting [medium]
 #
-# Address with: jjj critique address c1
-# Dismiss with:  jjj critique dismiss c1
-# Or force:      jjj solution accept s1 --force
+# Address with: jjj critique address "XSS vulnerability"
+# Dismiss with:  jjj critique dismiss "XSS vulnerability"
+# Or force:      jjj solution accept "JWT refresh" --force
 ```
 
 ### 5. No Clear "What Should I Work On?" Flow
@@ -232,14 +228,14 @@ jjj solution accept s1
 `jjj dashboard` shows information but doesn't guide action:
 ```
 My Problems (2):
-  p1 - Auth issues [in_progress]
-  p3 - Slow queries [open]
+  "Auth issues"   [in_progress]
+  "Slow queries"  [open]
 
 My Solutions (1):
-  s2 - Add caching [testing]
+  "Add caching"   [testing]
 
 Open Critiques on My Solutions (3):
-  c1, c2, c3
+  "XSS vulnerability", "No rate limiting", "Missing pagination"
 ```
 
 **What's Missing:**
@@ -251,17 +247,17 @@ Open Critiques on My Solutions (3):
 ```
 Next Actions:
 
-1. [BLOCKED] s2 has 3 unaddressed critiques
-   → jjj critique show c1  (high severity)
+1. [BLOCKED] "Add caching" has 3 unaddressed critiques
+   → jjj critique show "XSS vulnerability"  (high severity)
 
-2. [READY] p1 has accepted solution, ready to mark solved
-   → jjj problem solve p1
+2. [READY] "Auth issues" has accepted solution, ready to mark solved
+   → jjj problem solve "Auth issues"
 
 3. [WAITING] Review pending for change abc123
    → Waiting on @alice
 
-4. [TODO] p3 has no solutions proposed yet
-   → jjj start "Solution title" --problem p3
+4. [TODO] "Slow queries" has no solutions proposed yet
+   → jjj solution new "Solution title" --problem "Slow queries"
 ```
 
 ### 6. GitHub/External Integration Gap
@@ -277,9 +273,9 @@ Many teams use GitHub Issues and PRs. jjj is isolated.
 **More Elegant:**
 ```bash
 jjj problem import github#123
-# → Creates P-N from GitHub issue
+# → Creates problem from GitHub issue
 
-jjj solution submit s1
+jjj solution submit "JWT refresh"
 # → Creates GitHub PR with description from Solution
 # → PR comments sync back as Critiques
 ```
@@ -292,7 +288,7 @@ But there's no workflow for discovering this.
 
 **Current State:**
 ```bash
-jjj problem dissolve p1  # Just a manual status change
+jjj problem dissolve "Auth issues"  # Just a manual status change
 ```
 
 **What's Missing:**
@@ -302,9 +298,9 @@ jjj problem dissolve p1  # Just a manual status change
 
 **More Elegant:**
 ```bash
-jjj critique validate c5
-# "This critique shows the problem p3 is based on false premises"
-# → Prompt: Dissolve problem p3? [y/N]
+jjj critique validate "false premise"
+# "This critique shows the problem is based on false premises"
+# → Prompt: Dissolve problem "Slow queries"? [y/N]
 ```
 
 ---
@@ -333,14 +329,14 @@ Both block solution acceptance until resolved.
 ### 2. Semantic Change Descriptions
 
 ```
-jjj start "Use connection pooling" --problem p3
+jjj solution resume "Use connection pooling" --problem "Slow queries"
 ```
 
 Creates change with description:
 ```
-s7: Use connection pooling
+Use connection pooling
 
-Problem: p3 - Database queries are slow
+Problem: Database queries are slow
 Approach: Implement connection pooling to reduce connection overhead
 ```
 

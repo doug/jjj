@@ -16,14 +16,10 @@ pub fn execute(
     let repo_root = jj_client.repo_root();
     let db_path = repo_root.join(".jj").join("jjj.db");
 
-    // Ensure DB exists
-    let db = if db_path.exists() {
-        Database::open(&db_path)?
-    } else {
-        let db = Database::open(&db_path)?;
-        db::load_from_markdown(&db, &ctx.store)?;
-        db
-    };
+    // Always sync from markdown before searching to ensure results are fresh,
+    // since entity creation commands write to markdown but not the DB.
+    let db = Database::open(&db_path)?;
+    db::load_from_markdown(&db, &ctx.store)?;
 
     // Load local config and try to get embedding client
     let local_config = LocalConfig::load(repo_root);
@@ -69,26 +65,25 @@ fn execute_similarity_search(
             .collect();
         println!("{}", serde_json::to_string_pretty(&json_results)?);
     } else if results.is_empty() {
+        let type_char = entity_type.chars().next().unwrap_or('?');
         println!(
             "No similar entities found for {}/{}",
-            entity_type.chars().next().unwrap(),
-            entity_id_prefix
+            type_char, entity_id_prefix
         );
         println!("\nNote: Embeddings may not be computed. Run 'jjj db rebuild' with an embedding service running.");
     } else {
+        let type_char = entity_type.chars().next().unwrap_or('?');
         println!(
             "Entities similar to {}/{}:\n",
-            entity_type.chars().next().unwrap(),
+            type_char,
             &full_id[..6.min(full_id.len())]
         );
         for result in results {
             let short_id = &result.entity_id[..6.min(result.entity_id.len())];
+            let result_type_char = result.entity_type.chars().next().unwrap_or('?');
             println!(
                 "  {}/{}  [{:.2}]  \"{}\"",
-                result.entity_type.chars().next().unwrap(),
-                short_id,
-                result.similarity,
-                result.title
+                result_type_char, short_id, result.similarity, result.title
             );
         }
     }

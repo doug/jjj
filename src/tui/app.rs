@@ -38,6 +38,7 @@ pub enum InputAction {
         entity_type: EntityType,
         entity_id: String,
     },
+    Search,
 }
 
 #[derive(Debug, Clone)]
@@ -79,6 +80,8 @@ pub struct UiState {
     pub related_selected: usize,
     pub input_mode: InputMode,
     pub filter_actions_only: bool,
+    /// Text search filter for the tree (set via '/' key)
+    pub search_filter: Option<String>,
     /// Debounce timer for related items loading: (entity_type, entity_id, requested_at)
     pub related_pending_load: Option<(String, String, Instant)>,
     /// Cache of related items by (entity_type, entity_id)
@@ -105,6 +108,7 @@ impl UiState {
             related_selected: 0,
             input_mode: InputMode::Normal,
             filter_actions_only: false,
+            search_filter: None,
             related_pending_load: None,
             related_cache: HashMap::new(),
         }
@@ -255,6 +259,7 @@ impl App {
             KeyCode::Char('o') => self.handle_action_o()?,
             KeyCode::Char('v') => self.handle_action_v()?,
             KeyCode::Char('f') => self.toggle_filter(),
+            KeyCode::Char('/') => self.start_search(),
             KeyCode::Char('R') => self.toggle_related_panel(),
             KeyCode::Char('E') => self.open_in_editor()?,
             KeyCode::Char('?') => self.toggle_help(),
@@ -273,6 +278,49 @@ impl App {
             } => (prompt.clone(), buffer.clone(), action.clone()),
             _ => return Ok(()),
         };
+
+        // Search mode has special live-filtering behavior
+        if action == InputAction::Search {
+            match key {
+                KeyCode::Esc => {
+                    self.ui.search_filter = None;
+                    self.ui.input_mode = InputMode::Normal;
+                    self.apply_search_filter();
+                }
+                KeyCode::Enter => {
+                    // Keep filter active, just exit input mode
+                    self.ui.input_mode = InputMode::Normal;
+                }
+                KeyCode::Backspace => {
+                    let mut new_buffer = buffer;
+                    new_buffer.pop();
+                    self.ui.search_filter = if new_buffer.is_empty() {
+                        None
+                    } else {
+                        Some(new_buffer.clone())
+                    };
+                    self.ui.input_mode = InputMode::Input {
+                        prompt,
+                        buffer: new_buffer,
+                        action,
+                    };
+                    self.apply_search_filter();
+                }
+                KeyCode::Char(c) => {
+                    let mut new_buffer = buffer;
+                    new_buffer.push(c);
+                    self.ui.search_filter = Some(new_buffer.clone());
+                    self.ui.input_mode = InputMode::Input {
+                        prompt,
+                        buffer: new_buffer,
+                        action,
+                    };
+                    self.apply_search_filter();
+                }
+                _ => {}
+            }
+            return Ok(());
+        }
 
         match key {
             KeyCode::Esc => {
@@ -323,6 +371,9 @@ impl App {
                 entity_id,
             } => {
                 self.update_title(entity_type, entity_id, title)?;
+            }
+            InputAction::Search => {
+                // Search is handled directly in handle_input_key
             }
         }
         Ok(())
@@ -615,6 +666,14 @@ impl App {
         self.show_flash(mode);
     }
 
+    fn start_search(&mut self) {
+        self.ui.input_mode = InputMode::Input {
+            prompt: "/".to_string(),
+            buffer: self.ui.search_filter.clone().unwrap_or_default(),
+            action: InputAction::Search,
+        };
+    }
+
     fn toggle_help(&mut self) {
         self.ui.input_mode = match &self.ui.input_mode {
             InputMode::Help => InputMode::Normal,
@@ -709,6 +768,32 @@ impl App {
             &self.data.critiques,
             &self.ui.expanded_nodes,
         );
+        // Re-apply search filter if active
+        if self.ui.search_filter.is_some() {
+            self.apply_search_filter_to_tree();
+        }
+    }
+
+    fn apply_search_filter(&mut self) {
+        self.rebuild_tree();
+        super::annotate_tree_with_actions(&mut self.cache.tree_items, &self.cache.next_actions);
+        // Clamp tree_index
+        let max_index = self.cache.tree_items.len().saturating_sub(1);
+        if self.ui.tree_index > max_index {
+            self.ui.tree_index = max_index;
+        }
+        self.update_selected_detail();
+    }
+
+    fn apply_search_filter_to_tree(&mut self) {
+        if let Some(ref query) = self.ui.search_filter {
+            let query_lower = query.to_lowercase();
+            self.cache.tree_items.retain(|item| {
+                let title = item.node.title().to_lowercase();
+                let id = item.node.id().to_lowercase();
+                title.contains(&query_lower) || id.contains(&query_lower)
+            });
+        }
     }
 
     pub fn context_hints(&self) -> String {
@@ -1084,6 +1169,11 @@ impl App {
         self.data = ProjectData::load(&self.store)?;
         self.ui.related_cache.clear();
         self.rebuild_cache();
+        // Clamp tree_index to valid range after data change
+        let max_index = self.cache.tree_items.len().saturating_sub(1);
+        if self.ui.tree_index > max_index {
+            self.ui.tree_index = max_index;
+        }
         Ok(())
     }
 
@@ -1276,7 +1366,9 @@ impl App {
         // Simple parsing: extract title from frontmatter, description from body
         let parts: Vec<&str> = content.splitn(3, "---").collect();
         if parts.len() < 3 {
-            return Err(crate::error::JjjError::Validation("Invalid format".to_string()));
+            return Err(crate::error::JjjError::Validation(
+                "Invalid format".to_string(),
+            ));
         }
 
         let frontmatter = parts[1].trim();

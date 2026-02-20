@@ -101,7 +101,7 @@ jjj milestone remove-problem <milestone_id> <problem_id>
 ```
 
 ```bash
-jjj milestone remove-problem m1 p1
+jjj milestone remove-problem "v1.0" "Improve performance"
 ```
 
 ## `jjj milestone roadmap`
@@ -133,5 +133,5 @@ jjj milestone assign <milestone_id> [OPTIONS]
 | `--to` | string | Assignee name (defaults to self) |
 
 ```bash
-jjj milestone assign m1 --to alice
+jjj milestone assign "v1.0" --to alice
 ```

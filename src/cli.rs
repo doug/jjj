@@ -251,6 +251,10 @@ pub enum ProblemAction {
         #[arg(long)]
         search: Option<String>,
 
+        /// Sort by field (priority, status, created, title)
+        #[arg(long, default_value = "priority")]
+        sort: String,
+
         /// Output in JSON format
         #[arg(long)]
         json: bool,
@@ -258,7 +262,7 @@ pub enum ProblemAction {
 
     /// Show problem details
     Show {
-        /// Problem ID (e.g., P-1)
+        /// Problem ID or title (e.g., "auth bug", 01957d)
         problem_id: String,
 
         /// Output in JSON format
@@ -268,7 +272,7 @@ pub enum ProblemAction {
 
     /// Edit problem details
     Edit {
-        /// Problem ID (e.g., P-1)
+        /// Problem ID or title (e.g., "auth bug", 01957d)
         problem_id: String,
 
         /// New title
@@ -296,13 +300,13 @@ pub enum ProblemAction {
 
     /// Mark problem as solved (requires accepted solution)
     Solve {
-        /// Problem ID (e.g., P-1)
+        /// Problem ID or title (e.g., "auth bug", 01957d)
         problem_id: String,
     },
 
     /// Mark problem as dissolved (based on false premises)
     Dissolve {
-        /// Problem ID (e.g., P-1)
+        /// Problem ID or title (e.g., "auth bug", 01957d)
         problem_id: String,
 
         /// Reason for dissolving (why the problem was based on false premises)
@@ -312,7 +316,7 @@ pub enum ProblemAction {
 
     /// Assign a problem to a person
     Assign {
-        /// Problem ID (e.g., P-1)
+        /// Problem ID or title (e.g., "auth bug", 01957d)
         problem_id: String,
 
         /// Assignee name (if not specified, assigns to self)
@@ -336,7 +340,7 @@ pub enum SolutionAction {
         #[arg(long)]
         problem: Option<String>,
 
-        /// Solution this supersedes (e.g., S-1)
+        /// Solution this supersedes (e.g., "old approach", 01958a)
         #[arg(long)]
         supersedes: Option<String>,
 
@@ -364,6 +368,10 @@ pub enum SolutionAction {
         #[arg(long)]
         search: Option<String>,
 
+        /// Sort by field (status, created, title)
+        #[arg(long, default_value = "status")]
+        sort: String,
+
         /// Output in JSON format
         #[arg(long)]
         json: bool,
@@ -371,7 +379,7 @@ pub enum SolutionAction {
 
     /// Show solution details
     Show {
-        /// Solution ID (e.g., S-1)
+        /// Solution ID or title (e.g., "pooling", 01958a)
         solution_id: String,
 
         /// Output in JSON format
@@ -381,7 +389,7 @@ pub enum SolutionAction {
 
     /// Edit solution details
     Edit {
-        /// Solution ID (e.g., S-1)
+        /// Solution ID or title (e.g., "pooling", 01958a)
         solution_id: String,
 
         /// New title
@@ -395,7 +403,7 @@ pub enum SolutionAction {
 
     /// Attach current jj change to solution
     Attach {
-        /// Solution ID (e.g., S-1)
+        /// Solution ID or title (e.g., "pooling", 01958a)
         solution_id: String,
 
         /// Skip validation checks (change existence, duplicate attachment)
@@ -405,7 +413,7 @@ pub enum SolutionAction {
 
     /// Detach a change from solution
     Detach {
-        /// Solution ID (e.g., S-1)
+        /// Solution ID or title (e.g., "pooling", 01958a)
         solution_id: String,
 
         /// Change ID (if not specified, uses current change)
@@ -418,13 +426,13 @@ pub enum SolutionAction {
 
     /// Move solution to testing status
     Test {
-        /// Solution ID (e.g., S-1)
+        /// Solution ID or title (e.g., "pooling", 01958a)
         solution_id: String,
     },
 
     /// Accept solution (requires no open critiques)
     Accept {
-        /// Solution ID (e.g., s1)
+        /// Solution ID or title (e.g., "pooling", 01958a)
         solution_id: String,
 
         /// Force accept even with open critiques
@@ -442,7 +450,7 @@ pub enum SolutionAction {
 
     /// Refute solution (criticism showed it won't work)
     Refute {
-        /// Solution ID (e.g., s1)
+        /// Solution ID or title (e.g., "pooling", 01958a)
         solution_id: String,
 
         /// Reason for refuting
@@ -456,7 +464,7 @@ pub enum SolutionAction {
 
     /// Assign a solution to a person
     Assign {
-        /// Solution ID (e.g., S-1)
+        /// Solution ID or title (e.g., "pooling", 01958a)
         solution_id: String,
 
         /// Assignee name (if not specified, assigns to self)
@@ -466,7 +474,7 @@ pub enum SolutionAction {
 
     /// Resume working on an existing solution
     Resume {
-        /// Solution ID (e.g., S-1)
+        /// Solution ID or title (e.g., "pooling", 01958a)
         solution_id: String,
     },
 }
@@ -479,7 +487,7 @@ pub enum SolutionAction {
 pub enum CritiqueAction {
     /// Add a critique to a solution
     New {
-        /// Solution to critique (e.g., S-1)
+        /// Solution to critique (e.g., "pooling", 01958a)
         solution_id: String,
 
         /// Critique title
@@ -527,7 +535,7 @@ pub enum CritiqueAction {
 
     /// Show critique details
     Show {
-        /// Critique ID (e.g., CQ-1)
+        /// Critique ID or title (e.g., "error handling", 01959b)
         critique_id: String,
 
         /// Output in JSON format
@@ -537,7 +545,7 @@ pub enum CritiqueAction {
 
     /// Edit critique details
     Edit {
-        /// Critique ID (e.g., CQ-1)
+        /// Critique ID or title (e.g., "error handling", 01959b)
         critique_id: String,
 
         /// New title
@@ -555,25 +563,25 @@ pub enum CritiqueAction {
 
     /// Mark critique as addressed (solution was modified)
     Address {
-        /// Critique ID (e.g., CQ-1)
+        /// Critique ID or title (e.g., "error handling", 01959b)
         critique_id: String,
     },
 
     /// Validate critique (it's correct, solution should be refuted)
     Validate {
-        /// Critique ID (e.g., CQ-1)
+        /// Critique ID or title (e.g., "error handling", 01959b)
         critique_id: String,
     },
 
     /// Dismiss critique (incorrect or irrelevant)
     Dismiss {
-        /// Critique ID (e.g., CQ-1)
+        /// Critique ID or title (e.g., "error handling", 01959b)
         critique_id: String,
     },
 
     /// Reply to a critique
     Reply {
-        /// Critique ID (e.g., CQ-1)
+        /// Critique ID or title (e.g., "error handling", 01959b)
         critique_id: String,
 
         /// Reply body
@@ -599,7 +607,7 @@ pub enum MilestoneAction {
 
     /// Edit milestone details
     Edit {
-        /// Milestone ID (e.g., M-1)
+        /// Milestone ID or title (e.g., "v1.0", 01960c)
         milestone_id: String,
 
         /// New title
@@ -624,7 +632,7 @@ pub enum MilestoneAction {
 
     /// Show milestone details
     Show {
-        /// Milestone ID (e.g., M-1)
+        /// Milestone ID or title (e.g., "v1.0", 01960c)
         milestone_id: String,
 
         /// Output in JSON format
@@ -634,19 +642,19 @@ pub enum MilestoneAction {
 
     /// Add a problem to milestone
     AddProblem {
-        /// Milestone ID (e.g., M-1)
+        /// Milestone ID or title (e.g., "v1.0", 01960c)
         milestone_id: String,
 
-        /// Problem ID (e.g., P-1)
+        /// Problem ID or title (e.g., "auth bug", 01957d)
         problem_id: String,
     },
 
     /// Remove a problem from milestone
     RemoveProblem {
-        /// Milestone ID (e.g., M-1)
+        /// Milestone ID or title (e.g., "v1.0", 01960c)
         milestone_id: String,
 
-        /// Problem ID (e.g., P-1)
+        /// Problem ID or title (e.g., "auth bug", 01957d)
         problem_id: String,
     },
 
@@ -659,7 +667,7 @@ pub enum MilestoneAction {
 
     /// Assign a milestone to a person
     Assign {
-        /// Milestone ID (e.g., M-1)
+        /// Milestone ID or title (e.g., "v1.0", 01960c)
         milestone_id: String,
 
         /// Assignee name (if not specified, assigns to self)

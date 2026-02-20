@@ -51,11 +51,14 @@ CREATE TABLE IF NOT EXISTS critiques (
     solution_id TEXT NOT NULL,
     severity TEXT NOT NULL DEFAULT 'medium',
     reviewer TEXT,
+    author TEXT,
     file_path TEXT,
     line_number INTEGER,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     body TEXT DEFAULT '',
+    argument TEXT DEFAULT '',
+    evidence TEXT DEFAULT '',
     replies TEXT DEFAULT '[]',  -- JSON array
     FOREIGN KEY (solution_id) REFERENCES solutions(id)
 );
@@ -90,9 +93,7 @@ CREATE VIRTUAL TABLE IF NOT EXISTS fts USING fts5(
     entity_type,
     entity_id,
     title,
-    body,
-    content='',
-    contentless_delete=1
+    body
 );
 
 -- Indexes for common queries

@@ -52,7 +52,7 @@ pub struct Solution {
 }
 
 /// Status of a solution (conjecture)
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "snake_case")]
 pub enum SolutionStatus {
     /// Conjecture put forward, not yet tested
@@ -89,7 +89,10 @@ impl std::str::FromStr for SolutionStatus {
             "testing" => Ok(SolutionStatus::Testing),
             "refuted" => Ok(SolutionStatus::Refuted),
             "accepted" => Ok(SolutionStatus::Accepted),
-            _ => Err(format!("Unknown solution status: {}", s)),
+            _ => Err(format!(
+                "Unknown solution status: '{}'. Valid values: proposed, testing, refuted, accepted",
+                s
+            )),
         }
     }
 }
@@ -157,6 +160,18 @@ impl Solution {
     pub fn set_status(&mut self, status: SolutionStatus) {
         self.status = status;
         self.updated_at = Utc::now();
+    }
+
+    /// Check if a status transition is valid.
+    pub fn can_transition_to(&self, target: &SolutionStatus) -> bool {
+        matches!(
+            (&self.status, target),
+            (SolutionStatus::Proposed, SolutionStatus::Testing)
+                | (SolutionStatus::Proposed, SolutionStatus::Refuted)
+                | (SolutionStatus::Testing, SolutionStatus::Accepted)
+                | (SolutionStatus::Testing, SolutionStatus::Refuted)
+                | (SolutionStatus::Testing, SolutionStatus::Proposed)
+        )
     }
 
     /// Check if solution is active (can be worked on)

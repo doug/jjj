@@ -29,7 +29,7 @@ graph TD
     subgraph "jjj + Jujutsu Solution"
         A[Change ID: pmmz-qxrv<br/>Commit: abc123] --> B[Rebase/Amend]
         B --> C[Change ID: pmmz-qxrv<br/>Commit: def456]
-        D[Solution s1 linked to pmmz-qxrv] -->|STABLE| C
+        D[Solution linked to pmmz-qxrv] -->|STABLE| C
     end
 ```
 
@@ -47,10 +47,10 @@ change_ids:
 ```
 
 ### Automatic Attachment
-When you use `jjj start s1`, `jjj` does the following:
+When you use `jjj solution resume "Implement caching"`, `jjj` does the following:
 1.  Creates a new `jj` change.
 2.  Captures the Change ID of that new change.
-3.  Automatically appends it to `s1`'s `change_ids` list.
+3.  Automatically appends it to the solution's `change_ids` list.
 
 ### Multi-Change Solutions
 A single solution can span multiple `jj` changes. `jjj` tracks all of them, allowing the dashboard to show you everything related to a conjecture regardless of how many individual commits or changes it involves.

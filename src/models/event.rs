@@ -57,7 +57,7 @@ pub struct Event {
     #[serde(rename = "type")]
     pub event_type: EventType,
 
-    /// Primary entity ID (p1, s1, c1, m1)
+    /// Primary entity ID (UUID7 of problem, solution, critique, or milestone)
     pub entity: String,
 
     /// Who triggered the event

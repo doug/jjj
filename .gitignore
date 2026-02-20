@@ -46,3 +46,6 @@ Thumbs.db
 /SESSION_*.md
 /README_QUICKSTART.md
 /VSCODE_EXTENSION_PLAN.md
+
+# UXR output logs
+uxr/output/

@@ -13,10 +13,7 @@ pub enum JjjError {
     },
 
     #[error("jj command '{args}' failed:\n{stderr}")]
-    JjCommandFailed {
-        args: String,
-        stderr: String,
-    },
+    JjCommandFailed { args: String, stderr: String },
 
     #[error("jj executable not found in PATH.\n\nPlease install Jujutsu:\n  macOS: brew install jj\n  From source: cargo install --git https://github.com/martinvonz/jj jj-cli")]
     JjNotFound,

@@ -108,13 +108,12 @@ fn test_problem_list_filter_by_status() {
 
     run_jjj_success(&dir, &["problem", "new", "Open Problem"]);
     run_jjj_success(&dir, &["problem", "new", "Solved Problem"]);
-    // Create a solution and accept it to solve Solved Problem
+    // Create a solution and accept it (auto-solves Solved Problem)
     run_jjj_success(
         &dir,
         &["solution", "new", "Solution", "--problem", "Solved Problem"],
     );
     run_jjj_success(&dir, &["solution", "accept", "Solution"]);
-    run_jjj_success(&dir, &["problem", "solve", "Solved Problem"]);
 
     let stdout = run_jjj_success(&dir, &["problem", "list", "--status", "open"]);
     assert!(
@@ -338,16 +337,27 @@ fn test_problem_solve_requires_accepted_solution() {
         "Expected failure when solving without accepted solution"
     );
 
-    // Add a solution and accept it
+    // Add a solution and accept it (auto-solves the problem)
     run_jjj_success(
         &dir,
         &["solution", "new", "Fix", "--problem", "Need Solution"],
     );
     run_jjj_success(&dir, &["solution", "accept", "Fix"]);
 
-    // Now solve should work
-    let stdout = run_jjj_success(&dir, &["problem", "solve", "Need Solution"]);
-    assert!(stdout.contains("solved"), "Expected solved: {}", stdout);
+    // Problem is already auto-solved, explicit solve should fail
+    let output = run_jjj(&dir, &["problem", "solve", "Need Solution"]);
+    assert!(
+        !output.status.success(),
+        "Expected failure when problem is already solved"
+    );
+
+    // Verify problem is in solved state
+    let stdout = run_jjj_success(&dir, &["problem", "list", "--status", "solved"]);
+    assert!(
+        stdout.contains("Need Solution"),
+        "Expected problem in solved list: {}",
+        stdout
+    );
 }
 
 #[test]

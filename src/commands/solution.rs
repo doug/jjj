@@ -25,8 +25,9 @@ pub fn execute(ctx: &CommandContext, action: SolutionAction) -> Result<()> {
             problem,
             status,
             search,
+            sort,
             json,
-        } => list_solutions(ctx, problem, status, search.as_deref(), json),
+        } => list_solutions(ctx, problem, status, search.as_deref(), &sort, json),
         SolutionAction::Show { solution_id, json } => show_solution(ctx, solution_id, json),
         SolutionAction::Edit {
             solution_id,
@@ -67,6 +68,14 @@ fn new_solution(
     let store = &ctx.store;
     let jj_client = ctx.jj();
 
+    // Validate title is not empty
+    let title = title.trim().to_string();
+    if title.is_empty() {
+        return Err(crate::error::JjjError::Validation(
+            "Title cannot be empty.".to_string(),
+        ));
+    }
+
     // If not forcing, check for duplicates
     if !force {
         if let Some(similar) = check_for_similar_solutions(ctx, &title)? {
@@ -104,7 +113,9 @@ fn new_solution(
                 .map_err(|_| crate::error::JjjError::Validation("Invalid choice".to_string()))?;
 
             if choice < 1 || choice > open_problems.len() {
-                return Err(crate::error::JjjError::Validation("Invalid selection".to_string()));
+                return Err(crate::error::JjjError::Validation(
+                    "Invalid selection".to_string(),
+                ));
             }
 
             open_problems[choice - 1].id.clone()
@@ -224,6 +235,7 @@ fn list_solutions(
     problem_filter: Option<String>,
     status_filter: Option<String>,
     search_query: Option<&str>,
+    sort: &str,
     json: bool,
 ) -> Result<()> {
     let store = &ctx.store;
@@ -238,7 +250,9 @@ fn list_solutions(
 
     // Filter by status
     if let Some(status_str) = status_filter {
-        let status: SolutionStatus = status_str.parse().map_err(|e: String| crate::error::JjjError::Validation(e))?;
+        let status: SolutionStatus = status_str
+            .parse()
+            .map_err(|e: String| crate::error::JjjError::Validation(e))?;
         solutions.retain(|s| s.status == status);
     }
 
@@ -254,6 +268,14 @@ fn list_solutions(
                 results.iter().map(|r| r.entity_id.as_str()).collect();
             solutions.retain(|s| matching_ids.contains(s.id.as_str()));
         }
+    }
+
+    // Sort
+    match sort {
+        "status" => solutions.sort_by(|a, b| a.status.cmp(&b.status)),
+        "created" => solutions.sort_by(|a, b| b.created_at.cmp(&a.created_at)),
+        "title" => solutions.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase())),
+        _ => {} // default: no additional sort (UUID7 order)
     }
 
     if json {
@@ -387,7 +409,15 @@ fn edit_solution(
         }
 
         if let Some(status_str) = status {
-            let new_status: SolutionStatus = status_str.parse().map_err(|e: String| crate::error::JjjError::Validation(e))?;
+            let new_status: SolutionStatus = status_str
+                .parse()
+                .map_err(|e: String| crate::error::JjjError::Validation(e))?;
+            if !solution.can_transition_to(&new_status) {
+                return Err(crate::error::JjjError::Validation(format!(
+                    "Invalid status transition: {} -> {}",
+                    solution.status, new_status
+                )));
+            }
             solution.set_status(new_status);
         }
 
@@ -531,6 +561,17 @@ fn accept_solution(
     let solution_id = ctx.resolve_solution(&solution_input)?;
     let store = &ctx.store;
 
+    // Reject double-accept
+    {
+        let solution = store.load_solution(&solution_id)?;
+        if solution.status == SolutionStatus::Accepted {
+            return Err(crate::error::JjjError::Validation(format!(
+                "Solution '{}' is already accepted.",
+                solution.title
+            )));
+        }
+    }
+
     let critiques = store.list_critiques()?;
 
     // Find open critiques for this solution
@@ -620,23 +661,14 @@ fn accept_solution(
         };
         println!("Solution {} {}", solution_id, status);
 
-        // Check if we should solve the parent problem
+        // Auto-solve the parent problem if all solutions are resolved
         let (can_solve, _) = store.can_solve_problem(&solution.problem_id)?;
         if can_solve {
-            print!(
-                "Solution accepted. Mark problem {} as solved? [y/N] ",
-                solution.problem_id
-            );
-            io::stdout().flush()?;
-
-            let mut input = String::new();
-            io::stdin().read_line(&mut input)?;
-
-            if input.trim().to_lowercase() == "y" {
-                let mut problem = store.load_problem(&solution.problem_id)?;
+            let mut problem = store.load_problem(&solution.problem_id)?;
+            if problem.status != ProblemStatus::Solved {
                 problem.set_status(ProblemStatus::Solved);
                 store.save_problem(&problem)?;
-                println!("Problem {} marked as solved", solution.problem_id);
+                println!("Problem {} auto-solved (accepted solution)", solution.problem_id);
             }
         }
 

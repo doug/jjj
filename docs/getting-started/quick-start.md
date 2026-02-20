@@ -25,11 +25,11 @@ Problems describe things that need solving. Create one with a title and
 priority:
 
 ```bash,test
-jjj problem new "Search is slow" --priority P1
+jjj problem new "Search is slow" --priority high
 ```
 
-This creates `p1`. Priorities range from P0 (critical) to P3 (low) and
-affect how `jjj status` orders your work.
+Priorities range from P0/critical to P3/low and affect how `jjj status`
+orders your work.
 
 ## Propose a Solution
 
@@ -50,7 +50,7 @@ and moves the solution to `testing` status. To resume work on an existing
 solution:
 
 ```bash
-jjj solution resume s1
+jjj solution resume "Add search index"
 ```
 
 Your working copy now has a change tracked by jjj. The parent problem
@@ -62,11 +62,10 @@ Critiques are explicit criticism of a solution. They block acceptance until
 every critique is resolved (addressed, validated, or dismissed).
 
 ```bash
-jjj critique new s1 "Missing error handling" --severity medium
+jjj critique new "search index" "Missing error handling" --severity medium
 ```
 
-This creates `c1` against solution `s1`. Severities are `low`, `medium`,
-`high`, and `critical`.
+Severities are `low`, `medium`, `high`, and `critical`.
 
 ## Address the Critique
 
@@ -74,14 +73,14 @@ After modifying the solution to handle the criticism, mark the critique as
 addressed:
 
 ```bash
-jjj critique address c1
+jjj critique address "Missing error"
 ```
 
 Other resolution options:
 
-- `jjj critique validate c1` -- the critique is correct and the solution
+- `jjj critique validate "Missing error"` -- the critique is correct and the solution
   should be refuted
-- `jjj critique dismiss c1` -- the critique is incorrect or irrelevant
+- `jjj critique dismiss "Missing error"` -- the critique is incorrect or irrelevant
 
 ## Submit
 
@@ -126,6 +125,10 @@ Press `q` to exit.
 
 ## Key Concepts
 
+**Entity Resolution** -- You can reference any entity by its title (or partial
+title), by a truncated UUID prefix (minimum 6 hex chars), or by full UUID.
+For example, `"search index"`, `01957d`, or the full UUID all work.
+
 **Change IDs** -- jjj uses Jujutsu change IDs (not commit hashes) as stable
 references. They survive rebases and history rewrites, so metadata links never
 break.
@@ -151,13 +154,13 @@ problems surface first.
 | `jjj ui` | Launch interactive TUI |
 | `jjj problem new "title" --priority high` | Create a problem |
 | `jjj problem list` | List all problems |
-| `jjj problem show p1` | Show problem details and solutions |
-| `jjj solution new "title" --problem p1` | Propose a solution |
-| `jjj solution new "title" --problem p1 --reviewer @alice` | Propose with reviewer |
+| `jjj problem show "Search is slow"` | Show problem details and solutions |
+| `jjj solution new "title" --problem "Search"` | Propose a solution |
+| `jjj solution new "title" --problem "Search" --reviewer @alice` | Propose with reviewer |
 | `jjj solution list` | List all solutions |
-| `jjj solution resume s1` | Switch to a solution's change |
-| `jjj critique new s1 "title" --severity medium` | Critique a solution |
-| `jjj critique address c1` | Mark critique as addressed |
+| `jjj solution resume "search index"` | Switch to a solution's change |
+| `jjj critique new "search index" "title" --severity medium` | Critique a solution |
+| `jjj critique address "Missing error"` | Mark critique as addressed |
 | `jjj submit` | Squash, accept solution, solve problem |
 | `jjj push` | Push code and metadata to remote |
 | `jjj fetch` | Fetch code and metadata from remote |

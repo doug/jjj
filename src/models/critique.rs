@@ -116,7 +116,10 @@ impl std::str::FromStr for CritiqueStatus {
             "addressed" => Ok(CritiqueStatus::Addressed),
             "valid" => Ok(CritiqueStatus::Valid),
             "dismissed" => Ok(CritiqueStatus::Dismissed),
-            _ => Err(format!("Unknown critique status: {}", s)),
+            _ => Err(format!(
+                "Unknown critique status: '{}'. Valid values: open, addressed, valid, dismissed",
+                s
+            )),
         }
     }
 }
@@ -159,7 +162,10 @@ impl std::str::FromStr for CritiqueSeverity {
             "medium" => Ok(CritiqueSeverity::Medium),
             "high" => Ok(CritiqueSeverity::High),
             "critical" => Ok(CritiqueSeverity::Critical),
-            _ => Err(format!("Unknown critique severity: {}", s)),
+            _ => Err(format!(
+                "Unknown critique severity: '{}'. Valid values: low, medium, high, critical",
+                s
+            )),
         }
     }
 }
@@ -192,6 +198,19 @@ impl Critique {
     pub fn set_status(&mut self, status: CritiqueStatus) {
         self.status = status;
         self.updated_at = Utc::now();
+    }
+
+    /// Check if a status transition is valid.
+    pub fn can_transition_to(&self, target: &CritiqueStatus) -> bool {
+        matches!(
+            (&self.status, target),
+            (CritiqueStatus::Open, CritiqueStatus::Addressed)
+                | (CritiqueStatus::Open, CritiqueStatus::Valid)
+                | (CritiqueStatus::Open, CritiqueStatus::Dismissed)
+                | (CritiqueStatus::Addressed, CritiqueStatus::Open)
+                | (CritiqueStatus::Addressed, CritiqueStatus::Valid)
+                | (CritiqueStatus::Addressed, CritiqueStatus::Dismissed)
+        )
     }
 
     /// Set severity

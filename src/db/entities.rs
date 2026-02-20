@@ -26,7 +26,12 @@ pub fn upsert_problem(conn: &Connection, problem: &Problem) -> SqliteResult<()> 
             problem.id,
             problem.title,
             problem.status.to_string(),
-            format!("{:?}", problem.priority).to_lowercase(),
+            match problem.priority {
+                Priority::Low => "low",
+                Priority::Medium => "medium",
+                Priority::High => "high",
+                Priority::Critical => "critical",
+            },
             problem.parent_id,
             problem.milestone_id,
             problem.assignee,
@@ -275,8 +280,7 @@ pub fn upsert_critique(conn: &Connection, critique: &Critique) -> SqliteResult<(
     let replies_json =
         serde_json::to_string(&critique.replies).unwrap_or_else(|_| "[]".to_string());
 
-    // The schema uses 'reviewer' but we also have 'author' - map author to reviewer for now
-    // since the DB schema only has 'reviewer'. The body field combines argument and evidence.
+    // Keep body as combined field for backward compatibility / FTS
     let body = if critique.evidence.is_empty() {
         critique.argument.clone()
     } else {
@@ -288,21 +292,24 @@ pub fn upsert_critique(conn: &Connection, critique: &Critique) -> SqliteResult<(
 
     conn.execute(
         "INSERT OR REPLACE INTO critiques (
-            id, title, status, solution_id, severity, reviewer, file_path,
-            line_number, created_at, updated_at, body, replies
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            id, title, status, solution_id, severity, reviewer, author, file_path,
+            line_number, created_at, updated_at, body, argument, evidence, replies
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
         params![
             critique.id,
             critique.title,
             critique.status.to_string(),
             critique.solution_id,
             critique.severity.to_string(),
-            critique.reviewer.as_ref().or(critique.author.as_ref()),
+            critique.reviewer,
+            critique.author,
             critique.file_path,
             critique.line_start.map(|n| n as i64),
             critique.created_at.to_rfc3339(),
             critique.updated_at.to_rfc3339(),
             body,
+            critique.argument,
+            critique.evidence,
             replies_json,
         ],
     )?;
@@ -312,8 +319,8 @@ pub fn upsert_critique(conn: &Connection, critique: &Critique) -> SqliteResult<(
 /// Load a critique by ID.
 pub fn load_critique(conn: &Connection, id: &str) -> SqliteResult<Option<Critique>> {
     let mut stmt = conn.prepare(
-        "SELECT id, title, status, solution_id, severity, reviewer, file_path,
-                line_number, created_at, updated_at, body, replies
+        "SELECT id, title, status, solution_id, severity, reviewer, author, file_path,
+                line_number, created_at, updated_at, argument, evidence, replies
          FROM critiques WHERE id = ?1",
     )?;
 
@@ -329,8 +336,8 @@ pub fn load_critique(conn: &Connection, id: &str) -> SqliteResult<Option<Critiqu
 /// List all critiques.
 pub fn list_critiques(conn: &Connection) -> SqliteResult<Vec<Critique>> {
     let mut stmt = conn.prepare(
-        "SELECT id, title, status, solution_id, severity, reviewer, file_path,
-                line_number, created_at, updated_at, body, replies
+        "SELECT id, title, status, solution_id, severity, reviewer, author, file_path,
+                line_number, created_at, updated_at, argument, evidence, replies
          FROM critiques ORDER BY created_at DESC",
     )?;
 
@@ -345,8 +352,8 @@ pub fn list_critiques_for_solution(
     solution_id: &str,
 ) -> SqliteResult<Vec<Critique>> {
     let mut stmt = conn.prepare(
-        "SELECT id, title, status, solution_id, severity, reviewer, file_path,
-                line_number, created_at, updated_at, body, replies
+        "SELECT id, title, status, solution_id, severity, reviewer, author, file_path,
+                line_number, created_at, updated_at, argument, evidence, replies
          FROM critiques WHERE solution_id = ?1 ORDER BY created_at DESC",
     )?;
 
@@ -362,30 +369,23 @@ pub fn delete_critique(conn: &Connection, id: &str) -> SqliteResult<bool> {
 }
 
 fn row_to_critique(row: &rusqlite::Row) -> SqliteResult<Critique> {
+    // Column order: id(0), title(1), status(2), solution_id(3), severity(4),
+    //   reviewer(5), author(6), file_path(7), line_number(8),
+    //   created_at(9), updated_at(10), argument(11), evidence(12), replies(13)
     let status_str: String = row.get(2)?;
     let severity_str: String = row.get(4)?;
-    let created_at_str: String = row.get(8)?;
-    let updated_at_str: String = row.get(9)?;
-    let body: String = row.get::<_, Option<String>>(10)?.unwrap_or_default();
+    let created_at_str: String = row.get(9)?;
+    let updated_at_str: String = row.get(10)?;
+    let argument: String = row.get::<_, Option<String>>(11)?.unwrap_or_default();
+    let evidence: String = row.get::<_, Option<String>>(12)?.unwrap_or_default();
     let replies_json: String = row
-        .get::<_, Option<String>>(11)?
+        .get::<_, Option<String>>(13)?
         .unwrap_or_else(|| "[]".to_string());
 
     let replies: Vec<Reply> = serde_json::from_str(&replies_json).unwrap_or_else(|e| {
         eprintln!("Warning: invalid replies JSON for critique row: {}", e);
         Vec::new()
     });
-
-    // Parse body back into argument and evidence
-    const EVIDENCE_SEPARATOR: &str = "\n\n## Evidence\n\n";
-    let (argument, evidence) = if let Some(idx) = body.find(EVIDENCE_SEPARATOR) {
-        (
-            body[..idx].to_string(),
-            body[idx + EVIDENCE_SEPARATOR.len()..].to_string(),
-        )
-    } else {
-        (body, String::new())
-    };
 
     Ok(Critique {
         id: row.get(0)?,
@@ -405,11 +405,11 @@ fn row_to_critique(row: &rusqlite::Row) -> SqliteResult<Critique> {
             );
             CritiqueSeverity::Medium
         }),
-        author: row.get(5)?, // Using reviewer as author
         reviewer: row.get(5)?,
-        file_path: row.get(6)?,
-        line_start: row.get::<_, Option<i64>>(7)?.map(|n| n as usize),
-        line_end: row.get::<_, Option<i64>>(7)?.map(|n| n as usize), // Same as line_start (DB only stores one)
+        author: row.get(6)?,
+        file_path: row.get(7)?,
+        line_start: row.get::<_, Option<i64>>(8)?.map(|n| n as usize),
+        line_end: row.get::<_, Option<i64>>(8)?.map(|n| n as usize), // DB only stores one line number
         created_at: DateTime::parse_from_rfc3339(&created_at_str)
             .map(|dt| dt.with_timezone(&Utc))
             .unwrap_or_else(|e| {
@@ -572,6 +572,80 @@ fn row_to_milestone(row: &rusqlite::Row) -> SqliteResult<Milestone> {
         success_criteria,
         problem_ids,
     })
+}
+
+// ============================================================================
+// Computed field population
+// ============================================================================
+
+/// Populate computed fields on problems (solution_ids, child_ids) from DB relationships.
+pub fn populate_problem_computed_fields(
+    conn: &Connection,
+    problems: &mut [Problem],
+) -> SqliteResult<()> {
+    // Build solution_ids: problem_id -> [solution_id]
+    let mut stmt = conn.prepare("SELECT problem_id, id FROM solutions ORDER BY created_at")?;
+    let mut solution_map: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
+    let mut rows = stmt.query([])?;
+    while let Some(row) = rows.next()? {
+        let problem_id: String = row.get(0)?;
+        let solution_id: String = row.get(1)?;
+        solution_map
+            .entry(problem_id)
+            .or_default()
+            .push(solution_id);
+    }
+
+    // Build child_ids: parent_id -> [child_id]
+    let mut stmt =
+        conn.prepare("SELECT parent_id, id FROM problems WHERE parent_id IS NOT NULL")?;
+    let mut child_map: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
+    let mut rows = stmt.query([])?;
+    while let Some(row) = rows.next()? {
+        let parent_id: String = row.get(0)?;
+        let child_id: String = row.get(1)?;
+        child_map.entry(parent_id).or_default().push(child_id);
+    }
+
+    for problem in problems.iter_mut() {
+        if let Some(sids) = solution_map.remove(&problem.id) {
+            problem.solution_ids = sids;
+        }
+        if let Some(cids) = child_map.remove(&problem.id) {
+            problem.child_ids = cids;
+        }
+    }
+
+    Ok(())
+}
+
+/// Populate computed fields on solutions (critique_ids) from DB relationships.
+pub fn populate_solution_computed_fields(
+    conn: &Connection,
+    solutions: &mut [Solution],
+) -> SqliteResult<()> {
+    let mut stmt = conn.prepare("SELECT solution_id, id FROM critiques ORDER BY created_at")?;
+    let mut critique_map: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
+    let mut rows = stmt.query([])?;
+    while let Some(row) = rows.next()? {
+        let solution_id: String = row.get(0)?;
+        let critique_id: String = row.get(1)?;
+        critique_map
+            .entry(solution_id)
+            .or_default()
+            .push(critique_id);
+    }
+
+    for solution in solutions.iter_mut() {
+        if let Some(cids) = critique_map.remove(&solution.id) {
+            solution.critique_ids = cids;
+        }
+    }
+
+    Ok(())
 }
 
 // ============================================================================

@@ -10,7 +10,8 @@ use std::path::Path;
 use rusqlite::{params, Connection};
 
 use crate::db::entities::{
-    list_critiques, list_milestones, list_problems, list_solutions, upsert_critique,
+    list_critiques, list_milestones, list_problems, list_solutions,
+    populate_problem_computed_fields, populate_solution_computed_fields, upsert_critique,
     upsert_milestone, upsert_problem, upsert_solution,
 };
 use crate::db::events::{clear_events, insert_event, list_events};
@@ -34,13 +35,19 @@ pub fn load_from_markdown(db: &Database, store: &MetadataStore) -> Result<()> {
     // Clear all tables
     clear_all_tables(conn)?;
 
-    // Load problems
+    // Load milestones first (problems reference milestones via FK)
+    let milestones = store.list_milestones()?;
+    for milestone in &milestones {
+        upsert_milestone(conn, milestone)?;
+    }
+
+    // Load problems (solutions reference problems via FK)
     let problems = store.list_problems()?;
     for problem in &problems {
         upsert_problem(conn, problem)?;
     }
 
-    // Load solutions
+    // Load solutions (critiques reference solutions via FK)
     let solutions = store.list_solutions()?;
     for solution in &solutions {
         upsert_solution(conn, solution)?;
@@ -50,12 +57,6 @@ pub fn load_from_markdown(db: &Database, store: &MetadataStore) -> Result<()> {
     let critiques = store.list_critiques()?;
     for critique in &critiques {
         upsert_critique(conn, critique)?;
-    }
-
-    // Load milestones
-    let milestones = store.list_milestones()?;
-    for milestone in &milestones {
-        upsert_milestone(conn, milestone)?;
     }
 
     // Load events from JSONL file
@@ -77,14 +78,16 @@ pub fn load_from_markdown(db: &Database, store: &MetadataStore) -> Result<()> {
 pub fn dump_to_markdown(db: &Database, store: &MetadataStore) -> Result<()> {
     let conn = db.conn();
 
-    // Dump problems
-    let problems = list_problems(conn)?;
+    // Dump problems (with computed fields populated)
+    let mut problems = list_problems(conn)?;
+    populate_problem_computed_fields(conn, &mut problems)?;
     for problem in &problems {
         store.save_problem(problem)?;
     }
 
-    // Dump solutions
-    let solutions = list_solutions(conn)?;
+    // Dump solutions (with computed fields populated)
+    let mut solutions = list_solutions(conn)?;
+    populate_solution_computed_fields(conn, &mut solutions)?;
     for solution in &solutions {
         store.save_solution(solution)?;
     }
@@ -154,6 +157,43 @@ pub fn rebuild_fts(db: &Database) -> Result<()> {
         )?;
     }
 
+    Ok(())
+}
+
+/// Update a single entity's FTS entry (upsert).
+///
+/// Call this after saving an entity to keep FTS in sync incrementally,
+/// avoiding a full rebuild.
+pub fn update_fts_entry(
+    conn: &Connection,
+    entity_type: &str,
+    entity_id: &str,
+    title: &str,
+    body: &str,
+) -> std::result::Result<(), rusqlite::Error> {
+    // Delete existing entry if any
+    conn.execute(
+        "DELETE FROM fts WHERE entity_type = ?1 AND entity_id = ?2",
+        params![entity_type, entity_id],
+    )?;
+    // Insert updated entry
+    conn.execute(
+        "INSERT INTO fts (entity_type, entity_id, title, body) VALUES (?1, ?2, ?3, ?4)",
+        params![entity_type, entity_id, title, body],
+    )?;
+    Ok(())
+}
+
+/// Remove a single entity's FTS entry.
+pub fn remove_fts_entry(
+    conn: &Connection,
+    entity_type: &str,
+    entity_id: &str,
+) -> std::result::Result<(), rusqlite::Error> {
+    conn.execute(
+        "DELETE FROM fts WHERE entity_type = ?1 AND entity_id = ?2",
+        params![entity_type, entity_id],
+    )?;
     Ok(())
 }
 

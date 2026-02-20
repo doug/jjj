@@ -18,7 +18,7 @@ jjj solution new <title> [OPTIONS]
 | Flag | Type | Required | Description |
 |------|------|----------|-------------|
 | `--problem` | string | no | Problem this solution addresses (prompts interactively if not provided) |
-| `--supersedes` | string | no | Solution this supersedes (e.g., s1) |
+| `--supersedes` | string | no | Solution this supersedes (title or UUID prefix) |
 | `--reviewer` | string (repeatable) | no | Assign reviewers at creation (e.g., `@alice`) |
 | `--force`, `-f` | flag | no | Create even if a similar solution already exists |
 
@@ -35,7 +35,7 @@ jjj solution list
 Assign reviewers at creation:
 
 ```bash
-jjj solution new "Add caching" --problem p1 --reviewer @alice --reviewer @bob
+jjj solution new "Add caching" --problem "Login is too slow" --reviewer @alice --reviewer @bob
 ```
 
 When reviewers are assigned, the solution requires all of them to sign off before it can be accepted. Sign-offs are recorded via review-type critiques. Review is not required by default -- it is enabled per-solution by assigning reviewers.
@@ -92,7 +92,7 @@ jjj solution edit <solution_id> [OPTIONS]
 | `--status` | string | New status |
 
 ```bash
-jjj solution edit s1 --title "Add connection pooling with retry"
+jjj solution edit "Add connection" --title "Add connection pooling with retry"
 ```
 
 ## `jjj solution attach`
@@ -104,7 +104,7 @@ jjj solution attach <solution_id>
 ```
 
 ```bash
-jjj solution attach s1
+jjj solution attach "Add connection"
 ```
 
 ## `jjj solution detach`
@@ -118,8 +118,8 @@ jjj solution detach <solution_id> [change_id]
 If no change ID is given, detaches the current change.
 
 ```bash
-jjj solution detach s1
-jjj solution detach s1 abc123
+jjj solution detach "Add connection"
+jjj solution detach "Add connection" abc123
 ```
 
 ## `jjj solution test`
@@ -131,7 +131,7 @@ jjj solution test <solution_id>
 ```
 
 ```bash
-jjj solution test s1
+jjj solution test "Add connection"
 ```
 
 ## `jjj solution accept`
@@ -156,8 +156,8 @@ The acceptance gate checks that all critiques are resolved (addressed, dismissed
 Using `--force` bypasses the check and sets the `force_accepted` flag on the solution.
 
 ```bash
-jjj solution accept s1
-jjj solution accept s1 --force
+jjj solution accept "Add connection"
+jjj solution accept "Add connection" --force
 ```
 
 ## `jjj solution refute`
@@ -174,7 +174,7 @@ jjj solution refute <solution_id> [OPTIONS]
 | `--no-rationale` | flag | Skip the rationale prompt |
 
 ```bash
-jjj solution refute s1
+jjj solution refute "Add connection"
 ```
 
 ## `jjj solution assign`
@@ -190,7 +190,7 @@ jjj solution assign <solution_id> [OPTIONS]
 | `--to` | string | Assignee name (defaults to self) |
 
 ```bash
-jjj solution assign s1 --to bob
+jjj solution assign "Add connection" --to bob
 ```
 
 ## `jjj solution resume`
@@ -202,6 +202,6 @@ jjj solution resume <solution_id>
 ```
 
 ```bash
-jjj solution resume s1
+jjj solution resume "Add connection"
 ```
 

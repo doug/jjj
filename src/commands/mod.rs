@@ -138,9 +138,10 @@ pub(crate) fn show_related_items(
     println!("\nRelated:");
     for result in results {
         let short_id = &result.entity_id[..6.min(result.entity_id.len())];
+        let type_prefix = result.entity_type.chars().next().unwrap_or('?');
         println!(
             "  {}/{}  [{:.2}]  \"{}\"",
-            result.entity_type.chars().next().unwrap(),
+            type_prefix,
             short_id,
             result.similarity,
             truncate_title(&result.title, 50)

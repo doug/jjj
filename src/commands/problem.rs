@@ -23,8 +23,9 @@ pub fn execute(ctx: &CommandContext, action: ProblemAction) -> Result<()> {
             tree,
             milestone,
             search,
+            sort,
             json,
-        } => list_problems(ctx, status, tree, milestone, search.as_deref(), json),
+        } => list_problems(ctx, status, tree, milestone, search.as_deref(), &sort, json),
         ProblemAction::Show { problem_id, json } => show_problem(ctx, problem_id, json),
         ProblemAction::Edit {
             problem_id,
@@ -50,8 +51,33 @@ fn new_problem(
 ) -> Result<()> {
     let store = &ctx.store;
 
-    // If not forcing, check for duplicates
+    // Validate title is not empty
+    let title = title.trim().to_string();
+    if title.is_empty() {
+        return Err(crate::error::JjjError::Validation(
+            "Title cannot be empty.".to_string(),
+        ));
+    }
+
+    // If not forcing, check for exact title duplicates
     if !force {
+        let existing = store.list_problems()?;
+        let exact_match = existing
+            .iter()
+            .find(|p| p.title.to_lowercase() == title.to_lowercase());
+        if let Some(dup) = exact_match {
+            eprintln!(
+                "Warning: A problem with a similar title already exists: '{}' ({})",
+                dup.title,
+                &dup.id[..8.min(dup.id.len())]
+            );
+            eprintln!("Use --force to create anyway.");
+            return Err(crate::error::JjjError::Validation(
+                "Duplicate title. Use --force to create anyway.".to_string(),
+            ));
+        }
+
+        // Also check semantic duplicates via embeddings (if available)
         if let Some(similar) = check_for_duplicates(ctx, &title)? {
             if !prompt_create_anyway(&similar)? {
                 println!("Cancelled.");
@@ -81,7 +107,9 @@ fn new_problem(
         let mut problem = Problem::new(problem_id.clone(), title.clone());
 
         // Set priority
-        problem.priority = priority.parse::<Priority>().map_err(|e: String| crate::error::JjjError::Validation(e))?;
+        problem.priority = priority
+            .parse::<Priority>()
+            .map_err(|e: String| crate::error::JjjError::Validation(e))?;
 
         // Set parent
         if let Some(ref parent_id) = resolved_parent {
@@ -123,6 +151,7 @@ fn list_problems(
     tree: bool,
     milestone_filter: Option<String>,
     search_query: Option<&str>,
+    sort: &str,
     json: bool,
 ) -> Result<()> {
     let store = &ctx.store;
@@ -131,7 +160,9 @@ fn list_problems(
 
     // Filter by status
     if let Some(status_str) = status_filter {
-        let status: ProblemStatus = status_str.parse().map_err(|e: String| crate::error::JjjError::Validation(e))?;
+        let status: ProblemStatus = status_str
+            .parse()
+            .map_err(|e: String| crate::error::JjjError::Validation(e))?;
         problems.retain(|p| p.status == status);
     }
 
@@ -152,6 +183,15 @@ fn list_problems(
                 results.iter().map(|r| r.entity_id.as_str()).collect();
             problems.retain(|p| matching_ids.contains(p.id.as_str()));
         }
+    }
+
+    // Sort
+    match sort {
+        "priority" => problems.sort_by(|a, b| b.priority.cmp(&a.priority)),
+        "status" => problems.sort_by(|a, b| a.status.cmp(&b.status)),
+        "created" => problems.sort_by(|a, b| b.created_at.cmp(&a.created_at)),
+        "title" => problems.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase())),
+        _ => {} // default: no additional sort (UUID7 order)
     }
 
     if json {
@@ -176,8 +216,8 @@ fn list_problems(
         let uuids: Vec<&str> = problems.iter().map(|p| p.id.as_str()).collect();
         let prefixes = truncated_prefixes(&uuids);
 
-        println!("{:<10} {:<12} TITLE", "ID", "STATUS");
-        println!("{}", "-".repeat(60));
+        println!("{:<10} {:<12} {:<10} TITLE", "ID", "STATUS", "PRIORITY");
+        println!("{}", "-".repeat(70));
 
         for (problem, (_, prefix)) in problems.iter().zip(prefixes.iter()) {
             let status_icon = match problem.status {
@@ -187,8 +227,8 @@ fn list_problems(
                 ProblemStatus::Dissolved => "~",
             };
             println!(
-                "{:<10} {}{:<11} {}",
-                prefix, status_icon, problem.status, problem.title
+                "{:<10} {}{:<11} {:<10} {}",
+                prefix, status_icon, problem.status, problem.priority, problem.title
             );
         }
     }
@@ -339,12 +379,39 @@ fn edit_problem(
         }
 
         if let Some(status_str) = status {
-            let new_status: ProblemStatus = status_str.parse().map_err(|e: String| crate::error::JjjError::Validation(e))?;
+            let new_status: ProblemStatus = status_str
+                .parse()
+                .map_err(|e: String| crate::error::JjjError::Validation(e))?;
+            if !problem.can_transition_to(&new_status) {
+                return Err(crate::error::JjjError::Validation(format!(
+                    "Invalid status transition: {} -> {}. Valid transitions from {}: {}",
+                    problem.status,
+                    new_status,
+                    problem.status,
+                    valid_transitions_for_problem(&problem.status)
+                )));
+            }
+
+            // Guard: solved requires at least one accepted solution
+            if new_status == ProblemStatus::Solved {
+                let solutions = store.get_solutions_for_problem(&problem_id)?;
+                let has_accepted = solutions.iter().any(|s| {
+                    s.status == crate::models::SolutionStatus::Accepted
+                });
+                if !has_accepted {
+                    return Err(crate::error::JjjError::Validation(
+                        "Cannot mark as solved: no accepted solution. Use 'jjj solution accept' first, or 'jjj problem dissolve' if the problem is no longer relevant.".to_string(),
+                    ));
+                }
+            }
+
             problem.set_status(new_status);
         }
 
         if let Some(p_str) = priority {
-            problem.priority = p_str.parse::<Priority>().map_err(|e: String| crate::error::JjjError::Validation(e))?;
+            problem.priority = p_str
+                .parse::<Priority>()
+                .map_err(|e: String| crate::error::JjjError::Validation(e))?;
         }
 
         if let Some(ref new_parent) = resolved_parent {
@@ -531,6 +598,15 @@ fn check_for_duplicates(
         Ok(None)
     } else {
         Ok(Some(similar))
+    }
+}
+
+fn valid_transitions_for_problem(status: &ProblemStatus) -> &'static str {
+    match status {
+        ProblemStatus::Open => "in_progress, solved, dissolved",
+        ProblemStatus::InProgress => "open, solved, dissolved",
+        ProblemStatus::Solved => "(none - terminal state)",
+        ProblemStatus::Dissolved => "(none - terminal state)",
     }
 }
 

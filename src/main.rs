@@ -1,9 +1,11 @@
 use clap::Parser;
 use jjj::cli;
 use jjj::commands;
-use jjj::error::Result;
 
-fn main() -> Result<()> {
+fn main() {
     let cli = cli::Cli::parse();
-    commands::execute(cli)
+    if let Err(e) = commands::execute(cli) {
+        eprintln!("Error: {e}");
+        std::process::exit(1);
+    }
 }

@@ -87,7 +87,7 @@ jjj critique edit <critique_id> [OPTIONS]
 | `--status` | string | New status (open, addressed, valid, dismissed) |
 
 ```bash
-jjj critique edit c1 --severity critical --title "Missing error handling in auth"
+jjj critique edit "Missing error" --severity critical --title "Missing error handling in auth"
 ```
 
 ## `jjj critique address`
@@ -111,7 +111,7 @@ jjj critique validate <critique_id>
 ```
 
 ```bash
-jjj critique validate c1
+jjj critique validate "Missing error"
 ```
 
 ## `jjj critique dismiss`
@@ -123,7 +123,7 @@ jjj critique dismiss <critique_id>
 ```
 
 ```bash
-jjj critique dismiss c2
+jjj critique dismiss "Unused import"
 ```
 
 ## `jjj critique reply`
@@ -135,5 +135,5 @@ jjj critique reply <critique_id> <body>
 ```
 
 ```bash
-jjj critique reply c1 "Fixed in latest change, added error handling for all auth paths"
+jjj critique reply "Missing error" "Fixed in latest change, added error handling for all auth paths"
 ```

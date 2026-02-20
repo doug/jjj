@@ -90,7 +90,8 @@ fn to_markdown<T: serde::Serialize>(frontmatter: &T, body: &str) -> Result<Strin
     Ok(format!("---\n{}---\n\n{}", yaml, body))
 }
 
-/// Parse markdown body sections (## headers)
+/// Parse markdown body sections (## headers).
+/// Headers are normalized to title case for case-insensitive matching.
 fn parse_body_sections(body: &str) -> std::collections::HashMap<String, String> {
     let mut sections = std::collections::HashMap::new();
     let mut current_section = String::new();
@@ -101,10 +102,11 @@ fn parse_body_sections(body: &str) -> std::collections::HashMap<String, String> 
             if !current_section.is_empty() {
                 sections.insert(current_section.clone(), current_content.trim().to_string());
             }
-            current_section = line
+            let raw_header = line
                 .strip_prefix("## ")
-                .expect("strip_prefix failed after starts_with check")
-                .to_string();
+                .expect("strip_prefix failed after starts_with check");
+            // Normalize to title case: capitalize first letter, lowercase rest
+            current_section = normalize_section_header(raw_header);
             current_content = String::new();
         } else {
             current_content.push_str(line);
@@ -117,6 +119,31 @@ fn parse_body_sections(body: &str) -> std::collections::HashMap<String, String> 
     }
 
     sections
+}
+
+/// Normalize a section header to title case (e.g., "description" -> "Description",
+/// "TRADE-OFFS" -> "Trade-offs", "trade-offs" -> "Trade-offs").
+fn normalize_section_header(header: &str) -> String {
+    let lower = header.to_lowercase();
+    // Map known variants to canonical names
+    match lower.as_str() {
+        "description" => "Description".to_string(),
+        "context" => "Context".to_string(),
+        "approach" => "Approach".to_string(),
+        "trade-offs" | "tradeoffs" | "trade offs" => "Trade-offs".to_string(),
+        "argument" => "Argument".to_string(),
+        "evidence" => "Evidence".to_string(),
+        "goals" => "Goals".to_string(),
+        "success criteria" => "Success Criteria".to_string(),
+        _ => {
+            // Generic title case: capitalize first char
+            let mut chars = header.chars();
+            match chars.next() {
+                None => String::new(),
+                Some(c) => c.to_uppercase().to_string() + &chars.as_str().to_lowercase(),
+            }
+        }
+    }
 }
 
 /// Build markdown body from sections
@@ -154,7 +181,9 @@ impl MetadataStore {
     pub fn init(&self) -> Result<()> {
         // Check if already initialized
         if self.jj_client.bookmark_exists(META_BOOKMARK)? {
-            return Err(crate::error::JjjError::Validation("jjj is already initialized".to_string()));
+            return Err(crate::error::JjjError::Validation(
+                "jjj is already initialized".to_string(),
+            ));
         }
 
         // Create an empty orphan root
@@ -289,7 +318,13 @@ impl MetadataStore {
         Ok(())
     }
 
-    /// Delete a problem
+    /// Delete a problem and clean up references.
+    ///
+    /// This will:
+    /// - Orphan child problems (remove their parent_id)
+    /// - Remove the problem from its parent's child_ids
+    /// - Delete associated solutions and their critiques
+    /// - Remove the problem from its milestone
     pub fn delete_problem(&self, problem_id: &str) -> Result<()> {
         self.ensure_meta_checkout()?;
 
@@ -300,6 +335,54 @@ impl MetadataStore {
 
         if !problem_path.exists() {
             return Err(JjjError::ProblemNotFound(problem_id.to_string()));
+        }
+
+        let problem = self.load_problem(problem_id)?;
+
+        // Orphan child problems
+        if let Ok(children) = self.get_subproblems(problem_id) {
+            for child in children {
+                if let Ok(mut c) = self.load_problem(&child.id) {
+                    c.set_parent(None);
+                    let _ = self.save_problem(&c);
+                }
+            }
+        }
+
+        // Remove from parent's child_ids
+        if let Some(ref parent_id) = problem.parent_id {
+            if let Ok(mut parent) = self.load_problem(parent_id) {
+                parent.remove_child(problem_id);
+                let _ = self.save_problem(&parent);
+            }
+        }
+
+        // Delete associated solutions and their critiques
+        if let Ok(solutions) = self.get_solutions_for_problem(problem_id) {
+            for solution in solutions {
+                if let Ok(critiques) = self.get_critiques_for_solution(&solution.id) {
+                    for critique in critiques {
+                        let _ = fs::remove_file(
+                            self.meta_path
+                                .join(CRITIQUES_DIR)
+                                .join(format!("{}.md", critique.id)),
+                        );
+                    }
+                }
+                let _ = fs::remove_file(
+                    self.meta_path
+                        .join(SOLUTIONS_DIR)
+                        .join(format!("{}.md", solution.id)),
+                );
+            }
+        }
+
+        // Remove from milestone
+        if let Some(ref milestone_id) = problem.milestone_id {
+            if let Ok(mut milestone) = self.load_milestone(milestone_id) {
+                milestone.remove_problem(problem_id);
+                let _ = self.save_milestone(&milestone);
+            }
         }
 
         fs::remove_file(problem_path)?;
@@ -368,10 +451,21 @@ impl MetadataStore {
     pub fn get_parent_chain(&self, problem_id: &str) -> Result<Vec<Problem>> {
         let mut chain = Vec::new();
         let mut current_id = Some(problem_id.to_string());
+        let mut visited = std::collections::HashSet::new();
+        visited.insert(problem_id.to_string());
 
         while let Some(id) = current_id {
             if let Ok(problem) = self.load_problem(&id) {
                 current_id = problem.parent_id.clone();
+                if let Some(ref next_id) = current_id {
+                    if !visited.insert(next_id.clone()) {
+                        eprintln!(
+                            "Warning: cycle detected in problem parent chain at {}",
+                            next_id
+                        );
+                        break;
+                    }
+                }
                 if current_id.is_some() {
                     chain.push(problem);
                 }
@@ -445,7 +539,11 @@ impl MetadataStore {
         Ok(())
     }
 
-    /// Delete a solution
+    /// Delete a solution and clean up references.
+    ///
+    /// This will:
+    /// - Delete associated critiques
+    /// - Remove the solution from its parent problem's solution_ids
     pub fn delete_solution(&self, solution_id: &str) -> Result<()> {
         self.ensure_meta_checkout()?;
 
@@ -456,6 +554,25 @@ impl MetadataStore {
 
         if !solution_path.exists() {
             return Err(JjjError::SolutionNotFound(solution_id.to_string()));
+        }
+
+        let solution = self.load_solution(solution_id)?;
+
+        // Delete associated critiques
+        if let Ok(critiques) = self.get_critiques_for_solution(solution_id) {
+            for critique in critiques {
+                let _ = fs::remove_file(
+                    self.meta_path
+                        .join(CRITIQUES_DIR)
+                        .join(format!("{}.md", critique.id)),
+                );
+            }
+        }
+
+        // Remove from parent problem's solution_ids
+        if let Ok(mut problem) = self.load_problem(&solution.problem_id) {
+            problem.remove_solution(solution_id);
+            let _ = self.save_problem(&problem);
         }
 
         fs::remove_file(solution_path)?;
@@ -576,7 +693,9 @@ impl MetadataStore {
         Ok(())
     }
 
-    /// Delete a critique
+    /// Delete a critique and clean up references.
+    ///
+    /// This will remove the critique from its parent solution's critique_ids.
     pub fn delete_critique(&self, critique_id: &str) -> Result<()> {
         self.ensure_meta_checkout()?;
 
@@ -587,6 +706,13 @@ impl MetadataStore {
 
         if !critique_path.exists() {
             return Err(JjjError::CritiqueNotFound(critique_id.to_string()));
+        }
+
+        // Remove from parent solution's critique_ids
+        let critique = self.load_critique(critique_id)?;
+        if let Ok(mut solution) = self.load_solution(&critique.solution_id) {
+            solution.remove_critique(critique_id);
+            let _ = self.save_solution(&solution);
         }
 
         fs::remove_file(critique_path)?;

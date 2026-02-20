@@ -94,7 +94,7 @@ impl std::str::FromStr for Priority {
 }
 
 /// Status of a problem
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "snake_case")]
 pub enum ProblemStatus {
     /// Problem identified, not yet being addressed
@@ -131,7 +131,10 @@ impl std::str::FromStr for ProblemStatus {
             "in_progress" | "inprogress" => Ok(ProblemStatus::InProgress),
             "solved" => Ok(ProblemStatus::Solved),
             "dissolved" => Ok(ProblemStatus::Dissolved),
-            _ => Err(format!("Unknown problem status: {}", s)),
+            _ => Err(format!(
+                "Unknown problem status: '{}'. Valid values: open, in_progress, solved, dissolved",
+                s
+            )),
         }
     }
 }
@@ -208,10 +211,23 @@ impl Problem {
         self.updated_at = Utc::now();
     }
 
-    /// Update status
+    /// Update status. Returns an error string if the transition is invalid.
     pub fn set_status(&mut self, status: ProblemStatus) {
         self.status = status;
         self.updated_at = Utc::now();
+    }
+
+    /// Check if a status transition is valid.
+    pub fn can_transition_to(&self, target: &ProblemStatus) -> bool {
+        matches!(
+            (&self.status, target),
+            (ProblemStatus::Open, ProblemStatus::InProgress)
+                | (ProblemStatus::Open, ProblemStatus::Solved)
+                | (ProblemStatus::Open, ProblemStatus::Dissolved)
+                | (ProblemStatus::InProgress, ProblemStatus::Solved)
+                | (ProblemStatus::InProgress, ProblemStatus::Open)
+                | (ProblemStatus::InProgress, ProblemStatus::Dissolved)
+        )
     }
 
     /// Dissolve the problem with a reason

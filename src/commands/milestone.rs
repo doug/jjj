@@ -37,8 +37,12 @@ fn create_milestone(ctx: &CommandContext, title: String, date: Option<String>) -
 
         // Parse date if provided
         let target_date = if let Some(date_str) = date {
-            let naive_date = NaiveDate::parse_from_str(&date_str, "%Y-%m-%d")
-                .map_err(|_| crate::error::JjjError::Validation(format!("Invalid date format: {}. Use YYYY-MM-DD", date_str)))?;
+            let naive_date = NaiveDate::parse_from_str(&date_str, "%Y-%m-%d").map_err(|_| {
+                crate::error::JjjError::Validation(format!(
+                    "Invalid date format: {}. Use YYYY-MM-DD",
+                    date_str
+                ))
+            })?;
             Some(naive_date.and_hms_opt(0, 0, 0).unwrap().and_utc())
         } else {
             None
@@ -74,13 +78,19 @@ fn edit_milestone(
         }
 
         if let Some(d) = date {
-            let naive_date = NaiveDate::parse_from_str(&d, "%Y-%m-%d")
-                .map_err(|_| crate::error::JjjError::Validation(format!("Invalid date format: {}. Use YYYY-MM-DD", d)))?;
+            let naive_date = NaiveDate::parse_from_str(&d, "%Y-%m-%d").map_err(|_| {
+                crate::error::JjjError::Validation(format!(
+                    "Invalid date format: {}. Use YYYY-MM-DD",
+                    d
+                ))
+            })?;
             milestone.set_target_date(Some(naive_date.and_hms_opt(0, 0, 0).unwrap().and_utc()));
         }
 
         if let Some(s) = status {
-            let new_status: MilestoneStatus = s.parse().map_err(|e: String| crate::error::JjjError::Validation(e))?;
+            let new_status: MilestoneStatus = s
+                .parse()
+                .map_err(|e: String| crate::error::JjjError::Validation(e))?;
             milestone.set_status(new_status);
         }
 
@@ -251,6 +261,16 @@ fn add_problem(ctx: &CommandContext, milestone_input: String, problem_input: Str
     let milestone_id = ctx.resolve_milestone(&milestone_input)?;
     let problem_id = ctx.resolve_problem(&problem_input)?;
     let store = &ctx.store;
+
+    // Check if problem is already in milestone
+    let milestone = store.load_milestone(&milestone_id)?;
+    if milestone.problem_ids.contains(&problem_id) {
+        eprintln!(
+            "Warning: Problem {} is already in milestone {}",
+            problem_id, milestone_id
+        );
+        return Ok(());
+    }
 
     store.with_metadata(
         &format!("Add problem {} to milestone {}", problem_id, milestone_id),

@@ -28,21 +28,21 @@ jjj init
 # Define a problem
 jjj problem new "Search is slow" --priority high
 
-# Propose a solution
-jjj solution new "Add search index" --problem p1
+# Propose a solution (references problem by title)
+jjj solution new "Add search index" --problem "Search is slow"
 
 # Attach your current jj change to the solution
-jjj solution attach s1
+jjj solution attach "search index"
 
 # Add a critique during review
-jjj critique new s1 "Missing error handling" --severity medium
+jjj critique new "search index" "Missing error handling" --severity medium
 
 # Address the critique after fixing
-jjj critique address c1
+jjj critique address "Missing error"
 
 # Accept the solution and mark problem solved
-jjj solution accept s1
-jjj problem solve p1
+jjj solution accept "search index"
+jjj problem solve "Search is slow"
 ```
 
 ## Commands
@@ -59,37 +59,38 @@ jjj push                    # Push code and metadata to remote
 
 ### Problems
 ```bash
-jjj problem new "Title"     # Create problem
-jjj problem list            # List all problems
-jjj problem show p1         # Show details
-jjj problem tree            # Hierarchical view
-jjj problem solve p1        # Mark solved (requires accepted solution)
-jjj problem dissolve p1     # Mark dissolved (false premises)
+jjj problem new "Title"                # Create problem
+jjj problem list                       # List all problems
+jjj problem show "Search is slow"      # Show details (by title)
+jjj problem show 01957d                # Show details (by UUID prefix)
+jjj problem tree                       # Hierarchical view
+jjj problem solve "Search is slow"     # Mark solved (requires accepted solution)
+jjj problem dissolve "Search"          # Mark dissolved (false premises)
 ```
 
 ### Solutions
 ```bash
-jjj solution new "Title" --problem p1     # Create solution
-jjj solution attach s1                    # Link current change
-jjj solution resume s1                    # Resume working on solution
-jjj solution test s1                      # Move to testing status
-jjj solution accept s1                    # Accept (no open critiques)
-jjj solution refute s1                    # Refute (criticism showed it won't work)
+jjj solution new "Title" --problem "Search"       # Create solution
+jjj solution attach "search index"                 # Link current change
+jjj solution resume "search index"                 # Resume working on solution
+jjj solution test "search index"                   # Move to testing status
+jjj solution accept "search index"                 # Accept (no open critiques)
+jjj solution refute "search index"                 # Refute (criticism showed it won't work)
 ```
 
 ### Critiques
 ```bash
-jjj critique new s1 "Issue" --severity high     # Add critique
-jjj critique list --solution s1                 # List critiques
-jjj critique address c1                         # Mark addressed
-jjj critique dismiss c1                         # Dismiss (incorrect/irrelevant)
-jjj critique validate c1                        # Validate (solution should be refuted)
+jjj critique new "search index" "Issue" --severity high  # Add critique
+jjj critique list --solution "search index"              # List critiques
+jjj critique address "Missing error"                     # Mark addressed
+jjj critique dismiss "Missing error"                     # Dismiss (incorrect/irrelevant)
+jjj critique validate "Missing error"                    # Validate (solution should be refuted)
 ```
 
 ### Milestones
 ```bash
 jjj milestone new "Q1 Release" --date 2024-03-31
-jjj milestone add-problem m1 p1
+jjj milestone add-problem "Q1 Release" "Search is slow"
 jjj milestone roadmap
 ```
 
@@ -103,13 +104,13 @@ All metadata lives in an orphaned `jjj` bookmark, separate from your project his
 .jjj/
 ├── config.toml
 ├── problems/
-│   └── p1.md
+│   └── 01957d3e-a8b2-7def-8c3a-9f4e5d6c7b8a.md
 ├── solutions/
-│   └── s1.md
+│   └── 01958a1b-c3d4-7e5f-9a0b-1c2d3e4f5a6b.md
 ├── critiques/
-│   └── c1.md
+│   └── 01959b2c-d4e5-7f6a-0b1c-2d3e4f5a6b7c.md
 └── milestones/
-    └── m1.md
+    └── 01960c3d-e5f6-7a0b-1c2d-3e4f5a6b7c8d.md
 ```
 
 This means:

@@ -23,16 +23,55 @@ pub struct Migration {
 /// Add new migrations to the end of this list.
 pub fn all_migrations() -> Vec<Migration> {
     vec![
-        // Future migrations go here. Example:
-        // Migration {
-        //     version: 3,
-        //     description: "Add tags column to problems",
-        //     requires_rebuild: false,
-        //     up: |conn| {
-        //         conn.execute_batch("ALTER TABLE problems ADD COLUMN tags TEXT DEFAULT '[]';")?;
-        //         Ok(())
-        //     },
-        // },
+        Migration {
+            version: 3,
+            description: "Add argument, evidence, author columns to critiques",
+            requires_rebuild: false,
+            up: |conn| {
+                conn.execute_batch(
+                    "ALTER TABLE critiques ADD COLUMN argument TEXT DEFAULT '';
+                     ALTER TABLE critiques ADD COLUMN evidence TEXT DEFAULT '';
+                     ALTER TABLE critiques ADD COLUMN author TEXT;",
+                )?;
+
+                // Migrate existing data: split body into argument/evidence
+                let mut stmt =
+                    conn.prepare("SELECT id, body FROM critiques WHERE body != ''")?;
+                let rows: Vec<(String, String)> = stmt
+                    .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+                    .collect::<Result<_, _>>()?;
+
+                for (id, body) in rows {
+                    let separator = "\n\n## Evidence\n\n";
+                    let (argument, evidence) = if let Some(idx) = body.find(separator) {
+                        (
+                            body[..idx].to_string(),
+                            body[idx + separator.len()..].to_string(),
+                        )
+                    } else {
+                        (body, String::new())
+                    };
+
+                    conn.execute(
+                        "UPDATE critiques SET argument = ?1, evidence = ?2 WHERE id = ?3",
+                        rusqlite::params![argument, evidence, id],
+                    )?;
+                }
+
+                // Copy reviewer to author for existing rows
+                conn.execute_batch(
+                    "UPDATE critiques SET author = reviewer WHERE author IS NULL AND reviewer IS NOT NULL;",
+                )?;
+
+                Ok(())
+            },
+        },
+        Migration {
+            version: 4,
+            description: "Recreate FTS table without contentless mode (enables SELECT from FTS)",
+            requires_rebuild: true,
+            up: |_conn| Ok(()),
+        },
     ]
 }
 
@@ -81,9 +120,10 @@ mod tests {
     }
 
     #[test]
-    fn test_all_migrations_returns_empty() {
+    fn test_migrations_registered() {
         let migrations = all_migrations();
-        // Currently no migrations registered
-        assert!(migrations.is_empty());
+        assert!(!migrations.is_empty());
+        assert_eq!(migrations[0].version, 3);
+        assert!(!migrations[0].requires_rebuild);
     }
 }

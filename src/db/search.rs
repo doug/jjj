@@ -3,10 +3,9 @@
 //! This module provides search functions using the FTS5 virtual table.
 //! It supports searching across problems, solutions, critiques, and milestones.
 //!
-//! Note: The FTS5 table is contentless (`content=''`), which means we can use
-//! it for matching but cannot retrieve stored column values. The search uses
-//! EXISTS queries with dynamic entity_id matching to correlate FTS results
-//! with entity tables.
+//! Search queries are sanitized to prevent FTS5 syntax issues (e.g., hyphens
+//! in UUIDs being interpreted as NOT operators). User input is quoted per-word
+//! to ensure safe matching.
 
 use rusqlite::{params, Connection, Result as SqliteResult};
 
@@ -17,7 +16,7 @@ use crate::models::Event;
 pub struct SearchResult {
     /// Entity type: "problem", "solution", "critique", or "milestone"
     pub entity_type: String,
-    /// Entity ID (e.g., "p1", "s1", "c1", "m1")
+    /// Entity ID (UUID7)
     pub entity_id: String,
     /// Entity title
     pub title: String,
@@ -27,9 +26,9 @@ pub struct SearchResult {
 
 /// Search entities using full-text search.
 ///
-/// Uses FTS5 MATCH query with ranking by relevance. Since the FTS table is
-/// contentless, we query each entity type with EXISTS subqueries that
-/// correlate entity IDs in the FTS match expression.
+/// Uses FTS5 MATCH query with ranking by relevance. For each entity type,
+/// matches FTS results by entity_id and joins with the entity table to
+/// retrieve full details.
 ///
 /// Returns up to 50 results with snippets showing match context.
 ///
@@ -49,28 +48,35 @@ pub fn search(
 ) -> SqliteResult<Vec<SearchResult>> {
     let mut results = Vec::new();
 
+    // Sanitize user query for FTS5: escape double quotes and wrap in quotes
+    // to prevent FTS5 syntax injection and handle special characters.
+    let sanitized_query = sanitize_fts_query(query);
+
     // Helper to check if we should search this entity type
     let should_search = |et: &str| entity_type.is_none() || entity_type == Some(et);
 
+    // Use a two-step approach: first search FTS for matching entity IDs,
+    // then look up entity details. This avoids embedding UUIDs in MATCH
+    // expressions (hyphens in UUIDs break FTS5 syntax).
+
     // Search problems
     if should_search("problem") {
+        let fts_query = format!("entity_type:problem AND ({})", sanitized_query);
         let mut stmt = conn.prepare(
             "SELECT p.id, p.title, p.description, p.context
              FROM problems p
-             WHERE EXISTS (
-                 SELECT 1 FROM fts
-                 WHERE fts MATCH 'entity_type:problem AND entity_id:' || p.id || ' AND (' || ?1 || ')'
+             WHERE p.id IN (
+                 SELECT entity_id FROM fts WHERE fts MATCH ?1
              )
              LIMIT 50",
         )?;
 
-        let rows = stmt.query_map(params![query], |row| {
+        let rows = stmt.query_map(params![fts_query], |row| {
             let id: String = row.get(0)?;
             let title: String = row.get(1)?;
             let description: String = row.get::<_, Option<String>>(2)?.unwrap_or_default();
             let context: String = row.get::<_, Option<String>>(3)?.unwrap_or_default();
 
-            // Create snippet from description or context
             let snippet = create_snippet(&description, &context, &title, query);
 
             Ok(SearchResult {
@@ -88,17 +94,17 @@ pub fn search(
 
     // Search solutions
     if should_search("solution") {
+        let fts_query = format!("entity_type:solution AND ({})", sanitized_query);
         let mut stmt = conn.prepare(
             "SELECT s.id, s.title, s.approach, s.tradeoffs
              FROM solutions s
-             WHERE EXISTS (
-                 SELECT 1 FROM fts
-                 WHERE fts MATCH 'entity_type:solution AND entity_id:' || s.id || ' AND (' || ?1 || ')'
+             WHERE s.id IN (
+                 SELECT entity_id FROM fts WHERE fts MATCH ?1
              )
              LIMIT 50",
         )?;
 
-        let rows = stmt.query_map(params![query], |row| {
+        let rows = stmt.query_map(params![fts_query], |row| {
             let id: String = row.get(0)?;
             let title: String = row.get(1)?;
             let approach: String = row.get::<_, Option<String>>(2)?.unwrap_or_default();
@@ -121,17 +127,17 @@ pub fn search(
 
     // Search critiques
     if should_search("critique") {
+        let fts_query = format!("entity_type:critique AND ({})", sanitized_query);
         let mut stmt = conn.prepare(
             "SELECT c.id, c.title, c.body
              FROM critiques c
-             WHERE EXISTS (
-                 SELECT 1 FROM fts
-                 WHERE fts MATCH 'entity_type:critique AND entity_id:' || c.id || ' AND (' || ?1 || ')'
+             WHERE c.id IN (
+                 SELECT entity_id FROM fts WHERE fts MATCH ?1
              )
              LIMIT 50",
         )?;
 
-        let rows = stmt.query_map(params![query], |row| {
+        let rows = stmt.query_map(params![fts_query], |row| {
             let id: String = row.get(0)?;
             let title: String = row.get(1)?;
             let body: String = row.get::<_, Option<String>>(2)?.unwrap_or_default();
@@ -153,17 +159,17 @@ pub fn search(
 
     // Search milestones
     if should_search("milestone") {
+        let fts_query = format!("entity_type:milestone AND ({})", sanitized_query);
         let mut stmt = conn.prepare(
             "SELECT m.id, m.title, m.description
              FROM milestones m
-             WHERE EXISTS (
-                 SELECT 1 FROM fts
-                 WHERE fts MATCH 'entity_type:milestone AND entity_id:' || m.id || ' AND (' || ?1 || ')'
+             WHERE m.id IN (
+                 SELECT entity_id FROM fts WHERE fts MATCH ?1
              )
              LIMIT 50",
         )?;
 
-        let rows = stmt.query_map(params![query], |row| {
+        let rows = stmt.query_map(params![fts_query], |row| {
             let id: String = row.get(0)?;
             let title: String = row.get(1)?;
             let description: String = row.get::<_, Option<String>>(2)?.unwrap_or_default();
@@ -187,6 +193,27 @@ pub fn search(
     results.truncate(50);
 
     Ok(results)
+}
+
+/// Sanitize a user query for FTS5 MATCH syntax.
+///
+/// Escapes double quotes and wraps each word in quotes to prevent
+/// FTS5 special characters (AND, OR, NOT, -, etc.) from being
+/// interpreted as operators.
+fn sanitize_fts_query(query: &str) -> String {
+    let words: Vec<String> = query
+        .split_whitespace()
+        .map(|w| {
+            let escaped = w.replace('"', "\"\"");
+            format!("\"{}\"", escaped)
+        })
+        .collect();
+
+    if words.is_empty() {
+        "\"\"".to_string()
+    } else {
+        words.join(" ")
+    }
 }
 
 /// Create a snippet from entity content, prioritizing fields that contain the query.

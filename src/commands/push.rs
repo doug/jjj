@@ -45,7 +45,9 @@ pub fn execute(
             for error in &errors {
                 println!("  \u{2717} {}", error);
             }
-            return Err(crate::error::JjjError::Validation("Push aborted. Fix errors and retry.".to_string()));
+            return Err(crate::error::JjjError::Validation(
+                "Push aborted. Fix errors and retry.".to_string(),
+            ));
         }
         println!("  \u{2713} All checks passed");
 

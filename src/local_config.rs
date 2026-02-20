@@ -62,6 +62,16 @@ impl LocalConfig {
 
         // Apply environment variable overrides
         config.apply_env_overrides();
+
+        // Warn if API key is stored in the config file (not via env var)
+        if config.embeddings.api_key.is_some() && std::env::var("JJJ_EMBEDDINGS_API_KEY").is_err() {
+            eprintln!(
+                "Warning: API key is stored in plaintext in {}",
+                config_path.display()
+            );
+            eprintln!("  Consider using the JJJ_EMBEDDINGS_API_KEY environment variable instead.");
+        }
+
         config
     }
 

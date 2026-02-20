@@ -77,7 +77,7 @@ impl std::str::FromStr for MilestoneStatus {
             "active" => Ok(MilestoneStatus::Active),
             "completed" => Ok(MilestoneStatus::Completed),
             "cancelled" => Ok(MilestoneStatus::Cancelled),
-            _ => Err(format!("Unknown milestone status: {}", s)),
+            _ => Err(format!("Unknown milestone status: '{}'. Valid values: planning, active, completed, cancelled", s)),
         }
     }
 }

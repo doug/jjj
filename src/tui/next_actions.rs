@@ -125,7 +125,7 @@ pub fn build_next_actions(
         .filter(|c| c.status == CritiqueStatus::Open)
     {
         if let Some(reviewer) = &critique.reviewer {
-            if user.contains(reviewer) || reviewer.contains(user) {
+            if user == reviewer || user.contains(reviewer) {
                 let solution = solutions.iter().find(|s| s.id == critique.solution_id);
                 let problem = solution.and_then(|s| problems.iter().find(|p| p.id == s.problem_id));
                 let priority = problem.map(|p| p.priority.clone()).unwrap_or_default();

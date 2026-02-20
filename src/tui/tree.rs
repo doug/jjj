@@ -48,6 +48,16 @@ impl TreeNode {
         }
     }
 
+    pub fn title(&self) -> &str {
+        match self {
+            TreeNode::Milestone { title, .. } => title,
+            TreeNode::Backlog { .. } => "Backlog",
+            TreeNode::Problem { title, .. } => title,
+            TreeNode::Solution { title, .. } => title,
+            TreeNode::Critique { title, .. } => title,
+        }
+    }
+
     pub fn is_expanded(&self) -> bool {
         match self {
             TreeNode::Milestone { expanded, .. } => *expanded,
@@ -240,46 +250,37 @@ pub fn annotate_tree_with_actions(items: &mut [FlatTreeItem], next_actions: &[Ne
 
 fn category_to_symbol(category: Category) -> &'static str {
     match category {
-        Category::Ready => "⚡",
-        Category::Blocked => "🚫",
-        Category::Waiting => "⏳",
-        Category::Todo => "📋",
-        Category::Review => "👀",
+        Category::Ready => "!",
+        Category::Blocked => "X",
+        Category::Waiting => "~",
+        Category::Todo => "*",
+        Category::Review => "?",
     }
 }
 
 /// Filters tree to only show action items and their ancestors
 pub fn filter_tree_to_actions(items: &[FlatTreeItem]) -> Vec<FlatTreeItem> {
-    use std::collections::HashSet;
-
-    // First pass: collect IDs of items with action symbols
-    let action_ids: HashSet<&str> = items
+    // First pass: collect indices of items with action symbols
+    let action_indices: Vec<usize> = items
         .iter()
-        .filter(|item| item.action_symbol.is_some())
-        .map(|item| item.node.id())
+        .enumerate()
+        .filter(|(_, item)| item.action_symbol.is_some())
+        .map(|(i, _)| i)
         .collect();
 
-    if action_ids.is_empty() {
+    if action_indices.is_empty() {
         return Vec::new();
     }
 
-    // Second pass: for each action item, mark all ancestors as needed
-    let mut needed_ids: HashSet<String> = HashSet::new();
-    for item in items.iter().filter(|i| i.action_symbol.is_some()) {
-        needed_ids.insert(item.node.id().to_string());
-
-        // Walk backwards to find ancestors
-        let item_depth = item.depth;
-        let item_idx = items
-            .iter()
-            .position(|i| i.node.id() == item.node.id())
-            .unwrap();
-
-        let mut current_depth = item_depth;
-        for ancestor in items[..item_idx].iter().rev() {
-            if ancestor.depth < current_depth {
-                needed_ids.insert(ancestor.node.id().to_string());
-                current_depth = ancestor.depth;
+    // Second pass: for each action item, walk backwards to mark ancestors (O(n) total)
+    let mut needed: Vec<bool> = vec![false; items.len()];
+    for &idx in &action_indices {
+        needed[idx] = true;
+        let mut current_depth = items[idx].depth;
+        for ancestor_idx in (0..idx).rev() {
+            if items[ancestor_idx].depth < current_depth {
+                needed[ancestor_idx] = true;
+                current_depth = items[ancestor_idx].depth;
                 if current_depth == 0 {
                     break;
                 }
@@ -290,7 +291,8 @@ pub fn filter_tree_to_actions(items: &[FlatTreeItem]) -> Vec<FlatTreeItem> {
     // Third pass: keep only needed items
     items
         .iter()
-        .filter(|item| needed_ids.contains(item.node.id()))
-        .cloned()
+        .enumerate()
+        .filter(|(i, _)| needed[*i])
+        .map(|(_, item)| item.clone())
         .collect()
 }

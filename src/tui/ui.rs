@@ -322,6 +322,8 @@ fn draw_footer(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     // Context line (top) - or flash message if present
     let context_text = if let Some((msg, _)) = &app.ui.flash_message {
         msg.clone()
+    } else if let Some(ref filter) = app.ui.search_filter {
+        format!("[/{}] {}", filter, app.context_hints())
     } else {
         app.context_hints()
     };
@@ -343,9 +345,9 @@ fn draw_footer(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
 fn draw_help_overlay(f: &mut Frame, app: &App) {
     let area = f.area();
 
-    // Calculate centered popup (40 wide, 18 tall)
+    // Calculate centered popup (40 wide, 19 tall)
     let popup_width = 40u16;
-    let popup_height = 18u16;
+    let popup_height = 19u16;
     let popup_x = area.width.saturating_sub(popup_width) / 2;
     let popup_y = area.height.saturating_sub(popup_height) / 2;
     let popup_area = Rect::new(popup_x, popup_y, popup_width, popup_height);
@@ -361,6 +363,7 @@ fn draw_help_overlay(f: &mut Frame, app: &App) {
         Line::from("    ←/→     Collapse/Expand"),
         Line::from("    Tab     Jump to next action"),
         Line::from("    S-Tab   Jump to prev action"),
+        Line::from("    /       Search/filter tree"),
         Line::from("    f       Toggle filter (full/actions)"),
         Line::from("    j/k     Scroll detail"),
         Line::from("    R       Toggle related"),

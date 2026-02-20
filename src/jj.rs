@@ -62,11 +62,17 @@ impl JjClient {
             .args(args)
             .current_dir(&self.repo_root)
             .output()
-            .map_err(|e| crate::error::JjjError::JjIo { args: args.join(" "), source: e })?;
+            .map_err(|e| crate::error::JjjError::JjIo {
+                args: args.join(" "),
+                source: e,
+            })?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(crate::error::JjjError::JjCommandFailed { args: args.join(" "), stderr: stderr.to_string() });
+            return Err(crate::error::JjjError::JjCommandFailed {
+                args: args.join(" "),
+                stderr: stderr.to_string(),
+            });
         }
 
         Ok(String::from_utf8_lossy(&output.stdout).to_string())

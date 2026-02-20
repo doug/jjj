@@ -51,7 +51,9 @@ fn new_critique(
     let store = &ctx.store;
 
     // Parse severity
-    let severity: CritiqueSeverity = severity_str.parse().map_err(|e: String| crate::error::JjjError::Validation(e))?;
+    let severity: CritiqueSeverity = severity_str
+        .parse()
+        .map_err(|e: String| crate::error::JjjError::Validation(e))?;
 
     // Validate solution exists
     let solution = store.load_solution(&solution_id)?;
@@ -155,7 +157,9 @@ fn list_critiques(
 
     // Filter by status
     if let Some(status_str) = status_filter {
-        let status: CritiqueStatus = status_str.parse().map_err(|e: String| crate::error::JjjError::Validation(e))?;
+        let status: CritiqueStatus = status_str
+            .parse()
+            .map_err(|e: String| crate::error::JjjError::Validation(e))?;
         critiques.retain(|c| c.status == status);
     }
 
@@ -301,12 +305,22 @@ fn edit_critique(
         }
 
         if let Some(severity_str) = severity {
-            let new_severity: CritiqueSeverity = severity_str.parse().map_err(|e: String| crate::error::JjjError::Validation(e))?;
+            let new_severity: CritiqueSeverity = severity_str
+                .parse()
+                .map_err(|e: String| crate::error::JjjError::Validation(e))?;
             critique.set_severity(new_severity);
         }
 
         if let Some(status_str) = status {
-            let new_status: CritiqueStatus = status_str.parse().map_err(|e: String| crate::error::JjjError::Validation(e))?;
+            let new_status: CritiqueStatus = status_str
+                .parse()
+                .map_err(|e: String| crate::error::JjjError::Validation(e))?;
+            if !critique.can_transition_to(&new_status) {
+                return Err(crate::error::JjjError::Validation(format!(
+                    "Invalid status transition: {} -> {}",
+                    critique.status, new_status
+                )));
+            }
             critique.set_status(new_status);
         }
 
