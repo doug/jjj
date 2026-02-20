@@ -20,8 +20,8 @@ pub fn upsert_problem(conn: &Connection, problem: &Problem) -> SqliteResult<()> 
     conn.execute(
         "INSERT OR REPLACE INTO problems (
             id, title, status, priority, parent_id, milestone_id, assignee,
-            created_at, updated_at, description, context, dissolved_reason
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            created_at, updated_at, description, context, dissolved_reason, github_issue
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
         params![
             problem.id,
             problem.title,
@@ -40,6 +40,7 @@ pub fn upsert_problem(conn: &Connection, problem: &Problem) -> SqliteResult<()> 
             problem.description,
             problem.context,
             problem.dissolved_reason,
+            problem.github_issue.map(|n| n as i64),
         ],
     )?;
     Ok(())
@@ -49,7 +50,7 @@ pub fn upsert_problem(conn: &Connection, problem: &Problem) -> SqliteResult<()> 
 pub fn load_problem(conn: &Connection, id: &str) -> SqliteResult<Option<Problem>> {
     let mut stmt = conn.prepare(
         "SELECT id, title, status, priority, parent_id, milestone_id, assignee,
-                created_at, updated_at, description, context, dissolved_reason
+                created_at, updated_at, description, context, dissolved_reason, github_issue
          FROM problems WHERE id = ?1",
     )?;
 
@@ -66,7 +67,7 @@ pub fn load_problem(conn: &Connection, id: &str) -> SqliteResult<Option<Problem>
 pub fn list_problems(conn: &Connection) -> SqliteResult<Vec<Problem>> {
     let mut stmt = conn.prepare(
         "SELECT id, title, status, priority, parent_id, milestone_id, assignee,
-                created_at, updated_at, description, context, dissolved_reason
+                created_at, updated_at, description, context, dissolved_reason, github_issue
          FROM problems ORDER BY created_at DESC",
     )?;
 
@@ -128,6 +129,7 @@ fn row_to_problem(row: &rusqlite::Row) -> SqliteResult<Problem> {
         description: row.get::<_, Option<String>>(9)?.unwrap_or_default(),
         context: row.get::<_, Option<String>>(10)?.unwrap_or_default(),
         dissolved_reason: row.get(11)?,
+        github_issue: row.get::<_, Option<i64>>(12)?.map(|n| n as u64),
         // Computed fields - leave empty, will be populated by relationships
         solution_ids: Vec::new(),
         child_ids: Vec::new(),
@@ -146,8 +148,9 @@ pub fn upsert_solution(conn: &Connection, solution: &Solution) -> SqliteResult<(
     conn.execute(
         "INSERT OR REPLACE INTO solutions (
             id, title, status, problem_id, change_ids, supersedes, assignee,
-            force_accepted, created_at, updated_at, approach, tradeoffs
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            force_accepted, created_at, updated_at, approach, tradeoffs,
+            github_pr, github_branch
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
         params![
             solution.id,
             solution.title,
@@ -161,6 +164,8 @@ pub fn upsert_solution(conn: &Connection, solution: &Solution) -> SqliteResult<(
             solution.updated_at.to_rfc3339(),
             solution.approach,
             solution.tradeoffs,
+            solution.github_pr.map(|n| n as i64),
+            solution.github_branch,
         ],
     )?;
     Ok(())
@@ -170,7 +175,8 @@ pub fn upsert_solution(conn: &Connection, solution: &Solution) -> SqliteResult<(
 pub fn load_solution(conn: &Connection, id: &str) -> SqliteResult<Option<Solution>> {
     let mut stmt = conn.prepare(
         "SELECT id, title, status, problem_id, change_ids, supersedes, assignee,
-                force_accepted, created_at, updated_at, approach, tradeoffs
+                force_accepted, created_at, updated_at, approach, tradeoffs,
+                github_pr, github_branch
          FROM solutions WHERE id = ?1",
     )?;
 
@@ -187,7 +193,8 @@ pub fn load_solution(conn: &Connection, id: &str) -> SqliteResult<Option<Solutio
 pub fn list_solutions(conn: &Connection) -> SqliteResult<Vec<Solution>> {
     let mut stmt = conn.prepare(
         "SELECT id, title, status, problem_id, change_ids, supersedes, assignee,
-                force_accepted, created_at, updated_at, approach, tradeoffs
+                force_accepted, created_at, updated_at, approach, tradeoffs,
+                github_pr, github_branch
          FROM solutions ORDER BY created_at DESC",
     )?;
 
@@ -203,7 +210,8 @@ pub fn list_solutions_for_problem(
 ) -> SqliteResult<Vec<Solution>> {
     let mut stmt = conn.prepare(
         "SELECT id, title, status, problem_id, change_ids, supersedes, assignee,
-                force_accepted, created_at, updated_at, approach, tradeoffs
+                force_accepted, created_at, updated_at, approach, tradeoffs,
+                github_pr, github_branch
          FROM solutions WHERE problem_id = ?1 ORDER BY created_at DESC",
     )?;
 
@@ -266,6 +274,8 @@ fn row_to_solution(row: &rusqlite::Row) -> SqliteResult<Solution> {
             }),
         approach: row.get::<_, Option<String>>(10)?.unwrap_or_default(),
         tradeoffs: row.get::<_, Option<String>>(11)?.unwrap_or_default(),
+        github_pr: row.get::<_, Option<i64>>(12)?.map(|n| n as u64),
+        github_branch: row.get(13)?,
         // Computed field - leave empty, will be populated by relationships
         critique_ids: Vec::new(),
     })
@@ -293,8 +303,9 @@ pub fn upsert_critique(conn: &Connection, critique: &Critique) -> SqliteResult<(
     conn.execute(
         "INSERT OR REPLACE INTO critiques (
             id, title, status, solution_id, severity, reviewer, author, file_path,
-            line_number, created_at, updated_at, body, argument, evidence, replies
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+            line_number, created_at, updated_at, body, argument, evidence, replies,
+            github_review_id
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
         params![
             critique.id,
             critique.title,
@@ -311,6 +322,7 @@ pub fn upsert_critique(conn: &Connection, critique: &Critique) -> SqliteResult<(
             critique.argument,
             critique.evidence,
             replies_json,
+            critique.github_review_id.map(|n| n as i64),
         ],
     )?;
     Ok(())
@@ -320,7 +332,8 @@ pub fn upsert_critique(conn: &Connection, critique: &Critique) -> SqliteResult<(
 pub fn load_critique(conn: &Connection, id: &str) -> SqliteResult<Option<Critique>> {
     let mut stmt = conn.prepare(
         "SELECT id, title, status, solution_id, severity, reviewer, author, file_path,
-                line_number, created_at, updated_at, argument, evidence, replies
+                line_number, created_at, updated_at, argument, evidence, replies,
+                github_review_id
          FROM critiques WHERE id = ?1",
     )?;
 
@@ -337,7 +350,8 @@ pub fn load_critique(conn: &Connection, id: &str) -> SqliteResult<Option<Critiqu
 pub fn list_critiques(conn: &Connection) -> SqliteResult<Vec<Critique>> {
     let mut stmt = conn.prepare(
         "SELECT id, title, status, solution_id, severity, reviewer, author, file_path,
-                line_number, created_at, updated_at, argument, evidence, replies
+                line_number, created_at, updated_at, argument, evidence, replies,
+                github_review_id
          FROM critiques ORDER BY created_at DESC",
     )?;
 
@@ -353,7 +367,8 @@ pub fn list_critiques_for_solution(
 ) -> SqliteResult<Vec<Critique>> {
     let mut stmt = conn.prepare(
         "SELECT id, title, status, solution_id, severity, reviewer, author, file_path,
-                line_number, created_at, updated_at, argument, evidence, replies
+                line_number, created_at, updated_at, argument, evidence, replies,
+                github_review_id
          FROM critiques WHERE solution_id = ?1 ORDER BY created_at DESC",
     )?;
 
@@ -371,7 +386,8 @@ pub fn delete_critique(conn: &Connection, id: &str) -> SqliteResult<bool> {
 fn row_to_critique(row: &rusqlite::Row) -> SqliteResult<Critique> {
     // Column order: id(0), title(1), status(2), solution_id(3), severity(4),
     //   reviewer(5), author(6), file_path(7), line_number(8),
-    //   created_at(9), updated_at(10), argument(11), evidence(12), replies(13)
+    //   created_at(9), updated_at(10), argument(11), evidence(12), replies(13),
+    //   github_review_id(14)
     let status_str: String = row.get(2)?;
     let severity_str: String = row.get(4)?;
     let created_at_str: String = row.get(9)?;
@@ -432,6 +448,7 @@ fn row_to_critique(row: &rusqlite::Row) -> SqliteResult<Critique> {
         evidence,
         code_context: Vec::new(), // Not stored in DB
         replies,
+        github_review_id: row.get::<_, Option<i64>>(14)?.map(|n| n as u64),
     })
 }
 

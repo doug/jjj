@@ -60,6 +60,10 @@ pub struct Critique {
     /// Discussion thread
     #[serde(default)]
     pub replies: Vec<Reply>,
+
+    /// Linked GitHub review ID
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub github_review_id: Option<u64>,
 }
 
 /// A reply in a critique discussion thread
@@ -191,6 +195,7 @@ impl Critique {
             line_end: None,
             code_context: Vec::new(),
             replies: Vec::new(),
+            github_review_id: None,
         }
     }
 
@@ -306,6 +311,8 @@ pub struct CritiqueFrontmatter {
     pub line_end: Option<usize>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub github_review_id: Option<u64>,
 }
 
 impl From<&Critique> for CritiqueFrontmatter {
@@ -323,6 +330,7 @@ impl From<&Critique> for CritiqueFrontmatter {
             line_end: c.line_end,
             created_at: c.created_at,
             updated_at: c.updated_at,
+            github_review_id: c.github_review_id,
         }
     }
 }

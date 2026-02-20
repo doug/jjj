@@ -49,6 +49,14 @@ pub struct Solution {
     /// ID of the solution this one supersedes (for lineage tracking)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub supersedes: Option<String>,
+
+    /// Linked GitHub PR number
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub github_pr: Option<u64>,
+
+    /// GitHub branch name for this solution's PR
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub github_branch: Option<String>,
 }
 
 /// Status of a solution (conjecture)
@@ -115,6 +123,8 @@ impl Solution {
             approach: String::new(),
             tradeoffs: String::new(),
             supersedes: None,
+            github_pr: None,
+            github_branch: None,
         }
     }
 
@@ -243,6 +253,10 @@ pub struct SolutionFrontmatter {
     pub force_accepted: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub supersedes: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub github_pr: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub github_branch: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -259,6 +273,8 @@ impl From<&Solution> for SolutionFrontmatter {
             assignee: s.assignee.clone(),
             force_accepted: s.force_accepted,
             supersedes: s.supersedes.clone(),
+            github_pr: s.github_pr,
+            github_branch: s.github_branch.clone(),
             created_at: s.created_at,
             updated_at: s.updated_at,
         }

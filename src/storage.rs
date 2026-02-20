@@ -293,6 +293,7 @@ impl MetadataStore {
             description: sections.get("Description").cloned().unwrap_or_default(),
             context: sections.get("Context").cloned().unwrap_or_default(),
             dissolved_reason: frontmatter.dissolved_reason,
+            github_issue: frontmatter.github_issue,
         };
 
         Ok(problem)
@@ -514,6 +515,8 @@ impl MetadataStore {
             tradeoffs: sections.get("Trade-offs").cloned().unwrap_or_default(),
             supersedes: frontmatter.supersedes,
             force_accepted: frontmatter.force_accepted,
+            github_pr: frontmatter.github_pr,
+            github_branch: frontmatter.github_branch,
         };
 
         Ok(solution)
@@ -668,6 +671,7 @@ impl MetadataStore {
             line_end: frontmatter.line_end,
             code_context: Vec::new(),
             replies: Vec::new(),
+            github_review_id: frontmatter.github_review_id,
         };
 
         Ok(critique)
@@ -1145,6 +1149,7 @@ This is the context.
             created_at: Utc::now(),
             updated_at: Utc::now(),
             dissolved_reason: None,
+            github_issue: None,
         };
 
         let body = "## Description\n\nTest description";

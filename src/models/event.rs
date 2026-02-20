@@ -25,6 +25,14 @@ pub enum EventType {
     // Milestone events
     MilestoneCreated,
     MilestoneCompleted,
+
+    // GitHub sync events
+    GithubIssueCreated,
+    GithubIssueImported,
+    GithubIssueClosed,
+    GithubPrCreated,
+    GithubPrMerged,
+    GithubReviewImported,
 }
 
 impl std::fmt::Display for EventType {
@@ -43,6 +51,12 @@ impl std::fmt::Display for EventType {
             EventType::CritiqueValidated => write!(f, "critique_validated"),
             EventType::MilestoneCreated => write!(f, "milestone_created"),
             EventType::MilestoneCompleted => write!(f, "milestone_completed"),
+            EventType::GithubIssueCreated => write!(f, "github_issue_created"),
+            EventType::GithubIssueImported => write!(f, "github_issue_imported"),
+            EventType::GithubIssueClosed => write!(f, "github_issue_closed"),
+            EventType::GithubPrCreated => write!(f, "github_pr_created"),
+            EventType::GithubPrMerged => write!(f, "github_pr_merged"),
+            EventType::GithubReviewImported => write!(f, "github_review_imported"),
         }
     }
 }
@@ -98,6 +112,10 @@ pub struct EventExtra {
     /// For solution_created: supersedes ID
     #[serde(skip_serializing_if = "Option::is_none")]
     pub supersedes: Option<String>,
+
+    /// For github_* events: GitHub issue/PR number
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub github_number: Option<u64>,
 }
 
 impl Event {

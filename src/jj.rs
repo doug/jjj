@@ -157,9 +157,13 @@ impl JjClient {
         self.execute(&["file", "show", "-r", revision, path])
     }
 
-    /// Squash current change into parent
-    pub fn squash(&self) -> Result<()> {
-        self.execute(&["squash"])?;
+    /// Squash current change into parent.
+    /// If `message` is provided, uses it as the combined description (avoids opening an editor).
+    pub fn squash(&self, message: Option<&str>) -> Result<()> {
+        match message {
+            Some(msg) => self.execute(&["squash", "-m", msg])?,
+            None => self.execute(&["squash"])?,
+        };
         Ok(())
     }
 

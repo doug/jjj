@@ -668,12 +668,22 @@ fn accept_solution(
             if problem.status != ProblemStatus::Solved {
                 problem.set_status(ProblemStatus::Solved);
                 store.save_problem(&problem)?;
-                println!("Problem {} auto-solved (accepted solution)", solution.problem_id);
+                println!(
+                    "Problem {} auto-solved (accepted solution)",
+                    solution.problem_id
+                );
             }
         }
 
         Ok(())
-    })
+    })?;
+
+    // Auto-merge GitHub PR if enabled
+    if let Ok(solution) = ctx.store.load_solution(&solution_id) {
+        crate::sync::hooks::auto_merge_pr(ctx, &solution);
+    }
+
+    Ok(())
 }
 
 fn refute_solution(

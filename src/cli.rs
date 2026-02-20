@@ -131,6 +131,12 @@ pub enum Commands {
         json: bool,
     },
 
+    /// Sync with external systems (GitHub, etc.)
+    Sync {
+        #[command(subcommand)]
+        source: SyncSource,
+    },
+
     /// Query the event log
     Events {
         #[command(subcommand)]
@@ -673,5 +679,70 @@ pub enum MilestoneAction {
         /// Assignee name (if not specified, assigns to self)
         #[arg(long)]
         to: Option<String>,
+    },
+}
+
+// =============================================================================
+// Sync Commands
+// =============================================================================
+
+#[derive(Subcommand)]
+pub enum SyncSource {
+    /// Sync with GitHub Issues and Pull Requests
+    Github {
+        #[command(subcommand)]
+        action: Option<GitHubSyncAction>,
+
+        /// Show what would be done without making changes
+        #[arg(long)]
+        dry_run: bool,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum GitHubSyncAction {
+    /// Import a GitHub issue as a jjj problem
+    Import {
+        /// Issue number or reference (e.g., "#123" or "123")
+        issue: Option<String>,
+
+        /// Import all unlinked issues
+        #[arg(long)]
+        all: bool,
+
+        /// Filter by label when importing
+        #[arg(long)]
+        label: Option<String>,
+    },
+
+    /// Create or update a GitHub PR for a solution
+    Pr {
+        /// Solution ID or title (uses current change if not specified)
+        solution_id: Option<String>,
+
+        /// Base branch for the PR (default: main)
+        #[arg(long, default_value = "main")]
+        base: String,
+    },
+
+    /// Show sync status for all linked entities
+    Status,
+
+    /// Merge a linked GitHub PR
+    Merge {
+        /// Solution ID or title
+        solution_id: String,
+    },
+
+    /// Close the linked GitHub issue for a problem
+    Close {
+        /// Problem ID or title
+        problem_id: String,
+    },
+
+    /// Reopen the linked GitHub issue for a problem
+    Reopen {
+        /// Problem ID or title
+        problem_id: String,
     },
 }

@@ -15,6 +15,7 @@ pub mod models;
 pub mod picker;
 pub mod resolve;
 pub mod storage;
+pub mod sync;
 pub mod tui;
 pub mod utils;
 

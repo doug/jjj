@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS problems (
     description TEXT DEFAULT '',
     context TEXT DEFAULT '',
     dissolved_reason TEXT,
+    github_issue INTEGER,
     FOREIGN KEY (parent_id) REFERENCES problems(id),
     FOREIGN KEY (milestone_id) REFERENCES milestones(id)
 );
@@ -39,6 +40,8 @@ CREATE TABLE IF NOT EXISTS solutions (
     updated_at TEXT NOT NULL,
     approach TEXT DEFAULT '',
     tradeoffs TEXT DEFAULT '',
+    github_pr INTEGER,
+    github_branch TEXT,
     FOREIGN KEY (problem_id) REFERENCES problems(id),
     FOREIGN KEY (supersedes) REFERENCES solutions(id)
 );
@@ -60,6 +63,7 @@ CREATE TABLE IF NOT EXISTS critiques (
     argument TEXT DEFAULT '',
     evidence TEXT DEFAULT '',
     replies TEXT DEFAULT '[]',  -- JSON array
+    github_review_id INTEGER,
     FOREIGN KEY (solution_id) REFERENCES solutions(id)
 );
 
@@ -104,6 +108,9 @@ CREATE INDEX IF NOT EXISTS idx_solutions_problem_id ON solutions(problem_id);
 CREATE INDEX IF NOT EXISTS idx_critiques_solution_id ON critiques(solution_id);
 CREATE INDEX IF NOT EXISTS idx_problems_milestone_id ON problems(milestone_id);
 CREATE INDEX IF NOT EXISTS idx_problems_parent_id ON problems(parent_id);
+CREATE INDEX IF NOT EXISTS idx_problems_github_issue ON problems(github_issue);
+CREATE INDEX IF NOT EXISTS idx_solutions_github_pr ON solutions(github_pr);
+CREATE INDEX IF NOT EXISTS idx_critiques_github_review_id ON critiques(github_review_id);
 
 -- Embeddings table for semantic search
 CREATE TABLE IF NOT EXISTS embeddings (

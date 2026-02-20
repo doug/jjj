@@ -17,8 +17,10 @@ pub fn submit(ctx: &CommandContext, force: bool) -> Result<()> {
         None => {
             // No solution attached — just squash
             println!("No solution found for current change. Squashing only.");
+            let desc = jj_client.change_description("@").unwrap_or_default();
             jj_client.execute(&["rebase", "-d", "main"])?;
-            jj_client.squash()?;
+            let msg = if desc.is_empty() { None } else { Some(desc.as_str()) };
+            jj_client.squash(msg)?;
             println!("Submitted successfully.");
             return Ok(());
         }
@@ -47,9 +49,11 @@ pub fn submit(ctx: &CommandContext, force: bool) -> Result<()> {
         }
     }
 
-    // Rebase and squash
+    // Rebase and squash — pass the current description to avoid an interactive editor prompt
+    let desc = jj_client.change_description("@").unwrap_or_default();
     jj_client.execute(&["rebase", "-d", "main"])?;
-    jj_client.squash()?;
+    let msg = if desc.is_empty() { None } else { Some(desc.as_str()) };
+    jj_client.squash(msg)?;
 
     // Auto-accept
     if solution.status == SolutionStatus::Testing || solution.status == SolutionStatus::Proposed {
@@ -81,6 +85,11 @@ pub fn submit(ctx: &CommandContext, force: bool) -> Result<()> {
                 problem_id
             );
         }
+    }
+
+    // Auto-create/update GitHub PR if enabled
+    if let Ok(mut sol) = store.load_solution(&solution.id) {
+        crate::sync::hooks::auto_create_or_update_pr(ctx, &mut sol);
     }
 
     println!("\nSquashed changes into trunk.");

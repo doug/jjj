@@ -1,6 +1,55 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+fn default_true() -> bool {
+    true
+}
+
+fn default_problem_label() -> String {
+    "jjj".to_string()
+}
+
+/// GitHub integration configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GitHubConfig {
+    /// Enable GitHub integration (None = auto-detect, Some(false) = disabled)
+    #[serde(default)]
+    pub enabled: Option<bool>,
+
+    /// Override repository: "owner/repo"
+    #[serde(default)]
+    pub repo: Option<String>,
+
+    /// Opt-in: automatically create issues/PRs on local operations
+    #[serde(default)]
+    pub auto_push: bool,
+
+    /// Import "Request Changes" reviews as critiques
+    #[serde(default = "default_true")]
+    pub sync_critiques: bool,
+
+    /// Import "Approve" reviews
+    #[serde(default = "default_true")]
+    pub sync_lgtm: bool,
+
+    /// Label applied to synced GitHub issues
+    #[serde(default = "default_problem_label")]
+    pub problem_label: String,
+}
+
+impl Default for GitHubConfig {
+    fn default() -> Self {
+        Self {
+            enabled: None,
+            repo: None,
+            auto_push: false,
+            sync_critiques: true,
+            sync_lgtm: true,
+            problem_label: default_problem_label(),
+        }
+    }
+}
+
 /// Project-wide configuration stored in config.toml
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ProjectConfig {
@@ -15,4 +64,8 @@ pub struct ProjectConfig {
     /// Custom settings
     #[serde(default)]
     pub settings: HashMap<String, String>,
+
+    /// GitHub integration settings
+    #[serde(default)]
+    pub github: GitHubConfig,
 }

@@ -106,6 +106,54 @@ fn format_event_description(event: &Event) -> String {
         EventType::CritiqueValidated => format!("{} validated", event.entity),
         EventType::MilestoneCreated => format!("{} created", event.entity),
         EventType::MilestoneCompleted => format!("{} completed", event.entity),
+        EventType::GithubIssueCreated => {
+            let num = event
+                .extra
+                .github_number
+                .map(|n| format!(" #{}", n))
+                .unwrap_or_default();
+            format!("GitHub issue{} created", num)
+        }
+        EventType::GithubIssueImported => {
+            let num = event
+                .extra
+                .github_number
+                .map(|n| format!(" #{}", n))
+                .unwrap_or_default();
+            format!("imported from GitHub issue{}", num)
+        }
+        EventType::GithubIssueClosed => {
+            let num = event
+                .extra
+                .github_number
+                .map(|n| format!(" #{}", n))
+                .unwrap_or_default();
+            format!("GitHub issue{} closed", num)
+        }
+        EventType::GithubPrCreated => {
+            let num = event
+                .extra
+                .github_number
+                .map(|n| format!(" #{}", n))
+                .unwrap_or_default();
+            format!("GitHub PR{} created", num)
+        }
+        EventType::GithubPrMerged => {
+            let num = event
+                .extra
+                .github_number
+                .map(|n| format!(" #{}", n))
+                .unwrap_or_default();
+            format!("GitHub PR{} merged", num)
+        }
+        EventType::GithubReviewImported => {
+            let num = event
+                .extra
+                .github_number
+                .map(|n| format!(" PR #{}", n))
+                .unwrap_or_default();
+            format!("review imported from{}", num)
+        }
     }
 }
 

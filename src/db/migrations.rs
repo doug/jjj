@@ -35,8 +35,7 @@ pub fn all_migrations() -> Vec<Migration> {
                 )?;
 
                 // Migrate existing data: split body into argument/evidence
-                let mut stmt =
-                    conn.prepare("SELECT id, body FROM critiques WHERE body != ''")?;
+                let mut stmt = conn.prepare("SELECT id, body FROM critiques WHERE body != ''")?;
                 let rows: Vec<(String, String)> = stmt
                     .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
                     .collect::<Result<_, _>>()?;
@@ -71,6 +70,23 @@ pub fn all_migrations() -> Vec<Migration> {
             description: "Recreate FTS table without contentless mode (enables SELECT from FTS)",
             requires_rebuild: true,
             up: |_conn| Ok(()),
+        },
+        Migration {
+            version: 5,
+            description: "Add GitHub sync columns",
+            requires_rebuild: false,
+            up: |conn| {
+                conn.execute_batch(
+                    "ALTER TABLE problems ADD COLUMN github_issue INTEGER;
+                     ALTER TABLE solutions ADD COLUMN github_pr INTEGER;
+                     ALTER TABLE solutions ADD COLUMN github_branch TEXT;
+                     ALTER TABLE critiques ADD COLUMN github_review_id INTEGER;
+                     CREATE INDEX IF NOT EXISTS idx_problems_github_issue ON problems(github_issue);
+                     CREATE INDEX IF NOT EXISTS idx_solutions_github_pr ON solutions(github_pr);
+                     CREATE INDEX IF NOT EXISTS idx_critiques_github_review_id ON critiques(github_review_id);"
+                )?;
+                Ok(())
+            },
         },
     ]
 }

@@ -151,6 +151,42 @@ export function registerCommands(
     vscode.window.showInformationMessage(result);
   });
 
+  // --- Navigate: Switch to Change ---
+
+  // Registered separately (not via `register()`) to accept a tree node argument
+  context.subscriptions.push(
+    vscode.commands.registerCommand("jjj.switchToChange", async (node?: { solution?: { id: string } }) => {
+      try {
+        let solutionId: string;
+        if (node && node.solution) {
+          solutionId = node.solution.id;
+        } else {
+          // Fallback: QuickPick for solutions with changes
+          const solutions = cache.getSolutions().filter(s => s.change_ids.length > 0);
+          const pick = await vscode.window.showQuickPick(
+            solutions.map(s => ({ label: s.title, description: `${s.change_ids.length} change(s)`, id: s.id })),
+            { placeHolder: "Select solution to switch to" },
+          );
+          if (!pick) { return; }
+          solutionId = pick.id;
+        }
+
+        const solution = cache.getSolutions().find(s => s.id === solutionId);
+        if (!solution || solution.change_ids.length === 0) {
+          vscode.window.showWarningMessage("No changes attached to this solution.");
+          return;
+        }
+
+        const result = await cli.resumeSolution(solutionId);
+        vscode.window.showInformationMessage(result);
+        await cache.refresh();
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e);
+        vscode.window.showErrorMessage(`JJJ: ${message}`);
+      }
+    }),
+  );
+
   // --- Editor: Add Critique Here ---
 
   register("jjj.addCritiqueHere", async () => {
@@ -178,5 +214,30 @@ export function registerCommands(
 
     const result = await cli.newCritique(solutionPick.id, title, severity, filePath, line);
     vscode.window.showInformationMessage(result);
+  });
+
+  // --- GitHub Sync Commands ---
+
+  register("jjj.syncGithub", async () => {
+    const result = await cli.syncGithub();
+    vscode.window.showInformationMessage(result || "GitHub sync complete");
+  });
+
+  register("jjj.syncGithubImport", async () => {
+    const issue = await vscode.window.showInputBox({
+      prompt: "GitHub issue number (e.g., 123 or #123)",
+    });
+    if (!issue) { return; }
+    const result = await cli.syncGithubImport(issue);
+    vscode.window.showInformationMessage(result);
+  });
+
+  register("jjj.syncGithubStatus", async () => {
+    const result = await cli.syncGithubStatus();
+    const doc = await vscode.workspace.openTextDocument({
+      content: result,
+      language: "markdown",
+    });
+    await vscode.window.showTextDocument(doc, { preview: true });
   });
 }

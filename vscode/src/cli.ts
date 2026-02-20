@@ -18,6 +18,7 @@ export interface Problem {
   context: string;
   priority: "low" | "medium" | "high" | "critical";
   dissolved_reason: string | null;
+  github_issue?: number | null;
 }
 
 export interface Solution {
@@ -34,6 +35,8 @@ export interface Solution {
   approach: string;
   tradeoffs: string;
   supersedes: string | null;
+  github_pr?: number | null;
+  github_branch?: string | null;
 }
 
 export interface Reply {
@@ -60,6 +63,7 @@ export interface Critique {
   line_end: number | null;
   code_context: string[];
   replies: Reply[];
+  github_review_id?: number | null;
 }
 
 export interface Milestone {
@@ -249,5 +253,19 @@ export class JjjCli {
 
   async assignSolution(solutionId: string, assignee: string): Promise<string> {
     return this.exec(["solution", "assign", solutionId, "--to", assignee]);
+  }
+
+  // --- GitHub Sync ---
+
+  async syncGithub(): Promise<string> {
+    return this.exec(["sync", "github"]);
+  }
+
+  async syncGithubImport(issue: string): Promise<string> {
+    return this.exec(["sync", "github", "import", issue]);
+  }
+
+  async syncGithubStatus(): Promise<string> {
+    return this.exec(["sync", "github", "status"]);
   }
 }

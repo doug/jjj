@@ -102,6 +102,7 @@ fn new_problem(
 
     let user = store.get_current_user()?;
 
+    let created_id = std::cell::RefCell::new(String::new());
     store.with_metadata(&format!("Create problem: {}", title), || {
         let problem_id = store.next_problem_id()?;
         let mut problem = Problem::new(problem_id.clone(), title.clone());
@@ -141,8 +142,19 @@ fn new_problem(
         if let Some(ref parent_id) = resolved_parent {
             println!("  Parent: {}", parent_id);
         }
+        *created_id.borrow_mut() = problem_id;
         Ok(())
-    })
+    })?;
+
+    // Auto-push to GitHub if enabled (outside transaction, non-blocking)
+    let pid = created_id.into_inner();
+    if !pid.is_empty() {
+        if let Ok(mut problem) = ctx.store.load_problem(&pid) {
+            crate::sync::hooks::auto_create_issue(ctx, &mut problem);
+        }
+    }
+
+    Ok(())
 }
 
 fn list_problems(
@@ -493,7 +505,14 @@ fn solve_problem(ctx: &CommandContext, problem_input: String) -> Result<()> {
         store.save_problem(&problem)?;
         println!("Problem {} marked as solved.", problem_id);
         Ok(())
-    })
+    })?;
+
+    // Auto-close GitHub issue if enabled
+    if let Ok(problem) = ctx.store.load_problem(&problem_id) {
+        crate::sync::hooks::auto_close_issue(ctx, &problem);
+    }
+
+    Ok(())
 }
 
 fn dissolve_problem(

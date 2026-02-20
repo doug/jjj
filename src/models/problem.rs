@@ -52,6 +52,10 @@ pub struct Problem {
     /// Reason the problem was dissolved (if status is Dissolved)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dissolved_reason: Option<String>,
+
+    /// Linked GitHub issue number
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub github_issue: Option<u64>,
 }
 
 /// Priority level for a problem (P0 = most critical, P3 = lowest)
@@ -158,6 +162,7 @@ impl Problem {
             description: String::new(),
             context: String::new(),
             dissolved_reason: None,
+            github_issue: None,
         }
     }
 
@@ -287,6 +292,8 @@ pub struct ProblemFrontmatter {
     pub updated_at: DateTime<Utc>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dissolved_reason: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub github_issue: Option<u64>,
 }
 
 impl From<&Problem> for ProblemFrontmatter {
@@ -304,6 +311,7 @@ impl From<&Problem> for ProblemFrontmatter {
             created_at: p.created_at,
             updated_at: p.updated_at,
             dissolved_reason: p.dissolved_reason.clone(),
+            github_issue: p.github_issue,
         }
     }
 }

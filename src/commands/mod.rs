@@ -10,6 +10,7 @@ pub mod push;
 pub mod search;
 pub mod solution;
 pub mod status;
+pub mod sync;
 pub mod timeline;
 pub mod ui;
 pub mod workflow;
@@ -51,6 +52,9 @@ fn execute_with_context(ctx: &CommandContext, command: Commands) -> Result<()> {
             limit,
             json,
         } => status::execute(ctx, all, mine, limit, json),
+
+        // External sync
+        Commands::Sync { source } => sync::execute(ctx, source),
 
         // Sync commands
         Commands::Fetch { remote } => fetch::execute(ctx, &remote),

@@ -108,6 +108,33 @@ pub enum JjjError {
         matches: Vec<String>,
     },
 
+    #[error("gh CLI not found in PATH.\n\nPlease install GitHub CLI:\n  macOS: brew install gh\n  See: https://cli.github.com/")]
+    GhNotFound,
+
+    #[error("Failed to execute gh command '{args}': {source}")]
+    GhIo {
+        args: String,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error("gh command '{args}' failed:\n{stderr}")]
+    GhCommandFailed { args: String, stderr: String },
+
+    #[error("GitHub authentication failed.\n\nRun 'gh auth login' to authenticate.")]
+    GhAuthFailed,
+
+    #[error("Could not detect GitHub repository.\n\nEnsure this repo has a GitHub remote, or set github.repo in config.")]
+    GhRepoNotDetected,
+
+    #[error("Sync conflict for entity {entity_id}: local state '{local_state}' vs remote state '{remote_state}'.\n{suggestion}")]
+    SyncConflict {
+        entity_id: String,
+        local_state: String,
+        remote_state: String,
+        suggestion: String,
+    },
+
     #[error("{0}")]
     Other(String),
 
