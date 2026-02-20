@@ -296,3 +296,545 @@ pub fn filter_tree_to_actions(items: &[FlatTreeItem]) -> Vec<FlatTreeItem> {
         .map(|(_, item)| item.clone())
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::{
+        Critique, CritiqueStatus, Milestone, Priority, Problem, ProblemStatus,
+        Solution,
+    };
+    use crate::tui::next_actions::{Category, EntityType, NextAction};
+    use std::collections::HashSet;
+
+    // --- Helper functions ---
+
+    fn make_problem(id: &str, title: &str) -> Problem {
+        Problem::new(id.to_string(), title.to_string())
+    }
+
+    fn make_problem_in_milestone(id: &str, title: &str, milestone_id: &str) -> Problem {
+        let mut p = Problem::new(id.to_string(), title.to_string());
+        p.milestone_id = Some(milestone_id.to_string());
+        p
+    }
+
+    fn make_solution(id: &str, title: &str, problem_id: &str) -> Solution {
+        Solution::new(id.to_string(), title.to_string(), problem_id.to_string())
+    }
+
+    fn make_critique(id: &str, title: &str, solution_id: &str) -> Critique {
+        Critique::new(id.to_string(), title.to_string(), solution_id.to_string())
+    }
+
+    fn make_milestone(id: &str, title: &str) -> Milestone {
+        Milestone::new(id.to_string(), title.to_string())
+    }
+
+    fn make_next_action(entity_id: &str, category: Category) -> NextAction {
+        NextAction {
+            category,
+            entity_type: EntityType::Solution,
+            entity_id: entity_id.to_string(),
+            title: "Test action".to_string(),
+            summary: "Test summary".to_string(),
+            priority: Priority::Medium,
+            details: vec![],
+        }
+    }
+
+    fn expanded_set(ids: &[&str]) -> HashSet<String> {
+        ids.iter().map(|s| s.to_string()).collect()
+    }
+
+    // --- build_flat_tree tests ---
+
+    #[test]
+    fn test_build_flat_tree_empty_inputs() {
+        let tree = build_flat_tree(&[], &[], &[], &[], &HashSet::new());
+        // Should contain exactly one item: the Backlog node
+        assert_eq!(tree.len(), 1);
+        assert_eq!(tree[0].node.id(), "backlog");
+        assert!(!tree[0].has_children);
+    }
+
+    #[test]
+    fn test_build_flat_tree_single_milestone_with_problems() {
+        let milestones = vec![make_milestone("M-1", "v1.0 Release")];
+        let problems = vec![
+            make_problem_in_milestone("P-1", "Auth bug", "M-1"),
+            make_problem_in_milestone("P-2", "Performance issue", "M-1"),
+        ];
+        let expanded = expanded_set(&["M-1"]);
+
+        let tree = build_flat_tree(&milestones, &problems, &[], &[], &expanded);
+
+        // Milestone + 2 problems + Backlog = 4 items
+        assert_eq!(tree.len(), 4);
+
+        // First item: milestone
+        assert_eq!(tree[0].node.id(), "M-1");
+        assert_eq!(tree[0].depth, 0);
+        assert!(tree[0].has_children);
+        assert!(tree[0].node.is_expanded());
+
+        // Second and third: problems under milestone
+        assert_eq!(tree[1].node.id(), "P-1");
+        assert_eq!(tree[1].depth, 1);
+        assert_eq!(tree[2].node.id(), "P-2");
+        assert_eq!(tree[2].depth, 1);
+
+        // Last: backlog
+        assert_eq!(tree[3].node.id(), "backlog");
+        assert!(!tree[3].has_children);
+    }
+
+    #[test]
+    fn test_build_flat_tree_backlog_problems() {
+        // Problems without a milestone go into backlog
+        let problems = vec![
+            make_problem("P-1", "Backlog issue 1"),
+            make_problem("P-2", "Backlog issue 2"),
+        ];
+        let expanded = expanded_set(&["backlog"]);
+
+        let tree = build_flat_tree(&[], &problems, &[], &[], &expanded);
+
+        // Backlog + 2 problems = 3 items
+        assert_eq!(tree.len(), 3);
+        assert_eq!(tree[0].node.id(), "backlog");
+        assert!(tree[0].has_children);
+        assert!(tree[0].node.is_expanded());
+        assert_eq!(tree[1].node.id(), "P-1");
+        assert_eq!(tree[1].depth, 1);
+        assert_eq!(tree[2].node.id(), "P-2");
+        assert_eq!(tree[2].depth, 1);
+    }
+
+    #[test]
+    fn test_build_flat_tree_collapsed_milestone_hides_children() {
+        let milestones = vec![make_milestone("M-1", "v1.0")];
+        let problems = vec![make_problem_in_milestone("P-1", "Bug", "M-1")];
+        // M-1 is NOT in expanded set
+        let expanded = HashSet::new();
+
+        let tree = build_flat_tree(&milestones, &problems, &[], &[], &expanded);
+
+        // Milestone + Backlog = 2 items (problem is hidden because milestone collapsed)
+        assert_eq!(tree.len(), 2);
+        assert_eq!(tree[0].node.id(), "M-1");
+        assert!(tree[0].has_children);
+        assert!(!tree[0].node.is_expanded());
+        assert_eq!(tree[1].node.id(), "backlog");
+    }
+
+    #[test]
+    fn test_build_flat_tree_collapsed_backlog_hides_children() {
+        let problems = vec![make_problem("P-1", "Bug")];
+        // backlog is NOT in expanded set
+        let expanded = HashSet::new();
+
+        let tree = build_flat_tree(&[], &problems, &[], &[], &expanded);
+
+        // Only backlog node, problem is hidden
+        assert_eq!(tree.len(), 1);
+        assert_eq!(tree[0].node.id(), "backlog");
+        assert!(tree[0].has_children);
+        assert!(!tree[0].node.is_expanded());
+    }
+
+    #[test]
+    fn test_build_flat_tree_expanded_problem_shows_solutions() {
+        let problems = vec![make_problem("P-1", "Bug")];
+        let solutions = vec![
+            make_solution("S-1", "Fix A", "P-1"),
+            make_solution("S-2", "Fix B", "P-1"),
+        ];
+        let expanded = expanded_set(&["backlog", "P-1"]);
+
+        let tree = build_flat_tree(&[], &problems, &solutions, &[], &expanded);
+
+        // Backlog + Problem + 2 Solutions = 4 items
+        assert_eq!(tree.len(), 4);
+        assert_eq!(tree[0].node.id(), "backlog");
+        assert_eq!(tree[1].node.id(), "P-1");
+        assert!(tree[1].node.is_expanded());
+        assert_eq!(tree[2].node.id(), "S-1");
+        assert_eq!(tree[2].depth, 2);
+        assert_eq!(tree[3].node.id(), "S-2");
+        assert_eq!(tree[3].depth, 2);
+    }
+
+    #[test]
+    fn test_build_flat_tree_collapsed_problem_hides_solutions() {
+        let problems = vec![make_problem("P-1", "Bug")];
+        let solutions = vec![make_solution("S-1", "Fix A", "P-1")];
+        // Backlog expanded but problem is not
+        let expanded = expanded_set(&["backlog"]);
+
+        let tree = build_flat_tree(&[], &problems, &solutions, &[], &expanded);
+
+        // Backlog + Problem = 2 items (solution hidden)
+        assert_eq!(tree.len(), 2);
+        assert_eq!(tree[0].node.id(), "backlog");
+        assert_eq!(tree[1].node.id(), "P-1");
+        assert!(tree[1].has_children);
+        assert!(!tree[1].node.is_expanded());
+    }
+
+    #[test]
+    fn test_build_flat_tree_expanded_solution_shows_critiques() {
+        let problems = vec![make_problem("P-1", "Bug")];
+        let solutions = vec![make_solution("S-1", "Fix", "P-1")];
+        let critiques = vec![
+            make_critique("C-1", "Flaw 1", "S-1"),
+            make_critique("C-2", "Flaw 2", "S-1"),
+        ];
+        let expanded = expanded_set(&["backlog", "P-1", "S-1"]);
+
+        let tree = build_flat_tree(&[], &problems, &solutions, &critiques, &expanded);
+
+        // Backlog + Problem + Solution + 2 Critiques = 5 items
+        assert_eq!(tree.len(), 5);
+        assert_eq!(tree[3].node.id(), "C-1");
+        assert_eq!(tree[3].depth, 3);
+        assert!(!tree[3].has_children);
+        assert_eq!(tree[4].node.id(), "C-2");
+        assert_eq!(tree[4].depth, 3);
+    }
+
+    #[test]
+    fn test_build_flat_tree_full_hierarchy_depths() {
+        let milestones = vec![make_milestone("M-1", "v1.0")];
+        let problems = vec![make_problem_in_milestone("P-1", "Bug", "M-1")];
+        let solutions = vec![make_solution("S-1", "Fix", "P-1")];
+        let critiques = vec![make_critique("C-1", "Flaw", "S-1")];
+        let expanded = expanded_set(&["M-1", "P-1", "S-1"]);
+
+        let tree = build_flat_tree(&milestones, &problems, &solutions, &critiques, &expanded);
+
+        // M-1 (depth 0) -> P-1 (depth 1) -> S-1 (depth 2) -> C-1 (depth 3) + Backlog (depth 0)
+        assert_eq!(tree.len(), 5);
+        assert_eq!(tree[0].depth, 0); // M-1
+        assert_eq!(tree[1].depth, 1); // P-1
+        assert_eq!(tree[2].depth, 2); // S-1
+        assert_eq!(tree[3].depth, 3); // C-1
+        assert_eq!(tree[4].depth, 0); // backlog
+    }
+
+    #[test]
+    fn test_build_flat_tree_mixed_milestone_and_backlog() {
+        let milestones = vec![make_milestone("M-1", "v1.0")];
+        let problems = vec![
+            make_problem_in_milestone("P-1", "Milestone bug", "M-1"),
+            make_problem("P-2", "Backlog bug"),
+        ];
+        let expanded = expanded_set(&["M-1", "backlog"]);
+
+        let tree = build_flat_tree(&milestones, &problems, &[], &[], &expanded);
+
+        // M-1 + P-1 + Backlog + P-2 = 4
+        assert_eq!(tree.len(), 4);
+        assert_eq!(tree[0].node.id(), "M-1");
+        assert_eq!(tree[1].node.id(), "P-1");
+        assert_eq!(tree[2].node.id(), "backlog");
+        assert_eq!(tree[3].node.id(), "P-2");
+    }
+
+    // --- annotate_tree_with_actions tests ---
+
+    #[test]
+    fn test_annotate_tree_no_actions() {
+        let problems = vec![make_problem("P-1", "Bug")];
+        let expanded = expanded_set(&["backlog"]);
+        let mut tree = build_flat_tree(&[], &problems, &[], &[], &expanded);
+
+        annotate_tree_with_actions(&mut tree, &[]);
+
+        // No symbols assigned
+        for item in &tree {
+            assert!(item.action_symbol.is_none());
+        }
+    }
+
+    #[test]
+    fn test_annotate_tree_blocked_symbol() {
+        let problems = vec![make_problem("P-1", "Bug")];
+        let solutions = vec![make_solution("S-1", "Fix", "P-1")];
+        let expanded = expanded_set(&["backlog", "P-1"]);
+        let mut tree = build_flat_tree(&[], &problems, &solutions, &[], &expanded);
+
+        let actions = vec![make_next_action("S-1", Category::Blocked)];
+        annotate_tree_with_actions(&mut tree, &actions);
+
+        let s1_item = tree.iter().find(|i| i.node.id() == "S-1").unwrap();
+        assert_eq!(s1_item.action_symbol, Some("X".to_string()));
+    }
+
+    #[test]
+    fn test_annotate_tree_ready_symbol() {
+        let problems = vec![make_problem("P-1", "Bug")];
+        let solutions = vec![make_solution("S-1", "Fix", "P-1")];
+        let expanded = expanded_set(&["backlog", "P-1"]);
+        let mut tree = build_flat_tree(&[], &problems, &solutions, &[], &expanded);
+
+        let actions = vec![make_next_action("S-1", Category::Ready)];
+        annotate_tree_with_actions(&mut tree, &actions);
+
+        let s1_item = tree.iter().find(|i| i.node.id() == "S-1").unwrap();
+        assert_eq!(s1_item.action_symbol, Some("!".to_string()));
+    }
+
+    #[test]
+    fn test_annotate_tree_review_symbol() {
+        let problems = vec![make_problem("P-1", "Bug")];
+        let solutions = vec![make_solution("S-1", "Fix", "P-1")];
+        let critiques = vec![make_critique("C-1", "Flaw", "S-1")];
+        let expanded = expanded_set(&["backlog", "P-1", "S-1"]);
+        let mut tree = build_flat_tree(&[], &problems, &solutions, &critiques, &expanded);
+
+        let actions = vec![make_next_action("C-1", Category::Review)];
+        annotate_tree_with_actions(&mut tree, &actions);
+
+        let c1_item = tree.iter().find(|i| i.node.id() == "C-1").unwrap();
+        assert_eq!(c1_item.action_symbol, Some("?".to_string()));
+    }
+
+    #[test]
+    fn test_annotate_tree_todo_symbol() {
+        let problems = vec![make_problem("P-1", "Bug")];
+        let expanded = expanded_set(&["backlog"]);
+        let mut tree = build_flat_tree(&[], &problems, &[], &[], &expanded);
+
+        let actions = vec![make_next_action("P-1", Category::Todo)];
+        annotate_tree_with_actions(&mut tree, &actions);
+
+        let p1_item = tree.iter().find(|i| i.node.id() == "P-1").unwrap();
+        assert_eq!(p1_item.action_symbol, Some("*".to_string()));
+    }
+
+    #[test]
+    fn test_annotate_tree_waiting_symbol() {
+        let problems = vec![make_problem("P-1", "Bug")];
+        let expanded = expanded_set(&["backlog"]);
+        let mut tree = build_flat_tree(&[], &problems, &[], &[], &expanded);
+
+        let actions = vec![make_next_action("P-1", Category::Waiting)];
+        annotate_tree_with_actions(&mut tree, &actions);
+
+        let p1_item = tree.iter().find(|i| i.node.id() == "P-1").unwrap();
+        assert_eq!(p1_item.action_symbol, Some("~".to_string()));
+    }
+
+    #[test]
+    fn test_annotate_tree_multiple_actions() {
+        let problems = vec![
+            make_problem("P-1", "Bug 1"),
+            make_problem("P-2", "Bug 2"),
+        ];
+        let expanded = expanded_set(&["backlog"]);
+        let mut tree = build_flat_tree(&[], &problems, &[], &[], &expanded);
+
+        let actions = vec![
+            make_next_action("P-1", Category::Todo),
+            make_next_action("P-2", Category::Blocked),
+        ];
+        annotate_tree_with_actions(&mut tree, &actions);
+
+        let p1_item = tree.iter().find(|i| i.node.id() == "P-1").unwrap();
+        assert_eq!(p1_item.action_symbol, Some("*".to_string()));
+
+        let p2_item = tree.iter().find(|i| i.node.id() == "P-2").unwrap();
+        assert_eq!(p2_item.action_symbol, Some("X".to_string()));
+    }
+
+    #[test]
+    fn test_annotate_tree_unmatched_nodes_no_symbol() {
+        let problems = vec![
+            make_problem("P-1", "Bug 1"),
+            make_problem("P-2", "Bug 2"),
+        ];
+        let expanded = expanded_set(&["backlog"]);
+        let mut tree = build_flat_tree(&[], &problems, &[], &[], &expanded);
+
+        // Only P-1 has an action
+        let actions = vec![make_next_action("P-1", Category::Todo)];
+        annotate_tree_with_actions(&mut tree, &actions);
+
+        let p2_item = tree.iter().find(|i| i.node.id() == "P-2").unwrap();
+        assert!(p2_item.action_symbol.is_none());
+    }
+
+    // --- filter_tree_to_actions tests ---
+
+    #[test]
+    fn test_filter_tree_empty_when_no_actions() {
+        let problems = vec![make_problem("P-1", "Bug")];
+        let expanded = expanded_set(&["backlog"]);
+        let tree = build_flat_tree(&[], &problems, &[], &[], &expanded);
+
+        // No annotations -> all action_symbol is None
+        let filtered = filter_tree_to_actions(&tree);
+        assert!(filtered.is_empty());
+    }
+
+    #[test]
+    fn test_filter_tree_retains_action_items_and_ancestors() {
+        let milestones = vec![make_milestone("M-1", "v1.0")];
+        let problems = vec![make_problem_in_milestone("P-1", "Bug", "M-1")];
+        let solutions = vec![make_solution("S-1", "Fix", "P-1")];
+        let expanded = expanded_set(&["M-1", "P-1"]);
+        let mut tree = build_flat_tree(&milestones, &problems, &solutions, &[], &expanded);
+
+        // Annotate S-1 as blocked
+        let actions = vec![make_next_action("S-1", Category::Blocked)];
+        annotate_tree_with_actions(&mut tree, &actions);
+
+        let filtered = filter_tree_to_actions(&tree);
+
+        // Should include: M-1 (ancestor), P-1 (ancestor), S-1 (action item)
+        let ids: Vec<&str> = filtered.iter().map(|i| i.node.id()).collect();
+        assert!(ids.contains(&"M-1"), "Milestone ancestor should be retained");
+        assert!(ids.contains(&"P-1"), "Problem ancestor should be retained");
+        assert!(ids.contains(&"S-1"), "Action item should be retained");
+        // Backlog should NOT be included (no action items under it)
+        assert!(!ids.contains(&"backlog"));
+    }
+
+    #[test]
+    fn test_filter_tree_excludes_non_action_branches() {
+        let problems = vec![
+            make_problem("P-1", "Bug with action"),
+            make_problem("P-2", "Bug without action"),
+        ];
+        let expanded = expanded_set(&["backlog"]);
+        let mut tree = build_flat_tree(&[], &problems, &[], &[], &expanded);
+
+        // Only P-1 has an action
+        let actions = vec![make_next_action("P-1", Category::Todo)];
+        annotate_tree_with_actions(&mut tree, &actions);
+
+        let filtered = filter_tree_to_actions(&tree);
+
+        let ids: Vec<&str> = filtered.iter().map(|i| i.node.id()).collect();
+        assert!(ids.contains(&"P-1"));
+        assert!(ids.contains(&"backlog"), "Backlog is ancestor of P-1");
+        assert!(!ids.contains(&"P-2"), "P-2 has no action and should be excluded");
+    }
+
+    #[test]
+    fn test_filter_tree_multiple_actions_in_different_branches() {
+        let milestones = vec![make_milestone("M-1", "v1.0")];
+        let problems = vec![
+            make_problem_in_milestone("P-1", "Milestone bug", "M-1"),
+            make_problem("P-2", "Backlog bug"),
+        ];
+        let expanded = expanded_set(&["M-1", "backlog"]);
+        let mut tree = build_flat_tree(&milestones, &problems, &[], &[], &expanded);
+
+        let actions = vec![
+            make_next_action("P-1", Category::Blocked),
+            make_next_action("P-2", Category::Todo),
+        ];
+        annotate_tree_with_actions(&mut tree, &actions);
+
+        let filtered = filter_tree_to_actions(&tree);
+
+        let ids: Vec<&str> = filtered.iter().map(|i| i.node.id()).collect();
+        assert!(ids.contains(&"M-1"));
+        assert!(ids.contains(&"P-1"));
+        assert!(ids.contains(&"backlog"));
+        assert!(ids.contains(&"P-2"));
+    }
+
+    #[test]
+    fn test_filter_tree_preserves_depth() {
+        let milestones = vec![make_milestone("M-1", "v1.0")];
+        let problems = vec![make_problem_in_milestone("P-1", "Bug", "M-1")];
+        let expanded = expanded_set(&["M-1"]);
+        let mut tree = build_flat_tree(&milestones, &problems, &[], &[], &expanded);
+
+        let actions = vec![make_next_action("P-1", Category::Todo)];
+        annotate_tree_with_actions(&mut tree, &actions);
+
+        let filtered = filter_tree_to_actions(&tree);
+
+        let m1 = filtered.iter().find(|i| i.node.id() == "M-1").unwrap();
+        assert_eq!(m1.depth, 0);
+
+        let p1 = filtered.iter().find(|i| i.node.id() == "P-1").unwrap();
+        assert_eq!(p1.depth, 1);
+    }
+
+    #[test]
+    fn test_filter_tree_deep_action_includes_all_ancestors() {
+        let milestones = vec![make_milestone("M-1", "v1.0")];
+        let problems = vec![make_problem_in_milestone("P-1", "Bug", "M-1")];
+        let solutions = vec![make_solution("S-1", "Fix", "P-1")];
+        let critiques = vec![make_critique("C-1", "Flaw", "S-1")];
+        let expanded = expanded_set(&["M-1", "P-1", "S-1"]);
+        let mut tree = build_flat_tree(&milestones, &problems, &solutions, &critiques, &expanded);
+
+        // Action on the deepest node (critique)
+        let actions = vec![make_next_action("C-1", Category::Review)];
+        annotate_tree_with_actions(&mut tree, &actions);
+
+        let filtered = filter_tree_to_actions(&tree);
+
+        let ids: Vec<&str> = filtered.iter().map(|i| i.node.id()).collect();
+        assert_eq!(ids.len(), 4);
+        assert_eq!(ids[0], "M-1");
+        assert_eq!(ids[1], "P-1");
+        assert_eq!(ids[2], "S-1");
+        assert_eq!(ids[3], "C-1");
+    }
+
+    #[test]
+    fn test_filter_tree_on_empty_tree() {
+        let tree: Vec<FlatTreeItem> = vec![];
+        let filtered = filter_tree_to_actions(&tree);
+        assert!(filtered.is_empty());
+    }
+
+    // --- TreeNode method tests ---
+
+    #[test]
+    fn test_tree_node_critique_cannot_expand() {
+        let node = TreeNode::Critique {
+            id: "C-1".to_string(),
+            title: "Flaw".to_string(),
+            status: CritiqueStatus::Open,
+            severity: "medium".to_string(),
+        };
+        assert!(!node.can_expand());
+        assert!(!node.is_expanded());
+    }
+
+    #[test]
+    fn test_tree_node_set_expanded() {
+        let mut node = TreeNode::Problem {
+            id: "P-1".to_string(),
+            title: "Bug".to_string(),
+            status: ProblemStatus::Open,
+            priority: Priority::Medium,
+            expanded: false,
+        };
+        assert!(!node.is_expanded());
+        node.set_expanded(true);
+        assert!(node.is_expanded());
+        node.set_expanded(false);
+        assert!(!node.is_expanded());
+    }
+
+    #[test]
+    fn test_tree_node_critique_set_expanded_noop() {
+        let mut node = TreeNode::Critique {
+            id: "C-1".to_string(),
+            title: "Flaw".to_string(),
+            status: CritiqueStatus::Open,
+            severity: "medium".to_string(),
+        };
+        node.set_expanded(true);
+        assert!(!node.is_expanded()); // Still false, critiques don't expand
+    }
+}

@@ -58,7 +58,8 @@ pub trait SyncProvider {
 
     /// List remote issues not yet linked to local problems.
     /// `existing` contains (problem_id, github_issue_number) pairs.
-    fn list_unlinked_issues(&self, existing: &[(String, u64)]) -> Result<Vec<(u64, String)>>;
+    /// `label` optionally filters to issues with a specific label.
+    fn list_unlinked_issues(&self, existing: &[(String, u64)], label: Option<&str>) -> Result<Vec<(u64, String)>>;
 
     // -- Push (jjj -> remote) --
 
@@ -124,4 +125,89 @@ pub fn review_to_critique(review: &ReviewInfo, solution_id: &str, critique_id: S
     }
 
     critique
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::*;
+
+    fn make_review(state: ReviewState, author: &str, body: &str) -> ReviewInfo {
+        ReviewInfo {
+            id: 5001,
+            author: author.to_string(),
+            state,
+            body: body.to_string(),
+        }
+    }
+
+    #[test]
+    fn test_review_to_critique_changes_requested() {
+        let review = make_review(
+            ReviewState::ChangesRequested,
+            "alice",
+            "The error handling needs improvement.",
+        );
+
+        let critique = review_to_critique(&review, "S-10", "C-100".to_string());
+
+        assert_eq!(critique.id, "C-100");
+        assert_eq!(critique.solution_id, "S-10");
+        assert_eq!(critique.title, "GitHub review from alice");
+        assert_eq!(critique.author, Some("alice".to_string()));
+        assert_eq!(critique.argument, "The error handling needs improvement.");
+        assert_eq!(critique.github_review_id, Some(5001));
+        assert_eq!(critique.severity, CritiqueSeverity::High);
+        assert_eq!(critique.status, CritiqueStatus::Open);
+    }
+
+    #[test]
+    fn test_review_to_critique_commented() {
+        let review = make_review(
+            ReviewState::Commented,
+            "bob",
+            "Consider using a match statement here.",
+        );
+
+        let critique = review_to_critique(&review, "S-20", "C-200".to_string());
+
+        assert_eq!(critique.severity, CritiqueSeverity::Medium);
+        assert_eq!(critique.author, Some("bob".to_string()));
+        assert_eq!(critique.argument, "Consider using a match statement here.");
+    }
+
+    #[test]
+    fn test_review_to_critique_approved_default_severity() {
+        let review = make_review(ReviewState::Approved, "carol", "Looks good to me!");
+
+        let critique = review_to_critique(&review, "S-30", "C-300".to_string());
+
+        // Approved does not match ChangesRequested or Commented branches,
+        // so severity stays at the Critique::new default (Medium).
+        assert_eq!(critique.severity, CritiqueSeverity::Medium);
+        assert_eq!(critique.author, Some("carol".to_string()));
+        assert_eq!(critique.argument, "Looks good to me!");
+        assert_eq!(critique.github_review_id, Some(5001));
+    }
+
+    #[test]
+    fn test_review_to_critique_dismissed_default_severity() {
+        let review = make_review(ReviewState::Dismissed, "dave", "Dismissed review.");
+
+        let critique = review_to_critique(&review, "S-40", "C-400".to_string());
+
+        // Dismissed also falls through to default severity
+        assert_eq!(critique.severity, CritiqueSeverity::Medium);
+        assert_eq!(critique.title, "GitHub review from dave");
+    }
+
+    #[test]
+    fn test_review_to_critique_empty_body() {
+        let review = make_review(ReviewState::ChangesRequested, "eve", "");
+
+        let critique = review_to_critique(&review, "S-50", "C-500".to_string());
+
+        assert_eq!(critique.argument, "");
+        assert_eq!(critique.severity, CritiqueSeverity::High);
+    }
 }

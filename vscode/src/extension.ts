@@ -20,16 +20,37 @@ export function activate(context: vscode.ExtensionContext) {
   });
   context.subscriptions.push(treeView, projectTree);
 
-  // Set initial context for filter icon
-  vscode.commands.executeCommand("setContext", "jjj.filterMode", "open");
+  // --- Filter State ---
+  // Restore persisted filter mode (default: "open" for new workspaces)
+  const config = vscode.workspace.getConfiguration("jjj");
+  const savedFilterMode = config.get<"all" | "open">("filterMode", "open");
+  projectTree.setFilterMode(savedFilterMode);
 
-  // Filter toggle command
+  function applyFilterMode(mode: "all" | "open"): void {
+    treeView.title = mode === "open" ? "Project (Open)" : "Project";
+    vscode.commands.executeCommand("setContext", "jjj.filterMode", mode);
+    config.update("filterMode", mode, vscode.ConfigurationTarget.Workspace);
+  }
+
+  applyFilterMode(savedFilterMode);
+
+  // Toggle filter command (keyboard shortcut: Cmd+Shift+O)
   context.subscriptions.push(
     vscode.commands.registerCommand("jjj.toggleTreeFilter", () => {
       projectTree.toggleFilter();
-      const mode = projectTree.filterMode;
-      treeView.title = mode === "open" ? "Project (Open)" : "Project";
-      vscode.commands.executeCommand("setContext", "jjj.filterMode", mode);
+      applyFilterMode(projectTree.filterMode);
+    }),
+  );
+
+  // Icon-specific commands for view/title buttons (swap icons based on current mode)
+  context.subscriptions.push(
+    vscode.commands.registerCommand("jjj.showOpenOnly", () => {
+      projectTree.setFilterMode("open");
+      applyFilterMode("open");
+    }),
+    vscode.commands.registerCommand("jjj.showAll", () => {
+      projectTree.setFilterMode("all");
+      applyFilterMode("all");
     }),
   );
 
@@ -48,9 +69,6 @@ export function activate(context: vscode.ExtensionContext) {
       }
     }),
   );
-
-  // Set initial title
-  treeView.title = "Project (Open)";
 
   // --- Virtual Documents ---
   const docProvider = new EntityDocumentProvider(cache);

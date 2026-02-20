@@ -70,8 +70,8 @@ impl SyncProvider for GitHubProvider {
         mapping::issue_to_problem(&json, number)
     }
 
-    fn list_unlinked_issues(&self, existing: &[(String, u64)]) -> Result<Vec<(u64, String)>> {
-        let issues = self.client.list_issues(None, "open")?;
+    fn list_unlinked_issues(&self, existing: &[(String, u64)], label: Option<&str>) -> Result<Vec<(u64, String)>> {
+        let issues = self.client.list_issues(label, "open")?;
         let linked_numbers: std::collections::HashSet<u64> =
             existing.iter().map(|(_, n)| *n).collect();
 

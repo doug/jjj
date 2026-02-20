@@ -77,6 +77,27 @@ fn new_problem(
             ));
         }
 
+        // Check for similar problems via FTS text search (best-effort, skip on error)
+        let repo_root = ctx.jj().repo_root().to_path_buf();
+        let db_path = repo_root.join(".jj").join("jjj.db");
+        if db_path.exists() {
+            if let Ok(db) = Database::open(&db_path) {
+                if let Ok(results) = search::search(db.conn(), &title, Some("problem")) {
+                    if !results.is_empty() {
+                        eprintln!("Warning: similar problems already exist:");
+                        for r in &results {
+                            let short_id = &r.entity_id[..6.min(r.entity_id.len())];
+                            eprintln!("  p/{} — \"{}\"", short_id, r.title);
+                        }
+                        eprintln!("\nUse --force to create anyway.");
+                        return Err(crate::error::JjjError::Other(
+                            "Similar entities exist. Use --force to override.".to_string(),
+                        ));
+                    }
+                }
+            }
+        }
+
         // Also check semantic duplicates via embeddings (if available)
         if let Some(similar) = check_for_duplicates(ctx, &title)? {
             if !prompt_create_anyway(&similar)? {

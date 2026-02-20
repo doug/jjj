@@ -23,6 +23,12 @@
           "type": "string",
           "default": "jjj",
           "description": "Path to the jjj executable"
+        },
+        "jjj.filterMode": {
+          "type": "string",
+          "enum": ["all", "open"],
+          "default": "open",
+          "description": "Tree view filter mode: 'all' shows everything, 'open' hides completed items"
         }
       }
     },
@@ -44,7 +50,9 @@
       { "command": "jjj.resumeSolution", "title": "JJJ: Resume Solution" },
       { "command": "jjj.switchToChange", "title": "JJJ: Switch to Change", "icon": "$(git-branch)" },
       { "command": "jjj.openEntity", "title": "JJJ: Open Entity" },
-      { "command": "jjj.toggleTreeFilter", "title": "JJJ: Toggle Filter", "icon": "$(filter)" },
+      { "command": "jjj.showOpenOnly", "title": "JJJ: Show Open Only", "icon": "$(filter)" },
+      { "command": "jjj.showAll", "title": "JJJ: Show All", "icon": "$(filter-filled)" },
+      { "command": "jjj.toggleTreeFilter", "title": "JJJ: Toggle Filter" },
       { "command": "jjj.nextOpenItem", "title": "JJJ: Next Open Item" },
       { "command": "jjj.prevOpenItem", "title": "JJJ: Previous Open Item" },
       { "command": "jjj.syncGithub", "title": "JJJ: Sync GitHub", "icon": "$(cloud-download)" },
@@ -67,7 +75,8 @@
     },
     "menus": {
       "view/title": [
-        { "command": "jjj.toggleTreeFilter", "when": "view == jjj-project-tree", "group": "navigation@1" },
+        { "command": "jjj.showOpenOnly", "when": "view == jjj-project-tree && jjj.filterMode == all", "group": "navigation@1" },
+        { "command": "jjj.showAll", "when": "view == jjj-project-tree && jjj.filterMode == open", "group": "navigation@1" },
         { "command": "jjj.refreshAll", "when": "view == jjj-project-tree", "group": "navigation@2" },
         { "command": "jjj.newProblem", "when": "view == jjj-project-tree", "group": "navigation@3" },
         { "command": "jjj.newMilestone", "when": "view == jjj-project-tree", "group": "navigation@4" }

@@ -165,3 +165,450 @@ pub fn parse_pr_state(state: &str) -> crate::sync::PrStatus {
         _ => crate::sync::PrStatus::Closed,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::*;
+    use crate::sync::{IssueStatus, PrStatus, ReviewState};
+    use serde_json::json;
+
+    // ── issue_to_problem ──────────────────────────────────────────────
+
+    #[test]
+    fn test_issue_to_problem_basic() {
+        let issue = json!({
+            "title": "Login fails when session expires",
+            "body": "Users are logged out unexpectedly after 30 minutes.",
+            "number": 42,
+            "labels": [
+                { "name": "bug" },
+                { "name": "auth" }
+            ],
+            "author": {
+                "login": "octocat"
+            }
+        });
+
+        let problem = issue_to_problem(&issue, 42).unwrap();
+
+        assert_eq!(problem.title, "Login fails when session expires");
+        assert_eq!(
+            problem.description,
+            "Users are logged out unexpectedly after 30 minutes."
+        );
+        assert_eq!(problem.github_issue, Some(42));
+        assert!(problem.context.contains("#42"));
+        assert!(problem.context.contains("@octocat"));
+        // No priority label, so default Medium
+        assert_eq!(problem.priority, Priority::Medium);
+        assert_eq!(problem.status, ProblemStatus::Open);
+    }
+
+    #[test]
+    fn test_issue_to_problem_priority_p0_critical() {
+        let issue = json!({
+            "title": "Data loss on save",
+            "body": "",
+            "labels": [{ "name": "p0" }],
+            "author": { "login": "alice" }
+        });
+        let p = issue_to_problem(&issue, 1).unwrap();
+        assert_eq!(p.priority, Priority::Critical);
+
+        let issue2 = json!({
+            "title": "Data loss on save",
+            "body": "",
+            "labels": [{ "name": "critical" }],
+            "author": { "login": "alice" }
+        });
+        let p2 = issue_to_problem(&issue2, 2).unwrap();
+        assert_eq!(p2.priority, Priority::Critical);
+    }
+
+    #[test]
+    fn test_issue_to_problem_priority_p1_high() {
+        for label in &["p1", "high", "priority: high"] {
+            let issue = json!({
+                "title": "Slow query",
+                "body": "",
+                "labels": [{ "name": *label }],
+                "author": { "login": "bob" }
+            });
+            let p = issue_to_problem(&issue, 10).unwrap();
+            assert_eq!(
+                p.priority,
+                Priority::High,
+                "label '{}' should map to High",
+                label
+            );
+        }
+    }
+
+    #[test]
+    fn test_issue_to_problem_priority_p2_medium() {
+        for label in &["p2", "medium", "priority: medium"] {
+            let issue = json!({
+                "title": "UI glitch",
+                "body": "",
+                "labels": [{ "name": *label }],
+                "author": { "login": "carol" }
+            });
+            let p = issue_to_problem(&issue, 20).unwrap();
+            assert_eq!(
+                p.priority,
+                Priority::Medium,
+                "label '{}' should map to Medium",
+                label
+            );
+        }
+    }
+
+    #[test]
+    fn test_issue_to_problem_priority_p3_low() {
+        for label in &["p3", "low", "priority: low"] {
+            let issue = json!({
+                "title": "Typo in docs",
+                "body": "",
+                "labels": [{ "name": *label }],
+                "author": { "login": "dave" }
+            });
+            let p = issue_to_problem(&issue, 30).unwrap();
+            assert_eq!(
+                p.priority,
+                Priority::Low,
+                "label '{}' should map to Low",
+                label
+            );
+        }
+    }
+
+    #[test]
+    fn test_issue_to_problem_missing_title() {
+        let issue = json!({
+            "body": "No title here",
+            "labels": [],
+            "author": { "login": "eve" }
+        });
+        let result = issue_to_problem(&issue, 99);
+        assert!(result.is_err());
+        let err_msg = format!("{}", result.unwrap_err());
+        assert!(
+            err_msg.contains("missing title"),
+            "Error should mention missing title, got: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn test_issue_to_problem_null_body() {
+        let issue = json!({
+            "title": "Issue with null body",
+            "body": null,
+            "labels": [],
+            "author": { "login": "frank" }
+        });
+        let p = issue_to_problem(&issue, 5).unwrap();
+        assert_eq!(p.description, "");
+    }
+
+    #[test]
+    fn test_issue_to_problem_no_author() {
+        let issue = json!({
+            "title": "Anonymous issue",
+            "body": "some body",
+            "labels": []
+        });
+        let p = issue_to_problem(&issue, 7).unwrap();
+        // Without an author, context should not mention @
+        assert!(!p.context.contains("@"));
+    }
+
+    // ── problem_to_issue_body ─────────────────────────────────────────
+
+    #[test]
+    fn test_problem_to_issue_body_with_description_and_context() {
+        let mut problem = Problem::new("P-100".to_string(), "Auth tokens expire".to_string());
+        problem.description = "Tokens expire after 15 min causing UX friction.".to_string();
+        problem.context = "Reported by enterprise customers on SSO plan.".to_string();
+        problem.priority = Priority::High;
+
+        let body = problem_to_issue_body(&problem);
+
+        assert!(body.contains("Tokens expire after 15 min causing UX friction."));
+        assert!(body.contains("## Context"));
+        assert!(body.contains("Reported by enterprise customers on SSO plan."));
+        assert!(body.contains("P1/high"));
+        assert!(body.contains("open"));
+        assert!(body.contains("Synced from jjj"));
+    }
+
+    #[test]
+    fn test_problem_to_issue_body_empty_description() {
+        let problem = Problem::new("P-200".to_string(), "Bare problem".to_string());
+        let body = problem_to_issue_body(&problem);
+
+        // Should NOT have description section but should have footer
+        assert!(!body.starts_with("\n\n"));
+        assert!(body.contains("Synced from jjj"));
+        assert!(body.contains("P2/medium"));
+    }
+
+    #[test]
+    fn test_problem_to_issue_body_empty_context() {
+        let mut problem = Problem::new("P-300".to_string(), "No context".to_string());
+        problem.description = "Has a description.".to_string();
+
+        let body = problem_to_issue_body(&problem);
+
+        assert!(body.contains("Has a description."));
+        assert!(!body.contains("## Context"));
+    }
+
+    // ── format_pr_body ────────────────────────────────────────────────
+
+    #[test]
+    fn test_format_pr_body_with_critiques() {
+        let mut problem = Problem::new("P-1".to_string(), "Slow database queries".to_string());
+        problem.github_issue = Some(42);
+
+        let mut solution = Solution::new(
+            "S-1".to_string(),
+            "Add query caching".to_string(),
+            "P-1".to_string(),
+        );
+        solution.approach = "Use Redis as a read-through cache.".to_string();
+        solution.tradeoffs = "Adds operational complexity of running Redis.".to_string();
+
+        let critique = Critique::new(
+            "C-1".to_string(),
+            "Cache invalidation is error-prone".to_string(),
+            "S-1".to_string(),
+        );
+
+        let body = format_pr_body(&solution, &problem, &[critique]);
+
+        assert!(body.contains("Resolves problem: **Slow database queries**"));
+        assert!(body.contains("Closes #42"));
+        assert!(body.contains("## Approach"));
+        assert!(body.contains("Use Redis as a read-through cache."));
+        assert!(body.contains("## Trade-offs"));
+        assert!(body.contains("Adds operational complexity of running Redis."));
+        assert!(body.contains("## Open Critiques"));
+        assert!(body.contains("Cache invalidation is error-prone"));
+        assert!(body.contains("Synced from jjj"));
+    }
+
+    #[test]
+    fn test_format_pr_body_no_critiques() {
+        let problem = Problem::new("P-2".to_string(), "UI is too slow".to_string());
+
+        let mut solution = Solution::new(
+            "S-2".to_string(),
+            "Virtual scrolling".to_string(),
+            "P-2".to_string(),
+        );
+        solution.approach = "Implement virtual list rendering.".to_string();
+
+        let body = format_pr_body(&solution, &problem, &[]);
+
+        assert!(body.contains("Resolves problem: **UI is too slow**"));
+        assert!(!body.contains("Closes #")); // no github_issue
+        assert!(body.contains("## Approach"));
+        assert!(!body.contains("## Open Critiques"));
+    }
+
+    #[test]
+    fn test_format_pr_body_resolved_critiques_excluded() {
+        let problem = Problem::new("P-3".to_string(), "Memory leak".to_string());
+        let solution = Solution::new(
+            "S-3".to_string(),
+            "Fix allocator".to_string(),
+            "P-3".to_string(),
+        );
+
+        let mut addressed = Critique::new(
+            "C-2".to_string(),
+            "Already addressed".to_string(),
+            "S-3".to_string(),
+        );
+        addressed.address();
+
+        let mut dismissed = Critique::new(
+            "C-3".to_string(),
+            "Not relevant".to_string(),
+            "S-3".to_string(),
+        );
+        dismissed.dismiss();
+
+        let body = format_pr_body(&solution, &problem, &[addressed, dismissed]);
+
+        // Neither addressed nor dismissed critiques should appear
+        assert!(!body.contains("## Open Critiques"));
+        assert!(!body.contains("Already addressed"));
+        assert!(!body.contains("Not relevant"));
+    }
+
+    // ── parse_reviews ─────────────────────────────────────────────────
+
+    #[test]
+    fn test_parse_reviews_mixed_states() {
+        let reviews = json!([
+            {
+                "id": 1001,
+                "author": { "login": "alice" },
+                "state": "APPROVED",
+                "body": "LGTM!"
+            },
+            {
+                "id": 1002,
+                "author": { "login": "bob" },
+                "state": "CHANGES_REQUESTED",
+                "body": "Please fix the error handling."
+            },
+            {
+                "id": 1003,
+                "author": { "login": "carol" },
+                "state": "COMMENTED",
+                "body": "Interesting approach."
+            },
+            {
+                "id": 1004,
+                "author": { "login": "dave" },
+                "state": "DISMISSED",
+                "body": "Superseded by new review."
+            }
+        ]);
+
+        let parsed = parse_reviews(&reviews);
+
+        assert_eq!(parsed.len(), 4);
+
+        assert_eq!(parsed[0].id, 1001);
+        assert_eq!(parsed[0].author, "alice");
+        assert_eq!(parsed[0].state, ReviewState::Approved);
+        assert_eq!(parsed[0].body, "LGTM!");
+
+        assert_eq!(parsed[1].id, 1002);
+        assert_eq!(parsed[1].author, "bob");
+        assert_eq!(parsed[1].state, ReviewState::ChangesRequested);
+        assert_eq!(parsed[1].body, "Please fix the error handling.");
+
+        assert_eq!(parsed[2].id, 1003);
+        assert_eq!(parsed[2].author, "carol");
+        assert_eq!(parsed[2].state, ReviewState::Commented);
+
+        assert_eq!(parsed[3].id, 1004);
+        assert_eq!(parsed[3].author, "dave");
+        assert_eq!(parsed[3].state, ReviewState::Dismissed);
+    }
+
+    #[test]
+    fn test_parse_reviews_empty_array() {
+        let reviews = json!([]);
+        let parsed = parse_reviews(&reviews);
+        assert!(parsed.is_empty());
+    }
+
+    #[test]
+    fn test_parse_reviews_non_array_input() {
+        let not_array = json!({ "error": "not found" });
+        let parsed = parse_reviews(&not_array);
+        assert!(parsed.is_empty());
+
+        let null_input = json!(null);
+        let parsed2 = parse_reviews(&null_input);
+        assert!(parsed2.is_empty());
+    }
+
+    #[test]
+    fn test_parse_reviews_unknown_state_defaults_to_commented() {
+        let reviews = json!([
+            {
+                "id": 2001,
+                "author": { "login": "ghost" },
+                "state": "PENDING",
+                "body": ""
+            }
+        ]);
+        let parsed = parse_reviews(&reviews);
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].state, ReviewState::Commented);
+    }
+
+    #[test]
+    fn test_parse_reviews_string_id() {
+        let reviews = json!([
+            {
+                "id": "12345",
+                "author": { "login": "bot" },
+                "state": "APPROVED",
+                "body": "Auto-approved"
+            }
+        ]);
+        let parsed = parse_reviews(&reviews);
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].id, 12345);
+    }
+
+    // ── parse_issue_state ─────────────────────────────────────────────
+
+    #[test]
+    fn test_parse_issue_state_open() {
+        assert_eq!(parse_issue_state("OPEN"), IssueStatus::Open);
+    }
+
+    #[test]
+    fn test_parse_issue_state_closed() {
+        assert_eq!(parse_issue_state("CLOSED"), IssueStatus::Closed);
+    }
+
+    #[test]
+    fn test_parse_issue_state_lowercase() {
+        assert_eq!(parse_issue_state("open"), IssueStatus::Open);
+        assert_eq!(parse_issue_state("closed"), IssueStatus::Closed);
+    }
+
+    #[test]
+    fn test_parse_issue_state_with_whitespace() {
+        assert_eq!(parse_issue_state("  OPEN  "), IssueStatus::Open);
+        assert_eq!(parse_issue_state("  CLOSED\n"), IssueStatus::Closed);
+    }
+
+    #[test]
+    fn test_parse_issue_state_unknown_defaults_to_closed() {
+        assert_eq!(parse_issue_state("INVALID"), IssueStatus::Closed);
+        assert_eq!(parse_issue_state(""), IssueStatus::Closed);
+    }
+
+    // ── parse_pr_state ────────────────────────────────────────────────
+
+    #[test]
+    fn test_parse_pr_state_open() {
+        assert_eq!(parse_pr_state("OPEN"), PrStatus::Open);
+    }
+
+    #[test]
+    fn test_parse_pr_state_merged() {
+        assert_eq!(parse_pr_state("MERGED"), PrStatus::Merged);
+    }
+
+    #[test]
+    fn test_parse_pr_state_closed() {
+        assert_eq!(parse_pr_state("CLOSED"), PrStatus::Closed);
+    }
+
+    #[test]
+    fn test_parse_pr_state_unknown_defaults_to_closed() {
+        assert_eq!(parse_pr_state("DRAFT"), PrStatus::Closed);
+        assert_eq!(parse_pr_state("something_else"), PrStatus::Closed);
+        assert_eq!(parse_pr_state(""), PrStatus::Closed);
+    }
+
+    #[test]
+    fn test_parse_pr_state_case_insensitive() {
+        assert_eq!(parse_pr_state("open"), PrStatus::Open);
+        assert_eq!(parse_pr_state("merged"), PrStatus::Merged);
+        assert_eq!(parse_pr_state("Closed"), PrStatus::Closed);
+    }
+}

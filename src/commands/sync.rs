@@ -182,7 +182,7 @@ fn sync_pull(ctx: &CommandContext, provider: &GitHubProvider, dry_run: bool) -> 
         .filter_map(|p| p.github_issue.map(|n| (p.id.clone(), n)))
         .collect();
 
-    match provider.list_unlinked_issues(&existing) {
+    match provider.list_unlinked_issues(&existing, None) {
         Ok(unlinked) if !unlinked.is_empty() => {
             println!("\nUnlinked GitHub issues:");
             for (number, title) in &unlinked {
@@ -207,18 +207,18 @@ fn sync_import(
     provider: &GitHubProvider,
     issue: Option<String>,
     all: bool,
-    _label: Option<String>,
+    label: Option<String>,
     dry_run: bool,
 ) -> Result<()> {
     if all {
-        // Import all unlinked issues
+        // Import all unlinked issues (optionally filtered by label)
         let problems = ctx.store.list_problems()?;
         let existing: Vec<(String, u64)> = problems
             .iter()
             .filter_map(|p| p.github_issue.map(|n| (p.id.clone(), n)))
             .collect();
 
-        let unlinked = provider.list_unlinked_issues(&existing)?;
+        let unlinked = provider.list_unlinked_issues(&existing, label.as_deref())?;
 
         if unlinked.is_empty() {
             println!("No unlinked GitHub issues found.");

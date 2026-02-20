@@ -31,8 +31,10 @@ class MilestoneNode extends vscode.TreeItem {
 }
 
 class ProblemNode extends vscode.TreeItem {
-  constructor(public readonly problem: Problem) {
-    super(problem.title, vscode.TreeItemCollapsibleState.Collapsed);
+  constructor(public readonly problem: Problem, autoExpand: boolean = false) {
+    super(problem.title, autoExpand
+      ? vscode.TreeItemCollapsibleState.Expanded
+      : vscode.TreeItemCollapsibleState.Collapsed);
     this.contextValue = "problem";
     this.description = `${problem.id} [${problem.status}]${problem.priority !== "medium" ? ` ${problem.priority}` : ""}`;
     this.iconPath = problem.status === "solved"
@@ -55,7 +57,8 @@ class SolutionNode extends vscode.TreeItem {
       : vscode.TreeItemCollapsibleState.None);
     this.contextValue = "solution";
     const critDesc = critiqueCount > 0 ? ` — ${critiqueCount} critiques` : "";
-    this.description = `${solution.id} [${solution.status}]${critDesc}`;
+    const changeDesc = solution.change_ids.length > 0 ? ` [${solution.change_ids.length} changes]` : "";
+    this.description = `${solution.id} [${solution.status}]${critDesc}${changeDesc}`;
     this.iconPath = solution.status === "accepted"
       ? new vscode.ThemeIcon("check", new vscode.ThemeColor("testing.iconPassed"))
       : solution.status === "refuted"
@@ -113,6 +116,13 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode>, v
     this._onDidChangeTreeData.fire(undefined);
   }
 
+  setFilterMode(mode: "all" | "open"): void {
+    if (this._filterMode !== mode) {
+      this._filterMode = mode;
+      this._onDidChangeTreeData.fire(undefined);
+    }
+  }
+
   constructor(private cache: DataCache, private cli: JjjCli) {
     this.cacheSubscription = cache.onDidChange(() => this._onDidChangeTreeData.fire(undefined));
   }
@@ -124,6 +134,17 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode>, v
 
   getTreeItem(element: TreeNode): vscode.TreeItem {
     return element;
+  }
+
+  /** Check if a problem has any open solutions or open critiques beneath it. */
+  private hasOpenChildren(problem: Problem): boolean {
+    const solutions = this.cache.getSolutionsForProblem(problem.id);
+    for (const s of solutions) {
+      if (isOpenSolution(s)) { return true; }
+      const critiques = this.cache.getCritiquesForSolution(s.id);
+      if (critiques.some(isOpenCritique)) { return true; }
+    }
+    return false;
   }
 
   getChildren(element?: TreeNode): TreeNode[] {
@@ -148,8 +169,12 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode>, v
       }
 
       const backlog = this.cache.getBacklogProblems();
-      // Always show backlog (even if empty in open mode)
-      nodes.push(new MilestoneNode(null, backlog.length, 0));
+      const openBacklog = backlog.filter(isOpenProblem);
+
+      // In open mode, hide backlog if no open problems
+      if (!filterOpen || openBacklog.length > 0) {
+        nodes.push(new MilestoneNode(null, backlog.length, 0));
+      }
 
       return nodes;
     }
@@ -163,7 +188,11 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode>, v
         problems = problems.filter(isOpenProblem);
       }
 
-      return problems.map(p => new ProblemNode(p));
+      // In "Open" mode, auto-expand problems that have open children
+      return problems.map(p => {
+        const autoExpand = filterOpen && this.hasOpenChildren(p);
+        return new ProblemNode(p, autoExpand);
+      });
     }
 
     if (element instanceof ProblemNode) {

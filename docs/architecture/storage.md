@@ -178,18 +178,16 @@ id: 01957d3e-a8b2-7def-8c3a-9f4e5d6c7b8a
 title: Search is slow on large datasets
 status: open
 priority: high
-tags:
-  - performance
-  - search
+assignee: alice
+milestone_id: 01959c4d-e5f6-7a7b-8c9d-0e1f2a3b4c5d
+github_issue: 42
 created_at: 2025-11-23T10:00:00Z
 updated_at: 2025-11-23T15:30:00Z
 ---
 
-## Context
-
 Users are reporting slow search results when querying datasets with more than 10,000 records.
 
-## Symptoms
+## Context
 
 - Search takes 5+ seconds
 - Server logs show full table scans
@@ -334,11 +332,28 @@ Each work item is a separate file:
 - More files = slower directory listing
 - Mitigated by using separate directories per type
 
-### Caching Strategy
+### SQLite Runtime Cache
 
-Currently, jjj reloads from disk on every command.
+jjj maintains a local SQLite database at `.jj/jjj.db` as a runtime index/cache. The canonical data remains in the shadow graph (markdown files on the `jjj` bookmark); the SQLite database is derived and can be fully rebuilt at any time via `jjj db rebuild`.
 
-Future optimization: In-memory cache with file watchers.
+The SQLite layer provides:
+
+- **Full-text search (FTS5)**: All entity titles and bodies are indexed for fast `jjj search` queries.
+- **Relational indexes**: Foreign-key relationships (solutions to problems, critiques to solutions, problems to milestones) enable fast lookups without scanning files.
+- **Semantic embeddings**: Optional vector embeddings stored alongside entities for similarity search.
+- **Schema versioning**: The database self-manages its schema version (currently v5) and automatically rebuilds when the schema changes or if an interrupted sync left it in a dirty state.
+
+The database is populated by reading all markdown files and `events.jsonl` from the shadow graph, then inserting them into SQLite tables. This happens automatically when the database is missing or outdated.
+
+### GitHub Sync Fields
+
+Entities include optional fields for bidirectional GitHub synchronization:
+
+- **Problems**: `github_issue` -- linked GitHub issue number
+- **Solutions**: `github_pr` (pull request number), `github_branch` (remote branch name)
+- **Critiques**: `github_review_id` -- linked GitHub review ID
+
+These fields are stored in both the YAML frontmatter (canonical) and the SQLite cache (indexed). The `jjj sync` subsystem uses the `gh` CLI to push and pull state between the shadow graph and GitHub Issues/PRs.
 
 ## Backup and Recovery
 
@@ -422,9 +437,8 @@ Shadow graph:
 ### Planned Improvements
 
 1. **Compression**: Use zstd for large datasets
-2. **Indexing**: SQLite index for fast queries
-3. **Partial clone**: Fetch only recent metadata
-4. **Garbage collection**: Prune old review data
+2. **Partial clone**: Fetch only recent metadata
+3. **Garbage collection**: Prune old review data
 
 ### Compatibility
 
@@ -438,15 +452,17 @@ This means old jjj versions can read newer data (graceful degradation).
 
 ## Summary
 
-jjj's storage layer uses a **shadow graph** to achieve:
+jjj's storage layer uses a **shadow graph** (canonical markdown files on the `jjj` bookmark) plus a **SQLite runtime cache** (`.jj/jjj.db`) to achieve:
 
 - ✅ Clean separation of metadata and code
 - ✅ Atomic operations
 - ✅ Offline-first workflow
 - ✅ Standard git push/pull
 - ✅ Easy backup and recovery
+- ✅ Fast full-text search and relational queries via SQLite
+- ✅ Optional GitHub sync via `github_issue`, `github_pr`, and `github_review_id` fields
 
-This is only possible because of Jujutsu's flexible commit graph and workspace model!
+The SQLite database is always derivable from the shadow graph and can be deleted or rebuilt without data loss. This is only possible because of Jujutsu's flexible commit graph and workspace model!
 
 ## See Also
 

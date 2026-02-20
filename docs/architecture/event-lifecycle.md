@@ -19,9 +19,9 @@ When you run `jjj problem new "Fix bug"`, the CLI parses your intent and creates
 - **Payload**: The data for the action (title, priority, etc.).
 
 ### 2. Event Log Persistence
-The event is serialized into a **Protobuf** format and written to the shadow graph. 
-- Location: `.jj/.jjj/events/` (inside your local Jujutsu metadata).
-- Filename: A unique hash of the event.
+The event is serialized as a **JSON line** and appended to the `events.jsonl` file in the shadow graph.
+- Location: `events.jsonl` in the `jjj` bookmark workspace (checked out at `.jj/jjj-meta/`).
+- Each event is one JSON object per line in the JSONL file.
 
 ### 3. The Shadow Graph
 The shadow graph is a parallel commit graph that stores these events. 
@@ -29,10 +29,10 @@ The shadow graph is a parallel commit graph that stores these events.
 - It is synchronized across machines during `jjj push` and `jjj fetch`.
 
 ### 4. Database Indexing
-For high-performance querying and TUI rendering, `jjj` maintains a local **SQLite** index of the shadow graph.
-- When you run a command, `jjj` checks if the shadow graph has new events.
-- New events are "replayed" into the SQLite database to update the view of the world.
-- If the database is missing or corrupted, it can be entirely rebuilt from the event log via `jjj db rebuild`.
+For high-performance querying, full-text search, and TUI rendering, `jjj` maintains a local **SQLite** runtime cache at `.jj/jjj.db`.
+- When the database is missing or its schema version is outdated, `jjj` loads all markdown entity files and `events.jsonl` from the shadow graph into SQLite.
+- The SQLite layer provides relational indexes, FTS5 full-text search, and optional semantic embeddings.
+- If the database is missing or corrupted, it can be entirely rebuilt from the shadow graph via `jjj db rebuild`.
 
 ## Event Sourcing Benefits
 1. **Auditability**: We have a perfect log of every decision made in the project.

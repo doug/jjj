@@ -78,6 +78,28 @@ fn new_solution(
 
     // If not forcing, check for duplicates
     if !force {
+        // Check for similar solutions via FTS text search (best-effort, skip on error)
+        let repo_root = jj_client.repo_root().to_path_buf();
+        let db_path = repo_root.join(".jj").join("jjj.db");
+        if db_path.exists() {
+            if let Ok(db) = Database::open(&db_path) {
+                if let Ok(results) = search::search(db.conn(), &title, Some("solution")) {
+                    if !results.is_empty() {
+                        eprintln!("Warning: similar solutions already exist:");
+                        for r in &results {
+                            let short_id = &r.entity_id[..6.min(r.entity_id.len())];
+                            eprintln!("  s/{} — \"{}\"", short_id, r.title);
+                        }
+                        eprintln!("\nUse --force to create anyway.");
+                        return Err(crate::error::JjjError::Other(
+                            "Similar entities exist. Use --force to override.".to_string(),
+                        ));
+                    }
+                }
+            }
+        }
+
+        // Also check semantic duplicates via embeddings (if available)
         if let Some(similar) = check_for_similar_solutions(ctx, &title)? {
             if !prompt_create_solution_anyway(&similar)? {
                 println!("Cancelled.");

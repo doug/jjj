@@ -335,7 +335,7 @@ fn build_next_actions(
         }
     }
 
-    // 5. TODO: Open problems with no active solutions
+    // 5. Open problems with no active solutions
     for problem in problems.iter().filter(|p| p.is_open()) {
         let has_active_solution = solutions
             .iter()

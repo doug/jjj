@@ -17,14 +17,14 @@ Unlike GitHub, where metadata is central and code is distributed, `jjj` distribu
 ## How `jjj` Maintains Consistency
 
 ### 1. The Event Log as Source of Truth
-`jjj` does not maintain a mutable "state" that can get corrupted. Instead, it maintains a log of immutable events. 
-- If two developers create an event at the same time, they simply result in two separate files in the `.jj/.jjj/events` directory.
-- `jjj sync` (push/fetch) handles the distribution of these event files using standard file-sync mechanisms, often leveraging Jujutsu’s own metadata handling.
+`jjj` does not maintain a mutable "state" that can get corrupted. Instead, it maintains a log of immutable events.
+- Events are appended to a single `events.jsonl` file in the shadow graph (the `jjj` bookmark workspace at `.jj/jjj-meta/`).
+- If two developers create events concurrently, the JSONL lines are merged when the shadow graph is synced via `jj git push`/`jj git fetch`.
 
 ### 2. Causality and Timestamps
 Events are ordered by their timestamps and parent relationships.
 - If an event "Accepts" a solution, but a concurrent event "Critiques" it, the critique "wins" in the sense that it must be addressed before the solution can be successfully accepted in a final state.
-- The SQLite index is re-indexed from the combined event log to produce a consistent view.
+- The SQLite runtime cache (`.jj/jjj.db`) is rebuilt from the combined event log and markdown files to produce a consistent view. This cache can be regenerated at any time via `jjj db rebuild`.
 
 ### 3. Change ID Mapping
 `jjj` stores the *Jujutsu Change ID*, not the Git Commit ID. 
@@ -34,6 +34,6 @@ Events are ordered by their timestamps and parent relationships.
 
 ### 4. Verified Transitions
 Every state change (proposed $\rightarrow$ testing $\rightarrow$ accepted) is verified at the moment of the request.
-- `jjj solution accept` doesn't just check the local database. 
+- `jjj solution accept` doesn't just check the SQLite cache.
 - It scans the shadow graph for any critiques that might have been fetched recently and have not yet been addressed.
-- The "accepted" state is a logical conclusion of the surviving events, not just a row in a database.
+- The "accepted" state is a logical conclusion of the surviving events, not just a cached row in the SQLite index.

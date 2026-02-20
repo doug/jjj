@@ -427,6 +427,7 @@ fn get_context_actions(app: &App) -> Vec<Line<'static>> {
             lines.push(Line::from("    n       New critique"));
             lines.push(Line::from("    a       Accept"));
             lines.push(Line::from("    r       Refute"));
+            lines.push(Line::from("    g       Go to change"));
             lines.push(Line::from("    e       Edit title"));
             lines.push(Line::from("    E       Edit in $EDITOR"));
         }

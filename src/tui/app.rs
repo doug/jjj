@@ -127,8 +127,6 @@ pub struct App {
     pub data: ProjectData,
     pub ui: UiState,
     pub(crate) cache: RenderCache,
-    #[allow(dead_code)] // Prepared for future cache invalidation
-    dirty: bool,
     store: MetadataStore,
     db: Option<Database>,
     pub editor_request: Option<EditorRequest>,
@@ -177,7 +175,6 @@ impl App {
             data,
             ui,
             cache,
-            dirty: false,
             store,
             db,
             editor_request: None,
@@ -261,6 +258,7 @@ impl App {
             KeyCode::Char('f') => self.toggle_filter(),
             KeyCode::Char('/') => self.start_search(),
             KeyCode::Char('R') => self.toggle_related_panel(),
+            KeyCode::Char('g') => self.goto_change()?,
             KeyCode::Char('E') => self.open_in_editor()?,
             KeyCode::Char('?') => self.toggle_help(),
             _ => {}
@@ -681,6 +679,38 @@ impl App {
         };
     }
 
+    fn goto_change(&mut self) -> Result<()> {
+        use super::tree::TreeNode;
+
+        let solution_id = if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
+            match &item.node {
+                TreeNode::Solution { id, .. } => id.clone(),
+                _ => return Ok(()),
+            }
+        } else {
+            return Ok(());
+        };
+
+        let solution = match self.data.solutions.iter().find(|s| s.id == solution_id) {
+            Some(s) => s,
+            None => {
+                self.show_flash("Solution not found");
+                return Ok(());
+            }
+        };
+
+        if let Some(change_id) = solution.change_ids.last() {
+            match self.store.jj_client.edit(change_id) {
+                Ok(_) => self.show_flash(&format!("Switched to {}", change_id)),
+                Err(e) => self.show_flash(&format!("Error: {}", e)),
+            }
+        } else {
+            self.show_flash("No changes attached");
+        }
+
+        Ok(())
+    }
+
     /// Schedule a debounced load of related items for the currently selected entity
     pub fn load_related_for_selected(&mut self) {
         self.ui.related_selected = 0;
@@ -809,7 +839,10 @@ impl App {
                     format!("{}: [n]ew solution [s]olve [d]issolve [e]dit", id)
                 }
                 TreeNode::Solution { id, .. } => {
-                    format!("{}: [a]ccept [r]efute [n]ew critique [e]dit", id)
+                    format!(
+                        "{}: [a]ccept [r]efute [g]o to change [n]ew critique [e]dit",
+                        id
+                    )
                 }
                 TreeNode::Critique { id, .. } => {
                     format!("{}: [a]ddress [d]ismiss [e]dit", id)
