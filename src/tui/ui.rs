@@ -214,8 +214,9 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
 }
 
 fn draw_detail(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
-    // Decide if we should show the related panel
-    let show_related = app.ui.show_related && !app.ui.related_items.is_empty();
+    // Show related panel when there are results or a load is in-flight
+    let show_related =
+        app.ui.show_related && (!app.ui.related_items.is_empty() || app.ui.related_rx.is_some());
 
     // Split area if showing related panel
     let (detail_area, related_area) = if show_related {
@@ -256,33 +257,47 @@ fn draw_detail(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
 }
 
 fn draw_related_panel(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
-    let items: Vec<ListItem> = app
-        .ui
-        .related_items
-        .iter()
-        .enumerate()
-        .map(|(i, r)| {
-            let style = if i == app.ui.related_selected {
-                Style::default().bg(Color::DarkGray)
-            } else {
-                Style::default()
-            };
-            let short_id = &r.entity_id[..6.min(r.entity_id.len())];
-            let type_char = r.entity_type.chars().next().unwrap_or('?');
-            ListItem::new(Line::from(Span::styled(
-                format!(
-                    "{}/{}  [{:.2}]  {}",
-                    type_char, short_id, r.similarity, r.title
-                ),
-                style,
-            )))
-        })
-        .collect();
+    let is_loading = app.ui.related_rx.is_some();
+
+    let items: Vec<ListItem> = if is_loading && app.ui.related_items.is_empty() {
+        vec![ListItem::new(Line::from(Span::styled(
+            "Loading...",
+            Style::default().fg(Color::DarkGray),
+        )))]
+    } else {
+        app.ui
+            .related_items
+            .iter()
+            .enumerate()
+            .map(|(i, r)| {
+                let style = if i == app.ui.related_selected {
+                    Style::default().bg(Color::DarkGray)
+                } else {
+                    Style::default()
+                };
+                let short_id = &r.entity_id[..6.min(r.entity_id.len())];
+                let type_char = r.entity_type.chars().next().unwrap_or('?');
+                ListItem::new(Line::from(Span::styled(
+                    format!(
+                        "{}/{}  [{:.2}]  {}",
+                        type_char, short_id, r.similarity, r.title
+                    ),
+                    style,
+                )))
+            })
+            .collect()
+    };
+
+    let title = if is_loading {
+        "Related [loading...] [R to toggle]"
+    } else {
+        "Related [R to toggle]"
+    };
 
     let list = List::new(items).block(
         Block::default()
             .borders(Borders::ALL)
-            .title("Related [R to toggle]")
+            .title(title)
             .border_style(Style::default().fg(Color::DarkGray)),
     );
 

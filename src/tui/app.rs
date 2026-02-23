@@ -1,5 +1,4 @@
 use crate::db::search::SimilarityResult;
-use crate::db::Database;
 use crate::error::Result;
 use crate::jj::JjClient;
 use crate::models::{Critique, Milestone, Problem, Solution};
@@ -86,6 +85,8 @@ pub struct UiState {
     pub related_pending_load: Option<(String, String, Instant)>,
     /// Cache of related items by (entity_type, entity_id)
     pub related_cache: HashMap<(String, String), Vec<SimilarityResult>>,
+    /// In-flight background related-items load: (entity_type, entity_id, receiver)
+    pub related_rx: Option<(String, String, std::sync::mpsc::Receiver<Vec<SimilarityResult>>)>,
 }
 
 impl Default for UiState {
@@ -111,6 +112,7 @@ impl UiState {
             search_filter: None,
             related_pending_load: None,
             related_cache: HashMap::new(),
+            related_rx: None,
         }
     }
 }
@@ -128,7 +130,8 @@ pub struct App {
     pub ui: UiState,
     pub(crate) cache: RenderCache,
     store: MetadataStore,
-    db: Option<Database>,
+    db_path: Option<std::path::PathBuf>,
+    user: String,
     pub editor_request: Option<EditorRequest>,
 }
 
@@ -145,8 +148,12 @@ impl App {
         }
 
         let user = store.jj_client.user_identity().unwrap_or_default();
-        let next_actions =
-            super::build_next_actions(&data.problems, &data.solutions, &data.critiques, &user);
+        let next_actions = super::build_next_actions(
+            &data.problems,
+            &data.solutions,
+            &data.critiques,
+            &user,
+        );
         let tree_items = super::build_flat_tree(
             &data.milestones,
             &data.problems,
@@ -162,13 +169,9 @@ impl App {
         };
         super::annotate_tree_with_actions(&mut cache.tree_items, &cache.next_actions);
 
-        // Try to open the database for related items
+        // Store the db path for background queries (no connection held open)
         let db_path = store.jj_client.repo_root().join(".jj").join("jjj.db");
-        let db = if db_path.exists() {
-            Database::open(&db_path).ok()
-        } else {
-            None
-        };
+        let db_path = if db_path.exists() { Some(db_path) } else { None };
 
         let mut app = Self {
             should_quit: false,
@@ -176,7 +179,8 @@ impl App {
             ui,
             cache,
             store,
-            db,
+            db_path,
+            user,
             editor_request: None,
         };
         app.update_selected_detail();
@@ -714,6 +718,8 @@ impl App {
     /// Schedule a debounced load of related items for the currently selected entity
     pub fn load_related_for_selected(&mut self) {
         self.ui.related_selected = 0;
+        // Drop any in-flight request for a previous selection
+        self.ui.related_rx = None;
 
         // Get current selected entity info
         let (entity_type, entity_id) = match self.get_selected_entity_info() {
@@ -733,14 +739,39 @@ impl App {
             return;
         }
 
-        // Schedule debounced load
+        // Clear stale results and schedule debounced background load
+        self.ui.related_items.clear();
         self.ui.related_pending_load = Some((entity_type, entity_id, Instant::now()));
     }
 
-    /// Check if a pending related items load is ready (debounce expired)
+    /// Poll for completed background related-items load, or spawn one when debounce expires.
     fn check_pending_related_load(&mut self) {
-        use crate::db::search::find_similar;
+        // Collect results from an in-flight background load
+        let received = if let Some((ref et, ref eid, ref rx)) = self.ui.related_rx {
+            match rx.try_recv() {
+                Ok(results) => Some((et.clone(), eid.clone(), results)),
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    // Thread finished without sending (db unavailable etc.) — clear receiver
+                    Some((et.clone(), eid.clone(), Vec::new()))
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => None, // still loading
+            }
+        } else {
+            None
+        };
 
+        if let Some((et, eid, results)) = received {
+            self.ui.related_rx = None;
+            // Only apply if the selection hasn't changed since the request was made
+            if self.get_selected_entity_info() == Some((et.clone(), eid.clone())) {
+                let items: Vec<_> = results.into_iter().filter(|r| r.similarity > 0.5).collect();
+                self.ui.related_cache.insert((et, eid), items.clone());
+                self.ui.related_items = items;
+            }
+            return;
+        }
+
+        // Check if debounce has expired to start a new background load
         let (entity_type, entity_id) = match &self.ui.related_pending_load {
             Some((et, eid, requested_at))
                 if requested_at.elapsed() >= Duration::from_millis(300) =>
@@ -753,26 +784,28 @@ impl App {
         self.ui.related_pending_load = None;
 
         // Verify selection hasn't changed
-        if let Some((current_type, current_id)) = self.get_selected_entity_info() {
-            if current_type != entity_type || current_id != entity_id {
-                return;
-            }
-        } else {
+        if self.get_selected_entity_info() != Some((entity_type.clone(), entity_id.clone())) {
             return;
         }
 
-        // Load from database
-        let mut items = Vec::new();
-        if let Some(ref db) = self.db {
-            if let Ok(results) = find_similar(db.conn(), &entity_type, &entity_id, None, 5) {
-                items = results.into_iter().filter(|r| r.similarity > 0.5).collect();
-            }
-        }
+        // Spawn background thread to run the similarity query
+        if let Some(ref db_path) = self.db_path {
+            let db_path = db_path.clone();
+            let et = entity_type.clone();
+            let eid = entity_id.clone();
+            let (tx, rx) = std::sync::mpsc::channel();
 
-        // Update cache and display
-        let cache_key = (entity_type, entity_id);
-        self.ui.related_cache.insert(cache_key, items.clone());
-        self.ui.related_items = items;
+            std::thread::spawn(move || {
+                use crate::db::{search::find_similar, Database};
+                if let Ok(db) = Database::open(&db_path) {
+                    if let Ok(results) = find_similar(db.conn(), &et, &eid, None, 5) {
+                        let _ = tx.send(results);
+                    }
+                }
+            });
+
+            self.ui.related_rx = Some((entity_type, entity_id, rx));
+        }
     }
 
     fn get_selected_entity_info(&self) -> Option<(String, String)> {
@@ -1211,12 +1244,11 @@ impl App {
     }
 
     fn rebuild_cache(&mut self) {
-        let user = self.store.jj_client.user_identity().unwrap_or_default();
         self.cache.next_actions = super::build_next_actions(
             &self.data.problems,
             &self.data.solutions,
             &self.data.critiques,
-            &user,
+            &self.user,
         );
         self.rebuild_tree();
         // Annotate tree with action symbols
