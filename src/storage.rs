@@ -63,7 +63,7 @@ fn parse_frontmatter<T: serde::de::DeserializeOwned>(content: &str) -> Result<(T
     let body = rest[end_pos + 4..].trim().to_string();
 
     let frontmatter: T =
-        serde_yaml::from_str(yaml_str).map_err(|e| JjjError::FrontmatterParse {
+        serde_yml::from_str(yaml_str).map_err(|e| JjjError::FrontmatterParse {
             entity_type: String::new(),
             entity_id: String::new(),
             message: e.to_string(),
@@ -86,7 +86,7 @@ fn add_frontmatter_context(err: JjjError, entity_type: &str, entity_id: &str) ->
 
 /// Serialize entity to markdown with YAML frontmatter
 fn to_markdown<T: serde::Serialize>(frontmatter: &T, body: &str) -> Result<String> {
-    let yaml = serde_yaml::to_string(frontmatter)?;
+    let yaml = serde_yml::to_string(frontmatter)?;
     Ok(format!("---\n{}---\n\n{}", yaml, body))
 }
 
