@@ -3,12 +3,11 @@
 use crate::display::truncated_prefixes;
 use crate::error::{JjjError, Result};
 use crate::resolve::ResolveMatch;
-use dialoguer::{theme::ColorfulTheme, FuzzySelect};
-use std::io::IsTerminal;
+use std::io::{self, IsTerminal, Write};
 
 /// Pick one entity from multiple matches.
 ///
-/// If stdout is a TTY, shows an interactive picker.
+/// If stdout is a TTY, shows an interactive numbered list.
 /// Otherwise, returns an error with suggestions.
 pub fn pick_one(matches: &[ResolveMatch], entity_type: &str) -> Result<String> {
     if matches.is_empty() {
@@ -30,32 +29,37 @@ pub fn pick_one(matches: &[ResolveMatch], entity_type: &str) -> Result<String> {
 }
 
 fn pick_interactive(matches: &[ResolveMatch], entity_type: &str) -> Result<String> {
-    // Calculate truncated prefixes for display
     let uuids: Vec<&str> = matches.iter().map(|m| m.id.as_str()).collect();
     let prefixes = truncated_prefixes(&uuids);
 
-    // Build display strings
-    let items: Vec<String> = matches
-        .iter()
-        .zip(prefixes.iter())
-        .map(|(m, (_, prefix))| format!("{}  {}", prefix, m.title))
-        .collect();
+    eprintln!("Multiple {}s match. Select one:", entity_type);
+    for (i, (m, (_, prefix))) in matches.iter().zip(prefixes.iter()).enumerate() {
+        eprintln!("  {}. {}  {}", i + 1, prefix, m.title);
+    }
+    eprint!("Enter number (1-{}): ", matches.len());
+    io::stderr().flush().map_err(JjjError::Io)?;
 
-    let selection = FuzzySelect::with_theme(&ColorfulTheme::default())
-        .with_prompt(format!("Select {}:", entity_type))
-        .items(&items)
-        .default(0)
-        .interact_opt()
-        .map_err(|e| JjjError::Io(std::io::Error::other(e)))?;
+    let mut input = String::new();
+    io::stdin()
+        .read_line(&mut input)
+        .map_err(JjjError::Io)?;
 
-    match selection {
-        Some(index) => Ok(matches[index].id.clone()),
-        None => Err(JjjError::Cancelled("Selection cancelled".to_string())),
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return Err(JjjError::Cancelled("Selection cancelled".to_string()));
+    }
+
+    match trimmed.parse::<usize>() {
+        Ok(n) if n >= 1 && n <= matches.len() => Ok(matches[n - 1].id.clone()),
+        _ => Err(JjjError::Cancelled(format!(
+            "Invalid selection: '{}'. Expected a number between 1 and {}.",
+            trimmed,
+            matches.len()
+        ))),
     }
 }
 
 fn pick_non_interactive(matches: &[ResolveMatch], entity_type: &str) -> Result<String> {
-    // Calculate truncated prefixes for display
     let uuids: Vec<&str> = matches.iter().map(|m| m.id.as_str()).collect();
     let prefixes = truncated_prefixes(&uuids);
 

@@ -54,7 +54,7 @@ fn setup_test_repo() -> TempDir {
 
 #[test]
 fn test_workflow_start_new_solution() {
-    if which::which("jj").is_err() {
+    if jjj::jj::find_executable("jj").is_none() {
         return;
     }
     let temp_dir = setup_test_repo();
@@ -105,7 +105,7 @@ fn test_workflow_start_new_solution() {
 
 #[test]
 fn test_workflow_start_resume_solution() {
-    if which::which("jj").is_err() {
+    if jjj::jj::find_executable("jj").is_none() {
         return;
     }
     let temp_dir = setup_test_repo();
@@ -148,7 +148,7 @@ fn test_workflow_start_resume_solution() {
 
 #[test]
 fn test_workflow_submit_force() {
-    if which::which("jj").is_err() {
+    if jjj::jj::find_executable("jj").is_none() {
         return;
     }
     let temp_dir = setup_test_repo();
@@ -243,7 +243,7 @@ fn test_workflow_submit_force() {
 
 #[test]
 fn test_solution_status_workflow() {
-    if which::which("jj").is_err() {
+    if jjj::jj::find_executable("jj").is_none() {
         return;
     }
     let temp_dir = setup_test_repo();
@@ -281,7 +281,7 @@ fn test_solution_status_workflow() {
 
 #[test]
 fn test_critique_blocks_acceptance() {
-    if which::which("jj").is_err() {
+    if jjj::jj::find_executable("jj").is_none() {
         return;
     }
     let temp_dir = setup_test_repo();
@@ -329,7 +329,7 @@ fn test_critique_blocks_acceptance() {
 
 #[test]
 fn test_submit_blocked_by_critiques() {
-    if which::which("jj").is_err() {
+    if jjj::jj::find_executable("jj").is_none() {
         return;
     }
     let temp_dir = setup_test_repo();
@@ -392,7 +392,7 @@ fn test_submit_blocked_by_critiques() {
 
 #[test]
 fn test_submit_blocked_by_awaiting_review() {
-    if which::which("jj").is_err() {
+    if jjj::jj::find_executable("jj").is_none() {
         return;
     }
     let temp_dir = setup_test_repo();
@@ -431,7 +431,7 @@ fn test_submit_blocked_by_awaiting_review() {
 
 #[test]
 fn test_events_logged_on_status_changes() {
-    if which::which("jj").is_err() {
+    if jjj::jj::find_executable("jj").is_none() {
         return;
     }
     let temp_dir = setup_test_repo();

@@ -88,7 +88,7 @@ fn setup_repo_with_remote(remote_path: &std::path::Path) -> TempDir {
 
 #[test]
 fn test_push_to_bare_remote() {
-    if which::which("jj").is_err() {
+    if jjj::jj::find_executable("jj").is_none() {
         eprintln!("Skipping test: jj not found");
         return;
     }
@@ -162,7 +162,7 @@ fn test_push_to_bare_remote() {
 
 #[test]
 fn test_fetch_from_remote() {
-    if which::which("jj").is_err() {
+    if jjj::jj::find_executable("jj").is_none() {
         eprintln!("Skipping test: jj not found");
         return;
     }
@@ -229,7 +229,7 @@ fn test_fetch_from_remote() {
 
 #[test]
 fn test_push_fetch_roundtrip() {
-    if which::which("jj").is_err() {
+    if jjj::jj::find_executable("jj").is_none() {
         eprintln!("Skipping test: jj not found");
         return;
     }
@@ -301,7 +301,7 @@ fn test_push_fetch_roundtrip() {
 
 #[test]
 fn test_push_dry_run() {
-    if which::which("jj").is_err() {
+    if jjj::jj::find_executable("jj").is_none() {
         eprintln!("Skipping test: jj not found");
         return;
     }
@@ -343,7 +343,7 @@ fn test_push_dry_run() {
 
 #[test]
 fn test_push_validates_before_pushing() {
-    if which::which("jj").is_err() {
+    if jjj::jj::find_executable("jj").is_none() {
         eprintln!("Skipping test: jj not found");
         return;
     }

@@ -22,41 +22,24 @@ toml = "0.8"
 chrono = { version = "0.4", features = ["serde"] }
 
 # Error handling
-anyhow = "1.0"
 thiserror = "1.0"
 
 # Terminal UI
 ratatui = "0.29"
 crossterm = "0.28"
 
-# Process execution (for jj commands)
-which = "7.0"
-
-# File system operations
-walkdir = "2.5"
-
-# Hashing for context fingerprints
-sha2 = "0.10"
-
-# Fuzzy matching for comment relocation
-similar = "2.6"
 
 # SQLite storage
 rusqlite = { version = "0.31", features = ["bundled"] }
 
-# HTTP client for embedding API
-reqwest = { version = "0.12", features = ["blocking", "json"] }
 
 # UUID generation
 uuid = { version = "1.11", features = ["v7"] }
 
-# Interactive prompts
-dialoguer = { version = "0.11", features = ["fuzzy-select"] }
 
 [dev-dependencies]
 tempfile = "3.13"
 pretty_assertions = "1.4"
-walkdir = "2"
 
 [build-dependencies]
 clap = { version = "4.5", features = ["derive", "cargo"] }

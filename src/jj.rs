@@ -15,7 +15,7 @@ pub struct JjClient {
 impl JjClient {
     /// Create a new JjClient, discovering the jj executable and repo root
     pub fn new() -> Result<Self> {
-        let jj_path = which::which("jj").map_err(|_| JjjError::JjNotFound)?;
+        let jj_path = find_executable("jj").ok_or(JjjError::JjNotFound)?;
 
         let repo_root = Self::find_repo_root()?;
 
@@ -23,7 +23,7 @@ impl JjClient {
     }
 
     pub fn with_root(root: PathBuf) -> Result<Self> {
-        let jj_path = which::which("jj").map_err(|_| JjjError::JjNotFound)?;
+        let jj_path = find_executable("jj").ok_or(JjjError::JjNotFound)?;
         Ok(Self {
             jj_path,
             repo_root: root,
@@ -203,13 +203,24 @@ impl JjClient {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
 
     #[test]
     fn test_jj_detection() {
         // This test will fail if jj is not installed
-        match which::which("jj") {
-            Ok(_) => println!("jj found in PATH"),
-            Err(_) => println!("jj not found - some tests will be skipped"),
+        match find_executable("jj") {
+            Some(_) => println!("jj found in PATH"),
+            None => println!("jj not found - some tests will be skipped"),
         }
     }
+}
+
+/// Find an executable by name on the system PATH using stdlib only.
+pub fn find_executable(name: &str) -> Option<PathBuf> {
+    std::env::var_os("PATH")
+        .map(|paths| std::env::split_paths(&paths).collect::<Vec<_>>())
+        .unwrap_or_default()
+        .into_iter()
+        .map(|dir| dir.join(name))
+        .find(|path| path.is_file())
 }

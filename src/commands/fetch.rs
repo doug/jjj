@@ -44,7 +44,10 @@ pub fn execute(ctx: &CommandContext, remote: &str) -> Result<()> {
         }
     }
 
-    // 3. Rebuild database from updated markdown files
+    // 3. Update working copy to avoid stale workspace errors
+    let _ = jj_client.execute(&["workspace", "update-stale"]);
+
+    // 4. Rebuild database from updated markdown files
     println!("Rebuilding database...");
     if db_path.exists() {
         fs::remove_file(&db_path)?;

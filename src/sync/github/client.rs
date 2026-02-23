@@ -4,6 +4,7 @@
 //! via `std::process::Command` for GitHub API access.
 
 use crate::error::{JjjError, Result};
+use crate::jj::find_executable;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -20,7 +21,7 @@ pub struct GhClient {
 impl GhClient {
     /// Create a new GhClient, discovering the `gh` executable.
     pub fn new(repo_root: &Path) -> Result<Self> {
-        let gh_path = which::which("gh").map_err(|_| JjjError::GhNotFound)?;
+        let gh_path = find_executable("gh").ok_or(JjjError::GhNotFound)?;
         Ok(Self {
             gh_path,
             repo_root: repo_root.to_path_buf(),

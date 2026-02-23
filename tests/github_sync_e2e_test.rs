@@ -112,13 +112,13 @@ fn create_gh_issue(dir: &std::path::Path, title: &str, body: &str) -> u64 {
 /// Returns false if any check fails (test should skip).
 fn prerequisites_met() -> bool {
     // jj installed?
-    if which::which("jj").is_err() {
+    if jjj::jj::find_executable("jj").is_none() {
         eprintln!("Skipping github_sync_e2e: jj not found");
         return false;
     }
 
     // gh installed?
-    if which::which("gh").is_err() {
+    if jjj::jj::find_executable("gh").is_none() {
         eprintln!("Skipping github_sync_e2e: gh not found");
         return false;
     }

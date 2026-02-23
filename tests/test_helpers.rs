@@ -57,5 +57,5 @@ pub fn run_jjj_success(dir: &TempDir, args: &[&str]) -> String {
 
 /// Check if jj is available; tests should skip if not
 pub fn jj_available() -> bool {
-    which::which("jj").is_ok()
+    jjj::jj::find_executable("jj").is_some()
 }

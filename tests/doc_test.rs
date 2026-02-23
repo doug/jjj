@@ -37,6 +37,22 @@ fn extract_test_blocks(content: &str) -> Vec<TestBlock> {
     blocks
 }
 
+/// Recursively collect all `.md` files under a directory using stdlib fs.
+fn collect_md_files(dir: &Path) -> Vec<PathBuf> {
+    let mut results = Vec::new();
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            let path = entry.path();
+            if path.is_dir() {
+                results.extend(collect_md_files(&path));
+            } else if path.extension().map(|e| e == "md").unwrap_or(false) {
+                results.push(path);
+            }
+        }
+    }
+    results
+}
+
 fn jjj_binary() -> PathBuf {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("target");
@@ -128,7 +144,7 @@ fn run_doc_command(dir: &Path, cmd_line: &str) -> (bool, String, String) {
 #[test]
 fn test_documentation_examples() {
     // Skip if jj not installed
-    if which::which("jj").is_err() {
+    if jjj::jj::find_executable("jj").is_none() {
         eprintln!("Skipping doc tests: jj not found");
         return;
     }
@@ -143,12 +159,9 @@ fn test_documentation_examples() {
     let mut tested_files = 0;
     let mut tested_commands = 0;
 
-    for entry in walkdir::WalkDir::new(&docs_dir)
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().map(|ext| ext == "md").unwrap_or(false))
-    {
-        let path = entry.path();
+    let md_files = collect_md_files(&docs_dir);
+    for path in &md_files {
+        let path = path.as_path();
 
         // Skip plan files (they contain spec examples, not runnable commands)
         if path.to_string_lossy().contains("/plans/") {

@@ -1,15 +1,20 @@
-//! Embedding client for computing vector embeddings via OpenAI-compatible APIs.
+//! Embedding client for computing vector embeddings via the Ollama API.
 //!
-//! Supports Ollama (default), OpenAI, and other compatible providers.
+//! Uses stdlib TcpStream to talk directly to a local Ollama endpoint
+//! (default: localhost:11434). No external HTTP client dependency needed.
 
 use crate::local_config::LocalConfig;
 use serde::{Deserialize, Serialize};
+use std::io::{BufRead, BufReader, Write};
+use std::net::TcpStream;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-/// Default Ollama embedding endpoint
-const DEFAULT_BASE_URL: &str = "http://localhost:11434/v1";
-const DEFAULT_MODEL: &str = "nomic-embed-text";
-const DEFAULT_DIMENSIONS: usize = 768;
+/// Default Ollama host and port
+const DEFAULT_HOST: &str = "localhost";
+const DEFAULT_PORT: u16 = 11434;
+const DEFAULT_PATH: &str = "/v1/embeddings";
+const DEFAULT_MODEL: &str = "qwen3-embedding:8b";
+const DEFAULT_DIMENSIONS: usize = 4096;
 
 /// Track if we've already warned about connection failure this session
 static WARNED_THIS_SESSION: AtomicBool = AtomicBool::new(false);
@@ -36,10 +41,13 @@ struct EmbeddingData {
 #[derive(Debug, thiserror::Error)]
 pub enum EmbeddingError {
     #[error("HTTP request failed: {0}")]
-    Http(#[from] reqwest::Error),
+    Http(#[from] std::io::Error),
 
-    #[error("API returned error: {0}")]
-    Api(String),
+    #[error("API returned error status {status}: {body}")]
+    Api { status: u16, body: String },
+
+    #[error("Failed to parse embedding response: {0}")]
+    Parse(String),
 
     #[error("Dimension mismatch: expected {expected}, got {actual}")]
     DimensionMismatch { expected: usize, actual: usize },
@@ -48,55 +56,54 @@ pub enum EmbeddingError {
     EmptyResponse,
 }
 
-/// Client for computing embeddings via OpenAI-compatible API.
+/// Client for computing embeddings via a local Ollama instance.
 pub struct EmbeddingClient {
-    base_url: String,
+    host: String,
+    port: u16,
+    path: String,
     model: String,
     dimensions: usize,
-    api_key: Option<String>,
-    http_client: reqwest::blocking::Client,
 }
 
 impl EmbeddingClient {
     /// Create a new embedding client from config.
     ///
-    /// If `warn_on_error` is true and connection fails, logs a warning.
-    /// Returns None if the service is unavailable.
+    /// Tests the connection immediately. Returns None if the service is unavailable.
     pub fn from_config(config: &LocalConfig, warn_on_error: bool) -> Option<Self> {
-        let base_url = config
-            .embeddings
-            .base_url
-            .clone()
-            .unwrap_or_else(|| DEFAULT_BASE_URL.to_string());
+        // Parse host/port from base_url if provided, otherwise use defaults
+        let (host, port, path) = if let Some(ref base_url) = config.embeddings.base_url {
+            parse_base_url(base_url)
+        } else {
+            (
+                DEFAULT_HOST.to_string(),
+                DEFAULT_PORT,
+                DEFAULT_PATH.to_string(),
+            )
+        };
+
         let model = config
             .embeddings
             .model
             .clone()
             .unwrap_or_else(|| DEFAULT_MODEL.to_string());
         let dimensions = config.embeddings.dimensions.unwrap_or(DEFAULT_DIMENSIONS);
-        let api_key = config.embeddings.api_key.clone();
-
-        let http_client = reqwest::blocking::Client::builder()
-            .timeout(std::time::Duration::from_secs(30))
-            .build()
-            .ok()?;
 
         let client = Self {
-            base_url,
+            host: host.clone(),
+            port,
+            path,
             model,
             dimensions,
-            api_key,
-            http_client,
         };
 
-        // Test connection with a simple embed request
+        // Test connection
         match client.embed("test") {
             Ok(_) => Some(client),
             Err(e) => {
                 if warn_on_error && !WARNED_THIS_SESSION.swap(true, Ordering::SeqCst) {
                     eprintln!(
-                        "Warning: Embedding service unavailable at {}: {}",
-                        client.base_url, e
+                        "Warning: Embedding service unavailable at {}:{}: {}",
+                        host, port, e
                     );
                     eprintln!("Semantic search features will be disabled.");
                 }
@@ -130,44 +137,108 @@ impl EmbeddingClient {
             return Ok(Vec::new());
         }
 
-        let url = format!("{}/embeddings", self.base_url);
         let request = EmbeddingRequest {
             model: &self.model,
             input: texts.to_vec(),
         };
+        let body = serde_json::to_string(&request)
+            .map_err(|e| EmbeddingError::Parse(e.to_string()))?;
 
-        let mut req = self.http_client.post(&url).json(&request);
+        let response_body = self.http_post(&body)?;
 
-        if let Some(ref key) = self.api_key {
-            req = req.header("Authorization", format!("Bearer {}", key));
-        }
+        let response: EmbeddingResponse = serde_json::from_str(&response_body)
+            .map_err(|e| EmbeddingError::Parse(format!("{}: {}", e, response_body)))?;
 
-        let response = req.send()?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let body = response.text().unwrap_or_default();
-            return Err(EmbeddingError::Api(format!("{}: {}", status, body)));
-        }
-
-        let response: EmbeddingResponse = response.json()?;
-
-        // Validate dimensions
-        for (i, data) in response.data.iter().enumerate() {
+        // Validate dimensions of first result
+        if let Some(data) = response.data.first() {
             if data.embedding.len() != self.dimensions {
                 return Err(EmbeddingError::DimensionMismatch {
                     expected: self.dimensions,
                     actual: data.embedding.len(),
                 });
             }
-            // Only check first one in production for performance
-            if i == 0 {
-                break;
-            }
         }
 
         Ok(response.data.into_iter().map(|d| d.embedding).collect())
     }
+
+    /// Send a raw HTTP POST to the Ollama endpoint and return the response body.
+    fn http_post(&self, body: &str) -> Result<String, EmbeddingError> {
+        let addr = format!("{}:{}", self.host, self.port);
+        let mut stream = TcpStream::connect(&addr)?;
+        stream.set_read_timeout(Some(std::time::Duration::from_secs(30)))?;
+
+        let request = format!(
+            "POST {} HTTP/1.1\r\nHost: {}:{}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            self.path, self.host, self.port, body.len(), body
+        );
+        stream.write_all(request.as_bytes())?;
+
+        // Read response
+        let mut reader = BufReader::new(stream);
+        let mut status_line = String::new();
+        reader.read_line(&mut status_line)?;
+
+        let status_code = parse_status_code(&status_line);
+
+        // Skip headers
+        loop {
+            let mut header = String::new();
+            reader.read_line(&mut header)?;
+            if header == "\r\n" || header.is_empty() {
+                break;
+            }
+        }
+
+        // Read body
+        let mut response_body = String::new();
+        use std::io::Read;
+        reader.read_to_string(&mut response_body)?;
+
+        if status_code != 200 {
+            return Err(EmbeddingError::Api {
+                status: status_code,
+                body: response_body,
+            });
+        }
+
+        Ok(response_body)
+    }
+}
+
+/// Parse host, port, and path from a base URL string like "http://localhost:11434/v1".
+fn parse_base_url(base_url: &str) -> (String, u16, String) {
+    // Strip scheme
+    let without_scheme = base_url
+        .strip_prefix("http://")
+        .or_else(|| base_url.strip_prefix("https://"))
+        .unwrap_or(base_url);
+
+    // Split host:port from path
+    let (host_port, path) = if let Some(idx) = without_scheme.find('/') {
+        let path = format!("{}/embeddings", &without_scheme[idx..].trim_end_matches('/'));
+        (&without_scheme[..idx], path)
+    } else {
+        (without_scheme, DEFAULT_PATH.to_string())
+    };
+
+    // Split host and port
+    if let Some(colon) = host_port.rfind(':') {
+        let host = host_port[..colon].to_string();
+        let port = host_port[colon + 1..].parse().unwrap_or(DEFAULT_PORT);
+        (host, port, path)
+    } else {
+        (host_port.to_string(), DEFAULT_PORT, path)
+    }
+}
+
+/// Extract the HTTP status code from a status line like "HTTP/1.1 200 OK".
+fn parse_status_code(status_line: &str) -> u16 {
+    status_line
+        .split_whitespace()
+        .nth(1)
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0)
 }
 
 /// Compute cosine similarity between two vectors.
@@ -288,5 +359,27 @@ mod tests {
     fn test_prepare_milestone_text() {
         let text = prepare_milestone_text("Title", "Goals", "Criteria");
         assert_eq!(text, "Title\n\nGoals\n\nCriteria");
+    }
+
+    #[test]
+    fn test_parse_base_url_default() {
+        let (host, port, path) = parse_base_url("http://localhost:11434/v1");
+        assert_eq!(host, "localhost");
+        assert_eq!(port, 11434);
+        assert_eq!(path, "/v1/embeddings");
+    }
+
+    #[test]
+    fn test_parse_base_url_custom_port() {
+        let (host, port, _) = parse_base_url("http://localhost:9999/v1");
+        assert_eq!(host, "localhost");
+        assert_eq!(port, 9999);
+    }
+
+    #[test]
+    fn test_parse_status_code() {
+        assert_eq!(parse_status_code("HTTP/1.1 200 OK\r\n"), 200);
+        assert_eq!(parse_status_code("HTTP/1.1 404 Not Found\r\n"), 404);
+        assert_eq!(parse_status_code("HTTP/1.1 500 Internal Server Error\r\n"), 500);
     }
 }

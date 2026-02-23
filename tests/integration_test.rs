@@ -25,7 +25,7 @@ fn setup_test_repo() -> TempDir {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
 
     // Check if jj is installed
-    if which::which("jj").is_err() {
+    if jjj::jj::find_executable("jj").is_none() {
         eprintln!("Skipping test: jj not found");
         return temp_dir;
     }
@@ -59,7 +59,7 @@ fn setup_test_repo() -> TempDir {
 #[test]
 fn test_init_and_create_problem_solution() {
     // Skip if jj is not installed
-    if which::which("jj").is_err() {
+    if jjj::jj::find_executable("jj").is_none() {
         return;
     }
 
@@ -118,7 +118,7 @@ fn test_init_and_create_problem_solution() {
 #[test]
 fn test_critique_workflow() {
     // Skip if jj is not installed
-    if which::which("jj").is_err() {
+    if jjj::jj::find_executable("jj").is_none() {
         return;
     }
 
@@ -170,7 +170,7 @@ fn test_critique_workflow() {
 #[test]
 fn test_problem_hierarchy() {
     // Skip if jj is not installed
-    if which::which("jj").is_err() {
+    if jjj::jj::find_executable("jj").is_none() {
         return;
     }
 
@@ -214,7 +214,7 @@ fn test_problem_hierarchy() {
 
 #[test]
 fn test_problem_priority() {
-    if which::which("jj").is_err() {
+    if jjj::jj::find_executable("jj").is_none() {
         return;
     }
 
@@ -257,7 +257,7 @@ fn test_problem_priority() {
 
 #[test]
 fn test_problem_dissolve_reason() {
-    if which::which("jj").is_err() {
+    if jjj::jj::find_executable("jj").is_none() {
         return;
     }
 
@@ -300,7 +300,7 @@ fn test_problem_dissolve_reason() {
 
 #[test]
 fn test_solution_supersedes() {
-    if which::which("jj").is_err() {
+    if jjj::jj::find_executable("jj").is_none() {
         return;
     }
 
@@ -350,7 +350,7 @@ fn test_solution_supersedes() {
 
 #[test]
 fn test_solve_warns_active_solutions() {
-    if which::which("jj").is_err() {
+    if jjj::jj::find_executable("jj").is_none() {
         return;
     }
 
@@ -385,7 +385,7 @@ fn test_solve_warns_active_solutions() {
 
 #[test]
 fn test_next_priority_sorting() {
-    if which::which("jj").is_err() {
+    if jjj::jj::find_executable("jj").is_none() {
         return;
     }
 
@@ -458,7 +458,7 @@ fn test_next_priority_sorting() {
 
 #[test]
 fn test_critique_new_with_reviewer() {
-    if which::which("jj").is_err() {
+    if jjj::jj::find_executable("jj").is_none() {
         return;
     }
     let temp_dir = setup_test_repo();
@@ -516,7 +516,7 @@ fn test_critique_new_with_reviewer() {
 
 #[test]
 fn test_critique_list_filter_by_reviewer() {
-    if which::which("jj").is_err() {
+    if jjj::jj::find_executable("jj").is_none() {
         return;
     }
     let temp_dir = setup_test_repo();
@@ -584,7 +584,7 @@ fn test_critique_list_filter_by_reviewer() {
 
 #[test]
 fn test_solution_new_with_reviewer() {
-    if which::which("jj").is_err() {
+    if jjj::jj::find_executable("jj").is_none() {
         return;
     }
     let temp_dir = setup_test_repo();
@@ -633,7 +633,7 @@ fn test_solution_new_with_reviewer() {
 
 #[test]
 fn test_solution_new_with_multiple_reviewers() {
-    if which::which("jj").is_err() {
+    if jjj::jj::find_executable("jj").is_none() {
         return;
     }
     let temp_dir = setup_test_repo();
@@ -700,7 +700,7 @@ fn test_solution_new_with_multiple_reviewers() {
 
 #[test]
 fn test_status_shows_review_needed() {
-    if which::which("jj").is_err() {
+    if jjj::jj::find_executable("jj").is_none() {
         return;
     }
     let temp_dir = setup_test_repo();

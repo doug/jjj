@@ -52,7 +52,7 @@ fn setup_test_repo() -> TempDir {
 
 #[test]
 fn test_events_validate_clean() {
-    if which::which("jj").is_err() {
+    if jjj::jj::find_executable("jj").is_none() {
         return;
     }
     let temp_dir = setup_test_repo();
@@ -101,7 +101,7 @@ fn test_events_validate_clean() {
 
 #[test]
 fn test_events_rebuild() {
-    if which::which("jj").is_err() {
+    if jjj::jj::find_executable("jj").is_none() {
         return;
     }
     let temp_dir = setup_test_repo();
@@ -170,7 +170,7 @@ fn test_events_rebuild() {
 
 #[test]
 fn test_events_list_json() {
-    if which::which("jj").is_err() {
+    if jjj::jj::find_executable("jj").is_none() {
         return;
     }
     let temp_dir = setup_test_repo();
@@ -254,7 +254,7 @@ fn test_events_list_json() {
 
 #[test]
 fn test_events_filter_by_type() {
-    if which::which("jj").is_err() {
+    if jjj::jj::find_executable("jj").is_none() {
         return;
     }
     let temp_dir = setup_test_repo();
