@@ -106,7 +106,7 @@ impl GhClient {
         output
             .trim()
             .parse()
-            .map_err(|_| JjjError::Other(format!("Failed to parse issue number: {}", output)))
+            .map_err(|_| JjjError::Validation(format!("Failed to parse issue number: {}", output)))
     }
 
     /// Get issue details as JSON.
@@ -119,7 +119,7 @@ impl GhClient {
             "--json",
             "number,title,body,state,labels,author",
         ])?;
-        serde_json::from_str(&output).map_err(|e| JjjError::Other(e.to_string()))
+        serde_json::from_str(&output).map_err(|e| JjjError::Validation(e.to_string()))
     }
 
     /// List issues with optional label and state filter.
@@ -139,7 +139,7 @@ impl GhClient {
             args.push(l);
         }
         let output = self.execute(&args)?;
-        serde_json::from_str(&output).map_err(|e| JjjError::Other(e.to_string()))
+        serde_json::from_str(&output).map_err(|e| JjjError::Validation(e.to_string()))
     }
 
     /// Close an issue.
@@ -165,7 +165,7 @@ impl GhClient {
         output
             .trim()
             .parse()
-            .map_err(|_| JjjError::Other(format!("Failed to parse PR number: {}", output)))
+            .map_err(|_| JjjError::Validation(format!("Failed to parse PR number: {}", output)))
     }
 
     /// Get PR details as JSON.
@@ -178,7 +178,7 @@ impl GhClient {
             "--json",
             "number,title,body,state,reviews,headRefName",
         ])?;
-        serde_json::from_str(&output).map_err(|e| JjjError::Other(e.to_string()))
+        serde_json::from_str(&output).map_err(|e| JjjError::Validation(e.to_string()))
     }
 
     /// Merge a pull request (squash merge).
@@ -194,7 +194,7 @@ impl GhClient {
         let output = self.execute(&[
             "pr", "view", &num_str, "--json", "reviews", "--jq", ".reviews",
         ])?;
-        serde_json::from_str(&output).map_err(|e| JjjError::Other(e.to_string()))
+        serde_json::from_str(&output).map_err(|e| JjjError::Validation(e.to_string()))
     }
 
     /// Get PR state (OPEN, MERGED, CLOSED).

@@ -57,7 +57,7 @@ impl SyncProvider for GitHubProvider {
             if parts.len() == 2 {
                 return Ok((parts[0].to_string(), parts[1].to_string()));
             }
-            return Err(JjjError::Other(format!(
+            return Err(JjjError::Validation(format!(
                 "Invalid repo format '{}', expected 'owner/repo'",
                 repo
             )));

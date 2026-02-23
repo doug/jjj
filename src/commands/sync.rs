@@ -23,8 +23,8 @@ fn execute_github(
 
     // Check if GitHub integration is explicitly disabled
     if config.github.enabled == Some(false) {
-        return Err(JjjError::Other(
-            "GitHub integration is disabled in config. Set github.enabled = true to enable."
+        return Err(JjjError::Config(
+            "GitHub integration is disabled. Set github.enabled = true in config.toml to enable."
                 .to_string(),
         ));
     }
@@ -236,7 +236,7 @@ fn sync_import(
     }
 
     let issue_str = issue.ok_or_else(|| {
-        JjjError::Other(
+        JjjError::Validation(
             "Please specify an issue number (e.g., '#123' or '123'), or use --all".to_string(),
         )
     })?;
@@ -317,7 +317,7 @@ fn sync_pr(
 
             match found {
                 Some(s) => s.id.clone(),
-                None => return Err(JjjError::Other(
+                None => return Err(JjjError::Validation(
                     "No solution specified and current change is not attached to any solution.\n\
                          Use 'jjj sync github pr <solution>' to specify."
                         .to_string(),
@@ -361,7 +361,7 @@ fn sync_pr(
     // Create git branch from solution's changes
     // First, push the branch using jj git push
     if solution.change_ids.is_empty() {
-        return Err(JjjError::Other(
+        return Err(JjjError::Validation(
             "Solution has no attached changes. Attach changes first with 'jjj solution attach'."
                 .to_string(),
         ));
@@ -489,7 +489,7 @@ fn sync_merge(
     let solution = ctx.store.load_solution(&sol_id)?;
 
     let pr_number = solution.github_pr.ok_or_else(|| {
-        JjjError::Other(format!(
+        JjjError::Validation(format!(
             "Solution '{}' is not linked to a GitHub PR",
             solution.title
         ))
@@ -542,7 +542,7 @@ fn sync_close(
     let problem = ctx.store.load_problem(&prob_id)?;
 
     let issue_number = problem.github_issue.ok_or_else(|| {
-        JjjError::Other(format!(
+        JjjError::Validation(format!(
             "Problem '{}' is not linked to a GitHub issue",
             problem.title
         ))
@@ -590,7 +590,7 @@ fn sync_reopen(
     let problem = ctx.store.load_problem(&prob_id)?;
 
     let issue_number = problem.github_issue.ok_or_else(|| {
-        JjjError::Other(format!(
+        JjjError::Validation(format!(
             "Problem '{}' is not linked to a GitHub issue",
             problem.title
         ))
@@ -617,7 +617,7 @@ fn sync_reopen(
 fn parse_issue_number(input: &str) -> Result<u64> {
     let s = input.trim().trim_start_matches('#');
     s.parse().map_err(|_| {
-        JjjError::Other(format!(
+        JjjError::Validation(format!(
             "Invalid issue number: '{}'. Use a number like '#123' or '123'.",
             input
         ))

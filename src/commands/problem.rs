@@ -90,7 +90,7 @@ fn new_problem(
                             eprintln!("  p/{} — \"{}\"", short_id, r.title);
                         }
                         eprintln!("\nUse --force to create anyway.");
-                        return Err(crate::error::JjjError::Other(
+                        return Err(crate::error::JjjError::Validation(
                             "Similar entities exist. Use --force to override.".to_string(),
                         ));
                     }

@@ -59,15 +59,12 @@ pub enum JjjError {
     #[error("Cannot accept solution: {0}")]
     CannotAcceptSolution(String),
 
-    #[error("Failed to parse {entity_type} '{entity_id}': {message}")]
+    #[error("Failed to parse {entity_type} '{entity_id}': {message}\n\nRun 'jjj db validate' to check for corrupted entities.")]
     FrontmatterParse {
         entity_type: String,
         entity_id: String,
         message: String,
     },
-
-    #[error("Failed to parse {field}: {value}")]
-    ParseError { field: String, value: String },
 
     #[error("Failed to parse JSON: {0}")]
     JsonParse(#[from] serde_json::Error),
@@ -134,9 +131,6 @@ pub enum JjjError {
         remote_state: String,
         suggestion: String,
     },
-
-    #[error("{0}")]
-    Other(String),
 
     #[error("Validation failed: {0}")]
     Validation(String),

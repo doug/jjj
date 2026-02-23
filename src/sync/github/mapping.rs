@@ -8,7 +8,7 @@ use crate::sync::{ReviewInfo, ReviewState};
 pub fn issue_to_problem(json: &serde_json::Value, number: u64) -> Result<Problem> {
     let title = json["title"]
         .as_str()
-        .ok_or_else(|| JjjError::Other("Issue missing title".to_string()))?;
+        .ok_or_else(|| JjjError::Validation("Issue missing title".to_string()))?;
 
     let body = json["body"].as_str().unwrap_or("");
     let id = crate::id::generate_id();

@@ -91,7 +91,7 @@ fn new_solution(
                             eprintln!("  s/{} — \"{}\"", short_id, r.title);
                         }
                         eprintln!("\nUse --force to create anyway.");
-                        return Err(crate::error::JjjError::Other(
+                        return Err(crate::error::JjjError::Validation(
                             "Similar entities exist. Use --force to override.".to_string(),
                         ));
                     }
@@ -459,7 +459,7 @@ fn attach_change(ctx: &CommandContext, solution_input: String, force: bool) -> R
     // Validate change exists in jj
     if !force {
         if !jj_client.change_exists(&change_id)? {
-            return Err(crate::error::JjjError::Other(format!(
+            return Err(crate::error::JjjError::Validation(format!(
                 "Change '{}' not found in repository. Use --force to skip validation.",
                 change_id
             )));
@@ -469,7 +469,7 @@ fn attach_change(ctx: &CommandContext, solution_input: String, force: bool) -> R
         let all_solutions = store.list_solutions()?;
         for other in &all_solutions {
             if other.id != solution_id && other.change_ids.contains(&change_id) {
-                return Err(crate::error::JjjError::Other(format!(
+                return Err(crate::error::JjjError::Validation(format!(
                     "Change '{}' is already attached to solution {}. Use --force to attach anyway.",
                     change_id, other.id
                 )));
@@ -510,7 +510,7 @@ fn detach_change(
 
         // Block detach from Testing solutions
         if solution.status == SolutionStatus::Testing {
-            return Err(crate::error::JjjError::Other(format!(
+            return Err(crate::error::JjjError::Validation(format!(
                 "Cannot detach change from solution {} while in Testing state. Use --force to override.",
                 solution_id
             )));
@@ -518,7 +518,7 @@ fn detach_change(
 
         // Block detach of last change
         if solution.change_ids.len() <= 1 && solution.change_ids.contains(&change_id) {
-            return Err(crate::error::JjjError::Other(format!(
+            return Err(crate::error::JjjError::Validation(format!(
                 "Cannot detach the last change from solution {}. Use --force to override.",
                 solution_id
             )));
