@@ -1,3 +1,16 @@
+//! Error types for jjj.
+//!
+//! [`JjjError`] is the single error type used throughout the crate. Variants are
+//! grouped by concern:
+//! - **jj integration** — `JjNotFound`, `JjCommandFailed`, `JjIo`
+//! - **Entity lookup** — `ProblemNotFound`, `SolutionNotFound`, `CritiqueNotFound`,
+//!   `MilestoneNotFound`, `EntityNotFound`, `AmbiguousId`
+//! - **Parsing / data integrity** — `FrontmatterParse`, `JsonParse`, `YamlParse`,
+//!   `TomlParse`, `TomlSerialize`
+//! - **GitHub sync** — `GhNotFound`, `GhCommandFailed`, `GhAuthFailed`,
+//!   `GhRepoNotDetected`, `SyncConflict`
+//! - **General** — `Validation`, `Config`, `Cancelled`, `Io`, `Database`
+
 use std::path::PathBuf;
 use thiserror::Error;
 

@@ -16,6 +16,11 @@ impl App {
         self.update_selected_detail();
     }
 
+    /// Jump to the next (or previous) tree item that has an action symbol.
+    ///
+    /// Wraps around: going forward past the last action item cycles to the first;
+    /// going backward past the first cycles to the last. Automatically expands
+    /// ancestor nodes so the target is visible in the tree before navigating.
     pub(super) fn jump_to_next_action(&mut self, reverse: bool) {
         if self.cache.tree_items.is_empty() {
             return;
@@ -70,6 +75,11 @@ impl App {
         }
     }
 
+    /// Ensure a target entity is visible by expanding its ancestor nodes.
+    ///
+    /// Walks up the entity hierarchy (critique → solution → problem → milestone)
+    /// and inserts each ancestor's ID into `expanded_nodes`. Must be followed by
+    /// `rebuild_tree()` to take effect.
     fn expand_to_reveal(&mut self, target_id: &str) {
         // For a solution, we need its problem expanded, and that problem's milestone expanded
         if let Some(solution) = self.data.solutions.iter().find(|s| s.id == target_id) {

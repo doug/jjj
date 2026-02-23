@@ -15,6 +15,11 @@ mod editor;
 mod navigation;
 mod related;
 
+/// Controls how keyboard input is interpreted by the event loop.
+///
+/// - `Normal` — standard navigation and action keys.
+/// - `Help` — help overlay is displayed; any key returns to `Normal`.
+/// - `Input` — the user is typing a value (new entity title, search query, etc.).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum InputMode {
     #[default]
@@ -27,6 +32,11 @@ pub enum InputMode {
     },
 }
 
+/// The action to execute when the user confirms text entry in `InputMode::Input`.
+///
+/// Each variant carries the context needed to perform the action (e.g., the
+/// `problem_id` to attach a new solution to). `Search` is handled specially —
+/// the tree is filtered live as the user types rather than on confirmation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InputAction {
     NewProblem {
@@ -45,6 +55,11 @@ pub enum InputAction {
     Search,
 }
 
+/// A pending request to suspend the TUI and open an entity in an external editor.
+///
+/// Created by `open_in_editor()` and consumed by `run_editor()` in the main
+/// event loop. Carries the serialized original content so that unchanged saves
+/// can be detected and skipped.
 #[derive(Debug, Clone)]
 pub struct EditorRequest {
     pub entity_type: EntityType,
@@ -54,7 +69,11 @@ pub struct EditorRequest {
     pub editor: String,
 }
 
-/// Raw data from storage - single source of truth
+/// Raw data loaded from storage — the single source of truth for the TUI.
+///
+/// All rendering derives from this snapshot. Refreshed wholesale by
+/// [`App::refresh_data`] after any mutation. Kept separate from [`UiState`]
+/// so navigation state (selection, scroll, expansion) survives data reloads.
 pub struct ProjectData {
     pub milestones: Vec<Milestone>,
     pub problems: Vec<Problem>,
@@ -73,7 +92,18 @@ impl ProjectData {
     }
 }
 
-/// UI navigation and display state
+/// All transient UI state: selection, scroll position, expansion, input mode.
+///
+/// Distinct from [`ProjectData`] (authoritative storage snapshot) and
+/// [`RenderCache`] (derived display data). `UiState` persists across
+/// `refresh_data()` calls so the user's navigation position is preserved after
+/// mutations.
+///
+/// The related-items pipeline uses a three-stage debounce/background-load model:
+/// 1. Selection change → `related_pending_load` is set with a timestamp.
+/// 2. After 300 ms, a background thread is spawned and `related_rx` is set.
+/// 3. Each tick, `check_pending_related_load()` polls the receiver and populates
+///    `related_items` and `related_cache` when the result arrives.
 pub struct UiState {
     pub tree_index: usize,
     pub expanded_nodes: HashSet<String>,
@@ -86,11 +116,14 @@ pub struct UiState {
     pub filter_actions_only: bool,
     /// Text search filter for the tree (set via '/' key)
     pub search_filter: Option<String>,
-    /// Debounce timer for related items loading: (entity_type, entity_id, requested_at)
+    /// Pending debounce request: `(entity_type, entity_id, requested_at)`.
+    /// Cleared when the background thread is spawned or the selection changes.
     pub related_pending_load: Option<(String, String, Instant)>,
-    /// Cache of related items by (entity_type, entity_id)
+    /// LRU-style cache keyed by `(entity_type, entity_id)`. Cleared on
+    /// `refresh_data()` so stale embeddings are not shown after mutations.
     pub related_cache: HashMap<(String, String), Vec<SimilarityResult>>,
-    /// In-flight background related-items load: (entity_type, entity_id, receiver)
+    /// In-flight background load: `(entity_type, entity_id, receiver)`.
+    /// Dropped (cancelling the load) when the selection changes.
     pub related_rx: Option<(String, String, std::sync::mpsc::Receiver<Vec<SimilarityResult>>)>,
 }
 
@@ -141,6 +174,12 @@ pub struct App {
 }
 
 impl App {
+    /// Initialize the TUI application, loading all project data from storage.
+    ///
+    /// Discovers the jj repository, constructs the [`MetadataStore`], loads
+    /// [`ProjectData`], and builds the initial render cache. Expands the backlog
+    /// node and the first milestone by default. Kicks off the initial related-items
+    /// load for whatever entity is selected first.
     pub fn new() -> Result<Self> {
         let jj_client = JjClient::new()?;
         let store = MetadataStore::new(jj_client)?;
@@ -193,6 +232,12 @@ impl App {
         Ok(app)
     }
 
+    /// Run the main TUI event loop until the user quits.
+    ///
+    /// Each iteration: checks for a pending editor request (suspends terminal if
+    /// present), expires flash messages, polls for completed background loads,
+    /// renders a frame, then waits up to 100 ms for a key press. Exits when
+    /// `should_quit` is set.
     pub fn run<B: Backend + std::io::Write>(&mut self, terminal: &mut Terminal<B>) -> Result<()> {
         while !self.should_quit {
             // Check for editor request

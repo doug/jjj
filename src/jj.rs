@@ -2,7 +2,15 @@ use crate::error::{JjjError, Result};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-/// Interface to the jj version control system
+/// Thin wrapper around `jj` subprocess calls.
+///
+/// Discovers the `jj` executable on `PATH` and the repository root (by walking
+/// up from `CWD` until a `.jj/` directory is found). All operations invoke `jj`
+/// as a child process and parse stdout/stderr.
+///
+/// Use [`with_root`](JjClient::with_root) to target a different directory — the
+/// metadata workspace uses this to operate on `.jj/jjj-meta/` independently of
+/// the main repo.
 #[derive(Debug, Clone)]
 pub struct JjClient {
     /// Path to the jj executable
@@ -22,6 +30,11 @@ impl JjClient {
         Ok(Self { jj_path, repo_root })
     }
 
+    /// Create a `JjClient` rooted at an arbitrary directory instead of CWD.
+    ///
+    /// Used by [`MetadataStore`](crate::storage::MetadataStore) to construct a
+    /// client for the metadata workspace (`.jj/jjj-meta/`) that runs `jj`
+    /// commands there without affecting the user's main working copy.
     pub fn with_root(root: PathBuf) -> Result<Self> {
         let jj_path = find_executable("jj").ok_or(JjjError::JjNotFound)?;
         Ok(Self {

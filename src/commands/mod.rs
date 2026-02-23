@@ -20,6 +20,11 @@ use crate::context::CommandContext;
 use crate::db::{search as db_search, Database};
 use crate::error::Result;
 
+/// Entry point for CLI command dispatch.
+///
+/// Commands that manage their own context (`Init`, `Ui`, `Completion`) are
+/// handled directly. All other commands get a shared [`CommandContext`] created
+/// once and passed to [`execute_with_context`].
 pub fn execute(cli: Cli) -> Result<()> {
     match cli.command {
         // Commands that don't need context (they create their own store or don't need one)
@@ -35,6 +40,11 @@ pub fn execute(cli: Cli) -> Result<()> {
     }
 }
 
+/// Dispatch a command that requires shared storage/jj access.
+///
+/// All entity commands, sync, push/fetch, search, and event log commands route
+/// through here, sharing a single [`CommandContext`] (which holds the
+/// `MetadataStore` and `JjClient`).
 fn execute_with_context(ctx: &CommandContext, command: Commands) -> Result<()> {
     match command {
         Commands::Problem { action } => problem::execute(ctx, action),
@@ -101,6 +111,11 @@ fn execute_with_context(ctx: &CommandContext, command: Commands) -> Result<()> {
     }
 }
 
+/// Print semantically related entities below a command's output.
+///
+/// Queries the local SQLite cache for similar entities using cosine similarity
+/// on stored embeddings. Silently skips if the database doesn't exist, the
+/// entity has no embedding, or no results exceed the 0.5 similarity threshold.
 pub(crate) fn show_related_items(
     ctx: &CommandContext,
     entity_type: &str,

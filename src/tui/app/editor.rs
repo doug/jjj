@@ -7,6 +7,12 @@ use super::super::next_actions::EntityType;
 use super::EditorRequest;
 
 impl App {
+    /// Initiate editing the selected entity in an external editor.
+    ///
+    /// Serializes the entity to a temp file, then sets `editor_request` to signal
+    /// the main loop to suspend the TUI, run `$VISUAL` / `$EDITOR` / `vi`, and
+    /// resume. On resume, the edited content is diffed against the original and
+    /// saved if changed.
     pub(super) fn open_in_editor(&mut self) -> Result<()> {
         use super::super::tree::TreeNode;
 
@@ -62,6 +68,11 @@ impl App {
         Ok(())
     }
 
+    /// Render an entity as a markdown document with YAML frontmatter for editing.
+    ///
+    /// The format is intentionally minimal: just the fields users are likely to
+    /// want to change (title, status, priority/severity, and the main text body).
+    /// `apply_edited_content()` parses this format back after the editor exits.
     fn serialize_entity_for_edit(
         &self,
         entity_type: &EntityType,

@@ -1,5 +1,13 @@
 //! CRUD operations for jjj entities in SQLite.
 //!
+//! All row parsing is defensive: invalid datetime strings or unrecognised enum
+//! values emit a `Warning:` to stderr and fall back to a safe default rather
+//! than failing.
+//!
+//! Computed fields (`solution_ids`, `child_ids`, `critique_ids`) are left empty
+//! by the individual `row_to_*` functions and must be populated afterwards via
+//! [`populate_problem_computed_fields`] / [`populate_solution_computed_fields`].
+//!
 //! This module provides functions to store, retrieve, and delete
 //! Problems, Solutions, Critiques, and Milestones from the SQLite database.
 

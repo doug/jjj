@@ -1,5 +1,13 @@
-// Public library interface for jjj
-// This allows testing and potential use as a library
+//! jjj (Jujutsu Juggler) — distributed project management using Popperian epistemology.
+//!
+//! Entities follow a three-tier model:
+//! - **Problems**: things to solve, forming a DAG via `parent_id`
+//! - **Solutions**: conjectures attached to jj Change IDs (not commit hashes)
+//! - **Critiques**: error-elimination feedback that can block solution acceptance
+//!
+//! All metadata lives in an orphaned `jjj` bookmark and syncs via `jj git push/fetch`.
+//! There is no central server and no database required for the core workflow.
+//! SQLite is used as a local cache for search and embeddings only.
 
 pub mod cli;
 pub mod commands;

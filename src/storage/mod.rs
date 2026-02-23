@@ -21,7 +21,15 @@ pub(super) const SOLUTIONS_DIR: &str = "solutions";
 pub(super) const CRITIQUES_DIR: &str = "critiques";
 pub(super) const MILESTONES_DIR: &str = "milestones";
 
-/// Storage layer for jjj metadata
+/// The core storage abstraction for jjj metadata.
+///
+/// Manages reading/writing Problems, Solutions, Critiques, and Milestones from
+/// an orphaned `jjj` bookmark stored in `.jj/jjj-meta/`. Each write goes through
+/// [`with_metadata`](MetadataStore::with_metadata), which atomically commits the
+/// change with an event appended to the commit message.
+///
+/// The metadata lives entirely outside the working copy — operations here never
+/// touch the user's working changes.
 pub struct MetadataStore {
     /// Path to the metadata directory (checked out from jjj bookmark)
     meta_path: PathBuf,
@@ -218,7 +226,11 @@ impl MetadataStore {
         Ok(())
     }
 
-    /// Ensure the metadata directory is checked out
+    /// Ensure the metadata workspace exists and is checked out from the `jjj` bookmark.
+    ///
+    /// Creates a new `jj workspace` pointing at `.jj/jjj-meta/` if the directory
+    /// does not already exist. Must be called before any file-level operations on
+    /// the metadata directory.
     pub(super) fn ensure_meta_checkout(&self) -> Result<()> {
         if !self.meta_path.exists() {
             // Create workspace for metadata
@@ -267,8 +279,16 @@ impl MetadataStore {
     // High-Level Operations
     // =========================================================================
 
-    /// Check if a problem can be marked as solved
-    /// Requires: at least one accepted solution OR all subproblems solved
+    /// Check whether a problem can transition to `Solved` status.
+    ///
+    /// A problem is solvable if:
+    /// 1. It has at least one `Accepted` solution, **or**
+    /// 2. All of its direct subproblems are `Solved`.
+    ///
+    /// Returns `(can_solve, reason)` where `reason` is non-empty when `can_solve`
+    /// is `false` (explaining the blocker) or when it is `true` via subproblem path
+    /// (confirming all subproblems are solved). Returns an error if the problem
+    /// cannot be found.
     pub fn can_solve_problem(&self, problem_id: &str) -> Result<(bool, String)> {
         let problem = self.load_problem(problem_id)?;
 
@@ -305,8 +325,15 @@ impl MetadataStore {
         Ok((false, "No accepted solution exists".to_string()))
     }
 
-    /// Check if a solution can be accepted
-    /// Requires: no valid critiques
+    /// Determine whether a solution is eligible for `Accepted` status.
+    ///
+    /// A solution can be accepted if:
+    /// 1. It is not already in a finalized state (`Accepted` or `Refuted`), **and**
+    /// 2. It has no `Valid` critiques (refuting critiques block acceptance).
+    ///
+    /// Open critiques do not block acceptance but produce a warning in the returned
+    /// message. Returns `(can_accept, message)` where `message` may describe
+    /// blockers or warnings.
     pub fn can_accept_solution(&self, solution_id: &str) -> Result<(bool, String)> {
         let solution = self.load_solution(solution_id)?;
 
@@ -375,7 +402,15 @@ impl MetadataStore {
         Ok(())
     }
 
-    /// Perform an operation on the metadata and commit
+    /// Execute an operation on the metadata store and atomically commit the result.
+    ///
+    /// This is the primary mechanism for all metadata writes. The `operation`
+    /// closure runs first; if it succeeds, changes are committed to the `jjj`
+    /// bookmark with `message` as the commit description. Any pending event set
+    /// via [`set_pending_event`](MetadataStore::set_pending_event) is appended to
+    /// the message and cleared.
+    ///
+    /// If `operation` returns an error, no commit is made.
     pub fn with_metadata<F, R>(&self, message: &str, operation: F) -> Result<R>
     where
         F: FnOnce() -> Result<R>,
