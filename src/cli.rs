@@ -2,7 +2,27 @@ use clap::{Parser, Subcommand, ValueEnum};
 
 #[derive(Parser)]
 #[command(name = "jjj")]
-#[command(author, version, about = "Distributed project management and code review for Jujutsu", long_about = None)]
+#[command(author, version)]
+#[command(about = "Distributed project management for Jujutsu repositories")]
+#[command(long_about = "
+jjj organises work as Problems → Solutions → Critiques, stored in an orphaned
+'jjj' bookmark alongside your code. No central server, no database — everything
+syncs with your normal 'jj git push'.
+
+  Problems   What needs solving (the question)
+  Solutions  Conjectures attached to jj change IDs (the approach)
+  Critiques  Error-elimination feedback that blocks or endorses a solution
+  Milestones Time-based goals grouping related problems")]
+#[command(after_long_help = "TYPICAL WORKFLOW:
+  jjj init                    Set up a new repository
+  jjj problem new 'Bug: ...'  Define what needs solving
+  jjj solution new 'Fix: ...' Propose your approach (creates a solution record)
+  jjj solution attach <id>    Link your current jj change to the solution
+  jjj submit                  Squash changes, mark solution ready for review
+  jjj critique new <id> '...' Raise a critique against a solution
+  jjj solution accept <id>    Accept the solution once critiques are resolved
+
+Run 'jjj <command> --help' for detailed options.")]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
@@ -10,56 +30,20 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Initialize jjj in the current repository
-    Init,
+    // ── Quick start ────────────────────────────────────────────────────────
 
-    /// Launch interactive TUI
+    /// Open the interactive project browser (recommended starting point)
+    #[command(display_order = 0)]
     Ui,
 
-    /// Manage problems (what needs to be solved)
-    Problem {
-        #[command(subcommand)]
-        action: ProblemAction,
-    },
-
-    /// Manage solutions (conjectures to solve problems)
-    Solution {
-        #[command(subcommand)]
-        action: SolutionAction,
-    },
-
-    /// Manage critiques (criticism of solutions)
-    Critique {
-        #[command(subcommand)]
-        action: CritiqueAction,
-    },
-
-    /// Manage milestones
-    Milestone {
-        #[command(subcommand)]
-        action: MilestoneAction,
-    },
-
-    /// Submit current changes (squash and complete solution)
-    Submit {
-        /// Force submit (bypass review check)
-        #[arg(long)]
-        force: bool,
-    },
-
-    /// Generate shell completions
-    Completion {
-        /// Shell to generate completions for
-        shell: Shell,
-    },
-
-    /// Show status and next actions
+    /// Show what needs your attention: open problems, pending reviews, critiques
+    #[command(display_order = 1)]
     Status {
-        /// Show all items (no limit)
+        /// Show all items regardless of limit
         #[arg(long)]
         all: bool,
 
-        /// Only my authored work
+        /// Show only your own authored work
         #[arg(long)]
         mine: bool,
 
@@ -72,16 +56,59 @@ pub enum Commands {
         json: bool,
     },
 
-    /// Search across all entities
+    // ── Core entities ──────────────────────────────────────────────────────
+
+    /// Track problems to solve (the questions driving your work)
+    #[command(display_order = 10)]
+    Problem {
+        #[command(subcommand)]
+        action: ProblemAction,
+    },
+
+    /// Propose and accept solutions — conjectures attached to jj change IDs
+    #[command(display_order = 11)]
+    Solution {
+        #[command(subcommand)]
+        action: SolutionAction,
+    },
+
+    /// Add and resolve critiques that challenge or endorse a solution
+    #[command(display_order = 12)]
+    Critique {
+        #[command(subcommand)]
+        action: CritiqueAction,
+    },
+
+    /// Group problems into time-based milestones and track progress
+    #[command(display_order = 13)]
+    Milestone {
+        #[command(subcommand)]
+        action: MilestoneAction,
+    },
+
+    // ── Workflow ───────────────────────────────────────────────────────────
+
+    /// Squash changes and complete the current solution (marks it for review)
+    #[command(display_order = 20)]
+    Submit {
+        /// Bypass review checks and force submit
+        #[arg(long)]
+        force: bool,
+    },
+
+    // ── Discover ───────────────────────────────────────────────────────────
+
+    /// Search problems, solutions, and critiques by text or semantic similarity
+    #[command(display_order = 30)]
     Search {
-        /// Search query (or entity reference like p/01957d for similarity search)
+        /// Query string, or an entity reference like 'p/01957d' for similarity search
         query: String,
 
-        /// Filter by entity type (problem, solution, critique, milestone, event)
+        /// Restrict to one entity type: problem, solution, critique, milestone, event
         #[arg(long, short = 't')]
         r#type: Option<String>,
 
-        /// Force text-only search (disable semantic/embedding features)
+        /// Use full-text search only (skip semantic/embedding features)
         #[arg(long)]
         text_only: bool,
 
@@ -90,40 +117,10 @@ pub enum Commands {
         json: bool,
     },
 
-    /// Database management commands
-    Db {
-        #[command(subcommand)]
-        action: DbAction,
-    },
-
-    /// Fetch code and metadata from remote
-    Fetch {
-        /// Remote to fetch from (default: origin)
-        #[arg(long, default_value = "origin")]
-        remote: String,
-    },
-
-    /// Push code and metadata to remote
-    Push {
-        /// Bookmarks to push (in addition to jjj)
-        bookmarks: Vec<String>,
-
-        /// Remote to push to (default: origin)
-        #[arg(long, default_value = "origin")]
-        remote: String,
-
-        /// Skip interactive prompts
-        #[arg(long)]
-        no_prompt: bool,
-
-        /// Show what would be pushed without pushing
-        #[arg(long)]
-        dry_run: bool,
-    },
-
-    /// Show timeline for a problem
+    /// Show the full history of a problem: solutions, critiques, and decisions
+    #[command(display_order = 31)]
     Timeline {
-        /// Problem ID to show timeline for
+        /// Problem ID or title
         problem_id: String,
 
         /// Output as JSON
@@ -131,38 +128,33 @@ pub enum Commands {
         json: bool,
     },
 
-    /// Sync with external systems (GitHub, etc.)
-    Sync {
-        #[command(subcommand)]
-        source: SyncSource,
-    },
-
-    /// Query the event log
+    /// Browse the structured event log (state changes, rationales, decisions)
+    #[command(display_order = 32)]
     Events {
         #[command(subcommand)]
         action: Option<EventsAction>,
 
-        /// Filter by start date (YYYY-MM-DD or YYYY-MM)
+        /// Show events on or after this date (YYYY-MM-DD or YYYY-MM)
         #[arg(long)]
         from: Option<String>,
 
-        /// Filter by end date
+        /// Show events on or before this date
         #[arg(long)]
         to: Option<String>,
 
-        /// Filter by problem
+        /// Filter to events touching a specific problem
         #[arg(long)]
         problem: Option<String>,
 
-        /// Filter by solution
+        /// Filter to events touching a specific solution
         #[arg(long)]
         solution: Option<String>,
 
-        /// Filter by event type
+        /// Filter by event type (e.g. problem_created, solution_accepted)
         #[arg(long, name = "type")]
         event_type: Option<String>,
 
-        /// Full-text search in rationales
+        /// Full-text search in event rationales
         #[arg(long)]
         search: Option<String>,
 
@@ -170,9 +162,65 @@ pub enum Commands {
         #[arg(long)]
         json: bool,
 
-        /// Number of events to show (default: 20)
+        /// Maximum number of events to show (default: 20)
         #[arg(long, default_value = "20")]
         limit: usize,
+    },
+
+    // ── Collaborate ────────────────────────────────────────────────────────
+
+    /// Pull jj changes and jjj metadata from a remote
+    #[command(display_order = 40)]
+    Fetch {
+        /// Remote name (default: origin)
+        #[arg(long, default_value = "origin")]
+        remote: String,
+    },
+
+    /// Push jj changes and jjj metadata to a remote
+    #[command(display_order = 41)]
+    Push {
+        /// Additional bookmarks to push alongside jjj
+        bookmarks: Vec<String>,
+
+        /// Remote name (default: origin)
+        #[arg(long, default_value = "origin")]
+        remote: String,
+
+        /// Skip interactive confirmation prompts
+        #[arg(long)]
+        no_prompt: bool,
+
+        /// Preview what would be pushed without pushing
+        #[arg(long)]
+        dry_run: bool,
+    },
+
+    /// Sync problems and solutions with GitHub Issues and Pull Requests
+    #[command(display_order = 42)]
+    Sync {
+        #[command(subcommand)]
+        source: SyncSource,
+    },
+
+    // ── Setup & utilities ──────────────────────────────────────────────────
+
+    /// Initialize jjj metadata in the current jj repository
+    #[command(display_order = 50)]
+    Init,
+
+    /// Manage the local SQLite cache (full-text search index and embeddings)
+    #[command(display_order = 51)]
+    Db {
+        #[command(subcommand)]
+        action: DbAction,
+    },
+
+    /// Generate shell completions (bash, zsh, fish, etc.)
+    #[command(display_order = 52)]
+    Completion {
+        /// Target shell
+        shell: Shell,
     },
 }
 
@@ -191,10 +239,10 @@ pub enum Shell {
 
 #[derive(Subcommand)]
 pub enum DbAction {
-    /// Show database status
+    /// Show local database status (entity counts, index health)
     Status,
 
-    /// Rebuild database from markdown (includes FTS and embeddings)
+    /// Rebuild the database from markdown files (re-indexes FTS and embeddings)
     Rebuild,
 }
 
@@ -204,10 +252,10 @@ pub enum DbAction {
 
 #[derive(Subcommand)]
 pub enum EventsAction {
-    /// Rebuild events.jsonl from commit history
+    /// Rebuild events.jsonl by replaying the jjj commit history
     Rebuild,
 
-    /// Validate event log against entity states
+    /// Check that event log states match current entity states
     Validate,
 }
 
@@ -218,114 +266,122 @@ pub enum EventsAction {
 #[derive(Subcommand)]
 pub enum ProblemAction {
     /// Create a new problem
+    #[command(display_order = 0)]
     New {
-        /// Problem title
+        /// Problem title (the question to answer)
         title: String,
 
-        /// Priority (P0/critical, P1/high, P2/medium, P3/low)
+        /// Priority: critical (P0), high (P1), medium (P2), low (P3)
         #[arg(long, default_value = "medium")]
         priority: String,
 
-        /// Parent problem (for sub-problems)
+        /// Parent problem ID — makes this a sub-problem
         #[arg(long)]
         parent: Option<String>,
 
-        /// Milestone to target
+        /// Milestone to assign this problem to
         #[arg(long)]
         milestone: Option<String>,
 
-        /// Skip duplicate checking
+        /// Skip duplicate-detection checks
         #[arg(long, short = 'f')]
         force: bool,
     },
 
-    /// List all problems
+    /// List problems with optional filters
+    #[command(display_order = 1)]
     List {
-        /// Filter by status
+        /// Filter by status: open, in_progress, solved, dissolved
         #[arg(long)]
         status: Option<String>,
 
-        /// Show as tree (hierarchical view)
+        /// Show problems as a hierarchy tree
         #[arg(long)]
         tree: bool,
 
-        /// Filter by milestone
+        /// Filter to problems in a specific milestone
         #[arg(long)]
         milestone: Option<String>,
 
-        /// Search problems
+        /// Filter by title keyword
         #[arg(long)]
         search: Option<String>,
 
-        /// Sort by field (priority, status, created, title)
+        /// Sort by: priority, status, created, title
         #[arg(long, default_value = "priority")]
         sort: String,
 
-        /// Output in JSON format
+        /// Output as JSON
         #[arg(long)]
         json: bool,
     },
 
-    /// Show problem details
+    /// Show details for a problem
+    #[command(display_order = 2)]
     Show {
-        /// Problem ID or title (e.g., "auth bug", 01957d)
+        /// Problem ID, short prefix, or fuzzy title (e.g., "auth bug", 01957d)
         problem_id: String,
 
-        /// Output in JSON format
+        /// Output as JSON
         #[arg(long)]
         json: bool,
     },
 
-    /// Edit problem details
+    /// Edit a problem's title, status, or priority
+    #[command(display_order = 3)]
     Edit {
-        /// Problem ID or title (e.g., "auth bug", 01957d)
+        /// Problem ID, short prefix, or fuzzy title
         problem_id: String,
 
         /// New title
         #[arg(long)]
         title: Option<String>,
 
-        /// New status (open, in_progress, solved, dissolved)
+        /// New status: open, in_progress, solved, dissolved
         #[arg(long)]
         status: Option<String>,
 
-        /// Set priority (P0/critical, P1/high, P2/medium, P3/low)
+        /// New priority: critical (P0), high (P1), medium (P2), low (P3)
         #[arg(long)]
         priority: Option<String>,
 
-        /// Set parent problem
+        /// New parent problem (re-parents this as a sub-problem)
         #[arg(long)]
         parent: Option<String>,
     },
 
-    /// Show problem hierarchy as tree
+    /// Show problems as a hierarchy tree
+    #[command(display_order = 4)]
     Tree {
-        /// Starting problem ID (defaults to all root problems)
+        /// Root problem to start from (default: all root problems)
         problem_id: Option<String>,
     },
 
-    /// Mark problem as solved (requires accepted solution)
+    /// Mark a problem solved (requires an accepted solution or all sub-problems solved)
+    #[command(display_order = 5)]
     Solve {
-        /// Problem ID or title (e.g., "auth bug", 01957d)
+        /// Problem ID, short prefix, or fuzzy title
         problem_id: String,
     },
 
-    /// Mark problem as dissolved (based on false premises)
+    /// Dissolve a problem — mark it as based on false premises, not truly a problem
+    #[command(display_order = 6)]
     Dissolve {
-        /// Problem ID or title (e.g., "auth bug", 01957d)
+        /// Problem ID, short prefix, or fuzzy title
         problem_id: String,
 
-        /// Reason for dissolving (why the problem was based on false premises)
+        /// Explanation of why the problem turned out to be misconceived
         #[arg(long)]
         reason: Option<String>,
     },
 
-    /// Assign a problem to a person
+    /// Assign a problem to yourself or someone else
+    #[command(display_order = 7)]
     Assign {
-        /// Problem ID or title (e.g., "auth bug", 01957d)
+        /// Problem ID, short prefix, or fuzzy title
         problem_id: String,
 
-        /// Assignee name (if not specified, assigns to self)
+        /// Assignee (defaults to your jj identity)
         #[arg(long)]
         to: Option<String>,
     },
@@ -337,79 +393,83 @@ pub enum ProblemAction {
 
 #[derive(Subcommand)]
 pub enum SolutionAction {
-    /// Create a new solution (conjecture)
+    /// Propose a new solution (conjecture) for a problem
+    #[command(display_order = 0)]
     New {
-        /// Solution title
+        /// Solution title describing the approach
         title: String,
 
-        /// Problem this solution addresses (optional - will prompt if not provided)
+        /// Problem this solution addresses (prompts if omitted)
         #[arg(long)]
         problem: Option<String>,
 
-        /// Solution this supersedes (e.g., "old approach", 01958a)
+        /// ID of an older solution that this one supersedes
         #[arg(long)]
         supersedes: Option<String>,
 
-        /// Request review from specified people (creates awaiting review critiques)
-        /// Use @name or name:severity (e.g., @bob, alice:high)
+        /// Request review from specific people; use @name or name:severity
         #[arg(long, value_name = "REVIEWER")]
         reviewer: Vec<String>,
 
-        /// Skip duplicate checking
+        /// Skip duplicate-detection checks
         #[arg(long, short = 'f')]
         force: bool,
     },
 
-    /// List all solutions
+    /// List solutions with optional filters
+    #[command(display_order = 1)]
     List {
-        /// Filter by problem
+        /// Filter to solutions for a specific problem
         #[arg(long)]
         problem: Option<String>,
 
-        /// Filter by status (proposed, testing, refuted, accepted)
+        /// Filter by status: proposed, testing, accepted, refuted
         #[arg(long)]
         status: Option<String>,
 
-        /// Search solutions
+        /// Filter by title keyword
         #[arg(long)]
         search: Option<String>,
 
-        /// Sort by field (status, created, title)
+        /// Sort by: status, created, title
         #[arg(long, default_value = "status")]
         sort: String,
 
-        /// Output in JSON format
+        /// Output as JSON
         #[arg(long)]
         json: bool,
     },
 
-    /// Show solution details
+    /// Show details for a solution
+    #[command(display_order = 2)]
     Show {
-        /// Solution ID or title (e.g., "pooling", 01958a)
+        /// Solution ID, short prefix, or fuzzy title (e.g., "pooling", 01958a)
         solution_id: String,
 
-        /// Output in JSON format
+        /// Output as JSON
         #[arg(long)]
         json: bool,
     },
 
-    /// Edit solution details
+    /// Edit a solution's title or status
+    #[command(display_order = 3)]
     Edit {
-        /// Solution ID or title (e.g., "pooling", 01958a)
+        /// Solution ID, short prefix, or fuzzy title
         solution_id: String,
 
         /// New title
         #[arg(long)]
         title: Option<String>,
 
-        /// New status
+        /// New status: proposed, testing, accepted, refuted
         #[arg(long)]
         status: Option<String>,
     },
 
-    /// Attach current jj change to solution
+    /// Link the current jj change to a solution
+    #[command(display_order = 4)]
     Attach {
-        /// Solution ID or title (e.g., "pooling", 01958a)
+        /// Solution ID, short prefix, or fuzzy title
         solution_id: String,
 
         /// Skip validation checks (change existence, duplicate attachment)
@@ -417,70 +477,76 @@ pub enum SolutionAction {
         force: bool,
     },
 
-    /// Detach a change from solution
+    /// Unlink a jj change from a solution
+    #[command(display_order = 5)]
     Detach {
-        /// Solution ID or title (e.g., "pooling", 01958a)
+        /// Solution ID, short prefix, or fuzzy title
         solution_id: String,
 
-        /// Change ID (if not specified, uses current change)
+        /// Change ID to detach (defaults to the current change)
         change_id: Option<String>,
 
-        /// Skip safety checks (testing state, last change)
+        /// Skip safety checks (testing state, last-change guard)
         #[arg(long)]
         force: bool,
     },
 
-    /// Move solution to testing status
+    /// Mark a solution as in testing — ready for review
+    #[command(display_order = 6)]
     Test {
-        /// Solution ID or title (e.g., "pooling", 01958a)
+        /// Solution ID, short prefix, or fuzzy title
         solution_id: String,
     },
 
-    /// Accept solution (requires no open critiques)
+    /// Accept a solution — no Valid critiques may remain
+    #[command(display_order = 7)]
     Accept {
-        /// Solution ID or title (e.g., "pooling", 01958a)
+        /// Solution ID, short prefix, or fuzzy title
         solution_id: String,
 
-        /// Force accept even with open critiques
+        /// Accept despite open (unresolved) critiques
         #[arg(long)]
         force: bool,
 
-        /// Reason for accepting
+        /// Record why this solution was accepted
         #[arg(long)]
         rationale: Option<String>,
 
-        /// Skip rationale prompt
+        /// Skip the rationale prompt
         #[arg(long)]
         no_rationale: bool,
     },
 
-    /// Refute solution (criticism showed it won't work)
+    /// Refute a solution — a critique proved it won't work
+    #[command(display_order = 8)]
     Refute {
-        /// Solution ID or title (e.g., "pooling", 01958a)
+        /// Solution ID, short prefix, or fuzzy title
         solution_id: String,
 
-        /// Reason for refuting
+        /// Record why this solution was refuted
         #[arg(long)]
         rationale: Option<String>,
 
-        /// Skip rationale prompt
+        /// Skip the rationale prompt
         #[arg(long)]
         no_rationale: bool,
     },
 
-    /// Assign a solution to a person
+    /// Assign a solution to yourself or someone else
+    #[command(display_order = 9)]
     Assign {
-        /// Solution ID or title (e.g., "pooling", 01958a)
+        /// Solution ID, short prefix, or fuzzy title
         solution_id: String,
 
-        /// Assignee name (if not specified, assigns to self)
+        /// Assignee (defaults to your jj identity)
         #[arg(long)]
         to: Option<String>,
     },
 
-    /// Resume working on an existing solution
+    /// Switch back to working on an existing solution
+    #[command(display_order = 10)]
     Resume {
-        /// Solution ID or title (e.g., "pooling", 01958a)
+        /// Solution ID, short prefix, or fuzzy title
         solution_id: String,
     },
 }
@@ -491,38 +557,40 @@ pub enum SolutionAction {
 
 #[derive(Subcommand)]
 pub enum CritiqueAction {
-    /// Add a critique to a solution
+    /// Raise a new critique against a solution
+    #[command(display_order = 0)]
     New {
-        /// Solution to critique (e.g., "pooling", 01958a)
+        /// Solution to critique (ID, short prefix, or fuzzy title)
         solution_id: String,
 
-        /// Critique title
+        /// Brief description of the critique
         title: String,
 
-        /// Severity (low, medium, high, critical)
+        /// Severity: low, medium, high, critical
         #[arg(long, default_value = "medium")]
         severity: String,
 
-        /// File path for code-level critique
+        /// Source file relevant to this critique
         #[arg(long)]
         file: Option<String>,
 
-        /// Line number for code-level critique
+        /// Source line number
         #[arg(long)]
         line: Option<usize>,
 
-        /// Assign a reviewer to address this critique
+        /// Assign a specific reviewer to address this critique
         #[arg(long)]
         reviewer: Option<String>,
     },
 
-    /// List critiques
+    /// List critiques with optional filters
+    #[command(display_order = 1)]
     List {
-        /// Filter by solution
+        /// Filter to critiques on a specific solution
         #[arg(long)]
         solution: Option<String>,
 
-        /// Filter by status (open, addressed, valid, dismissed)
+        /// Filter by status: open, addressed, valid, dismissed
         #[arg(long)]
         status: Option<String>,
 
@@ -530,67 +598,73 @@ pub enum CritiqueAction {
         #[arg(long)]
         reviewer: Option<String>,
 
-        /// Search critiques
+        /// Filter by title keyword
         #[arg(long)]
         search: Option<String>,
 
-        /// Output in JSON format
+        /// Output as JSON
         #[arg(long)]
         json: bool,
     },
 
-    /// Show critique details
+    /// Show details for a critique
+    #[command(display_order = 2)]
     Show {
-        /// Critique ID or title (e.g., "error handling", 01959b)
+        /// Critique ID, short prefix, or fuzzy title
         critique_id: String,
 
-        /// Output in JSON format
+        /// Output as JSON
         #[arg(long)]
         json: bool,
     },
 
-    /// Edit critique details
+    /// Edit a critique's title, severity, or status
+    #[command(display_order = 3)]
     Edit {
-        /// Critique ID or title (e.g., "error handling", 01959b)
+        /// Critique ID, short prefix, or fuzzy title
         critique_id: String,
 
         /// New title
         #[arg(long)]
         title: Option<String>,
 
-        /// New severity
+        /// New severity: low, medium, high, critical
         #[arg(long)]
         severity: Option<String>,
 
-        /// New status
+        /// New status: open, addressed, valid, dismissed
         #[arg(long)]
         status: Option<String>,
     },
 
-    /// Mark critique as addressed (solution was modified)
+    /// Mark a critique as addressed — the solution was updated to handle it
+    #[command(display_order = 4)]
     Address {
-        /// Critique ID or title (e.g., "error handling", 01959b)
+        /// Critique ID, short prefix, or fuzzy title
         critique_id: String,
     },
 
-    /// Validate critique (it's correct, solution should be refuted)
+    /// Validate a critique — confirm it is correct and the solution must be refuted
+    #[command(display_order = 5)]
     Validate {
-        /// Critique ID or title (e.g., "error handling", 01959b)
+        /// Critique ID, short prefix, or fuzzy title
         critique_id: String,
     },
 
-    /// Dismiss critique (incorrect or irrelevant)
+    /// Dismiss a critique — it is incorrect or no longer relevant
+    #[command(display_order = 6)]
     Dismiss {
-        /// Critique ID or title (e.g., "error handling", 01959b)
+        /// Critique ID, short prefix, or fuzzy title
         critique_id: String,
     },
 
-    /// Reply to a critique
+    /// Reply to a critique with a comment
+    #[command(display_order = 7)]
     Reply {
-        /// Critique ID or title (e.g., "error handling", 01959b)
+        /// Critique ID, short prefix, or fuzzy title
         critique_id: String,
 
-        /// Reply body
+        /// Reply text
         body: String,
     },
 }
@@ -602,81 +676,89 @@ pub enum CritiqueAction {
 #[derive(Subcommand)]
 pub enum MilestoneAction {
     /// Create a new milestone
+    #[command(display_order = 0)]
     New {
         /// Milestone title
         title: String,
 
-        /// Target date (YYYY-MM-DD)
+        /// Target completion date (YYYY-MM-DD)
         #[arg(long)]
         date: Option<String>,
     },
 
-    /// Edit milestone details
+    /// List all milestones
+    #[command(display_order = 1)]
+    List {
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Show details for a milestone
+    #[command(display_order = 2)]
+    Show {
+        /// Milestone ID, short prefix, or fuzzy title (e.g., "v1.0", 01960c)
+        milestone_id: String,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Edit a milestone's title, date, or status
+    #[command(display_order = 3)]
     Edit {
-        /// Milestone ID or title (e.g., "v1.0", 01960c)
+        /// Milestone ID, short prefix, or fuzzy title
         milestone_id: String,
 
         /// New title
         #[arg(long)]
         title: Option<String>,
 
-        /// New target date
+        /// New target date (YYYY-MM-DD)
         #[arg(long)]
         date: Option<String>,
 
-        /// New status (planning, active, completed, cancelled)
+        /// New status: planning, active, completed, cancelled
         #[arg(long)]
         status: Option<String>,
     },
 
-    /// List all milestones
-    List {
-        /// Output in JSON format
-        #[arg(long)]
-        json: bool,
-    },
-
-    /// Show milestone details
-    Show {
-        /// Milestone ID or title (e.g., "v1.0", 01960c)
-        milestone_id: String,
-
-        /// Output in JSON format
-        #[arg(long)]
-        json: bool,
-    },
-
-    /// Add a problem to milestone
-    AddProblem {
-        /// Milestone ID or title (e.g., "v1.0", 01960c)
-        milestone_id: String,
-
-        /// Problem ID or title (e.g., "auth bug", 01957d)
-        problem_id: String,
-    },
-
-    /// Remove a problem from milestone
-    RemoveProblem {
-        /// Milestone ID or title (e.g., "v1.0", 01960c)
-        milestone_id: String,
-
-        /// Problem ID or title (e.g., "auth bug", 01957d)
-        problem_id: String,
-    },
-
-    /// Show roadmap view (problems and solution progress)
+    /// Show milestone roadmap: problems and their solution progress
+    #[command(display_order = 4)]
     Roadmap {
-        /// Output in JSON format
+        /// Output as JSON
         #[arg(long)]
         json: bool,
     },
 
-    /// Assign a milestone to a person
-    Assign {
-        /// Milestone ID or title (e.g., "v1.0", 01960c)
+    /// Add a problem to a milestone
+    #[command(display_order = 5)]
+    AddProblem {
+        /// Milestone ID, short prefix, or fuzzy title
         milestone_id: String,
 
-        /// Assignee name (if not specified, assigns to self)
+        /// Problem ID, short prefix, or fuzzy title
+        problem_id: String,
+    },
+
+    /// Remove a problem from a milestone
+    #[command(display_order = 6)]
+    RemoveProblem {
+        /// Milestone ID, short prefix, or fuzzy title
+        milestone_id: String,
+
+        /// Problem ID, short prefix, or fuzzy title
+        problem_id: String,
+    },
+
+    /// Assign a milestone to yourself or someone else
+    #[command(display_order = 7)]
+    Assign {
+        /// Milestone ID, short prefix, or fuzzy title
+        milestone_id: String,
+
+        /// Assignee (defaults to your jj identity)
         #[arg(long)]
         to: Option<String>,
     },
@@ -693,7 +775,7 @@ pub enum SyncSource {
         #[command(subcommand)]
         action: Option<GitHubSyncAction>,
 
-        /// Show what would be done without making changes
+        /// Preview actions without making any changes
         #[arg(long)]
         dry_run: bool,
     },
@@ -701,46 +783,52 @@ pub enum SyncSource {
 
 #[derive(Subcommand)]
 pub enum GitHubSyncAction {
-    /// Import a GitHub issue as a jjj problem
+    /// Import a GitHub issue (or all unlinked issues) as jjj problems
+    #[command(display_order = 0)]
     Import {
-        /// Issue number or reference (e.g., "#123" or "123")
+        /// Issue number to import (e.g., "123" or "#123")
         issue: Option<String>,
 
-        /// Import all unlinked issues
+        /// Import every unlinked open issue
         #[arg(long)]
         all: bool,
 
-        /// Filter by label when importing
+        /// Filter by label when using --all
         #[arg(long)]
         label: Option<String>,
     },
 
     /// Create or update a GitHub PR for a solution
+    #[command(display_order = 1)]
     Pr {
-        /// Solution ID or title (uses current change if not specified)
+        /// Solution ID or title (defaults to the current change's solution)
         solution_id: Option<String>,
 
-        /// Base branch for the PR (default: main)
+        /// Base branch for the PR
         #[arg(long, default_value = "main")]
         base: String,
     },
 
-    /// Show sync status for all linked entities
+    /// Show sync status for all linked problems and solutions
+    #[command(display_order = 2)]
     Status,
 
-    /// Merge a linked GitHub PR
+    /// Squash-merge the linked GitHub PR for a solution
+    #[command(display_order = 3)]
     Merge {
         /// Solution ID or title
         solution_id: String,
     },
 
     /// Close the linked GitHub issue for a problem
+    #[command(display_order = 4)]
     Close {
         /// Problem ID or title
         problem_id: String,
     },
 
     /// Reopen the linked GitHub issue for a problem
+    #[command(display_order = 5)]
     Reopen {
         /// Problem ID or title
         problem_id: String,
