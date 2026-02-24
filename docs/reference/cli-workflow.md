@@ -1,6 +1,6 @@
 ---
 title: Workflow Commands
-description: CLI reference for init, submit, status, push, fetch, and other high-level jjj commands
+description: CLI reference for init, submit, status, fetch, push, sync, github, and other high-level jjj commands
 ---
 
 # Workflow Commands
@@ -105,6 +105,61 @@ jjj push [bookmarks...] [OPTIONS]
 jjj push
 jjj push my-feature
 jjj push --dry-run
+```
+
+## `jjj sync`
+
+Fetch from remote then push local changes back — shorthand for `jjj fetch` followed by `jjj push`.
+
+```
+jjj sync [OPTIONS]
+```
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `--remote` | string | Remote to sync with (default: origin) |
+| `--no-prompt` | bool | Skip interactive prompts |
+| `--dry-run` | bool | Show what would happen without making any changes |
+
+```bash
+jjj sync
+jjj sync --remote upstream
+jjj sync --dry-run
+```
+
+## `jjj github`
+
+Bridge jjj problems and solutions with GitHub Issues and Pull Requests.
+
+```
+jjj github [COMMAND] [OPTIONS]
+```
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `--dry-run` | bool | Preview actions without making any changes |
+
+### Subcommands
+
+| Command | Description |
+|---------|-------------|
+| `import [issue] [--all] [--label]` | Import GitHub issue(s) as jjj problems |
+| `pr [solution] [--base]` | Create or update a GitHub PR for a solution |
+| `status` | Show sync status for all linked problems and solutions |
+| `merge <solution>` | Squash-merge the linked GitHub PR for a solution |
+| `close <problem>` | Close the linked GitHub issue for a problem |
+| `reopen <problem>` | Reopen the linked GitHub issue for a problem |
+
+```bash
+jjj github                          # pull review states from GitHub
+jjj github import #123              # import issue #123 as a problem
+jjj github import --all             # import all unlinked open issues
+jjj github import --all --label bug # import issues with a specific label
+jjj github pr                       # create PR for current solution
+jjj github pr "auth fix" --base dev # create PR against a specific base branch
+jjj github status                   # show linked issue/PR status
+jjj github merge "auth fix"         # squash-merge the linked PR
+jjj github close "old problem"      # close the linked GitHub issue
 ```
 
 ## `jjj ui`

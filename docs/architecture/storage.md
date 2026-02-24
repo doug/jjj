@@ -353,7 +353,7 @@ Entities include optional fields for bidirectional GitHub synchronization:
 - **Solutions**: `github_pr` (pull request number), `github_branch` (remote branch name)
 - **Critiques**: `github_review_id` -- linked GitHub review ID
 
-These fields are stored in both the YAML frontmatter (canonical) and the SQLite cache (indexed). The `jjj sync` subsystem uses the `gh` CLI to push and pull state between the shadow graph and GitHub Issues/PRs.
+These fields are stored in both the YAML frontmatter (canonical) and the SQLite cache (indexed). The `jjj github` command uses the `gh` CLI to push and pull state between the shadow graph and GitHub Issues/PRs.
 
 ## Backup and Recovery
 
