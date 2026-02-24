@@ -1,80 +1,125 @@
 import React from 'react';
-import { Target, Zap, ShieldAlert, ChevronRight } from 'lucide-react';
+import { Target, Zap, ShieldAlert } from 'lucide-react';
+
+function ArrowRight() {
+  return (
+    <svg viewBox="0 0 48 20" width="48" height="20" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <line x1="2" y1="10" x2="35" y2="10"
+        stroke="var(--accent)" strokeWidth="2" strokeDasharray="4 3" opacity="0.5" />
+      <polygon points="32,5 46,10 32,15" fill="var(--accent)" opacity="0.5" />
+    </svg>
+  );
+}
+
+function ArrowDown() {
+  return (
+    <svg viewBox="0 0 20 44" width="20" height="44" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <line x1="10" y1="2" x2="10" y2="33"
+        stroke="var(--accent)" strokeWidth="2" strokeDasharray="4 3" opacity="0.5" />
+      <polygon points="5,29 10,43 15,29" fill="var(--accent)" opacity="0.5" />
+    </svg>
+  );
+}
 
 export function WorkflowDiagram() {
   return (
-    <div className="relative flex flex-col md:flex-row items-center justify-center gap-12 md:gap-4 py-12 max-w-4xl mx-auto">
-      {/* Background Glow */}
-      <div className="absolute inset-0 bg-accent/5 blur-3xl rounded-full -z-10" />
+    <div className="max-w-3xl mx-auto py-8 px-4">
+      {/* Three-phase flow */}
+      <div className="flex flex-col md:flex-row items-center justify-center">
 
-      {/* SVG Connections (Desktop) */}
-      <svg className="absolute inset-0 w-full h-full hidden md:block pointer-events-none" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="line-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.2" />
-            <stop offset="50%" stopColor="var(--accent)" stopOpacity="1" />
-            <stop offset="100%" stopColor="var(--accent)" stopOpacity="0.2" />
-          </linearGradient>
-          <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-            <polygon points="0 0, 10 3.5, 0 7" fill="var(--accent)" />
-          </marker>
-        </defs>
-        <path d="M 160 80 L 250 80" stroke="url(#line-grad)" strokeWidth="2" strokeDasharray="4 4" marker-end="url(#arrowhead)" className="animate-dash" />
-        <path d="M 420 80 L 510 80" stroke="url(#line-grad)" strokeWidth="2" strokeDasharray="4 4" marker-end="url(#arrowhead)" className="animate-dash" />
-      </svg>
+        {/* PROBLEM */}
+        <div className="group relative flex flex-col items-center">
+          <div className="w-36 h-28 rounded-2xl bg-linear-to-br from-red-500 to-red-700 dark:from-red-600 dark:to-red-900 border border-white/20 shadow-xl flex flex-col items-center justify-center text-white z-10 transition-all duration-300 group-hover:scale-105">
+            <Target className="w-8 h-8 mb-2 opacity-90" />
+            <span className="font-black text-lg tracking-tighter uppercase">PROBLEM</span>
+          </div>
+          <div className="mt-3 text-center">
+            <p className="text-xs font-bold text-text-primary uppercase tracking-widest opacity-70">Phase 1</p>
+            <p className="text-sm text-text-secondary">Identify &amp; articulate</p>
+          </div>
+          <div className="absolute inset-0 bg-red-500/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity -z-10" />
+        </div>
 
-      {/* Problem */}
-      <div className="group relative flex flex-col items-center">
-        <div className="w-36 h-28 rounded-2xl bg-linear-to-br from-red-500 to-red-700 dark:from-red-600 dark:to-red-900 border border-white/20 shadow-xl flex flex-col items-center justify-center text-white z-10 transition-all duration-300 group-hover:scale-105 group-hover:shadow-red-500/20">
-          <Target className="w-8 h-8 mb-2 opacity-90" />
-          <span className="font-black text-lg tracking-tighter uppercase">PROBLEM</span>
+        {/* Connector */}
+        <div className="my-4 md:my-0 md:mx-3 self-center flex items-center justify-center">
+          <span className="hidden md:block"><ArrowRight /></span>
+          <span className="md:hidden block"><ArrowDown /></span>
         </div>
-        <div className="mt-4 text-center">
-          <p className="text-xs font-bold text-text-primary uppercase tracking-widest opacity-80">Phase 1</p>
-          <p className="text-sm text-text-secondary">Identify & articulate</p>
+
+        {/* SOLUTION */}
+        <div className="group relative flex flex-col items-center">
+          <div className="w-36 h-28 rounded-2xl bg-linear-to-br from-blue-500 to-blue-700 dark:from-blue-600 dark:to-blue-900 border border-white/20 shadow-xl flex flex-col items-center justify-center text-white z-10 transition-all duration-300 group-hover:scale-105">
+            <Zap className="w-8 h-8 mb-2 opacity-90" />
+            <span className="font-black text-lg tracking-tighter uppercase">SOLUTION</span>
+          </div>
+          <div className="mt-3 text-center">
+            <p className="text-xs font-bold text-text-primary uppercase tracking-widest opacity-70">Phase 2</p>
+            <p className="text-sm text-text-secondary">Propose conjecture</p>
+          </div>
+          <div className="absolute inset-0 bg-blue-500/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity -z-10" />
         </div>
-        {/* Glow behind */}
-        <div className="absolute inset-0 bg-red-500/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+
+        {/* Connector */}
+        <div className="my-4 md:my-0 md:mx-3 self-center flex items-center justify-center">
+          <span className="hidden md:block"><ArrowRight /></span>
+          <span className="md:hidden block"><ArrowDown /></span>
+        </div>
+
+        {/* CRITIQUE */}
+        <div className="group relative flex flex-col items-center">
+          <div className="w-36 h-28 rounded-2xl bg-linear-to-br from-purple-500 to-purple-700 dark:from-purple-600 dark:to-purple-900 border border-white/20 shadow-xl flex flex-col items-center justify-center text-white z-10 transition-all duration-300 group-hover:scale-105">
+            <ShieldAlert className="w-8 h-8 mb-2 opacity-90" />
+            <span className="font-black text-lg tracking-tighter uppercase">CRITIQUE</span>
+          </div>
+          <div className="mt-3 text-center">
+            <p className="text-xs font-bold text-text-primary uppercase tracking-widest opacity-70">Phase 3</p>
+            <p className="text-sm text-text-secondary">Eliminate errors</p>
+          </div>
+          <div className="absolute inset-0 bg-purple-500/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity -z-10" />
+        </div>
       </div>
 
-      {/* Mobile Arrow */}
-      <ChevronRight className="md:hidden w-8 h-8 text-accent animate-bounce rotate-90" />
-
-      {/* Solution */}
-      <div className="group relative flex flex-col items-center">
-        <div className="w-36 h-28 rounded-2xl bg-linear-to-br from-blue-500 to-blue-700 dark:from-blue-600 dark:to-blue-900 border border-white/20 shadow-xl flex flex-col items-center justify-center text-white z-10 transition-all duration-300 group-hover:scale-105 group-hover:shadow-blue-500/20">
-          <Zap className="w-8 h-8 mb-2 opacity-90" />
-          <span className="font-black text-lg tracking-tighter uppercase">SOLUTION</span>
-        </div>
-        <div className="mt-4 text-center">
-          <p className="text-xs font-bold text-text-primary uppercase tracking-widest opacity-80">Phase 2</p>
-          <p className="text-sm text-text-secondary">Propose conjecture</p>
-        </div>
-        <div className="absolute inset-0 bg-blue-500/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
-      </div>
-
-      {/* Mobile Arrow */}
-      <ChevronRight className="md:hidden w-8 h-8 text-accent animate-bounce rotate-90" />
-
-      {/* Critique */}
-      <div className="group relative flex flex-col items-center">
-        <div className="w-36 h-28 rounded-2xl bg-linear-to-br from-purple-500 to-purple-700 dark:from-purple-600 dark:to-purple-900 border border-white/20 shadow-xl flex flex-col items-center justify-center text-white z-10 transition-all duration-300 group-hover:scale-105 group-hover:shadow-purple-500/20">
-          <ShieldAlert className="w-8 h-8 mb-2 opacity-90" />
-          <span className="font-black text-lg tracking-tighter uppercase">CRITIQUE</span>
-        </div>
-        <div className="mt-4 text-center">
-          <p className="text-xs font-bold text-text-primary uppercase tracking-widest opacity-80">Phase 3</p>
-          <p className="text-sm text-text-secondary">Eliminate errors</p>
-        </div>
-        <div className="absolute inset-0 bg-purple-500/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
-      </div>
-
-      {/* Refine loop (Desktop) */}
-      <div className="hidden md:flex flex-col items-center ml-8 group">
-        <div className="w-16 h-16 rounded-full border-2 border-dashed border-success/40 flex items-center justify-center transition-all group-hover:rotate-180 group-hover:border-success">
-          <span className="text-success text-3xl">↻</span>
-        </div>
-        <p className="mt-2 text-xs font-bold text-success uppercase tracking-widest">Refine</p>
+      {/* Refine feedback loop — desktop arc, mobile label */}
+      <div className="mt-2">
+        {/*
+          Arc spans from x=72 (center of leftmost card) to x=508 (center of rightmost card)
+          within a 580-wide viewBox, matching the ~576px max-width of the flex row.
+        */}
+        <svg
+          viewBox="0 0 580 56"
+          className="hidden md:block w-full max-w-xl mx-auto h-auto"
+          xmlns="http://www.w3.org/2000/svg"
+          aria-label="Refine or refute loop"
+        >
+          <circle cx="72"  cy="8" r="3" fill="var(--accent)" opacity="0.4" />
+          <path
+            d="M 72 8 Q 290 52 508 8"
+            fill="none"
+            stroke="var(--accent)"
+            strokeWidth="1.5"
+            strokeDasharray="5 4"
+            opacity="0.35"
+            strokeLinecap="round"
+          />
+          <circle cx="508" cy="8" r="3" fill="var(--accent)" opacity="0.4" />
+          <text
+            x="290" y="49"
+            textAnchor="middle"
+            fontSize="10"
+            fill="var(--accent)"
+            opacity="0.45"
+            fontWeight="700"
+            fontFamily="Inter, system-ui, sans-serif"
+          >
+            REFINE OR REFUTE
+          </text>
+        </svg>
+        <p
+          className="md:hidden text-center text-xs font-bold uppercase tracking-widest mt-3"
+          style={{ color: 'var(--accent)', opacity: 0.45 }}
+        >
+          ↑ Refine or refute ↑
+        </p>
       </div>
     </div>
   );
