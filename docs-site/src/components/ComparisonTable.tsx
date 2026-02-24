@@ -1,14 +1,14 @@
 const features = [
   { name: 'Works offline', jjj: true, github: false, linear: false, jira: false },
-  { name: 'No server required', jjj: true, github: false, linear: false, jira: false },
-  { name: 'Survives rebases', jjj: true, github: false, linear: false, jira: false },
-  { name: 'Data in your repo', jjj: true, github: false, linear: false, jira: false },
-  { name: 'Popperian model', jjj: true, github: false, linear: false, jira: false },
-  { name: 'Blocking critiques', jjj: true, github: false, linear: false, jira: false },
-  { name: 'Stable Change ID mapping', jjj: true, github: false, linear: false, jira: false },
-  { name: 'AI agent native', jjj: true, github: false, linear: false, jira: false },
-  { name: 'Built for Jujutsu', jjj: true, github: false, linear: false, jira: false },
+  { name: 'No server or account needed', jjj: true, github: false, linear: false, jira: false },
+  { name: 'Data versioned with your code', jjj: true, github: false, linear: false, jira: false },
+  { name: 'Survives rebases & history rewrites', jjj: true, github: false, linear: false, jira: false },
+  { name: 'Blocking critiques (enforced review)', jjj: true, github: false, linear: false, jira: false },
+  { name: 'Explicit refutation workflow', jjj: true, github: false, linear: false, jira: false },
   { name: 'Team collaboration', jjj: true, github: true, linear: true, jira: true },
+  { name: 'Hosted / SaaS option', jjj: false, github: true, linear: true, jira: true },
+  { name: 'Mobile app', jjj: false, github: true, linear: true, jira: true },
+  { name: 'Non-Jujutsu repo support', jjj: false, github: true, linear: true, jira: true },
 ];
 
 function Check() {

@@ -107,5 +107,40 @@ const { title, description } = Astro.props;
     <div class="pt-16">
       <slot />
     </div>
+    <footer
+      class="border-t border-[var(--border)] py-8"
+      style="background-color: var(--surface);"
+    >
+      <div
+        class="container mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm"
+        style="color: var(--text-secondary);"
+      >
+        <span>© 2025 jjj — Jujutsu Juggler. MIT License.</span>
+        <nav class="flex items-center gap-6">
+          <a
+            href={`${import.meta.env.BASE_URL}getting-started/installation`}
+            class="hover:text-[var(--accent)] transition-colors"
+          >
+            Docs
+          </a>
+          <a
+            href="https://github.com/doug/jjj"
+            class="hover:text-[var(--accent)] transition-colors"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            GitHub
+          </a>
+          <a
+            href="https://github.com/doug/jjj/issues"
+            class="hover:text-[var(--accent)] transition-colors"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Issues
+          </a>
+        </nav>
+      </div>
+    </footer>
   </body>
 </html>

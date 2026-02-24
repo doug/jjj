@@ -61,3 +61,75 @@ If you're trying two different approaches for the same problem:
     ```bash
     jjj solution refute "GraphQL" --rationale "GraphQL introduced too much complexity for this use case."
     ```
+
+## 5. Preparing for Code Review
+
+Before requesting a review, use jjj to document your thinking so reviewers have context:
+
+1.  **Mark your solution as in testing** to signal it's review-ready:
+    ```bash
+    jjj solution test "Add search index"
+    ```
+2.  **Add self-critiques** for known concerns you haven't fully resolved:
+    ```bash
+    jjj critique new "Add search index" "Index rebuild time on large datasets unknown" --severity medium
+    ```
+3.  **Assign a reviewer**:
+    ```bash
+    jjj solution assign "Add search index" --reviewer @alice
+    ```
+4.  **Ask Alice to review**: she runs `jjj status` and sees your solution in the REVIEW queue. When she raises a critique, you'll see it in BLOCKED. When all critiques are resolved and she signs off, you can `jjj submit`.
+
+## 6. Tracking a Milestone
+
+When planning a release, use milestones to group problems and track progress:
+
+1.  **Create the milestone**:
+    ```bash
+    jjj milestone new "v1.0 Launch" --date 2025-09-01
+    ```
+2.  **Tag problems to the milestone**:
+    ```bash
+    jjj problem edit "Search is slow" --milestone "v1.0"
+    jjj problem edit "Auth missing" --milestone "v1.0"
+    ```
+3.  **Check progress**:
+    ```bash
+    jjj milestone roadmap
+    ```
+    This shows which problems are open, in-progress, and solved for each milestone, so you can assess scope and schedule risk.
+
+## 7. Handling an Abandoned Solution
+
+If a team member leaves or a solution goes stale, you can cleanly hand it off or close it:
+
+1.  **Check the current state**:
+    ```bash
+    jjj solution show "Old approach"
+    ```
+2.  **Reassign to yourself** to pick it up:
+    ```bash
+    jjj solution assign "Old approach" --me
+    jjj solution resume "Old approach"  # Switch your workspace to this change
+    ```
+3.  **Or refute it** with a rationale if the approach is no longer viable:
+    ```bash
+    jjj solution refute "Old approach" --rationale "Superseded by the new caching architecture."
+    ```
+
+## 8. Using Search to Find Context
+
+Use full-text or semantic search to find related work before starting something new:
+
+```bash
+# Full-text search across all entities
+jjj search "authentication"
+
+# Semantic search (finds conceptually related even without exact match)
+jjj search "login security" --semantic
+
+# Filter by type
+jjj search "token" --type solution
+```
+
+This helps avoid duplicating work and surfaces critiques from previous related efforts.

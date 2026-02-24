@@ -52,20 +52,25 @@ jj --version
 
 ## Installing jjj
 
-### From Source (Current Method)
+### One-Line Install
 
-Currently, jjj must be built from source:
+Install directly from GitHub with Cargo (no cloning required):
 
 ```bash
-# Clone the repository
-git clone https://github.com/doug/jjj.git
-cd jjj
-
-# Build and install
-cargo install --path .
+cargo install --git https://github.com/doug/jjj
 ```
 
-This will install the `jjj` binary to `~/.cargo/bin/`, which should be in your PATH.
+This builds from the latest `main` branch and installs the `jjj` binary to `~/.cargo/bin/`.
+
+### From a Local Clone
+
+If you want to track development or contribute:
+
+```bash
+git clone https://github.com/doug/jjj.git
+cd jjj
+cargo install --path .
+```
 
 ### Verify Installation
 

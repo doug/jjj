@@ -12,7 +12,7 @@ Problem/Solution/Critique workflow.
 
 Navigate to an existing Jujutsu repository and initialize jjj:
 
-```bash,test
+```bash
 jjj init
 ```
 
@@ -24,7 +24,7 @@ project metadata separately from your code. The bookmark `jjj` tracks it.
 Problems describe things that need solving. Create one with a title and
 priority:
 
-```bash,test
+```bash
 jjj problem new "Search is slow" --priority high
 ```
 
@@ -36,7 +36,7 @@ orders your work.
 Solutions are conjectures -- proposed ways to solve a problem. They start in
 `proposed` status and must survive criticism before acceptance.
 
-```bash,test
+```bash
 jjj solution new "Add search index" --problem "Search is slow"
 ```
 
@@ -115,11 +115,27 @@ Items are grouped by urgency:
 
 ## View the TUI
 
-The interactive TUI gives you an overview of next actions and the project tree:
+The interactive TUI gives you a two-pane overview of your project:
 
 ```bash
 jjj ui
 ```
+
+The left pane shows **Next Actions** — the same prioritized list as `jjj status`, updated live. The right pane shows the **Project Tree**: problems, their solutions, and any attached critiques, expanded into a hierarchy.
+
+Key bindings:
+
+| Key | Action |
+|-----|--------|
+| `Tab` | Switch between Next Actions and Project Tree |
+| `↑` / `↓` or `j` / `k` | Navigate items |
+| `→` / `←` | Expand / collapse tree nodes |
+| `a` | Accept selected solution |
+| `r` | Refute selected solution |
+| `d` | Dismiss selected critique |
+| `/` | Search / filter |
+| `?` | Show all key bindings |
+| `q` | Quit |
 
 Press `q` to exit.
 

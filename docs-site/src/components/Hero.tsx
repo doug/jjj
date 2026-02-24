@@ -9,11 +9,12 @@ export function Hero({ base = '/' }: { base?: string }) {
       </div>
 
       <div className="container mx-auto px-6 text-center">
-        {/* Logo placeholder */}
-        <div className="mb-8">
-          <span className="inline-flex items-center justify-center w-64 h-14 rounded-2xl bg-accent text-white text-2xl font-bold">
-            jjj: Jujutsu Juggler
+        {/* Badge */}
+        <div className="mb-8 flex items-center justify-center gap-3">
+          <span className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-accent text-white text-lg font-black shadow-lg shadow-accent/20">
+            jjj
           </span>
+          <span className="text-text-secondary font-medium tracking-wide">Jujutsu Juggler</span>
         </div>
 
         {/* Headline */}
@@ -25,9 +26,9 @@ export function Hero({ base = '/' }: { base?: string }) {
 
         {/* Subtitle */}
         <p className="text-xl text-text-secondary max-w-3xl mx-auto mb-10">
-          The first project management tool built on <strong>Critical Rationalism</strong>.
+          Problems → Solutions → Critiques. Offline-first, no server, no database.
           <br />
-          Problems, conjectures, and critiques — fully distributed, offline-first, and anchored to your code.
+          Metadata lives in your repo and survives every rebase.
         </p>
 
         {/* CTA Buttons */}
