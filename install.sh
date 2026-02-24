@@ -31,7 +31,7 @@ if ! command -v jj &> /dev/null; then
     echo
     echo "   Install with:"
     echo "     macOS: brew install jj"
-    echo "     From source: cargo install --git https://github.com/martinvonz/jj jj-cli"
+    echo "     From source: cargo install --git https://github.com/jj-vcs/jj jj-cli"
     echo
     read -p "Continue anyway? (y/N) " -n 1 -r
     echo
@@ -87,14 +87,13 @@ echo
 echo "Get started:"
 echo "  cd /path/to/your/jj/repo"
 echo "  jjj init"
-echo "  jjj board"
+echo "  jjj ui"
 echo
 echo "Try the demo:"
 echo "  cd demo"
 echo "  ./setup.sh"
 echo
 echo "Documentation:"
-echo "  README.md - Project overview"
-echo "  FEATURES.md - Detailed features"
-echo "  README_QUICKSTART.md - Quick start guide"
+echo "  README.md          - Project overview"
+echo "  https://dougfritz.com/jjj/ - Full documentation"
 echo
