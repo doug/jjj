@@ -390,6 +390,82 @@ fn test_submit_blocked_by_critiques() {
 // has been replaced with critique-based reviews. The test_submit_blocked_by_critiques
 // test covers the blocking behavior via the unified critique system.
 
+/// Regression test for the "working copy is stale" bug.
+///
+/// Previously, `commit_changes()` in storage/mod.rs would run `jj new` in the
+/// meta workspace (which advances the shared jj operation log), then immediately
+/// run `jj bookmark set` in the main workspace. Because the main workspace's
+/// working copy hadn't been updated to the new operation, jj would refuse with:
+///   "The working copy is stale (not updated since operation ...)"
+///
+/// The fix adds `jj workspace update-stale` before `bookmark set`. This test
+/// exercises the full call path by running multiple metadata writes and verifying
+/// that `jj status` in the main workspace succeeds after each one.
+#[test]
+fn test_no_stale_working_copy_after_metadata_writes() {
+    if jjj::jj::find_executable("jj").is_none() {
+        return;
+    }
+    let temp_dir = setup_test_repo();
+    let dir = temp_dir.path();
+
+    let assert_not_stale = |label: &str| {
+        let out = Command::new("jj")
+            .current_dir(dir)
+            .args(&["status"])
+            .output()
+            .expect("Failed to run jj status");
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            !stderr.contains("stale"),
+            "{}: jj status reported stale working copy:\n{}",
+            label,
+            stderr
+        );
+        assert!(
+            out.status.success(),
+            "{}: jj status exited non-zero:\n{}",
+            label,
+            stderr
+        );
+    };
+
+    // setup already ran `jjj init` + `problem new` (two commit_changes calls)
+    assert_not_stale("after setup");
+
+    // Each of these triggers another commit_changes()
+    run_jjj(
+        dir,
+        &[
+            "solution",
+            "new",
+            "Stale Regression Solution",
+            "--problem",
+            "Workflow Problem",
+        ],
+    );
+    assert_not_stale("after solution new");
+
+    run_jjj(
+        dir,
+        &[
+            "critique",
+            "new",
+            "Stale Regression Solution",
+            "Needs more tests",
+            "--severity",
+            "low",
+        ],
+    );
+    assert_not_stale("after critique new");
+
+    run_jjj(
+        dir,
+        &["solution", "accept", "Stale Regression Solution", "--force"],
+    );
+    assert_not_stale("after solution accept");
+}
+
 #[test]
 fn test_submit_blocked_by_awaiting_review() {
     if jjj::jj::find_executable("jj").is_none() {
