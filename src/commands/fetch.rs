@@ -25,9 +25,12 @@ pub fn execute(ctx: &CommandContext, remote: &str) -> Result<()> {
     let solutions_before = ctx.store.list_solutions().unwrap_or_default().len();
     let critiques_before = ctx.store.list_critiques().unwrap_or_default().len();
 
-    // 1. Fetch from remote
+    // 1. Fetch from remote.
+    // --ignore-working-copy: if commit_changes() ran above to flush dirty
+    // local changes, it left the main workspace stale. git fetch doesn't
+    // need to snapshot the working copy, so the stale check can be skipped.
     println!("Fetching from {}...", remote);
-    jj_client.execute(&["git", "fetch", "--remote", remote])?;
+    jj_client.execute(&["--ignore-working-copy", "git", "fetch", "--remote", remote])?;
 
     // Track the jjj bookmark from the remote if it exists
     // This allows push to update the bookmark without conflicts

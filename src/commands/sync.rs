@@ -369,9 +369,11 @@ fn sync_pr(
 
     let change_id = &solution.change_ids[0];
 
-    // Set the bookmark on the solution's change
+    // Set the bookmark on the solution's change.
+    // --ignore-working-copy: main workspace may be stale from a prior
+    // commit_changes(); bookmark set doesn't touch the working copy.
     ctx.jj()
-        .execute(&["bookmark", "set", &branch, "-r", change_id])?;
+        .execute(&["--ignore-working-copy", "bookmark", "set", &branch, "-r", change_id])?;
 
     // Push the branch
     ctx.jj().execute(&["git", "push", "--bookmark", &branch])?;
