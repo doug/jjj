@@ -89,10 +89,6 @@ echo "  cd /path/to/your/jj/repo"
 echo "  jjj init"
 echo "  jjj ui"
 echo
-echo "Try the demo:"
-echo "  cd demo"
-echo "  ./setup.sh"
-echo
 echo "Documentation:"
 echo "  README.md          - Project overview"
 echo "  https://dougfritz.com/jjj/ - Full documentation"

@@ -30,6 +30,7 @@ UXR_KEEP_TMPDIR=1 ./uxr/run-all.sh 04
 | 03 | `new-contributor.sh` | New joiner (Charlie) | Discovery experience: status, list, show, help, discoverability |
 | 04 | `conflict-resolution.sh` | Two concurrent users | Concurrent edits, frontmatter integrity, cascade effects, state machines |
 | 05 | `error-recovery.sh` | Mistake-prone user | Invalid inputs, empty states, edge cases, JSON output, search |
+| 06 | `end-to-end-showcase.sh` | New adopter | Full P→S→CQ lifecycle on a realistic multi-commit repo; push/fetch/sync help; timeline |
 
 ## How It Works
 
