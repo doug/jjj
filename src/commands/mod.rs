@@ -63,10 +63,7 @@ fn execute_with_context(ctx: &CommandContext, command: Commands) -> Result<()> {
             json,
         } => status::execute(ctx, all, mine, limit, json),
 
-        // External sync
-        Commands::Sync { source } => sync::execute(ctx, source),
-
-        // Sync commands
+        // Transport: fetch, push, sync (fetch + push)
         Commands::Fetch { remote } => fetch::execute(ctx, &remote),
         Commands::Push {
             bookmarks,
@@ -74,6 +71,17 @@ fn execute_with_context(ctx: &CommandContext, command: Commands) -> Result<()> {
             no_prompt,
             dry_run,
         } => push::execute(ctx, bookmarks, &remote, no_prompt, dry_run),
+        Commands::Sync {
+            remote,
+            no_prompt,
+            dry_run,
+        } => {
+            fetch::execute(ctx, &remote)?;
+            push::execute(ctx, vec![], &remote, no_prompt, dry_run)
+        }
+
+        // GitHub bridge
+        Commands::Github { action, dry_run } => sync::execute(ctx, action, dry_run),
 
         // These are handled by execute() before calling this function
         Commands::Init | Commands::Ui | Commands::Completion { .. } => {

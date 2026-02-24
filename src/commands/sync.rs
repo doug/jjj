@@ -1,16 +1,18 @@
 //! Sync command handler for bidirectional sync with external systems.
 
-use crate::cli::{GitHubSyncAction, SyncSource};
+use crate::cli::GitHubSyncAction;
 use crate::context::CommandContext;
 use crate::error::{JjjError, Result};
 use crate::models::{Event, EventExtra, EventType};
 use crate::sync::github::GitHubProvider;
 use crate::sync::{IssueStatus, PrStatus, ReviewState, SyncProvider};
 
-pub fn execute(ctx: &CommandContext, source: SyncSource) -> Result<()> {
-    match source {
-        SyncSource::Github { action, dry_run } => execute_github(ctx, action, dry_run),
-    }
+pub fn execute(
+    ctx: &CommandContext,
+    action: Option<GitHubSyncAction>,
+    dry_run: bool,
+) -> Result<()> {
+    execute_github(ctx, action, dry_run)
 }
 
 fn execute_github(

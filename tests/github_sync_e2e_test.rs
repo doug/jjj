@@ -264,9 +264,9 @@ fn test_github_sync_e2e_full_flow() {
         issue_number, TEST_REPO
     );
 
-    // Import the issue via jjj sync github import
+    // Import the issue via jjj github import
     let issue_ref = format!("#{}", issue_number);
-    let stdout = run_jjj_success(path, &["sync", "github", "import", &issue_ref]);
+    let stdout = run_jjj_success(path, &["github", "import", &issue_ref]);
     assert!(
         stdout.contains("Imported") || stdout.contains(&gh_issue_title),
         "Expected import confirmation: {}",
@@ -313,9 +313,9 @@ fn test_github_sync_e2e_full_flow() {
     );
 
     // -----------------------------------------------------------------------
-    // Step 4: Close the issue via jjj sync github close
+    // Step 4: Close the issue via jjj github close
     // -----------------------------------------------------------------------
-    let stdout = run_jjj_success(path, &["sync", "github", "close", imported_id]);
+    let stdout = run_jjj_success(path, &["github", "close", imported_id]);
     assert!(
         stdout.contains("Closed") || stdout.contains("close"),
         "Expected close confirmation: {}",
@@ -346,9 +346,9 @@ fn test_github_sync_e2e_full_flow() {
     );
 
     // -----------------------------------------------------------------------
-    // Step 5: Reopen the issue via jjj sync github reopen
+    // Step 5: Reopen the issue via jjj github reopen
     // -----------------------------------------------------------------------
-    let stdout = run_jjj_success(path, &["sync", "github", "reopen", imported_id]);
+    let stdout = run_jjj_success(path, &["github", "reopen", imported_id]);
     assert!(
         stdout.contains("Reopened") || stdout.contains("reopen"),
         "Expected reopen confirmation: {}",
@@ -381,7 +381,7 @@ fn test_github_sync_e2e_full_flow() {
     // -----------------------------------------------------------------------
     // Step 6: Check sync status
     // -----------------------------------------------------------------------
-    let stdout = run_jjj_success(path, &["sync", "github", "status"]);
+    let stdout = run_jjj_success(path, &["github", "status"]);
     // Status should mention the repo and the linked issue
     assert!(
         stdout.contains("jjjtest") || stdout.contains(TEST_REPO),
@@ -496,7 +496,7 @@ fn test_github_sync_import_idempotent() {
     let issue_ref = format!("#{}", issue_number);
 
     // First import
-    let stdout = run_jjj_success(path, &["sync", "github", "import", &issue_ref]);
+    let stdout = run_jjj_success(path, &["github", "import", &issue_ref]);
     assert!(
         stdout.contains("Imported"),
         "First import should say Imported: {}",
@@ -504,7 +504,7 @@ fn test_github_sync_import_idempotent() {
     );
 
     // Second import should be a no-op (already linked)
-    let stdout = run_jjj_success(path, &["sync", "github", "import", &issue_ref]);
+    let stdout = run_jjj_success(path, &["github", "import", &issue_ref]);
     assert!(
         stdout.contains("already linked") || stdout.contains("already"),
         "Second import should report already linked: {}",

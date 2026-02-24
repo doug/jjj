@@ -196,11 +196,31 @@ pub enum Commands {
         dry_run: bool,
     },
 
-    /// Sync problems and solutions with GitHub Issues and Pull Requests
+    /// Fetch metadata from remote then push local changes back (shorthand for fetch + push)
     #[command(display_order = 42)]
     Sync {
+        /// Remote name (default: origin)
+        #[arg(long, default_value = "origin")]
+        remote: String,
+
+        /// Skip interactive confirmation prompts
+        #[arg(long)]
+        no_prompt: bool,
+
+        /// Preview what would happen without making any changes
+        #[arg(long)]
+        dry_run: bool,
+    },
+
+    /// Bridge jjj problems and solutions with GitHub Issues and Pull Requests
+    #[command(display_order = 43)]
+    Github {
         #[command(subcommand)]
-        source: SyncSource,
+        action: Option<GitHubSyncAction>,
+
+        /// Preview actions without making any changes
+        #[arg(long)]
+        dry_run: bool,
     },
 
     // ── Setup & utilities ──────────────────────────────────────────────────
@@ -765,21 +785,8 @@ pub enum MilestoneAction {
 }
 
 // =============================================================================
-// Sync Commands
+// GitHub Sync Commands
 // =============================================================================
-
-#[derive(Subcommand)]
-pub enum SyncSource {
-    /// Sync with GitHub Issues and Pull Requests
-    Github {
-        #[command(subcommand)]
-        action: Option<GitHubSyncAction>,
-
-        /// Preview actions without making any changes
-        #[arg(long)]
-        dry_run: bool,
-    },
-}
 
 #[derive(Subcommand)]
 pub enum GitHubSyncAction {
