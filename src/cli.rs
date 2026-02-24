@@ -158,6 +158,10 @@ pub enum Commands {
         #[arg(long)]
         search: Option<String>,
 
+        /// Filter events after this RFC3339 timestamp (e.g. 2025-01-01T00:00:00Z)
+        #[arg(long)]
+        since: Option<String>,
+
         /// Output as JSON
         #[arg(long)]
         json: bool,
@@ -306,6 +310,10 @@ pub enum ProblemAction {
         /// Skip duplicate-detection checks
         #[arg(long, short = 'f')]
         force: bool,
+
+        /// Initial context for the problem (why is this hard / background)
+        #[arg(long)]
+        context: Option<String>,
     },
 
     /// List problems with optional filters
@@ -326,6 +334,10 @@ pub enum ProblemAction {
         /// Filter by title keyword
         #[arg(long)]
         search: Option<String>,
+
+        /// Filter by assignee
+        #[arg(long)]
+        assignee: Option<String>,
 
         /// Sort by: priority, status, created, title
         #[arg(long, default_value = "priority")]

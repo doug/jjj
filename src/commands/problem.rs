@@ -17,15 +17,17 @@ pub fn execute(ctx: &CommandContext, action: ProblemAction) -> Result<()> {
             parent,
             milestone,
             force,
-        } => new_problem(ctx, title, priority, parent, milestone, force),
+            context,
+        } => new_problem(ctx, title, priority, parent, milestone, force, context),
         ProblemAction::List {
             status,
             tree,
             milestone,
             search,
+            assignee,
             sort,
             json,
-        } => list_problems(ctx, status, tree, milestone, search.as_deref(), &sort, json),
+        } => list_problems(ctx, status, tree, milestone, search.as_deref(), assignee, &sort, json),
         ProblemAction::Show { problem_id, json } => show_problem(ctx, problem_id, json),
         ProblemAction::Edit {
             problem_id,
@@ -48,6 +50,7 @@ fn new_problem(
     parent: Option<String>,
     milestone: Option<String>,
     force: bool,
+    context: Option<String>,
 ) -> Result<()> {
     let store = &ctx.store;
 
@@ -133,6 +136,11 @@ fn new_problem(
             .parse::<Priority>()
             .map_err(|e: String| crate::error::JjjError::Validation(e))?;
 
+        // Set context
+        if let Some(ref ctx_text) = context {
+            problem.context = ctx_text.clone();
+        }
+
         // Set parent
         if let Some(ref parent_id) = resolved_parent {
             problem.set_parent(Some(parent_id.clone()));
@@ -184,6 +192,7 @@ fn list_problems(
     tree: bool,
     milestone_filter: Option<String>,
     search_query: Option<&str>,
+    assignee_filter: Option<String>,
     sort: &str,
     json: bool,
 ) -> Result<()> {
@@ -202,6 +211,11 @@ fn list_problems(
     // Filter by milestone
     if let Some(ref ms_id) = milestone_filter {
         problems.retain(|p| p.milestone_id.as_deref() == Some(ms_id.as_str()));
+    }
+
+    // Filter by assignee
+    if let Some(ref assignee) = assignee_filter {
+        problems.retain(|p| p.assignee.as_deref() == Some(assignee.as_str()));
     }
 
     // Filter by search query using FTS

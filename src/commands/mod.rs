@@ -97,10 +97,11 @@ fn execute_with_context(ctx: &CommandContext, command: Commands) -> Result<()> {
             solution,
             event_type,
             search,
+            since,
             json,
             limit,
         } => events::execute(
-            ctx, action, from, to, problem, solution, event_type, search, json, limit,
+            ctx, action, from, to, problem, solution, event_type, search, since, json, limit,
         ),
 
         // Timeline

@@ -17,6 +17,7 @@ pub fn execute(
     solution: Option<String>,
     event_type: Option<String>,
     search: Option<String>,
+    since: Option<String>,
     json: bool,
     limit: usize,
 ) -> Result<()> {
@@ -24,7 +25,7 @@ pub fn execute(
         Some(EventsAction::Rebuild) => rebuild_events(ctx),
         Some(EventsAction::Validate) => validate_events(ctx),
         None => list_events(
-            ctx, from, to, problem, solution, event_type, search, json, limit,
+            ctx, from, to, problem, solution, event_type, search, since, json, limit,
         ),
     }
 }
@@ -38,12 +39,21 @@ fn list_events(
     solution: Option<String>,
     event_type: Option<String>,
     search: Option<String>,
+    since: Option<String>,
     json: bool,
     limit: usize,
 ) -> Result<()> {
     let store = &ctx.store;
 
     let mut events = store.list_events()?;
+
+    // Since filter (RFC3339 timestamp, more precise than from/to)
+    if let Some(ref since_str) = since {
+        if let Ok(since_ts) = chrono::DateTime::parse_from_rfc3339(since_str) {
+            let since_utc = since_ts.with_timezone(&Utc);
+            events.retain(|e| e.when > since_utc);
+        }
+    }
 
     // Parse date filters
     let from_date = from.as_ref().and_then(|s| parse_date_filter(s));
