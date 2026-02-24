@@ -158,16 +158,21 @@ impl App {
         // Process result
         match status {
             Ok(exit_status) if exit_status.success() => {
-                let new_content = std::fs::read_to_string(&request.temp_path)?;
-                if new_content == request.original_content {
-                    self.show_flash("No changes");
-                } else {
-                    self.apply_edited_content(
-                        &request.entity_type,
-                        &request.entity_id,
-                        &new_content,
-                    )?;
-                    self.show_flash(&format!("Updated {}", request.entity_id));
+                match std::fs::read_to_string(&request.temp_path) {
+                    Err(e) => self.show_flash(&format!("Read error: {}", e)),
+                    Ok(new_content) if new_content == request.original_content => {
+                        self.show_flash("No changes");
+                    }
+                    Ok(new_content) => {
+                        match self.apply_edited_content(
+                            &request.entity_type,
+                            &request.entity_id,
+                            &new_content,
+                        ) {
+                            Ok(()) => self.show_flash(&format!("Updated {}", request.entity_id)),
+                            Err(e) => self.show_flash(&format!("Save error: {}", e)),
+                        }
+                    }
                 }
             }
             Ok(_) => {

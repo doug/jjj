@@ -384,6 +384,12 @@ impl MetadataStore {
         // Create a new change in the metadata workspace
         self.meta_client.new_empty_change(&full_message)?;
 
+        // jj new in the meta workspace advances the shared operation log, which
+        // makes the main workspace's working copy appear stale to jj. Any
+        // subsequent jj command run in the main workspace (like bookmark set
+        // below) will fail with "working copy is stale" unless we update first.
+        let _ = self.jj_client.execute(&["workspace", "update-stale"]);
+
         // Update the bookmark to point to the new change
         let meta_change = self.meta_client.current_change_id()?;
 
