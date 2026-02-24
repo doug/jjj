@@ -392,15 +392,19 @@ fn test_submit_blocked_by_critiques() {
 
 /// Regression test for the "working copy is stale" bug.
 ///
-/// Previously, `commit_changes()` in storage/mod.rs would run `jj new` in the
-/// meta workspace (which advances the shared jj operation log), then immediately
-/// run `jj bookmark set` in the main workspace. Because the main workspace's
-/// working copy hadn't been updated to the new operation, jj would refuse with:
-///   "The working copy is stale (not updated since operation ...)"
+/// `commit_changes()` in storage/mod.rs coordinates two jj workspaces:
+///  1. meta workspace: `jj workspace update-stale` then `jj new` (snapshots
+///     metadata files into a commit, advances shared op log to op N)
+///  2. main workspace: `jj bookmark set --ignore-working-copy` (points the
+///     jjj bookmark at the new meta commit; --ignore-working-copy bypasses the
+///     stale check that would otherwise fail because op N > main's last sync)
 ///
-/// The fix adds `jj workspace update-stale` before `bookmark set`. This test
-/// exercises the full call path by running multiple metadata writes and verifying
-/// that `jj status` in the main workspace succeeds after each one.
+/// Without `workspace update-stale` before `jj new` in the meta workspace, a
+/// prior `bookmark set` in the main workspace (op N-1) would leave the meta
+/// workspace stale, causing `jj new` to fail on the next call.
+///
+/// This test exercises the full call path through multiple metadata writes and
+/// verifies that `jj status` in the main workspace succeeds after each one.
 #[test]
 fn test_no_stale_working_copy_after_metadata_writes() {
     if jjj::jj::find_executable("jj").is_none() {
