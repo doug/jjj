@@ -217,6 +217,10 @@ export class JjjCli {
     return this.exec(["critique", "validate", critiqueId]);
   }
 
+  async testSolution(solutionId: string): Promise<string> {
+    return this.exec(["solution", "test", solutionId]);
+  }
+
   async acceptSolution(solutionId: string, force = false): Promise<string> {
     const args = ["solution", "accept", solutionId];
     if (force) { args.push("--force"); }

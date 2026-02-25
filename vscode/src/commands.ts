@@ -67,6 +67,28 @@ export function registerCommands(
     vscode.window.showInformationMessage(result);
   });
 
+  register("jjj.requestReview", async () => {
+    const solutions = cache.getSolutions().filter(s => s.status === "proposed");
+    const pick = await vscode.window.showQuickPick(
+      solutions.map(s => ({ label: `${s.id}: ${s.title}`, id: s.id })),
+      { placeHolder: "Select solution to move to testing (request review)" },
+    );
+    if (!pick) { return; }
+    const result = await cli.testSolution(pick.id);
+    vscode.window.showInformationMessage(result);
+  });
+
+  register("jjj.lgtm", async () => {
+    const solutions = cache.getSolutions().filter(s => s.status === "testing");
+    const pick = await vscode.window.showQuickPick(
+      solutions.map(s => ({ label: `${s.id}: ${s.title}`, id: s.id })),
+      { placeHolder: "Select solution to accept (LGTM)" },
+    );
+    if (!pick) { return; }
+    const result = await cli.acceptSolution(pick.id);
+    vscode.window.showInformationMessage(result);
+  });
+
   register("jjj.acceptSolution", async () => {
     const solutions = cache.getSolutions().filter(s => s.status === "testing");
     const pick = await vscode.window.showQuickPick(

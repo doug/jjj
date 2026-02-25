@@ -5,6 +5,7 @@ import { ProjectTreeProvider } from "./views/projectTreeProvider";
 import { EntityDocumentProvider } from "./documents/entityDocumentProvider";
 import { CritiqueCommentController } from "./editor/critiqueComments";
 import { registerCommands } from "./commands";
+import { SolutionStatusBar } from "./statusBar";
 
 export function activate(context: vscode.ExtensionContext) {
   const cli = new JjjCli();
@@ -97,6 +98,20 @@ export function activate(context: vscode.ExtensionContext) {
       (thread: vscode.CommentThread) => critiqueComments.validateCritique(thread)),
     vscode.commands.registerCommand("jjj.commentSubmitCritique",
       (reply: vscode.CommentReply) => critiqueComments.replyToCritique(reply)),
+  );
+
+  // --- Status Bar ---
+  const statusBar = new SolutionStatusBar(cache);
+  context.subscriptions.push(statusBar);
+  context.subscriptions.push(
+    vscode.commands.registerCommand("jjj.openActiveSolution", async () => {
+      const status = cache.getStatus();
+      if (!status?.active_solution) { return; }
+      const { id } = status.active_solution;
+      const uri = vscode.Uri.parse(`jjj:///solution/${id}.md`);
+      const doc = await vscode.workspace.openTextDocument(uri);
+      await vscode.window.showTextDocument(doc, { preview: false });
+    }),
   );
 
   // --- Commands ---
