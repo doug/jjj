@@ -31,6 +31,11 @@ UXR_KEEP_TMPDIR=1 ./uxr/run-all.sh 04
 | 04 | `conflict-resolution.sh` | Two concurrent users | Concurrent edits, frontmatter integrity, cascade effects, state machines |
 | 05 | `error-recovery.sh` | Mistake-prone user | Invalid inputs, empty states, edge cases, JSON output, search |
 | 06 | `end-to-end-showcase.sh` | New adopter | Full P→S→CQ lifecycle on a realistic multi-commit repo; push/fetch/sync help; timeline |
+| 07 | `solution-lifecycle.sh` | Developer iterating | solution test, attach/detach, refute/accept with rationale, supersedes, assign, list filters |
+| 08 | `critique-validate.sh` | Reviewer | critique validate, dismiss, reply, edit, file/line annotations, reviewer assignment |
+| 09 | `events-audit.sh` | Tech lead auditing | events rebuild, validate, date/type/search/solution/problem filters, JSON output |
+| 10 | `status-and-filtering.sh` | Power user | All status flags, all list filters, search --type/--text-only, db status/rebuild, completions |
+| 11 | `milestone-advanced.sh` | Project manager | milestone edit, remove-problem, assign, roadmap progression, lifecycle to completion |
 
 ## How It Works
 
