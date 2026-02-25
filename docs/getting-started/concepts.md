@@ -30,7 +30,7 @@ Everything in `jjj` starts with a **Problem**. A problem is not just a bug; it's
 **Problem lifecycle:** `open` → `in_progress` → `solved` / `dissolved`
 
 - `open` — identified, no solution yet
-- `in_progress` — at least one solution is proposed or in testing
+- `in_progress` — at least one solution is proposed or in review
 - `solved` — an accepted solution resolves it (or all sub-problems are solved)
 - `dissolved` — the problem was based on false premises and is no longer applicable
 
@@ -38,10 +38,10 @@ Everything in `jjj` starts with a **Problem**. A problem is not just a bug; it's
 
 Instead of "making a fix," you propose a **Solution**. A solution is a conjecture — your best current guess about how to solve the problem. You can propose multiple competing solutions for the same problem. jjj tracks which jj change ID implements each solution, so metadata survives rebases.
 
-**Solution lifecycle:** `proposed` → `testing` → `accepted` / `refuted`
+**Solution lifecycle:** `proposed` → `review` → `accepted` / `refuted`
 
-- `proposed` — created, not yet being worked on
-- `testing` — code attached and under review
+- `proposed` — created, work in progress
+- `review` — submitted for review; critiques may be raised
 - `accepted` — survived all criticism; solution is verified knowledge
 - `refuted` — a critique proved it won't work; this is a valuable outcome, not a failure
 

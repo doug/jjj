@@ -45,9 +45,9 @@ multiple competing solutions.
 
 ## Start Working
 
-The `solution new` command creates a solution, a new jj change, attaches it,
-and moves the solution to `testing` status. To resume work on an existing
-solution:
+The `solution new` command creates a solution, a new jj change, and attaches
+it. The solution stays `proposed` until you run `solution review` to submit it
+for review. To resume work on an existing solution:
 
 ```bash
 jjj solution resume "Add search index"
@@ -110,7 +110,7 @@ Items are grouped by urgency:
 | BLOCKED   | Solutions blocked by open critiques               |
 | READY     | Solutions ready to accept (critiques resolved)    |
 | REVIEW    | Solutions waiting for your review                 |
-| WAITING   | Solutions in testing, waiting on others            |
+| WAITING   | Solutions in review, waiting on others             |
 | TODO      | Open problems without solutions yet                |
 
 ## View the TUI

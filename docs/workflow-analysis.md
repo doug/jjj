@@ -40,7 +40,7 @@ jjj implements Popperian epistemology for software development:
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                            SOLUTIONS (Conjectures)                          │
 │                                                                              │
-│  proposed ────► testing ────► accepted                                      │
+│  proposed ────► review ────► accepted                                       │
 │                    │              │                                          │
 │                    ▼              └───► Problem can be solved               │
 │                 refuted                                                      │
@@ -87,7 +87,7 @@ jjj solution new "Use JWT with explicit refresh handling" --problem "Token refre
 
 # 5. Start working on the solution
 jjj solution resume "JWT with explicit"
-# → Creates jj change, attaches to solution, moves to "testing"
+# → Creates jj change, attaches to solution (stays "proposed" until solution review)
 # → "Token refresh" moves to "in_progress"
 
 # 6. Write code...
@@ -185,14 +185,14 @@ Then `submit` could auto-detect which solution this implements.
 The user must explicitly transition states that could be inferred:
 
 ```bash
-jjj solution test "JWT refresh"    # Why? I started working = testing
+jjj solution review "JWT refresh"  # Why? I'm ready for review
 jjj solution accept "JWT refresh"  # Why? My PR was approved = accepted
 jjj problem solve "Token refresh"  # Why? All solutions accepted = solved
 ```
 
 **More Elegant:**
 Infer status from actions:
-- `jjj solution resume "JWT refresh"` → auto `testing`
+- `jjj solution resume "JWT refresh"` → stays `proposed`; run `solution review` when ready
 - `jjj submit` + review approved → auto `accept`
 - All sub-problems solved → auto-prompt to solve parent
 
@@ -232,7 +232,7 @@ My Problems (2):
   "Slow queries"  [open]
 
 My Solutions (1):
-  "Add caching"   [testing]
+  "Add caching"   [review]
 
 Open Critiques on My Solutions (3):
   "XSS vulnerability", "No rate limiting", "Missing pagination"
@@ -345,9 +345,9 @@ Then all jj operations carry context.
 ### 3. Smart Status Inference
 
 ```rust
-// Automatically move to testing when work starts
+// Automatically move to review when work starts
 fn start(solution_id) {
-    solution.status = Testing;
+    solution.status = Review;
     problem.status = InProgress;
 }
 

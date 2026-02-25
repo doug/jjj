@@ -55,7 +55,7 @@ class SolutionNode extends vscode.TreeItem {
     super(solution.title, critiqueCount > 0
       ? vscode.TreeItemCollapsibleState.Collapsed
       : vscode.TreeItemCollapsibleState.None);
-    this.contextValue = "solution";
+    this.contextValue = `solution-${solution.status}`;
     const critDesc = critiqueCount > 0 ? ` — ${critiqueCount} critiques` : "";
     const changeDesc = solution.change_ids.length > 0 ? ` [${solution.change_ids.length} changes]` : "";
     this.description = `${solution.id} [${solution.status}]${critDesc}${changeDesc}`;

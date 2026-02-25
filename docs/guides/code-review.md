@@ -247,7 +247,7 @@ In the hybrid flow, review and critique happen in jjj. The GitHub PR is used for
 
 ```bash
 # All solutions with pending reviews
-jjj solution list --status testing
+jjj solution list --status review
 
 # Review critiques assigned to you
 jjj critique list --reviewer @alice --status open

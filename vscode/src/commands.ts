@@ -78,17 +78,6 @@ export function registerCommands(
     vscode.window.showInformationMessage(result);
   });
 
-  register("jjj.lgtm", async () => {
-    const solutions = cache.getSolutions().filter(s => s.status === "review");
-    const pick = await vscode.window.showQuickPick(
-      solutions.map(s => ({ label: `${s.id}: ${s.title}`, id: s.id })),
-      { placeHolder: "Select solution to accept (LGTM)" },
-    );
-    if (!pick) { return; }
-    const result = await cli.acceptSolution(pick.id);
-    vscode.window.showInformationMessage(result);
-  });
-
   register("jjj.acceptSolution", async () => {
     const solutions = cache.getSolutions().filter(s => s.status === "review");
     const pick = await vscode.window.showQuickPick(

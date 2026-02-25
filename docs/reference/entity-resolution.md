@@ -106,7 +106,7 @@ In commands that show multiple entity types (like `jjj status`), type prefixes d
 ```
 Next Actions:
   p/01957d  App crashes on startup     [open]
-  s/01958a  Add connection pooling     [testing]
+  s/01958a  Add connection pooling     [review]
   c/01958b  Missing error handling     [open]
 ```
 

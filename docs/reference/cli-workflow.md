@@ -36,7 +36,7 @@ Submit performs these steps:
 1. Checks for open critiques (unless `--force`).
 2. Checks that all assigned reviewers have signed off (unless `--force`).
 3. Rebases the current change onto main and squashes.
-4. Auto-accepts the solution if it was in testing or proposed status.
+4. Auto-accepts the solution if it was in review or proposed status.
 5. Auto-solves the problem if the accepted solution is the only active one and there are no open sub-problems.
 
 Using `--force` bypasses the critique and sign-off gates and sets the `force_accepted` flag on the solution.
@@ -61,7 +61,7 @@ jjj status [OPTIONS]
 | `--limit` | integer | Show top N items (default: 5) |
 | `--json` | bool | Output as JSON |
 
-Shows the active solution for the current jj change, next actions sorted by priority, and a summary of open problems, testing solutions, and open critiques.
+Shows the active solution for the current jj change, next actions sorted by priority, and a summary of open problems, solutions in review, and open critiques.
 
 ```bash,test
 jjj status

@@ -24,7 +24,7 @@ The TUI provides two panes:
 | BLOCKED | Solutions blocked by open critiques |
 | READY | Solutions ready to accept (critiques resolved) |
 | REVIEW | Solutions waiting for your review |
-| WAITING | Solutions in testing, waiting on others |
+| WAITING | Solutions in review, waiting on others |
 | TODO | Open problems without solutions yet |
 
 **Project Tree** (right pane) — A hierarchical view of the project:
@@ -33,7 +33,7 @@ The TUI provides two panes:
 Milestones
 ├── 01957d: Q1 Release
 │   ├── 01958a: Search is slow [open]
-│   │   └── 01958b: Add search index [testing]
+│   │   └── 01958b: Add search index [review]
 │   │       └── 01958c: Missing error handling [open]
 │   └── 01958d: Login fails [solved]
 └── Backlog
@@ -68,7 +68,7 @@ jjj status
 Output:
 
 ```
-Active: s/01959a "Add Redis caching" -> p/01958f [testing]
+Active: s/01959a "Add Redis caching" -> p/01958f [review]
   Open critiques: 2
     c/01959b: Cache invalidation not handled [high]
     c/01959c: Redis single point of failure [medium]
@@ -83,7 +83,7 @@ Next actions:
 2. [TODO] p/01959d: API rate limiting needed -- No solutions proposed
    -> jjj solution new "title" --problem "rate limiting"
 
-Summary: 4 open problems, 3 testing solutions, 5 open critiques
+Summary: 4 open problems, 3 in review, 5 open critiques
 ```
 
 ### Status Flags
@@ -110,7 +110,7 @@ jjj status --json
    jjj critique address "invalidation"
    ```
 
-2. **Solutions in testing?** Continue implementation, request reviews when ready.
+2. **Solutions in review?** Address critiques or wait for reviewer sign-off.
    ```bash
    jjj solution new "title" --problem "search slow" --reviewer @bob
    ```

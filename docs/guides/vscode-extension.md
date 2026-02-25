@@ -133,7 +133,7 @@ Lists solutions with grouping options (by status, problem, or assignee).
 - Create new solution (`+` button)
 
 **Grouping Options:**
-- By status (proposed, testing, accepted, refuted)
+- By status (proposed, review, accepted, refuted)
 - By problem
 - By assignee
 

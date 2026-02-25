@@ -66,9 +66,9 @@ If you're trying two different approaches for the same problem:
 
 Before requesting a review, use jjj to document your thinking so reviewers have context:
 
-1.  **Mark your solution as in testing** to signal it's review-ready:
+1.  **Submit for review** to signal it's ready for criticism:
     ```bash
-    jjj solution test "Add search index"
+    jjj solution review "Add search index"
     ```
 2.  **Add self-critiques** for known concerns you haven't fully resolved:
     ```bash
