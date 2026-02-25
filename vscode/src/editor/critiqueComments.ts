@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { DataCache } from "../cache";
-import { JjjCli, Critique } from "../cli";
+import { JjjCli, Critique, Solution } from "../cli";
 
 export class CritiqueCommentController implements vscode.Disposable {
   private controller: vscode.CommentController;
@@ -13,6 +13,11 @@ export class CritiqueCommentController implements vscode.Disposable {
     this.controller.options = {
       prompt: "Reply to this critique…",
       placeHolder: "Type a reply…",
+    };
+    this.controller.commentingRangeProvider = {
+      provideCommentingRanges(document: vscode.TextDocument): vscode.Range[] {
+        return [new vscode.Range(0, 0, Math.max(0, document.lineCount - 1), 0)];
+      },
     };
     this.disposables.push(this.controller);
     this.disposables.push(cache.onDidChange(() => this.syncThreads()));
@@ -130,9 +135,52 @@ export class CritiqueCommentController implements vscode.Disposable {
 
   async replyToCritique(reply: vscode.CommentReply): Promise<void> {
     const id = this.findCritiqueIdForThread(reply.thread);
-    if (!id) { return; }
+    if (!id) {
+      await this._createCritique(reply);
+      return;
+    }
     await this.cli.replyCritique(id, reply.text);
     await this.cache.refresh();
+  }
+
+  private async _createCritique(reply: vscode.CommentReply): Promise<void> {
+    const thread = reply.thread;
+    const title = reply.text.trim();
+    if (!title) { thread.dispose(); return; }
+
+    const severity = await vscode.window.showQuickPick(
+      ["low", "medium", "high", "critical"],
+      { placeHolder: "Critique severity" },
+    );
+    if (!severity) { thread.dispose(); return; }
+
+    const solutionId = await this._resolveSolutionId();
+    if (!solutionId) { thread.dispose(); return; }
+
+    const filePath = vscode.workspace.asRelativePath(thread.uri);
+    const line = thread.range ? thread.range.start.line + 1 : undefined; // convert 0-indexed to 1-indexed
+
+    thread.dispose(); // remove temp thread; syncThreads will create the real one after refresh
+    await this.cli.newCritique(solutionId, title, severity, filePath, line);
+    await this.cache.refresh();
+  }
+
+  private async _resolveSolutionId(): Promise<string | undefined> {
+    // Prefer the active solution from status
+    const activeSolution = this.cache.getStatus()?.active_solution;
+    if (activeSolution) { return activeSolution.id; }
+
+    // Fall back to solutions in testing or proposed state
+    const solutions = this.cache.getSolutions() as Solution[];
+    const candidates = solutions.filter(s => s.status === "testing" || s.status === "proposed");
+    if (candidates.length === 0) { return undefined; }
+    if (candidates.length === 1) { return candidates[0].id; }
+
+    const picked = await vscode.window.showQuickPick(
+      candidates.map(s => ({ label: s.title, description: s.id, id: s.id })),
+      { placeHolder: "Select solution to critique" },
+    );
+    return picked?.id;
   }
 
   dispose(): void {

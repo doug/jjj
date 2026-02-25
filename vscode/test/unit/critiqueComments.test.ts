@@ -68,6 +68,8 @@ interface MockCache {
   onDidChange: (cb: () => void) => { dispose: () => void };
   getCritiquesWithLocations: sinon.SinonStub;
   getSolution: sinon.SinonStub;
+  getSolutions: sinon.SinonStub;
+  getStatus: sinon.SinonStub;
   refresh: sinon.SinonStub;
 }
 
@@ -80,8 +82,28 @@ function makeMockCache(): MockCache & { _fireCacheChange: () => void } {
     }),
     getCritiquesWithLocations: sinon.stub().returns([]),
     getSolution: sinon.stub().returns(undefined),
+    getSolutions: sinon.stub().returns([]),
+    getStatus: sinon.stub().returns(null),
     refresh: sinon.stub().resolves(),
     _fireCacheChange: () => { if (_cb) { _cb(); } },
+  };
+}
+
+// Temp thread factory — simulates a thread created by VS Code when the user clicks gutter +
+function makeTempThread(filePath = "src/foo.rs", line = 9) {
+  // joinPath handles plain objects with fsPath via the mock implementation
+  const wsRoot = { fsPath: "/mock/workspace", scheme: "file" } as unknown as vscode.Uri;
+  const uri = vscode.Uri.joinPath(wsRoot, filePath);
+  return {
+    uri,
+    range: { start: { line, character: 0 }, end: { line, character: 0 } },
+    label: undefined as string | undefined,
+    state: 0,
+    canReply: true,
+    contextValue: undefined as string | undefined,
+    collapsibleState: 0,
+    comments: [] as unknown[],
+    dispose: sinon.stub(),
   };
 }
 
@@ -381,7 +403,9 @@ describe("CritiqueCommentController", () => {
       sinon.assert.calledOnce(cache.refresh);
     });
 
-    it("does nothing for an unknown thread", async () => {
+    it("routes to new critique creation when thread is not in the known map", async () => {
+      // An unknown thread triggers _createCritique, NOT replyCritique.
+      // showQuickPick returns undefined (mock default) → severity cancelled → dispose + early return.
       cache.getCritiquesWithLocations.returns([makeCritique()]);
       const controller = new CritiqueCommentController(
         cache as unknown as DataCache,
@@ -395,7 +419,216 @@ describe("CritiqueCommentController", () => {
       });
 
       sinon.assert.notCalled(cli.replyCritique);
+      sinon.assert.notCalled(cli.newCritique);
+      sinon.assert.calledOnce(unknown.dispose); // temp thread disposed on cancellation
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Phase 2: inline critique creation via gutter + button
+  // ---------------------------------------------------------------------------
+
+  describe("replyToCritique — new critique creation (gutter +)", () => {
+    it("creates a critique with correct solution, title, severity, file, and line", async () => {
+      cache.getCritiquesWithLocations.returns([]);
+      cache.getStatus.returns({
+        active_solution: { id: "s-active", title: "Fix bug", problem_id: "p1", status: "testing" },
+        items: [], total_count: 0, user: "test",
+        summary: { open_problems: 0, testing_solutions: 0, open_critiques: 0 },
+      });
+      cli.newCritique.resolves("new-id");
+
+      sinon.stub(vscode.window, "showQuickPick").resolves("high" as unknown as vscode.QuickPickItem);
+
+      const controller = new CritiqueCommentController(
+        cache as unknown as DataCache,
+        cli as unknown as JjjCli,
+      );
+      const tempThread = makeTempThread("src/foo.rs", 9); // line 9 (0-indexed) → line 10 (1-indexed)
+
+      await controller.replyToCritique({
+        thread: tempThread as unknown as vscode.CommentThread,
+        text: "This logic is wrong",
+      });
+
+      sinon.assert.calledOnceWithExactly(cli.newCritique, "s-active", "This logic is wrong", "high", "src/foo.rs", 10);
+      sinon.assert.calledOnce(cache.refresh);
+      sinon.assert.calledOnce(tempThread.dispose);
+    });
+
+    it("disposes temp thread and skips creation when title is empty/whitespace", async () => {
+      cache.getCritiquesWithLocations.returns([]);
+      cache.getStatus.returns(null);
+
+      const controller = new CritiqueCommentController(
+        cache as unknown as DataCache,
+        cli as unknown as JjjCli,
+      );
+      const tempThread = makeTempThread();
+
+      await controller.replyToCritique({
+        thread: tempThread as unknown as vscode.CommentThread,
+        text: "   ",
+      });
+
+      sinon.assert.calledOnce(tempThread.dispose);
+      sinon.assert.notCalled(cli.newCritique);
       sinon.assert.notCalled(cache.refresh);
+    });
+
+    it("disposes temp thread when severity pick is cancelled", async () => {
+      cache.getCritiquesWithLocations.returns([]);
+      cache.getStatus.returns(null);
+      sinon.stub(vscode.window, "showQuickPick").resolves(undefined);
+
+      const controller = new CritiqueCommentController(
+        cache as unknown as DataCache,
+        cli as unknown as JjjCli,
+      );
+      const tempThread = makeTempThread();
+
+      await controller.replyToCritique({
+        thread: tempThread as unknown as vscode.CommentThread,
+        text: "Some issue",
+      });
+
+      sinon.assert.calledOnce(tempThread.dispose);
+      sinon.assert.notCalled(cli.newCritique);
+      sinon.assert.notCalled(cache.refresh);
+    });
+
+    it("disposes temp thread when no solution candidates exist", async () => {
+      cache.getCritiquesWithLocations.returns([]);
+      cache.getStatus.returns(null);
+      cache.getSolutions.returns([]);
+      sinon.stub(vscode.window, "showQuickPick").resolves("medium" as unknown as vscode.QuickPickItem);
+
+      const controller = new CritiqueCommentController(
+        cache as unknown as DataCache,
+        cli as unknown as JjjCli,
+      );
+      const tempThread = makeTempThread();
+
+      await controller.replyToCritique({
+        thread: tempThread as unknown as vscode.CommentThread,
+        text: "Some issue",
+      });
+
+      sinon.assert.calledOnce(tempThread.dispose);
+      sinon.assert.notCalled(cli.newCritique);
+    });
+
+    it("uses single candidate solution without a second quick pick", async () => {
+      cache.getCritiquesWithLocations.returns([]);
+      cache.getStatus.returns(null);
+      cache.getSolutions.returns([makeSolution({ id: "s-solo", status: "testing" })]);
+      cli.newCritique.resolves("nid");
+
+      const qpStub = sinon.stub(vscode.window, "showQuickPick")
+        .resolves("critical" as unknown as vscode.QuickPickItem);
+
+      const controller = new CritiqueCommentController(
+        cache as unknown as DataCache,
+        cli as unknown as JjjCli,
+      );
+      const tempThread = makeTempThread();
+
+      await controller.replyToCritique({
+        thread: tempThread as unknown as vscode.CommentThread,
+        text: "Bug here",
+      });
+
+      // showQuickPick called exactly once (severity only; solution resolved without prompt)
+      assert.strictEqual(qpStub.callCount, 1);
+      assert.strictEqual((cli.newCritique.firstCall.args as string[])[0], "s-solo");
+    });
+
+    it("shows solution quick pick when multiple candidates exist", async () => {
+      cache.getCritiquesWithLocations.returns([]);
+      cache.getStatus.returns(null);
+      cache.getSolutions.returns([
+        makeSolution({ id: "s1", title: "Fix A", status: "testing" }),
+        makeSolution({ id: "s2", title: "Fix B", status: "proposed" }),
+      ]);
+      cli.newCritique.resolves("nid");
+
+      const qpStub = sinon.stub(vscode.window, "showQuickPick");
+      qpStub.onFirstCall().resolves("medium" as unknown as vscode.QuickPickItem); // severity
+      qpStub.onSecondCall().resolves({ label: "Fix A", description: "s1", id: "s1" } as unknown as vscode.QuickPickItem); // solution
+
+      const controller = new CritiqueCommentController(
+        cache as unknown as DataCache,
+        cli as unknown as JjjCli,
+      );
+      const tempThread = makeTempThread();
+
+      await controller.replyToCritique({
+        thread: tempThread as unknown as vscode.CommentThread,
+        text: "Issue",
+      });
+
+      assert.strictEqual(qpStub.callCount, 2);
+      assert.strictEqual((cli.newCritique.firstCall.args as string[])[0], "s1");
+    });
+
+    it("disposes temp thread when solution quick pick is cancelled", async () => {
+      cache.getCritiquesWithLocations.returns([]);
+      cache.getStatus.returns(null);
+      cache.getSolutions.returns([
+        makeSolution({ id: "s1", status: "testing" }),
+        makeSolution({ id: "s2", status: "testing" }),
+      ]);
+
+      const qpStub = sinon.stub(vscode.window, "showQuickPick");
+      qpStub.onFirstCall().resolves("low" as unknown as vscode.QuickPickItem); // severity
+      qpStub.onSecondCall().resolves(undefined); // solution cancelled
+
+      const controller = new CritiqueCommentController(
+        cache as unknown as DataCache,
+        cli as unknown as JjjCli,
+      );
+      const tempThread = makeTempThread();
+
+      await controller.replyToCritique({
+        thread: tempThread as unknown as vscode.CommentThread,
+        text: "Issue",
+      });
+
+      sinon.assert.calledOnce(tempThread.dispose);
+      sinon.assert.notCalled(cli.newCritique);
+    });
+
+    it("active solution takes priority over candidates — no solution quick pick shown", async () => {
+      cache.getCritiquesWithLocations.returns([]);
+      cache.getStatus.returns({
+        active_solution: { id: "s-active", title: "Active", problem_id: "p1", status: "testing" },
+        items: [], total_count: 0, user: "test",
+        summary: { open_problems: 0, testing_solutions: 0, open_critiques: 0 },
+      });
+      // Even with multiple solutions available, active_solution should win
+      cache.getSolutions.returns([
+        makeSolution({ id: "s1", status: "testing" }),
+        makeSolution({ id: "s2", status: "testing" }),
+      ]);
+      cli.newCritique.resolves("nid");
+
+      const qpStub = sinon.stub(vscode.window, "showQuickPick")
+        .resolves("high" as unknown as vscode.QuickPickItem);
+
+      const controller = new CritiqueCommentController(
+        cache as unknown as DataCache,
+        cli as unknown as JjjCli,
+      );
+      const tempThread = makeTempThread();
+
+      await controller.replyToCritique({
+        thread: tempThread as unknown as vscode.CommentThread,
+        text: "Big issue",
+      });
+
+      // Only severity pick — solution resolved from active_solution
+      assert.strictEqual(qpStub.callCount, 1);
+      assert.strictEqual((cli.newCritique.firstCall.args as string[])[0], "s-active");
     });
   });
 

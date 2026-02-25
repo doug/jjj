@@ -77,13 +77,28 @@ export class Uri {
   }
 }
 
+export class Position {
+  constructor(public line: number, public character: number) {}
+}
+
 export class Range {
+  start: Position;
+  end: Position;
   constructor(
     public startLine: number,
     public startChar: number,
     public endLine: number,
     public endChar: number,
-  ) {}
+  ) {
+    this.start = new Position(startLine, startChar);
+    this.end = new Position(endLine, endChar);
+  }
+}
+
+export interface TextDocument {
+  uri: Uri;
+  lineCount: number;
+  fileName: string;
 }
 
 export class MarkdownString {
@@ -119,6 +134,7 @@ export const comments = {
   createCommentController(_id: string, _label: string) {
     return {
       options: {} as Record<string, unknown>,
+      commentingRangeProvider: undefined as unknown,
       createCommentThread(_uri: Uri, _range: Range, _comments: unknown[]) {
         return {
           label: undefined as string | undefined,
@@ -143,7 +159,13 @@ export const workspace = {
   textDocuments: [] as unknown[],
   registerTextDocumentContentProvider: () => ({ dispose: () => {} }),
   onDidSaveTextDocument: () => ({ dispose: () => {} }),
-  asRelativePath: (uri: unknown) => String(uri),
+  asRelativePath: (uri: unknown) => {
+    if (uri instanceof Uri) {
+      const wsRoot = "/mock/workspace/";
+      return uri.path.startsWith(wsRoot) ? uri.path.slice(wsRoot.length) : uri.path;
+    }
+    return String(uri);
+  },
 };
 
 export const window = {
