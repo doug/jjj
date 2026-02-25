@@ -57,9 +57,11 @@ export enum OverviewRulerLane {
 export class Uri {
   scheme: string;
   path: string;
+  fsPath: string;
   constructor(scheme: string, path: string) {
     this.scheme = scheme;
     this.path = path;
+    this.fsPath = path;
   }
   static parse(value: string): Uri {
     const match = value.match(/^([^:]+):\/\/(.*)/);
@@ -67,6 +69,11 @@ export class Uri {
       return new Uri(match[1], match[2]);
     }
     return new Uri("", value);
+  }
+  static joinPath(uri: Uri, ...pathSegments: string[]): Uri {
+    const base = uri.path || uri.fsPath || "";
+    const combined = [base, ...pathSegments].filter(Boolean).join("/");
+    return new Uri(uri.scheme || "file", combined);
   }
 }
 
@@ -92,6 +99,41 @@ export class DataTransfer {
   get(mimeType: string) { return this.items.get(mimeType); }
   set(mimeType: string, item: DataTransferItem) { this.items.set(mimeType, item); }
 }
+
+export enum CommentMode {
+  Editing = 0,
+  Preview = 1,
+}
+
+export enum CommentThreadState {
+  Unresolved = 0,
+  Resolved = 1,
+}
+
+export enum CommentThreadCollapsibleState {
+  Collapsed = 0,
+  Expanded = 1,
+}
+
+export const comments = {
+  createCommentController(_id: string, _label: string) {
+    return {
+      options: {} as Record<string, unknown>,
+      createCommentThread(_uri: Uri, _range: Range, _comments: unknown[]) {
+        return {
+          label: undefined as string | undefined,
+          state: CommentThreadState.Unresolved as number,
+          canReply: true,
+          contextValue: undefined as string | undefined,
+          collapsibleState: CommentThreadCollapsibleState.Expanded as number,
+          comments: _comments,
+          dispose() {},
+        };
+      },
+      dispose() {},
+    };
+  },
+};
 
 export const workspace = {
   getConfiguration: (_section?: string) => ({

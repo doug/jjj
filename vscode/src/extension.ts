@@ -3,7 +3,7 @@ import { JjjCli } from "./cli";
 import { DataCache } from "./cache";
 import { ProjectTreeProvider } from "./views/projectTreeProvider";
 import { EntityDocumentProvider } from "./documents/entityDocumentProvider";
-import { CritiqueDecorationManager } from "./editor/critiqueDecorations";
+import { CritiqueCommentController } from "./editor/critiqueComments";
 import { registerCommands } from "./commands";
 
 export function activate(context: vscode.ExtensionContext) {
@@ -85,9 +85,19 @@ export function activate(context: vscode.ExtensionContext) {
     }),
   );
 
-  // --- Gutter Decorations ---
-  const decorations = new CritiqueDecorationManager(cache);
-  context.subscriptions.push(decorations);
+  // --- Inline Comment Threads ---
+  const critiqueComments = new CritiqueCommentController(cache, cli);
+  context.subscriptions.push(
+    critiqueComments,
+    vscode.commands.registerCommand("jjj.commentAddressCritique",
+      (thread: vscode.CommentThread) => critiqueComments.addressCritique(thread)),
+    vscode.commands.registerCommand("jjj.commentDismissCritique",
+      (thread: vscode.CommentThread) => critiqueComments.dismissCritique(thread)),
+    vscode.commands.registerCommand("jjj.commentValidateCritique",
+      (thread: vscode.CommentThread) => critiqueComments.validateCritique(thread)),
+    vscode.commands.registerCommand("jjj.commentReplyCritique",
+      (reply: vscode.CommentReply) => critiqueComments.replyToCritique(reply)),
+  );
 
   // --- Commands ---
   context.subscriptions.push(

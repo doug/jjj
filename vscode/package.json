@@ -57,7 +57,10 @@
       { "command": "jjj.prevOpenItem", "title": "JJJ: Previous Open Item" },
       { "command": "jjj.syncGithub", "title": "JJJ: Sync GitHub", "icon": "$(cloud-download)" },
       { "command": "jjj.syncGithubImport", "title": "JJJ: Import GitHub Issue" },
-      { "command": "jjj.syncGithubStatus", "title": "JJJ: GitHub Sync Status" }
+      { "command": "jjj.syncGithubStatus", "title": "JJJ: GitHub Sync Status" },
+      { "command": "jjj.commentAddressCritique", "title": "Address", "icon": "$(check)" },
+      { "command": "jjj.commentDismissCritique", "title": "Dismiss", "icon": "$(close)" },
+      { "command": "jjj.commentValidateCritique", "title": "Validate (Confirmed Flaw)", "icon": "$(warning)" }
     ],
     "viewsContainers": {
       "activitybar": [
@@ -98,6 +101,30 @@
       ],
       "editor/context": [
         { "command": "jjj.addCritiqueHere", "group": "jjj@1" }
+      ],
+      "comments/commentThread/title": [
+        {
+          "command": "jjj.commentAddressCritique",
+          "when": "commentController == jjj-critiques && commentThreadContextValue =~ /open|valid/",
+          "group": "inline@1"
+        },
+        {
+          "command": "jjj.commentDismissCritique",
+          "when": "commentController == jjj-critiques && commentThreadContextValue =~ /open|valid/",
+          "group": "inline@2"
+        },
+        {
+          "command": "jjj.commentValidateCritique",
+          "when": "commentController == jjj-critiques && commentThreadContextValue == open",
+          "group": "inline@3"
+        }
+      ],
+      "comments/commentThread/context": [
+        {
+          "command": "jjj.commentReplyCritique",
+          "when": "commentController == jjj-critiques",
+          "group": "inline"
+        }
       ]
     },
     "keybindings": [
