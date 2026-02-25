@@ -97,7 +97,8 @@ CREATE VIRTUAL TABLE IF NOT EXISTS fts USING fts5(
     entity_type,
     entity_id,
     title,
-    body
+    body,
+    tokenize = 'porter ascii'
 );
 
 -- Indexes for common queries

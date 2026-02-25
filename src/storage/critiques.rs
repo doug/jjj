@@ -66,6 +66,21 @@ impl MetadataStore {
         let critique_path = critiques_dir.join(format!("{}.md", critique.id));
         fs::write(critique_path, content)?;
 
+        // Update FTS if DB exists (best-effort)
+        let db_path = self.jj_client.repo_root().join(".jj").join("jjj.db");
+        if db_path.exists() {
+            if let Ok(db) = crate::db::schema::Database::open(&db_path) {
+                let fts_body = format!("{}\n{}", critique.argument, critique.evidence);
+                let _ = crate::db::sync::update_fts_entry(
+                    db.conn(),
+                    "critique",
+                    &critique.id,
+                    &critique.title,
+                    &fts_body,
+                );
+            }
+        }
+
         Ok(())
     }
 

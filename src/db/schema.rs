@@ -8,7 +8,7 @@ use rusqlite::{Connection, Result as SqliteResult};
 use std::path::Path;
 
 /// Current schema version. Increment when schema changes require rebuild.
-pub const SCHEMA_VERSION: u32 = 5;
+pub const SCHEMA_VERSION: u32 = 6;
 
 /// Database wrapper providing connection management and schema initialization.
 pub struct Database {
