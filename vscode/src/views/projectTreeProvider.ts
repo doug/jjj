@@ -13,7 +13,7 @@ function isOpenSolution(s: Solution): boolean {
 }
 
 function isOpenCritique(c: Critique): boolean {
-  return c.status === "open";
+  return c.status === "open" || c.status === "valid";
 }
 
 class MilestoneNode extends vscode.TreeItem {
@@ -77,16 +77,20 @@ class SolutionNode extends vscode.TreeItem {
 class CritiqueNode extends vscode.TreeItem {
   constructor(public readonly critique: Critique) {
     super(critique.title, vscode.TreeItemCollapsibleState.None);
-    this.contextValue = "critique";
+    this.contextValue = `critique-${critique.status}`;
     const location = critique.file_path
       ? ` — ${critique.file_path}:${critique.line_start}`
       : "";
     this.description = `${critique.id} [${critique.severity}]${location}`;
-    this.iconPath = critique.status === "open"
-      ? (critique.severity === "high" || critique.severity === "critical"
-        ? new vscode.ThemeIcon("warning", new vscode.ThemeColor("errorForeground"))
-        : new vscode.ThemeIcon("warning", new vscode.ThemeColor("editorWarning.foreground")))
-      : new vscode.ThemeIcon("pass", new vscode.ThemeColor("testing.iconPassed"));
+    this.iconPath = critique.status === "valid"
+      ? new vscode.ThemeIcon("error", new vscode.ThemeColor("errorForeground"))
+      : critique.status === "open"
+        ? (critique.severity === "high" || critique.severity === "critical"
+          ? new vscode.ThemeIcon("warning", new vscode.ThemeColor("errorForeground"))
+          : new vscode.ThemeIcon("warning", new vscode.ThemeColor("editorWarning.foreground")))
+        : critique.status === "addressed"
+          ? new vscode.ThemeIcon("pass", new vscode.ThemeColor("testing.iconPassed"))
+          : new vscode.ThemeIcon("x", new vscode.ThemeColor("disabledForeground"));
     this.command = {
       command: "jjj.openEntity",
       title: "Open",
@@ -204,7 +208,7 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode>, v
 
       return solutions.map(s => {
         const critiques = this.cache.getCritiquesForSolution(s.id);
-        return new SolutionNode(s, critiques.filter(c => c.status === "open").length);
+        return new SolutionNode(s, critiques.filter(isOpenCritique).length);
       });
     }
 
@@ -241,7 +245,7 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode>, v
         for (const s of solutions) {
           const critiques = this.cache.getCritiquesForSolution(s.id);
           if (isOpenSolution(s)) {
-            items.push(new SolutionNode(s, critiques.filter(c => c.status === "open").length));
+            items.push(new SolutionNode(s, critiques.filter(isOpenCritique).length));
           }
           for (const c of critiques) {
             if (isOpenCritique(c)) {
@@ -262,7 +266,7 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode>, v
       for (const s of solutions) {
         const critiques = this.cache.getCritiquesForSolution(s.id);
         if (isOpenSolution(s)) {
-          items.push(new SolutionNode(s, critiques.filter(c => c.status === "open").length));
+          items.push(new SolutionNode(s, critiques.filter(isOpenCritique).length));
         }
         for (const c of critiques) {
           if (isOpenCritique(c)) {

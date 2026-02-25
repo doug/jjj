@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { DataCache } from "../cache";
-import { JjjCli, Critique, Solution } from "../cli";
+import { JjjCli, Critique } from "../cli";
 
 export class CritiqueCommentController implements vscode.Disposable {
   private controller: vscode.CommentController;
@@ -89,6 +89,9 @@ export class CritiqueCommentController implements vscode.Disposable {
           : vscode.CommentThreadState.Unresolved;
         existing.canReply = !isResolved;
         existing.contextValue = critique.status;
+        existing.collapsibleState = isResolved
+          ? vscode.CommentThreadCollapsibleState.Collapsed
+          : vscode.CommentThreadCollapsibleState.Expanded;
       } else {
         const thread = this.controller.createCommentThread(uri, range, this.buildComments(critique));
         thread.label = solution?.title ?? "jjj Critique";
@@ -136,14 +139,14 @@ export class CritiqueCommentController implements vscode.Disposable {
   async replyToCritique(reply: vscode.CommentReply): Promise<void> {
     const id = this.findCritiqueIdForThread(reply.thread);
     if (!id) {
-      await this._createCritique(reply);
+      await this.createCritique(reply);
       return;
     }
     await this.cli.replyCritique(id, reply.text);
     await this.cache.refresh();
   }
 
-  private async _createCritique(reply: vscode.CommentReply): Promise<void> {
+  private async createCritique(reply: vscode.CommentReply): Promise<void> {
     const thread = reply.thread;
     const title = reply.text.trim();
     if (!title) { thread.dispose(); return; }
@@ -154,7 +157,7 @@ export class CritiqueCommentController implements vscode.Disposable {
     );
     if (!severity) { thread.dispose(); return; }
 
-    const solutionId = await this._resolveSolutionId();
+    const solutionId = await this.resolveSolutionId();
     if (!solutionId) { thread.dispose(); return; }
 
     const filePath = vscode.workspace.asRelativePath(thread.uri);
@@ -165,13 +168,13 @@ export class CritiqueCommentController implements vscode.Disposable {
     await this.cache.refresh();
   }
 
-  private async _resolveSolutionId(): Promise<string | undefined> {
+  private async resolveSolutionId(): Promise<string | undefined> {
     // Prefer the active solution from status
     const activeSolution = this.cache.getStatus()?.active_solution;
     if (activeSolution) { return activeSolution.id; }
 
     // Fall back to solutions in testing or proposed state
-    const solutions = this.cache.getSolutions() as Solution[];
+    const solutions = this.cache.getSolutions();
     const candidates = solutions.filter(s => s.status === "testing" || s.status === "proposed");
     if (candidates.length === 0) { return undefined; }
     if (candidates.length === 1) { return candidates[0].id; }

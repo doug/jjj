@@ -58,9 +58,11 @@
       { "command": "jjj.syncGithub", "title": "JJJ: Sync GitHub", "icon": "$(cloud-download)" },
       { "command": "jjj.syncGithubImport", "title": "JJJ: Import GitHub Issue" },
       { "command": "jjj.syncGithubStatus", "title": "JJJ: GitHub Sync Status" },
+      { "command": "jjj.validateCritique", "title": "JJJ: Validate Critique", "icon": "$(error)" },
+      { "command": "jjj.commentSubmitCritique", "title": "Submit" },
       { "command": "jjj.commentAddressCritique", "title": "Address", "icon": "$(check)" },
       { "command": "jjj.commentDismissCritique", "title": "Dismiss", "icon": "$(close)" },
-      { "command": "jjj.commentValidateCritique", "title": "Validate (Confirmed Flaw)", "icon": "$(warning)" }
+      { "command": "jjj.commentValidateCritique", "title": "Validate (Confirmed Flaw)", "icon": "$(error)" }
     ],
     "viewsContainers": {
       "activitybar": [
@@ -95,8 +97,9 @@
         { "command": "jjj.newCritique", "when": "viewItem == solution", "group": "1_actions@5" },
         { "command": "jjj.resumeSolution", "when": "viewItem == solution", "group": "1_actions@6" },
         { "command": "jjj.switchToChange", "when": "viewItem == solution", "group": "2_navigate@1" },
-        { "command": "jjj.addressCritique", "when": "viewItem == critique", "group": "1_actions@1" },
-        { "command": "jjj.dismissCritique", "when": "viewItem == critique", "group": "1_actions@2" },
+        { "command": "jjj.addressCritique", "when": "viewItem =~ /^critique-(open|valid)$/", "group": "1_actions@1" },
+        { "command": "jjj.dismissCritique", "when": "viewItem =~ /^critique-(open|valid)$/", "group": "1_actions@2" },
+        { "command": "jjj.validateCritique", "when": "viewItem == critique-open", "group": "1_actions@3" },
         { "command": "jjj.newProblem", "when": "viewItem == milestone || viewItem == backlog", "group": "1_actions@1" }
       ],
       "editor/context": [
@@ -121,7 +124,7 @@
       ],
       "comments/commentThread/context": [
         {
-          "command": "jjj.commentReplyCritique",
+          "command": "jjj.commentSubmitCritique",
           "when": "commentController == jjj-critiques",
           "group": "inline"
         }

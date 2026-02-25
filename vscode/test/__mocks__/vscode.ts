@@ -155,7 +155,7 @@ export const workspace = {
   getConfiguration: (_section?: string) => ({
     get: <T>(key: string, defaultValue?: T): T | undefined => defaultValue,
   }),
-  workspaceFolders: [{ uri: { fsPath: "/mock/workspace" } }],
+  workspaceFolders: [{ uri: new Uri("file", "/mock/workspace") }],
   textDocuments: [] as unknown[],
   registerTextDocumentContentProvider: () => ({ dispose: () => {} }),
   onDidSaveTextDocument: () => ({ dispose: () => {} }),

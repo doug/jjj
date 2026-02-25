@@ -121,7 +121,7 @@ export function registerCommands(
   });
 
   register("jjj.addressCritique", async () => {
-    const critiques = cache.getCritiques().filter(c => c.status === "open");
+    const critiques = cache.getCritiques().filter(c => c.status === "open" || c.status === "valid");
     const pick = await vscode.window.showQuickPick(
       critiques.map(c => ({ label: `${c.id}: ${c.title} [${c.severity}]`, id: c.id })),
       { placeHolder: "Select critique to address" },
@@ -132,13 +132,24 @@ export function registerCommands(
   });
 
   register("jjj.dismissCritique", async () => {
-    const critiques = cache.getCritiques().filter(c => c.status === "open");
+    const critiques = cache.getCritiques().filter(c => c.status === "open" || c.status === "valid");
     const pick = await vscode.window.showQuickPick(
       critiques.map(c => ({ label: `${c.id}: ${c.title} [${c.severity}]`, id: c.id })),
       { placeHolder: "Select critique to dismiss" },
     );
     if (!pick) { return; }
     const result = await cli.dismissCritique(pick.id);
+    vscode.window.showInformationMessage(result);
+  });
+
+  register("jjj.validateCritique", async () => {
+    const critiques = cache.getCritiques().filter(c => c.status === "open");
+    const pick = await vscode.window.showQuickPick(
+      critiques.map(c => ({ label: `${c.id}: ${c.title} [${c.severity}]`, id: c.id })),
+      { placeHolder: "Select critique to validate (confirm as a real flaw)" },
+    );
+    if (!pick) { return; }
+    const result = await cli.validateCritique(pick.id);
     vscode.window.showInformationMessage(result);
   });
 

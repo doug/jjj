@@ -95,7 +95,7 @@ export function activate(context: vscode.ExtensionContext) {
       (thread: vscode.CommentThread) => critiqueComments.dismissCritique(thread)),
     vscode.commands.registerCommand("jjj.commentValidateCritique",
       (thread: vscode.CommentThread) => critiqueComments.validateCritique(thread)),
-    vscode.commands.registerCommand("jjj.commentReplyCritique",
+    vscode.commands.registerCommand("jjj.commentSubmitCritique",
       (reply: vscode.CommentReply) => critiqueComments.replyToCritique(reply)),
   );
 

@@ -91,9 +91,8 @@ function makeMockCache(): MockCache & { _fireCacheChange: () => void } {
 
 // Temp thread factory — simulates a thread created by VS Code when the user clicks gutter +
 function makeTempThread(filePath = "src/foo.rs", line = 9) {
-  // joinPath handles plain objects with fsPath via the mock implementation
-  const wsRoot = { fsPath: "/mock/workspace", scheme: "file" } as unknown as vscode.Uri;
-  const uri = vscode.Uri.joinPath(wsRoot, filePath);
+  const wsUri = vscode.workspace.workspaceFolders![0].uri as vscode.Uri;
+  const uri = vscode.Uri.joinPath(wsUri, filePath);
   return {
     uri,
     range: { start: { line, character: 0 }, end: { line, character: 0 } },
