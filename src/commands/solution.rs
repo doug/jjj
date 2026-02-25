@@ -181,7 +181,6 @@ fn new_solution(
         jj_client.new_empty_change(&title)?;
         let change_id = jj_client.current_change_id()?;
         solution.attach_change(change_id);
-        solution.start_testing();
 
         store.save_solution(&solution)?;
 
@@ -599,7 +598,10 @@ fn accept_solution(
     // Find open critiques for this solution
     let open_critiques: Vec<_> = critiques
         .iter()
-        .filter(|c| c.solution_id == solution_id && c.status == CritiqueStatus::Open)
+        .filter(|c| {
+            c.solution_id == solution_id
+                && (c.status == CritiqueStatus::Open || c.status == CritiqueStatus::Valid)
+        })
         .collect();
 
     // Check critique blocking

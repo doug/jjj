@@ -208,14 +208,21 @@ fn list_problems(
         problems.retain(|p| p.status == status);
     }
 
-    // Filter by milestone
-    if let Some(ref ms_id) = milestone_filter {
-        problems.retain(|p| p.milestone_id.as_deref() == Some(ms_id.as_str()));
+    // Filter by milestone (entity resolution: UUID, prefix, or title)
+    if let Some(ref ms_input) = milestone_filter {
+        let resolved = ctx.resolve_milestone(ms_input)?;
+        problems.retain(|p| p.milestone_id.as_deref() == Some(resolved.as_str()));
     }
 
-    // Filter by assignee
-    if let Some(ref assignee) = assignee_filter {
-        problems.retain(|p| p.assignee.as_deref() == Some(assignee.as_str()));
+    // Filter by assignee (substring match)
+    if let Some(ref assignee_pattern) = assignee_filter {
+        let pattern = assignee_pattern.to_lowercase();
+        problems.retain(|p| {
+            p.assignee
+                .as_deref()
+                .map(|a| a.to_lowercase().contains(&pattern))
+                .unwrap_or(false)
+        });
     }
 
     // Filter by search query using FTS

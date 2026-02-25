@@ -4,7 +4,7 @@
 # Tests the full solution state machine and all solution-specific commands
 # that aren't covered by the basic P→S→CQ scenarios:
 #
-#   solution test        (auto-enters Testing on creation; explicit test is idempotent)
+#   solution test        (solution new stays Proposed; solution test advances to Testing)
 #   solution attach      (link current jj change)
 #   solution detach      (unlink a change; requires --force from Testing state)
 #   solution refute      (with --rationale)
@@ -14,8 +14,9 @@
 #   solution list        (--status, --problem filters)
 #   solution show        (--json output)
 #
-# Note: solution new auto-attaches the current jj change and auto-advances
-# to Testing state. Detaching from Testing requires --force.
+# Note: solution new auto-attaches the current jj change but stays in Proposed
+# state. Call solution test explicitly to advance to Testing.
+# Detaching from Testing requires --force.
 #
 # Tests: solution test, attach, detach, refute/accept with rationale,
 #        supersedes chain, assign, list filters, show --json
@@ -37,26 +38,26 @@ run_jjj problem new "Login takes too long" --priority high
 assert_success "create problem"
 
 # ============================================================================
-section "Step 1: solution new auto-enters Testing; solution test is idempotent"
+section "Step 1: solution new stays Proposed; solution test advances to Testing"
 # ============================================================================
 
 run_jjj solution new "Cache session tokens" --problem "Login takes too long"
 assert_success "create solution"
 assert_contains "Cache session tokens" "solution title in output"
 
-# solution new auto-attaches the current jj change → status advances to Testing
+# solution new auto-attaches the current jj change but stays in Proposed state
 run_jjj solution list
 assert_success "solution list"
-assert_contains "testing" "solution auto-enters testing when change is attached"
+assert_contains "proposed" "solution stays proposed after creation"
 assert_contains "Cache session" "solution title in list"
 
-# solution test is idempotent on an already-testing solution
+# solution test explicitly advances to Testing
 run_jjj solution test "Cache session"
-assert_success "solution test is idempotent on testing solution"
-assert_contains "testing" "solution remains in testing"
+assert_success "solution test advances to testing"
+assert_contains "testing" "solution is now in testing after explicit test call"
 
-observe "solution new auto-attaches current jj change and advances to Testing"
-observe "solution test is still useful for solutions created without an active change"
+observe "solution new auto-attaches current jj change but stays Proposed"
+observe "call solution test explicitly when ready to begin implementation"
 
 # ============================================================================
 section "Step 2: solution list --status filter"
@@ -67,7 +68,7 @@ assert_success "list filtered to testing"
 assert_contains "Cache session" "testing solution in filtered list"
 
 run_jjj solution list --status proposed
-assert_success "list filtered to proposed (should be empty — new solutions auto-enter testing)"
+assert_success "list filtered to proposed (empty — cache solution is now testing)"
 
 run_jjj solution list --problem "Login"
 assert_success "list filtered by problem"
@@ -84,8 +85,11 @@ run_jjj solution new "Use JWT with short expiry" --problem "Login takes too long
 assert_success "create second solution"
 assert_contains "Use JWT" "JWT solution created"
 
-# JWT solution is already in Testing (auto-attached on creation).
-# Attach is idempotent — calling it again on the same change confirms the link.
+# JWT solution is Proposed (auto-attached, but not yet testing).
+# Advance to Testing, then verify attach is idempotent.
+run_jjj solution test "JWT"
+assert_success "advance JWT to testing"
+
 run_jjj solution attach "JWT"
 assert_success "attach current change to solution (idempotent)"
 assert_contains "Attached" "attach confirms the link"
@@ -114,12 +118,19 @@ assert_contains "validated" "critique is now valid"
 
 observe "Validated critiques mean the solution has a confirmed flaw"
 
-# Note: validated critiques do NOT hard-block acceptance (only Open critiques block).
-# The team is expected to refute the solution manually when a critique is validated.
+# Validated critiques hard-block acceptance (same as Open critiques).
+# Must address or dismiss the blocking critique before accepting.
 run_jjj solution accept "JWT" --no-rationale
-assert_success "accept technically succeeds even with validated critique"
-observe "Validated critiques are informational — they do not hard-block acceptance"
-observe "Use solution refute explicitly when a validated critique shows the solution is unworkable"
+assert_failure "accept is blocked by validated critique"
+observe "Validated critiques hard-block acceptance — resolve them before accepting"
+
+# Dismiss the validated critique to unblock acceptance
+run_jjj critique dismiss "JWT expiry"
+assert_success "dismiss the validated critique"
+
+run_jjj solution accept "JWT" --no-rationale
+assert_success "accept succeeds once critique is dismissed"
+assert_contains "accepted" "solution accepted after resolving blocking critique"
 
 # Reset: re-open by... actually we just accepted it, so let's demonstrate refute
 # on a freshly created solution instead

@@ -134,7 +134,7 @@ assert_failure() {
 assert_contains() {
     local needle="$1"
     local msg="${2:-output should contain '$needle'}"
-    if echo "$OUTPUT" | grep -qF "$needle"; then
+    if [[ "$OUTPUT" == *"$needle"* ]]; then
         echo -e "    ${GREEN}PASS${RESET} $msg"
         _PASS=$((_PASS + 1))
     else
@@ -149,7 +149,7 @@ assert_contains() {
 assert_not_contains() {
     local needle="$1"
     local msg="${2:-output should not contain '$needle'}"
-    if echo "$OUTPUT" | grep -qF "$needle"; then
+    if [[ "$OUTPUT" == *"$needle"* ]]; then
         echo -e "    ${RED}FAIL${RESET} $msg"
         echo "    FOUND unwanted: $needle"
         _FAIL=$((_FAIL + 1))

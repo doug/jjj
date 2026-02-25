@@ -163,10 +163,15 @@ fn list_critiques(
         critiques.retain(|c| c.status == status);
     }
 
-    // Filter by reviewer
-    if let Some(ref reviewer) = reviewer_filter {
-        let reviewer = reviewer.trim_start_matches('@');
-        critiques.retain(|c| c.reviewer.as_deref() == Some(reviewer));
+    // Filter by reviewer (substring match)
+    if let Some(ref reviewer_filter) = reviewer_filter {
+        let pattern = reviewer_filter.trim_start_matches('@').to_lowercase();
+        critiques.retain(|c| {
+            c.reviewer
+                .as_deref()
+                .map(|r| r.to_lowercase().contains(&pattern))
+                .unwrap_or(false)
+        });
     }
 
     // Filter by search query using FTS
@@ -251,6 +256,15 @@ fn show_critique(ctx: &CommandContext, critique_input: String, json: bool) -> Re
 
     if let Some(ref author) = critique.author {
         println!("Author: {}", author);
+    }
+    if let Some(ref reviewer) = critique.reviewer {
+        println!("Reviewer: {}", reviewer);
+    }
+    if let Some(ref file_path) = critique.file_path {
+        match critique.line_start {
+            Some(line) => println!("Location: {}:{}", file_path, line),
+            None => println!("Location: {}", file_path),
+        }
     }
 
     // Show argument

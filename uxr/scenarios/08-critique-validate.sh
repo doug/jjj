@@ -3,7 +3,7 @@
 #
 # Tests all critique lifecycle paths not covered by the basic scenarios:
 #
-#   critique validate     (Valid state — informational, does not hard-block accept)
+#   critique validate     (Valid state — hard-blocks accept, same as Open)
 #   critique dismiss      (shown to be incorrect)
 #   critique reply        (comment threading)
 #   critique edit         (change title/severity/status)
@@ -12,10 +12,9 @@
 #   critique list filters (--status, --solution, --reviewer)
 #   critique show --json  (structured output)
 #
-# Note: --file/--line/--reviewer appear in creation output and --json, but
-# not in the default text of critique show.
-# Note: Only Open critiques hard-block solution accept; Valid critiques are
-# informational (team is expected to refute manually).
+# Note: --file/--line/--reviewer appear in critique show text output and --json.
+# Note: Both Open and Valid critiques hard-block solution accept.
+# Address or dismiss blocking critiques before accepting.
 #
 # Tests: validate, dismiss, reply, edit, file/line annotations,
 #        reviewer assignment, list filters, show --json
@@ -54,7 +53,12 @@ assert_contains "Schema validator" "critique title in output"
 assert_contains "validate.rs" "file annotation in creation output"
 assert_contains "42" "line number in creation output"
 
-# critique show text output is brief (id + title + status); use --json for full detail
+# critique show now displays reviewer/file/line in text output too
+run_jjj critique show "unknown fields"
+assert_success "show critique with file/line"
+assert_contains "validate.rs" "file annotation in show output"
+assert_contains "42" "line number in show output"
+
 run_jjj critique show "unknown fields" --json
 assert_success "show critique as JSON"
 assert_contains "\"file_path\"" "file path in JSON"
@@ -62,7 +66,7 @@ assert_contains "src/api/validate.rs" "correct file path in JSON"
 assert_contains "\"line_start\"" "line number in JSON"
 
 observe "File and line annotations let reviewers jump directly to the problem in code"
-observe "Use critique show --json to see all fields including file/line/reviewer"
+observe "critique show displays reviewer, file, and line in plain text output"
 
 # ============================================================================
 section "Step 2: critique new with --reviewer"
@@ -96,8 +100,13 @@ assert_contains "unknown fields" "open critique in list"
 
 # Reviewer filter uses exact string match
 run_jjj critique list --reviewer "bob@example.com"
-assert_success "list critiques filtered by reviewer (exact email)"
+assert_success "list critiques filtered by reviewer (substring match)"
 assert_contains "rate limiting" "bob's critique in filtered list"
+
+# substring match also works with partial email
+run_jjj critique list --reviewer "bob"
+assert_success "list critiques filtered by reviewer (partial name)"
+assert_contains "rate limiting" "bob's critique found by partial match"
 
 run_jjj critique list --json
 assert_success "list critiques as JSON"
@@ -105,7 +114,7 @@ assert_contains "\"id\"" "JSON has id field"
 assert_contains "\"title\"" "JSON has title field"
 assert_contains "\"status\"" "JSON has status field"
 
-observe "critique list --reviewer requires the exact assigned string (full email)"
+observe "critique list --reviewer uses substring matching — partial email or username works"
 
 # ============================================================================
 section "Step 4: critique edit"
@@ -165,7 +174,7 @@ assert_not_contains "unknown fields" "dismissed critique not in open list"
 observe "Dismissed critiques are archived, not deleted — the reasoning remains visible"
 
 # ============================================================================
-section "Step 7: critique validate (informational) and the refute path"
+section "Step 7: critique validate hard-blocks accept; correct flow: address then accept"
 # ============================================================================
 
 # The DoS risk critique is still open — validate it
@@ -179,14 +188,23 @@ assert_contains "DoS risk" "validated critique in list"
 
 observe "Validate means: this critique is confirmed correct — the solution has a flaw"
 
-# Note: Only Open critiques hard-block acceptance. Validated critiques are
-# informational — acceptance succeeds, but the team should refute manually.
+# Valid critiques hard-block acceptance (same as Open critiques)
 run_jjj solution accept "JSON schema" --no-rationale
-assert_success "accept succeeds even with validated critique (not a hard block)"
-observe "Validated critiques do not hard-block acceptance — team decides whether to refute"
-observe "Convention: if a critique is validated, refute the solution and propose a new one"
+assert_failure "accept is blocked by validated critique"
+observe "Validated critiques hard-block acceptance — must resolve them first"
 
-# Demonstrate the proper flow: create a new solution, refute it if it has a valid critique
+# Correct flow: address (or dismiss) the blocking critique, then accept
+run_jjj critique address "DoS risk"
+assert_success "address the validated critique"
+
+run_jjj solution accept "JSON schema" --no-rationale
+assert_success "accept succeeds after addressing the blocking critique"
+assert_contains "accepted" "solution accepted"
+
+observe "Address or dismiss a validated critique to unblock acceptance"
+observe "Convention: if a critique is validated, fix the flaw, address the critique, then accept"
+
+# Demonstrate the proper refute flow with a new solution
 run_jjj solution new "Rewrite validation layer with type-safe parser" \
     --problem "API lacks input validation"
 assert_success "create replacement solution"

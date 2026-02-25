@@ -444,11 +444,19 @@ fn test_solution_test_status() {
         &["solution", "new", "Test Status", "--problem", "Problem"],
     );
 
-    // solution new auto-attaches and moves to testing
+    // solution new auto-attaches but stays in Proposed; explicit test advances to Testing
+    let show = run_jjj_success(&dir, &["solution", "show", "Test Status"]);
+    assert!(
+        show.contains("Proposed") || show.contains("proposed"),
+        "Expected proposed status after creation: {}",
+        show
+    );
+
+    run_jjj_success(&dir, &["solution", "test", "Test Status"]);
     let show = run_jjj_success(&dir, &["solution", "show", "Test Status"]);
     assert!(
         show.contains("Testing") || show.contains("testing"),
-        "Expected testing status: {}",
+        "Expected testing status after solution test: {}",
         show
     );
 }

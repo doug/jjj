@@ -14,10 +14,10 @@
 #   completion (shell completion generation)
 #
 # Implementation notes:
-#   - problem list --assignee and --reviewer use EXACT string comparison
-#   - problem list --search and jjj search use FTS — requires db rebuild first
-#   - solution new auto-attaches current change → status is "testing" not "proposed"
-#   - problem list --milestone uses exact UUID comparison (not entity resolution)
+#   - problem list --assignee and --reviewer use substring comparison
+#   - problem list --search and jjj search use FTS — auto-indexed on save
+#   - solution new auto-attaches current change but stays in "proposed" state
+#   - problem list --milestone accepts UUID, prefix, or title (entity resolution)
 #   - search --json field is "type" (not "entity_type")
 #   - completion generates "_jjj" bash function
 #
@@ -67,7 +67,7 @@ assert_success "add P0 to milestone"
 run_jjj milestone add-problem "v2.0" "Auth tokens"
 assert_success "add auth problem to milestone"
 
-# Create solutions (auto-enter Testing state due to current jj change attachment)
+# Create solutions (auto-attach current change; stay in Proposed state)
 run_jjj solution new "Add search result cache" --problem "Performance regression"
 assert_success "solution for search perf"
 
@@ -87,9 +87,7 @@ run_jjj critique new "Extend token lifetime" \
     --reviewer "security@example.com"
 assert_success "add security critique"
 
-# Populate the FTS index — required for problem list --search and jjj search
-run_jjj db rebuild
-assert_success "db rebuild populates FTS index"
+# FTS is auto-indexed on save — no db rebuild needed
 
 # ============================================================================
 section "Step 1: status flags"
@@ -130,36 +128,29 @@ assert_success "problem list --status in_progress"
 assert_contains "in_progress" "in_progress problems listed"
 assert_contains "Performance regression" "P0 with solution is in_progress"
 
-# assignee filter uses exact string comparison
-run_jjj problem list --assignee "alice@example.com"
-assert_success "problem list --assignee alice (exact email)"
+# assignee filter uses substring comparison
+run_jjj problem list --assignee "alice"
+assert_success "problem list --assignee alice (substring)"
 assert_contains "Performance regression" "alice's problem in list"
 assert_not_contains "Missing dark mode" "unassigned problem not in alice's list"
 
 run_jjj problem list --assignee "bob@example.com"
-assert_success "problem list --assignee bob (exact email)"
+assert_success "problem list --assignee bob (exact email also works)"
 assert_contains "Auth tokens" "bob's problem in list"
 
-# search filter uses FTS (db rebuild required above)
-# FTS uses exact word matching — use "Auth" not "token" (FTS doesn't stem "tokens"→"token")
-run_jjj problem list --search "Auth"
-assert_success "problem list --search Auth"
-assert_contains "Auth tokens" "search finds matching problem"
+# search filter uses FTS (auto-indexed on save — no db rebuild needed)
+# Porter stemmer: "token" matches "tokens", "Auth" matches "auth"
+run_jjj problem list --search "token"
+assert_success "problem list --search token (stemmed: matches tokens)"
+assert_contains "Auth tokens" "search finds matching problem via stemming"
 assert_not_contains "Performance regression" "non-matching problem excluded"
 
-# milestone filter uses exact UUID — get it from milestone show
-run_jjj milestone show "v2.0 Release" --json
-MILESTONE_UUID=$(echo "$OUTPUT" | grep -oE '"id":\s*"[0-9a-f-]+"' | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
-
-if [[ -n "${MILESTONE_UUID:-}" ]]; then
-    run_jjj problem list --milestone "$MILESTONE_UUID"
-    assert_success "problem list --milestone filter (by UUID)"
-    assert_contains "Performance regression" "milestone problem in list"
-    assert_not_contains "Missing dark mode" "non-milestone problem excluded"
-    observe "problem list --milestone requires exact UUID — get it from milestone show --json"
-else
-    skip "Milestone UUID not captured — skipping --milestone filter test"
-fi
+# milestone filter accepts title directly (entity resolution)
+run_jjj problem list --milestone "v2.0"
+assert_success "problem list --milestone filter (by title prefix)"
+assert_contains "Performance regression" "milestone problem in list"
+assert_not_contains "Missing dark mode" "non-milestone problem excluded"
+observe "problem list --milestone accepts UUID, prefix, or title — no need to look up UUID"
 
 # Sort variants
 run_jjj problem list --sort priority
@@ -181,7 +172,7 @@ assert_contains "\"priority\"" "JSON has priority"
 assert_contains "\"status\"" "JSON has status"
 
 observe "List filters reduce noise — show only what's relevant to the current focus"
-observe "assignee and reviewer filters use exact string match (full email address)"
+observe "assignee and reviewer filters use substring matching — partial email or username works"
 
 # ============================================================================
 section "Step 3: problem show --json"
@@ -198,11 +189,11 @@ assert_contains "alice@example.com" "assignee in JSON"
 section "Step 4: solution list filters"
 # ============================================================================
 
-# solution new auto-attaches current change → status is "testing" not "proposed"
-run_jjj solution list --status testing
-assert_success "solution list --status testing"
-assert_contains "testing" "testing solutions returned"
-assert_contains "Add search result cache" "cache solution in testing list"
+# solution new auto-attaches current change but stays in Proposed state
+run_jjj solution list --status proposed
+assert_success "solution list --status proposed"
+assert_contains "proposed" "proposed solutions returned"
+assert_contains "Add search result cache" "cache solution in proposed list"
 
 run_jjj solution list --problem "Auth tokens"
 assert_success "solution list --problem filter"
@@ -250,9 +241,9 @@ assert_success "critique list --solution filter"
 assert_contains "Cache invalidation" "critique for that solution"
 assert_not_contains "30 days" "other solution's critique excluded"
 
-# reviewer filter uses exact string match
-run_jjj critique list --reviewer "security@example.com"
-assert_success "critique list --reviewer filter (exact email)"
+# reviewer filter uses substring match
+run_jjj critique list --reviewer "security"
+assert_success "critique list --reviewer filter (substring match)"
 assert_contains "30 days is too long" "security team's critique in filter"
 
 run_jjj critique list --json
@@ -289,11 +280,11 @@ assert_contains "2026-06-01" "date in JSON"
 section "Step 9: search --type and --text-only"
 # ============================================================================
 
-# jjj search uses FTS (populated by db rebuild above)
-# FTS uses exact word matching — "Auth" matches, "token" does not match "tokens"
-run_jjj search "Auth" --type problem
-assert_success "search --type problem"
-assert_contains "Auth tokens" "Auth problem found"
+# jjj search uses FTS (auto-indexed on save, porter stemmer enabled)
+# Porter stemmer: "token" matches "tokens", "cache" matches "cached", etc.
+run_jjj search "token" --type problem
+assert_success "search --type problem (stemmed: token→tokens)"
+assert_contains "Auth tokens" "Auth tokens problem found via stemming"
 assert_not_contains "Extend token lifetime" "solution excluded by type filter"
 
 run_jjj search "cache" --type solution
@@ -313,6 +304,7 @@ assert_contains "\"type\"" "JSON has type field"
 
 observe "search --type narrows results when you know what kind of entity you're looking for"
 observe "search --text-only is useful when embeddings haven't been computed yet"
+observe "FTS uses porter stemming — 'token' finds 'tokens', 'cache' finds 'cached'"
 observe "search --json field is 'type' (not 'entity_type')"
 
 # ============================================================================
