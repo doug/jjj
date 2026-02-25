@@ -270,8 +270,8 @@ fn test_solution_status_workflow() {
         stdout
     );
 
-    // Advance to testing, then accept
-    run_jjj(dir, &["solution", "test", "Test Solution"]);
+    // Advance to review, then accept
+    run_jjj(dir, &["solution", "review", "Test Solution"]);
     let output = run_jjj(dir, &["solution", "accept", "Test Solution"]);
     assert!(output.status.success());
 
@@ -288,7 +288,7 @@ fn test_critique_blocks_acceptance() {
     let temp_dir = setup_test_repo();
     let dir = temp_dir.path();
 
-    // Create a solution and move to testing
+    // Create a solution and move to review
     run_jjj(
         dir,
         &[
@@ -299,7 +299,7 @@ fn test_critique_blocks_acceptance() {
             "Workflow Problem",
         ],
     );
-    run_jjj(dir, &["solution", "test", "Test Solution"]);
+    run_jjj(dir, &["solution", "review", "Test Solution"]);
 
     // Add a critique
     run_jjj(
@@ -348,7 +348,7 @@ fn test_submit_blocked_by_critiques() {
         .status()
         .unwrap();
 
-    // Create solution (creates change, sets to testing via auto-attach)
+    // Create solution (creates change, auto-attaches; stays Proposed)
     run_jjj(
         dir,
         &[

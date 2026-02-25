@@ -25,7 +25,7 @@ export interface Solution {
   id: string;
   title: string;
   problem_id: string;
-  status: "proposed" | "testing" | "accepted" | "refuted";
+  status: "proposed" | "review" | "accepted" | "refuted";
   critique_ids: string[];
   change_ids: string[];
   assignee: string | null;
@@ -96,7 +96,7 @@ export interface StatusResult {
   items: StatusItem[];
   total_count: number;
   user: string;
-  summary: { open_problems: number; testing_solutions: number; open_critiques: number };
+  summary: { open_problems: number; review_solutions: number; open_critiques: number };
 }
 
 // --- CLI Client ---
@@ -217,8 +217,8 @@ export class JjjCli {
     return this.exec(["critique", "validate", critiqueId]);
   }
 
-  async testSolution(solutionId: string): Promise<string> {
-    return this.exec(["solution", "test", solutionId]);
+  async reviewSolution(solutionId: string): Promise<string> {
+    return this.exec(["solution", "review", solutionId]);
   }
 
   async acceptSolution(solutionId: string, force = false): Promise<string> {

@@ -67,8 +67,8 @@ pub enum SolutionStatus {
     #[default]
     Proposed,
 
-    /// Being implemented/tested
-    Testing,
+    /// Under review — ready for criticism
+    Review,
 
     /// Criticism has shown this won't work
     Refuted,
@@ -81,7 +81,7 @@ impl std::fmt::Display for SolutionStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             SolutionStatus::Proposed => write!(f, "proposed"),
-            SolutionStatus::Testing => write!(f, "testing"),
+            SolutionStatus::Review => write!(f, "review"),
             SolutionStatus::Refuted => write!(f, "refuted"),
             SolutionStatus::Accepted => write!(f, "accepted"),
         }
@@ -94,11 +94,11 @@ impl std::str::FromStr for SolutionStatus {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "proposed" => Ok(SolutionStatus::Proposed),
-            "testing" => Ok(SolutionStatus::Testing),
+            "review" => Ok(SolutionStatus::Review),
             "refuted" => Ok(SolutionStatus::Refuted),
             "accepted" => Ok(SolutionStatus::Accepted),
             _ => Err(format!(
-                "Unknown solution status: '{}'. Valid values: proposed, testing, refuted, accepted",
+                "Unknown solution status: '{}'. Valid values: proposed, review, refuted, accepted",
                 s
             )),
         }
@@ -176,11 +176,11 @@ impl Solution {
     pub fn can_transition_to(&self, target: &SolutionStatus) -> bool {
         matches!(
             (&self.status, target),
-            (SolutionStatus::Proposed, SolutionStatus::Testing)
+            (SolutionStatus::Proposed, SolutionStatus::Review)
                 | (SolutionStatus::Proposed, SolutionStatus::Refuted)
-                | (SolutionStatus::Testing, SolutionStatus::Accepted)
-                | (SolutionStatus::Testing, SolutionStatus::Refuted)
-                | (SolutionStatus::Testing, SolutionStatus::Proposed)
+                | (SolutionStatus::Review, SolutionStatus::Accepted)
+                | (SolutionStatus::Review, SolutionStatus::Refuted)
+                | (SolutionStatus::Review, SolutionStatus::Proposed)
         )
     }
 
@@ -188,7 +188,7 @@ impl Solution {
     pub fn is_active(&self) -> bool {
         matches!(
             self.status,
-            SolutionStatus::Proposed | SolutionStatus::Testing
+            SolutionStatus::Proposed | SolutionStatus::Review
         )
     }
 
@@ -205,9 +205,9 @@ impl Solution {
         self.status == SolutionStatus::Proposed
     }
 
-    /// Check if solution is in testing status
-    pub fn is_testing(&self) -> bool {
-        self.status == SolutionStatus::Testing
+    /// Check if solution is in review status
+    pub fn is_review(&self) -> bool {
+        self.status == SolutionStatus::Review
     }
 
     /// Check if solution has been accepted
@@ -220,9 +220,9 @@ impl Solution {
         self.status == SolutionStatus::Refuted
     }
 
-    /// Mark solution as being tested
-    pub fn start_testing(&mut self) {
-        self.set_status(SolutionStatus::Testing);
+    /// Mark solution as under review
+    pub fn start_review(&mut self) {
+        self.set_status(SolutionStatus::Review);
     }
 
     /// Accept the solution (survived criticism)
@@ -306,8 +306,8 @@ mod tests {
         assert_eq!(solution.status, SolutionStatus::Proposed);
         assert!(solution.is_active());
 
-        solution.start_testing();
-        assert_eq!(solution.status, SolutionStatus::Testing);
+        solution.start_review();
+        assert_eq!(solution.status, SolutionStatus::Review);
         assert!(solution.is_active());
 
         solution.accept();
@@ -319,7 +319,7 @@ mod tests {
     fn test_refutation() {
         let mut solution = Solution::new("S-1".to_string(), "Test".to_string(), "P-1".to_string());
 
-        solution.start_testing();
+        solution.start_review();
         solution.refute();
 
         assert_eq!(solution.status, SolutionStatus::Refuted);
@@ -355,8 +355,8 @@ mod tests {
             SolutionStatus::Proposed
         );
         assert_eq!(
-            "testing".parse::<SolutionStatus>().unwrap(),
-            SolutionStatus::Testing
+            "review".parse::<SolutionStatus>().unwrap(),
+            SolutionStatus::Review
         );
         assert_eq!(
             "refuted".parse::<SolutionStatus>().unwrap(),

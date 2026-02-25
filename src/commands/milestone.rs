@@ -212,7 +212,7 @@ fn show_milestone(ctx: &CommandContext, milestone_input: String, json: bool) -> 
                     .count();
                 let testing_solutions = solutions
                     .iter()
-                    .filter(|s| s.status == SolutionStatus::Testing)
+                    .filter(|s| s.status == SolutionStatus::Review)
                     .count();
 
                 let status_icon = match problem.status {

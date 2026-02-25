@@ -5,7 +5,7 @@ description: CLI reference for creating, listing, attaching, accepting, and refu
 
 # Solution Commands
 
-Solutions are conjectures proposed to solve problems. They go through a lifecycle: proposed, testing, accepted, or refuted. Solutions can have jj changes attached, be critiqued, and have reviewers assigned whose sign-offs gate acceptance.
+Solutions are conjectures proposed to solve problems. They go through a lifecycle: proposed, review, accepted, or refuted. Solutions can have jj changes attached, be critiqued, and have reviewers assigned whose sign-offs gate acceptance.
 
 ## `jjj solution new`
 
@@ -22,7 +22,7 @@ jjj solution new <title> [OPTIONS]
 | `--reviewer` | string (repeatable) | no | Assign reviewers at creation (e.g., `@alice`) |
 | `--force`, `-f` | flag | no | Create even if a similar solution already exists |
 
-When `--problem` is not provided, lists open problems and prompts you to select one interactively. After creation, automatically creates a jj change, attaches it to the solution, and moves the solution to `testing` status.
+When `--problem` is not provided, lists open problems and prompts you to select one interactively. After creation, automatically creates a jj change and attaches it to the solution. The solution stays in `proposed` status until you explicitly run `solution review`.
 
 ```bash,test
 jjj init
@@ -51,13 +51,13 @@ jjj solution list [OPTIONS]
 | Flag | Type | Description |
 |------|------|-------------|
 | `--problem` | string | Filter by problem |
-| `--status` | string | Filter by status (proposed, testing, refuted, accepted) |
+| `--status` | string | Filter by status (proposed, review, refuted, accepted) |
 | `--search` | string | Search solutions by title text |
 | `--json` | bool | Output in JSON format |
 
 ```bash,test
 jjj solution list --problem "Login is too slow"
-jjj solution list --status testing
+jjj solution list --status review
 jjj solution list --json
 ```
 
@@ -122,16 +122,16 @@ jjj solution detach "Add connection"
 jjj solution detach "Add connection" abc123
 ```
 
-## `jjj solution test`
+## `jjj solution review`
 
-Move a solution to testing status.
+Mark a solution as ready for review.
 
 ```
-jjj solution test <solution_id>
+jjj solution review <solution_id>
 ```
 
 ```bash
-jjj solution test "Add connection"
+jjj solution review "Add connection"
 ```
 
 ## `jjj solution accept`

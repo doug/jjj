@@ -111,9 +111,9 @@ fn test_solution_status_transitions() {
     );
     assert!(solution.is_proposed());
 
-    // When: I start testing
-    solution.start_testing();
-    assert!(solution.is_testing());
+    // When: I move to review
+    solution.start_review();
+    assert!(solution.is_review());
 
     // When: I accept the solution
     solution.accept();
@@ -122,13 +122,13 @@ fn test_solution_status_transitions() {
 
 #[test]
 fn test_solution_refute() {
-    // Given: A testing solution
+    // Given: A solution in review
     let mut solution = Solution::new(
         "s1".to_string(),
         "Test solution".to_string(),
         "p1".to_string(),
     );
-    solution.start_testing();
+    solution.start_review();
 
     // When: I refute it
     solution.refute();

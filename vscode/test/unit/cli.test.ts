@@ -42,13 +42,13 @@ describe("JjjCli", () => {
     });
 
     it("status passes --all flag when requested", async () => {
-      execStub.resolves('{"active_solution":null,"items":[],"total_count":0,"user":"test","summary":{"open_problems":0,"testing_solutions":0,"open_critiques":0}}');
+      execStub.resolves('{"active_solution":null,"items":[],"total_count":0,"user":"test","summary":{"open_problems":0,"review_solutions":0,"open_critiques":0}}');
       await cli.status(true);
       assert.deepStrictEqual(execStub.firstCall.args[0], ["status", "--json", "--all"]);
     });
 
     it("status omits --all flag by default", async () => {
-      execStub.resolves('{"active_solution":null,"items":[],"total_count":0,"user":"test","summary":{"open_problems":0,"testing_solutions":0,"open_critiques":0}}');
+      execStub.resolves('{"active_solution":null,"items":[],"total_count":0,"user":"test","summary":{"open_problems":0,"review_solutions":0,"open_critiques":0}}');
       await cli.status(false);
       assert.deepStrictEqual(execStub.firstCall.args[0], ["status", "--json"]);
     });

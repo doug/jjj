@@ -688,14 +688,14 @@ mod tests {
         assert_eq!(loaded.status, SolutionStatus::Proposed);
 
         // Update
-        solution.set_status(SolutionStatus::Testing);
+        solution.set_status(SolutionStatus::Review);
         solution.attach_change("ghi789".to_string());
         upsert_solution(conn, &solution).expect("Failed to update");
 
         let loaded = load_solution(conn, "s1")
             .expect("Failed to load")
             .expect("Not found");
-        assert_eq!(loaded.status, SolutionStatus::Testing);
+        assert_eq!(loaded.status, SolutionStatus::Review);
         assert_eq!(loaded.change_ids.len(), 3);
 
         // List for problem

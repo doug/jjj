@@ -40,7 +40,7 @@ pub fn execute(ctx: &CommandContext, action: SolutionAction) -> Result<()> {
             change_id,
             force,
         } => detach_change(ctx, solution_id, change_id, force),
-        SolutionAction::Test { solution_id } => test_solution(ctx, solution_id),
+        SolutionAction::Review { solution_id } => review_solution(ctx, solution_id),
         SolutionAction::Accept {
             solution_id,
             force,
@@ -327,7 +327,7 @@ fn list_solutions(
     {
         let status_icon = match solution.status {
             SolutionStatus::Proposed => " ",
-            SolutionStatus::Testing => ">",
+            SolutionStatus::Review => ">",
             SolutionStatus::Accepted => "+",
             SolutionStatus::Refuted => "x",
         };
@@ -507,10 +507,10 @@ fn detach_change(
     if !force {
         let solution = store.load_solution(&solution_id)?;
 
-        // Block detach from Testing solutions
-        if solution.status == SolutionStatus::Testing {
+        // Block detach from Review solutions
+        if solution.status == SolutionStatus::Review {
             return Err(crate::error::JjjError::Validation(format!(
-                "Cannot detach change from solution {} while in Testing state. Use --force to override.",
+                "Cannot detach change from solution {} while in Review state. Use --force to override.",
                 solution_id
             )));
         }
@@ -548,13 +548,13 @@ fn detach_change(
     )
 }
 
-fn test_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
+fn review_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
     let solution_id = ctx.resolve_solution(&solution_input)?;
     let store = &ctx.store;
 
-    store.with_metadata(&format!("Move solution {} to testing", solution_id), || {
+    store.with_metadata(&format!("Move solution {} to review", solution_id), || {
         let mut solution = store.load_solution(&solution_id)?;
-        solution.start_testing();
+        solution.start_review();
         store.save_solution(&solution)?;
 
         // Update problem status to in_progress if it's still open
@@ -565,7 +565,7 @@ fn test_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
             println!("Problem {} moved to in_progress", problem.id);
         }
 
-        println!("Solution {} moved to testing", solution_id);
+        println!("Solution {} moved to review", solution_id);
         Ok(())
     })
 }
@@ -806,7 +806,7 @@ fn resume_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
 
             let mut solution = store.load_solution(&solution_id)?;
             solution.attach_change(change_id);
-            solution.start_testing();
+            solution.start_review();
             store.save_solution(&solution)?;
 
             // Update problem status

@@ -4,9 +4,9 @@
 # Tests the full solution state machine and all solution-specific commands
 # that aren't covered by the basic P→S→CQ scenarios:
 #
-#   solution test        (solution new stays Proposed; solution test advances to Testing)
+#   solution review      (solution new stays Proposed; solution review advances to Review)
 #   solution attach      (link current jj change)
-#   solution detach      (unlink a change; requires --force from Testing state)
+#   solution detach      (unlink a change; requires --force from Review state)
 #   solution refute      (with --rationale)
 #   solution accept      (with --rationale)
 #   solution assign      (assign to named person)
@@ -15,10 +15,10 @@
 #   solution show        (--json output)
 #
 # Note: solution new auto-attaches the current jj change but stays in Proposed
-# state. Call solution test explicitly to advance to Testing.
-# Detaching from Testing requires --force.
+# state. Call solution review explicitly to advance to Review.
+# Detaching from Review requires --force.
 #
-# Tests: solution test, attach, detach, refute/accept with rationale,
+# Tests: solution review, attach, detach, refute/accept with rationale,
 #        supersedes chain, assign, list filters, show --json
 
 source "$(dirname "$0")/../lib.sh"
@@ -38,7 +38,7 @@ run_jjj problem new "Login takes too long" --priority high
 assert_success "create problem"
 
 # ============================================================================
-section "Step 1: solution new stays Proposed; solution test advances to Testing"
+section "Step 1: solution new stays Proposed; solution review advances to Review"
 # ============================================================================
 
 run_jjj solution new "Cache session tokens" --problem "Login takes too long"
@@ -51,24 +51,24 @@ assert_success "solution list"
 assert_contains "proposed" "solution stays proposed after creation"
 assert_contains "Cache session" "solution title in list"
 
-# solution test explicitly advances to Testing
-run_jjj solution test "Cache session"
-assert_success "solution test advances to testing"
-assert_contains "testing" "solution is now in testing after explicit test call"
+# solution review explicitly advances to Testing
+run_jjj solution review "Cache session"
+assert_success "solution review advances to review"
+assert_contains "review" "solution is now in review after explicit review call"
 
 observe "solution new auto-attaches current jj change but stays Proposed"
-observe "call solution test explicitly when ready to begin implementation"
+observe "call solution review explicitly when ready to submit for review"
 
 # ============================================================================
 section "Step 2: solution list --status filter"
 # ============================================================================
 
-run_jjj solution list --status testing
-assert_success "list filtered to testing"
-assert_contains "Cache session" "testing solution in filtered list"
+run_jjj solution list --status review
+assert_success "list filtered to review"
+assert_contains "Cache session" "review solution in filtered list"
 
 run_jjj solution list --status proposed
-assert_success "list filtered to proposed (empty — cache solution is now testing)"
+assert_success "list filtered to proposed (empty — cache solution is now in review)"
 
 run_jjj solution list --problem "Login"
 assert_success "list filtered by problem"
@@ -87,8 +87,8 @@ assert_contains "Use JWT" "JWT solution created"
 
 # JWT solution is Proposed (auto-attached, but not yet testing).
 # Advance to Testing, then verify attach is idempotent.
-run_jjj solution test "JWT"
-assert_success "advance JWT to testing"
+run_jjj solution review "JWT"
+assert_success "advance JWT to review"
 
 run_jjj solution attach "JWT"
 assert_success "attach current change to solution (idempotent)"
@@ -100,10 +100,10 @@ assert_contains "JWT" "solution details visible"
 
 # Detaching from a Testing solution requires --force
 run_jjj solution detach "JWT" --force
-assert_success "detach current change from solution (--force required from Testing state)"
+assert_success "detach current change from solution (--force required from Review state)"
 assert_contains "Detached" "detach confirms removal"
 
-observe "Detach from Testing requires --force — prevents accidental loss of work in progress"
+observe "Detach from Review requires --force — prevents accidental loss of work in progress"
 
 # ============================================================================
 section "Step 4: Validate critique then refute with rationale"

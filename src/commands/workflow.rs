@@ -56,7 +56,7 @@ pub fn submit(ctx: &CommandContext, force: bool) -> Result<()> {
     jj_client.squash(msg)?;
 
     // Auto-accept
-    if solution.status == SolutionStatus::Testing || solution.status == SolutionStatus::Proposed {
+    if solution.status == SolutionStatus::Review || solution.status == SolutionStatus::Proposed {
         let mut solution = store.load_solution(&solution.id)?;
         if force {
             solution.force_accepted = true;

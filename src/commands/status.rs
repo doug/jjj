@@ -50,9 +50,9 @@ pub fn execute(
         items.truncate(effective_limit);
 
         let open_problems = problems.iter().filter(|p| p.is_open()).count();
-        let testing_solutions = solutions
+        let review_solutions = solutions
             .iter()
-            .filter(|s| s.status == SolutionStatus::Testing)
+            .filter(|s| s.status == SolutionStatus::Review)
             .count();
         let open_critiques = critiques
             .iter()
@@ -66,7 +66,7 @@ pub fn execute(
             "user": user,
             "summary": {
                 "open_problems": open_problems,
-                "testing_solutions": testing_solutions,
+                "review_solutions": review_solutions,
                 "open_critiques": open_critiques,
             }
         });
@@ -177,9 +177,9 @@ pub fn execute(
             .iter()
             .filter(|p| p.status == ProblemStatus::Open || p.status == ProblemStatus::InProgress)
             .count();
-        let testing_solutions = solutions
+        let review_solutions = solutions
             .iter()
-            .filter(|s| s.status == SolutionStatus::Testing)
+            .filter(|s| s.status == SolutionStatus::Review)
             .count();
         let open_critiques = critiques
             .iter()
@@ -187,8 +187,8 @@ pub fn execute(
             .count();
 
         println!(
-            "\nSummary: {} open problems, {} testing solutions, {} open critiques",
-            open_problems, testing_solutions, open_critiques
+            "\nSummary: {} open problems, {} in review, {} open critiques",
+            open_problems, review_solutions, open_critiques
         );
     }
 

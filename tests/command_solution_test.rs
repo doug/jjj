@@ -70,10 +70,10 @@ fn test_solution_new_auto_attaches_change() {
     );
 
     let stdout = run_jjj_success(&dir, &["solution", "show", "Solution"]);
-    // Solution new auto-attaches and moves to testing
+    // Solution new auto-attaches but stays Proposed; solution review advances to Review
     assert!(
-        stdout.contains("Changes") || stdout.contains("Testing") || stdout.contains("testing"),
-        "Expected change attached or testing status: {}",
+        stdout.contains("Changes") || stdout.contains("Review") || stdout.contains("review"),
+        "Expected change attached: {}",
         stdout
     );
 }
@@ -444,7 +444,7 @@ fn test_solution_test_status() {
         &["solution", "new", "Test Status", "--problem", "Problem"],
     );
 
-    // solution new auto-attaches but stays in Proposed; explicit test advances to Testing
+    // solution new auto-attaches but stays in Proposed; explicit review advances to Review
     let show = run_jjj_success(&dir, &["solution", "show", "Test Status"]);
     assert!(
         show.contains("Proposed") || show.contains("proposed"),
@@ -452,11 +452,11 @@ fn test_solution_test_status() {
         show
     );
 
-    run_jjj_success(&dir, &["solution", "test", "Test Status"]);
+    run_jjj_success(&dir, &["solution", "review", "Test Status"]);
     let show = run_jjj_success(&dir, &["solution", "show", "Test Status"]);
     assert!(
-        show.contains("Testing") || show.contains("testing"),
-        "Expected testing status after solution test: {}",
+        show.contains("Review") || show.contains("review"),
+        "Expected review status after solution review: {}",
         show
     );
 }

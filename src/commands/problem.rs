@@ -374,7 +374,7 @@ fn show_problem(ctx: &CommandContext, problem_input: String, json: bool) -> Resu
         for solution in &solutions {
             let status_icon = match solution.status {
                 crate::models::SolutionStatus::Proposed => " ",
-                crate::models::SolutionStatus::Testing => ">",
+                crate::models::SolutionStatus::Review => ">",
                 crate::models::SolutionStatus::Accepted => "+",
                 crate::models::SolutionStatus::Refuted => "x",
             };

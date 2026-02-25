@@ -173,9 +173,9 @@ export class CritiqueCommentController implements vscode.Disposable {
     const activeSolution = this.cache.getStatus()?.active_solution;
     if (activeSolution) { return activeSolution.id; }
 
-    // Fall back to solutions in testing or proposed state
+    // Fall back to solutions in review or proposed state
     const solutions = this.cache.getSolutions();
-    const candidates = solutions.filter(s => s.status === "testing" || s.status === "proposed");
+    const candidates = solutions.filter(s => s.status === "review" || s.status === "proposed");
     if (candidates.length === 0) { return undefined; }
     if (candidates.length === 1) { return candidates[0].id; }
 

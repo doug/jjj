@@ -374,7 +374,7 @@ fn test_solve_warns_active_solutions() {
     // If solve succeeded or even if it didn't, check for warning text
     if output.status.success() {
         assert!(
-            stderr.contains("active") || stderr.contains("Warning") || stderr.contains("testing"),
+            stderr.contains("active") || stderr.contains("Warning") || stderr.contains("review"),
             "Expected warning about active solutions: stderr={}",
             stderr
         );

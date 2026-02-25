@@ -63,7 +63,7 @@ class SolutionNode extends vscode.TreeItem {
       ? new vscode.ThemeIcon("check", new vscode.ThemeColor("testing.iconPassed"))
       : solution.status === "refuted"
         ? new vscode.ThemeIcon("x", new vscode.ThemeColor("errorForeground"))
-        : solution.status === "testing"
+        : solution.status === "review"
           ? new vscode.ThemeIcon("beaker")
           : new vscode.ThemeIcon("lightbulb");
     this.command = {

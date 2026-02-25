@@ -66,7 +66,7 @@ describe("DataCache", () => {
       makeCritique({ id: "c3", solution_id: "s3" }),
     ]);
     cli.listMilestones.resolves([makeMilestone({ id: "m1" })]);
-    cli.status.resolves({ active_solution: null, items: [], total_count: 0, user: "test", summary: { open_problems: 0, testing_solutions: 0, open_critiques: 0 } });
+    cli.status.resolves({ active_solution: null, items: [], total_count: 0, user: "test", summary: { open_problems: 0, review_solutions: 0, open_critiques: 0 } });
 
     cache = new DataCache(cli as unknown as JjjCli);
     await cache.refresh();

@@ -18,7 +18,7 @@ function makeProblem(overrides: Partial<Problem> = {}): Problem {
 
 function makeSolution(overrides: Partial<Solution> = {}): Solution {
   return {
-    id: "s1", title: "Add search index", problem_id: "p1", status: "testing",
+    id: "s1", title: "Add search index", problem_id: "p1", status: "review",
     critique_ids: ["c1"], change_ids: ["kxq2p"],
     assignee: "doug",
     force_accepted: false, created_at: "", updated_at: "",
@@ -61,7 +61,7 @@ describe("EntityDocumentProvider", () => {
     cli.listSolutions.resolves([makeSolution()]);
     cli.listCritiques.resolves([makeCritique()]);
     cli.listMilestones.resolves([makeMilestone()]);
-    cli.status.resolves({ active_solution: null, items: [], total_count: 0, user: "test", summary: { open_problems: 0, testing_solutions: 0, open_critiques: 0 } });
+    cli.status.resolves({ active_solution: null, items: [], total_count: 0, user: "test", summary: { open_problems: 0, review_solutions: 0, open_critiques: 0 } });
 
     cache = new DataCache(cli as unknown as JjjCli);
     await cache.refresh();
@@ -119,7 +119,7 @@ describe("EntityDocumentProvider", () => {
       const uri = vscode.Uri.parse("jjj:///problem/p1.md");
       const content = provider.provideTextDocumentContent(uri);
       assert.ok(content.includes("s1: Add search index"));
-      assert.ok(content.includes("[testing]"));
+      assert.ok(content.includes("[review]"));
     });
 
     it("includes priority", () => {
@@ -154,7 +154,7 @@ describe("EntityDocumentProvider", () => {
       const uri = vscode.Uri.parse("jjj:///solution/s1.md");
       const content = provider.provideTextDocumentContent(uri);
       assert.ok(content.includes("Add search index"));
-      assert.ok(content.includes("Status: testing"));
+      assert.ok(content.includes("Status: review"));
     });
 
     it("lists critiques", () => {

@@ -455,7 +455,7 @@ pub enum SolutionAction {
         #[arg(long)]
         problem: Option<String>,
 
-        /// Filter by status: proposed, testing, accepted, refuted
+        /// Filter by status: proposed, review, accepted, refuted
         #[arg(long)]
         status: Option<String>,
 
@@ -493,7 +493,7 @@ pub enum SolutionAction {
         #[arg(long)]
         title: Option<String>,
 
-        /// New status: proposed, testing, accepted, refuted
+        /// New status: proposed, review, accepted, refuted
         #[arg(long)]
         status: Option<String>,
     },
@@ -518,14 +518,14 @@ pub enum SolutionAction {
         /// Change ID to detach (defaults to the current change)
         change_id: Option<String>,
 
-        /// Skip safety checks (testing state, last-change guard)
+        /// Skip safety checks (review state, last-change guard)
         #[arg(long)]
         force: bool,
     },
 
-    /// Mark a solution as in testing — ready for review
+    /// Mark a solution as ready for review
     #[command(display_order = 6)]
-    Test {
+    Review {
         /// Solution ID, short prefix, or fuzzy title
         solution_id: String,
     },
