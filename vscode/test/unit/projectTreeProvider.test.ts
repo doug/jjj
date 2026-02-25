@@ -48,8 +48,8 @@ describe("filtering", () => {
   it("hides milestones with no open items in open mode", () => {
     const provider = createTestProviderWithEmptyMilestone();
     const milestones = provider.getChildren(undefined);
-    // Should only show backlog, not the empty milestone
-    assert.strictEqual(milestones.length, 1);
+    // Both the milestone (only solved problems) and the empty backlog are hidden in open mode
+    assert.strictEqual(milestones.length, 0);
   });
 
   it("hides accepted solutions in open mode", () => {
@@ -124,8 +124,8 @@ function createTestProviderWithSolutions(): ProjectTreeProvider {
     ],
     getBacklogProblems: () => [],
     getSolutionsForProblem: () => [
-      { id: "s1", title: "Proposed", status: "proposed" },
-      { id: "s2", title: "Accepted", status: "accepted" },
+      { id: "s1", title: "Proposed", status: "proposed", change_ids: [] },
+      { id: "s2", title: "Accepted", status: "accepted", change_ids: [] },
     ],
     getCritiquesForSolution: () => [],
     getProblem: () => undefined,
@@ -142,7 +142,7 @@ function createTestProviderWithCritiques(): ProjectTreeProvider {
     ],
     getBacklogProblems: () => [],
     getSolutionsForProblem: () => [
-      { id: "s1", title: "Solution", status: "proposed" },
+      { id: "s1", title: "Solution", status: "proposed", change_ids: [] },
     ],
     getCritiquesForSolution: () => [
       { id: "c1", title: "Open Critique", status: "open", severity: "high" },
@@ -217,7 +217,7 @@ function createTestProviderWithNavData(): ProjectTreeProvider {
     ],
     getBacklogProblems: () => [],
     getSolutionsForProblem: (id: string) => id === "p1"
-      ? [{ id: "s1", title: "Solution", status: "proposed" }]
+      ? [{ id: "s1", title: "Solution", status: "proposed", change_ids: [] }]
       : [],
     getCritiquesForSolution: () => [
       { id: "c1", title: "Critique", status: "open", severity: "high" },
