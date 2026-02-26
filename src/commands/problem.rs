@@ -37,7 +37,7 @@ pub fn execute(ctx: &CommandContext, action: ProblemAction) -> Result<()> {
             parent,
         } => edit_problem(ctx, problem_id, title, status, priority, parent),
         ProblemAction::Tree { problem_id } => show_tree(ctx, problem_id),
-        ProblemAction::Solve { problem_id } => solve_problem(ctx, problem_id),
+        ProblemAction::Solve { problem_id, github_close } => solve_problem(ctx, problem_id, github_close),
         ProblemAction::Dissolve { problem_id, reason } => dissolve_problem(ctx, problem_id, reason),
         ProblemAction::Assign { problem_id, to } => assign_problem(ctx, problem_id, to),
     }
@@ -503,7 +503,7 @@ fn show_tree(ctx: &CommandContext, problem_input: Option<String>) -> Result<()> 
     Ok(())
 }
 
-fn solve_problem(ctx: &CommandContext, problem_input: String) -> Result<()> {
+fn solve_problem(ctx: &CommandContext, problem_input: String, github_close: bool) -> Result<()> {
     let store = &ctx.store;
 
     let problem_id = ctx.resolve_problem(&problem_input)?;
@@ -549,9 +549,9 @@ fn solve_problem(ctx: &CommandContext, problem_input: String) -> Result<()> {
         Ok(())
     })?;
 
-    // Auto-close GitHub issue if enabled
+    // Auto-close GitHub issue if explicitly requested or configured
     if let Ok(problem) = ctx.store.load_problem(&problem_id) {
-        crate::sync::hooks::auto_close_issue(ctx, &problem);
+        crate::sync::hooks::auto_close_issue(ctx, &problem, github_close);
     }
 
     Ok(())

@@ -402,6 +402,10 @@ pub enum ProblemAction {
     Solve {
         /// Problem ID, short prefix, or fuzzy title
         problem_id: String,
+
+        /// Close the linked GitHub issue after solving
+        #[arg(long)]
+        github_close: bool,
     },
 
     /// Dissolve a problem — mark it as based on false premises, not truly a problem

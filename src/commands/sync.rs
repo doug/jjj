@@ -506,6 +506,7 @@ fn sync_status(ctx: &CommandContext, provider: &GitHubProvider) -> Result<()> {
     );
     println!("Sync critiques: {}", config.github.sync_critiques);
     println!("Sync LGTM: {}", config.github.sync_lgtm);
+    println!("Auto-close on solve: {}", config.github.auto_close_on_solve);
     println!("Problem label: {}", config.github.problem_label);
 
     // Show linked problems

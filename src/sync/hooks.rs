@@ -33,15 +33,20 @@ fn try_auto_create_issue(ctx: &CommandContext, problem: &mut Problem) -> crate::
 }
 
 /// Auto-close a GitHub issue after a problem is solved.
-pub fn auto_close_issue(ctx: &CommandContext, problem: &Problem) {
-    if let Err(e) = try_auto_close_issue(ctx, problem) {
+///
+/// Triggers when any of these are true:
+/// - `force` is set (caller passed `--github-close`)
+/// - `github.auto_close_on_solve = true` in config
+/// - `github.auto_push = true` in config (coarse-grained catch-all)
+pub fn auto_close_issue(ctx: &CommandContext, problem: &Problem, force: bool) {
+    if let Err(e) = try_auto_close_issue(ctx, problem, force) {
         eprintln!("Warning: auto-close GitHub issue failed: {}", e);
     }
 }
 
-fn try_auto_close_issue(ctx: &CommandContext, problem: &Problem) -> crate::error::Result<()> {
+fn try_auto_close_issue(ctx: &CommandContext, problem: &Problem, force: bool) -> crate::error::Result<()> {
     let config = ctx.store.load_config()?;
-    if !config.github.auto_push {
+    if !force && !config.github.auto_push && !config.github.auto_close_on_solve {
         return Ok(());
     }
 

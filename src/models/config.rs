@@ -32,6 +32,11 @@ pub struct GitHubConfig {
     #[serde(default = "default_true")]
     pub sync_lgtm: bool,
 
+    /// Auto-close linked GitHub issue when `problem solve` runs.
+    /// Finer-grained than `auto_push` (which also controls issue/PR creation).
+    #[serde(default)]
+    pub auto_close_on_solve: bool,
+
     /// Label applied to synced GitHub issues
     #[serde(default = "default_problem_label")]
     pub problem_label: String,
@@ -45,6 +50,7 @@ impl Default for GitHubConfig {
             auto_push: false,
             sync_critiques: true,
             sync_lgtm: true,
+            auto_close_on_solve: false,
             problem_label: default_problem_label(),
         }
     }
