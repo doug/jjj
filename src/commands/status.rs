@@ -195,7 +195,7 @@ pub fn execute(
     Ok(())
 }
 
-fn build_next_actions(
+pub(crate) fn build_next_actions(
     problems: &[crate::models::Problem],
     solutions: &[crate::models::Solution],
     critiques: &[Critique],

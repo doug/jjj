@@ -582,13 +582,19 @@ fn accept_solution(
     let solution_id = ctx.resolve_solution(&solution_input)?;
     let store = &ctx.store;
 
-    // Reject double-accept
+    // Validate state: must be in review (or force to override)
     {
         let solution = store.load_solution(&solution_id)?;
         if solution.status == SolutionStatus::Accepted {
             return Err(crate::error::JjjError::Validation(format!(
                 "Solution '{}' is already accepted.",
                 solution.title
+            )));
+        }
+        if solution.status != SolutionStatus::Review && !force {
+            return Err(crate::error::JjjError::Validation(format!(
+                "Solution '{}' is in '{}' state. Move it to review first:\n  jjj solution review {}\n\nOr force: jjj solution accept {} --force",
+                solution.title, solution.status, solution_id, solution_id
             )));
         }
     }

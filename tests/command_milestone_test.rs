@@ -403,6 +403,7 @@ fn test_milestone_with_problem_progress() {
 
     // Solve one problem (accept auto-solves the parent problem)
     run_jjj_success(&dir, &["solution", "new", "Fix", "--problem", "Problem 1"]);
+    run_jjj_success(&dir, &["solution", "review", "Fix"]);
     run_jjj_success(&dir, &["solution", "accept", "Fix"]);
 
     let stdout = run_jjj_success(&dir, &["milestone", "show", "Progress Milestone"]);

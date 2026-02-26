@@ -113,6 +113,7 @@ fn test_problem_list_filter_by_status() {
         &dir,
         &["solution", "new", "Solution", "--problem", "Solved Problem"],
     );
+    run_jjj_success(&dir, &["solution", "review", "Solution"]);
     run_jjj_success(&dir, &["solution", "accept", "Solution"]);
 
     let stdout = run_jjj_success(&dir, &["problem", "list", "--status", "open"]);
@@ -342,6 +343,7 @@ fn test_problem_solve_requires_accepted_solution() {
         &dir,
         &["solution", "new", "Fix", "--problem", "Need Solution"],
     );
+    run_jjj_success(&dir, &["solution", "review", "Fix"]);
     run_jjj_success(&dir, &["solution", "accept", "Fix"]);
 
     // Problem is already auto-solved, explicit solve should fail

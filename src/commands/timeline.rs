@@ -1,11 +1,12 @@
+use crate::context::CommandContext;
 use crate::error::Result;
-use crate::jj::JjClient;
 use crate::models::{Event, EventType};
-use crate::storage::MetadataStore;
 
-pub fn execute(problem_id: String, json: bool) -> Result<()> {
-    let jj_client = JjClient::new()?;
-    let store = MetadataStore::new(jj_client)?;
+pub fn execute(ctx: &CommandContext, problem_input: String, json: bool) -> Result<()> {
+    let store = &ctx.store;
+
+    // Resolve problem ID from title, prefix, or UUID
+    let problem_id = ctx.resolve_problem(&problem_input)?;
 
     // Load problem for title
     let problem = store.load_problem(&problem_id)?;

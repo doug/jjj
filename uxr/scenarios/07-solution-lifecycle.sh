@@ -160,18 +160,12 @@ run_jjj solution show "JWT with sliding" --json
 assert_success "show refuted solution as JSON"
 assert_contains "\"refuted\"" "JSON shows refuted status"
 
-JWT_UUID=$(echo "$OUTPUT" | grep -oE '"id":\s*"[0-9a-f-]+"' | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
-
-if [[ -n "${JWT_UUID:-}" ]]; then
-    run_jjj solution new "Sliding window sessions with refresh tokens" \
-        --problem "Login takes too long" \
-        --supersedes "$JWT_UUID"
-    assert_success "create superseding solution"
-    assert_contains "Sliding window" "superseding solution created"
-    observe "supersedes links the new solution to the one it replaces — maintains decision history"
-else
-    skip "JWT UUID not captured — skipping supersedes test"
-fi
+run_jjj solution new "Sliding window sessions with refresh tokens" \
+    --problem "Login takes too long" \
+    --supersedes "JWT with sliding"
+assert_success "create superseding solution"
+assert_contains "Sliding window" "superseding solution created"
+observe "supersedes links the new solution to the one it replaces — maintains decision history"
 
 # ============================================================================
 section "Step 6: Accept with rationale"

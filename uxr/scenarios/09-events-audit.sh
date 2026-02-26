@@ -111,33 +111,15 @@ assert_contains "critique_raised" "raised event present"
 section "Step 4: events --problem and --solution filters"
 # ============================================================================
 
-# Get the problem ID to filter by
-run_jjj problem show "Memory leak" --json
-assert_success "show problem as JSON"
-PROBLEM_ID=$(echo "$OUTPUT" | grep -oE '"id":\s*"[0-9a-f-]+"' | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
+run_jjj events --problem "Memory leak"
+assert_success "events filtered by problem title"
+assert_contains "problem_created" "problem's own creation event in filter"
+observe "Problem-scoped event view shows the complete history of one problem"
 
-if [[ -n "${PROBLEM_ID:-}" ]]; then
-    run_jjj events --problem "$PROBLEM_ID"
-    assert_success "events filtered by problem ID"
-    assert_contains "problem_created" "problem's own creation event in filter"
-    observe "Problem-scoped event view shows the complete history of one problem"
-else
-    skip "Problem ID not captured — skipping --problem filter test"
-fi
-
-# Get the solution ID
-run_jjj solution show "Fix worker" --json
-assert_success "show solution as JSON"
-SOLUTION_ID=$(echo "$OUTPUT" | grep -oE '"id":\s*"[0-9a-f-]+"' | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
-
-if [[ -n "${SOLUTION_ID:-}" ]]; then
-    run_jjj events --solution "$SOLUTION_ID"
-    assert_success "events filtered by solution ID"
-    assert_contains "solution_created" "solution creation event in filter"
-    assert_contains "solution_accepted" "solution acceptance in filter"
-else
-    skip "Solution ID not captured — skipping --solution filter test"
-fi
+run_jjj events --solution "Fix worker"
+assert_success "events filtered by solution title"
+assert_contains "solution_created" "solution creation event in filter"
+assert_contains "solution_accepted" "solution acceptance in filter"
 
 # ============================================================================
 section "Step 5: events --search (rationale full-text)"

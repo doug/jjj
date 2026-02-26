@@ -311,19 +311,12 @@ observe "search --json field is 'type' (not 'entity_type')"
 section "Step 10: timeline --json"
 # ============================================================================
 
-run_jjj problem show "Performance regression" --json
-PERF_ID=$(echo "$OUTPUT" | grep -oE '"id":\s*"[0-9a-f-]+"' | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
-
-if [[ -n "${PERF_ID:-}" ]]; then
-    run_jjj timeline "$PERF_ID" --json
-    assert_success "timeline --json for a problem"
-    assert_contains "\"type\"" "JSON timeline has type field"
-    assert_contains "\"entity\"" "JSON timeline has entity field"
-    assert_contains "\"when\"" "JSON timeline has timestamp"
-    observe "timeline --json is useful for generating changelogs and audit reports programmatically"
-else
-    skip "Problem ID not captured — skipping timeline --json test"
-fi
+run_jjj timeline "Performance regression" --json
+assert_success "timeline --json for a problem"
+assert_contains "\"type\"" "JSON timeline has type field"
+assert_contains "\"entity\"" "JSON timeline has entity field"
+assert_contains "\"when\"" "JSON timeline has timestamp"
+observe "timeline --json is useful for generating changelogs and audit reports programmatically"
 
 # ============================================================================
 section "Step 11: db status"

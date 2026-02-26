@@ -56,6 +56,14 @@ pub enum Commands {
         json: bool,
     },
 
+    /// Print the single highest-priority next action (great for shell prompts)
+    #[command(display_order = 2)]
+    Next {
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
     // ── Core entities ──────────────────────────────────────────────────────
 
     /// Track problems to solve (the questions driving your work)

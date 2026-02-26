@@ -204,16 +204,11 @@ section "Step 9: Search and timeline"
 run_jjj search "rate limit"
 assert_success "search finds entities by keyword"
 
-# timeline uses exact UUID (not fuzzy title) — use the ID captured at creation
-if [[ -n "${RATE_LIMIT_PROBLEM_ID:-}" ]]; then
-    run_jjj timeline "$RATE_LIMIT_PROBLEM_ID"
-    assert_success "timeline shows full history for a problem"
-    assert_contains "proposed" "solution event appears in timeline"
-    assert_contains "Rate limit state" "critique appears in timeline"
-    observe "Timeline gives a complete audit trail of every decision made on a problem"
-else
-    skip "problem ID not captured — skipping timeline assertions"
-fi
+run_jjj timeline "rate limit"
+assert_success "timeline shows full history for a problem"
+assert_contains "proposed" "solution event appears in timeline"
+assert_contains "Rate limit state" "critique appears in timeline"
+observe "Timeline gives a complete audit trail of every decision made on a problem"
 
 # ============================================================================
 section "Step 10: Help discoverability"

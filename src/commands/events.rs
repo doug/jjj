@@ -47,6 +47,26 @@ fn list_events(
 
     let mut events = store.list_events()?;
 
+    // Resolve --problem and --solution inputs to IDs (fuzzy title/prefix/UUID)
+    let problem = match problem {
+        Some(ref input) => {
+            // Best-effort resolution: if it fails, fall back to raw string so
+            // plain UUIDs still work in scripts that already have the ID.
+            match ctx.resolve_problem(input) {
+                Ok(id) => Some(id),
+                Err(_) => Some(input.clone()),
+            }
+        }
+        None => None,
+    };
+    let solution = match solution {
+        Some(ref input) => match ctx.resolve_solution(input) {
+            Ok(id) => Some(id),
+            Err(_) => Some(input.clone()),
+        },
+        None => None,
+    };
+
     // Since filter (RFC3339 timestamp, more precise than from/to)
     if let Some(ref since_str) = since {
         if let Ok(since_ts) = chrono::DateTime::parse_from_rfc3339(since_str) {

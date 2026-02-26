@@ -504,9 +504,10 @@ fn test_critique_blocks_solution_accept() {
         &dir,
         &["solution", "new", "Blocked", "--problem", "Problem"],
     );
+    run_jjj_success(&dir, &["solution", "review", "Blocked"]);
     run_jjj_success(&dir, &["critique", "new", "Blocked", "Blocker"]);
 
-    // Try to accept - should fail
+    // Try to accept - should fail (open critique)
     let output = run_jjj(&dir, &["solution", "accept", "Blocked"]);
     assert!(
         !output.status.success(),
@@ -547,6 +548,7 @@ fn test_critique_on_finalized_solution_warns() {
         &dir,
         &["solution", "new", "Solution", "--problem", "Problem"],
     );
+    run_jjj_success(&dir, &["solution", "review", "Solution"]);
     run_jjj_success(&dir, &["solution", "accept", "Solution"]);
 
     // Creating critique on accepted solution should warn but succeed

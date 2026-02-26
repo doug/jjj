@@ -70,34 +70,34 @@ export function registerCommands(
   register("jjj.requestReview", async () => {
     const solutions = cache.getSolutions().filter(s => s.status === "proposed");
     const pick = await vscode.window.showQuickPick(
-      solutions.map(s => ({ label: `${s.id}: ${s.title}`, id: s.id })),
+      solutions.map(s => ({ label: s.title, description: s.id.slice(0, 8), id: s.id })),
       { placeHolder: "Select solution to move to review" },
     );
     if (!pick) { return; }
-    const result = await cli.reviewSolution(pick.id);
-    vscode.window.showInformationMessage(result);
+    await cli.reviewSolution(pick.id);
+    vscode.window.showInformationMessage(`Solution "${pick.label}" moved to review.`);
   });
 
   register("jjj.acceptSolution", async () => {
     const solutions = cache.getSolutions().filter(s => s.status === "review");
     const pick = await vscode.window.showQuickPick(
-      solutions.map(s => ({ label: `${s.id}: ${s.title}`, id: s.id })),
+      solutions.map(s => ({ label: s.title, description: s.id.slice(0, 8), id: s.id })),
       { placeHolder: "Select solution to accept" },
     );
     if (!pick) { return; }
-    const result = await cli.acceptSolution(pick.id);
-    vscode.window.showInformationMessage(result);
+    await cli.acceptSolution(pick.id);
+    vscode.window.showInformationMessage(`Solution "${pick.label}" accepted.`);
   });
 
   register("jjj.refuteSolution", async () => {
     const solutions = cache.getSolutions().filter(s => s.status === "review" || s.status === "proposed");
     const pick = await vscode.window.showQuickPick(
-      solutions.map(s => ({ label: `${s.id}: ${s.title}`, id: s.id })),
+      solutions.map(s => ({ label: s.title, description: s.id.slice(0, 8), id: s.id })),
       { placeHolder: "Select solution to refute" },
     );
     if (!pick) { return; }
-    const result = await cli.refuteSolution(pick.id);
-    vscode.window.showInformationMessage(result);
+    await cli.refuteSolution(pick.id);
+    vscode.window.showInformationMessage(`Solution "${pick.label}" refuted.`);
   });
 
   register("jjj.resumeSolution", async () => {

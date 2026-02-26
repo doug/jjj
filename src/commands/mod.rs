@@ -5,6 +5,7 @@ pub mod events;
 pub mod fetch;
 pub mod init;
 pub mod milestone;
+pub mod next;
 pub mod problem;
 pub mod push;
 pub mod search;
@@ -63,6 +64,8 @@ fn execute_with_context(ctx: &CommandContext, command: Commands) -> Result<()> {
             json,
         } => status::execute(ctx, all, mine, limit, json),
 
+        Commands::Next { json } => next::execute(ctx, json),
+
         // Transport: fetch, push, sync (fetch + push)
         Commands::Fetch { remote } => fetch::execute(ctx, &remote),
         Commands::Push {
@@ -105,7 +108,7 @@ fn execute_with_context(ctx: &CommandContext, command: Commands) -> Result<()> {
         ),
 
         // Timeline
-        Commands::Timeline { problem_id, json } => timeline::execute(problem_id, json),
+        Commands::Timeline { problem_id, json } => timeline::execute(ctx, problem_id, json),
 
         // Search
         Commands::Search {

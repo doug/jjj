@@ -180,6 +180,7 @@ fn test_solution_list_filter_by_status() {
             "Problem",
         ],
     );
+    run_jjj_success(&dir, &["solution", "review", "Accepted Solution"]);
     run_jjj_success(&dir, &["solution", "accept", "Accepted Solution"]);
 
     let stdout = run_jjj_success(&dir, &["solution", "list", "--status", "accepted"]);
@@ -292,6 +293,7 @@ fn test_solution_accept() {
         &dir,
         &["solution", "new", "Acceptable", "--problem", "Problem"],
     );
+    run_jjj_success(&dir, &["solution", "review", "Acceptable"]);
 
     let stdout = run_jjj_success(&dir, &["solution", "accept", "Acceptable"]);
     assert!(
@@ -326,6 +328,7 @@ fn test_solution_accept_blocked_by_critiques() {
             "Problem",
         ],
     );
+    run_jjj_success(&dir, &["solution", "review", "Blocked Solution"]);
     run_jjj_success(&dir, &["critique", "new", "Blocked Solution", "Major flaw"]);
 
     let output = run_jjj(&dir, &["solution", "accept", "Blocked Solution"]);
