@@ -197,6 +197,20 @@ impl GhClient {
         serde_json::from_str(&output).map_err(|e| JjjError::Validation(e.to_string()))
     }
 
+    /// List inline review threads (file-level comments) for a PR.
+    ///
+    /// Returns the raw `reviewThreads` JSON array.  Each element has:
+    /// `isResolved`, `isOutdated`, and a `comments` array where the first
+    /// entry is the root comment with `databaseId`, `author`, `body`, `path`,
+    /// `line`, and `originalLine` fields.
+    pub fn list_review_threads(&self, pr_number: u64) -> Result<serde_json::Value> {
+        let num_str = pr_number.to_string();
+        let output = self.execute(&[
+            "pr", "view", &num_str, "--json", "reviewThreads", "--jq", ".reviewThreads",
+        ])?;
+        serde_json::from_str(&output).map_err(|e| JjjError::Validation(e.to_string()))
+    }
+
     /// Get PR state (OPEN, MERGED, CLOSED).
     pub fn pr_state(&self, number: u64) -> Result<String> {
         let num_str = number.to_string();

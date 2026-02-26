@@ -2,7 +2,7 @@
 
 use crate::error::{JjjError, Result};
 use crate::models::{Priority, Problem};
-use crate::sync::{ReviewInfo, ReviewState};
+use crate::sync::{ReviewInfo, ReviewState, ReviewThread};
 
 /// Convert a GitHub issue JSON object to a Problem.
 pub fn issue_to_problem(json: &serde_json::Value, number: u64) -> Result<Problem> {
@@ -147,6 +147,71 @@ pub fn parse_reviews(json: &serde_json::Value) -> Vec<ReviewInfo> {
     }
 
     reviews
+}
+
+/// Parse inline review threads from `gh pr view --json reviewThreads`.
+///
+/// Each thread element has `isResolved`, `isOutdated`, and a `comments`
+/// array.  We extract only the first comment of each thread (the root),
+/// skipping threads with empty bodies.
+pub fn parse_review_threads(json: &serde_json::Value) -> Vec<ReviewThread> {
+    let mut threads = Vec::new();
+
+    let arr = match json.as_array() {
+        Some(a) => a,
+        None => return threads,
+    };
+
+    for thread in arr {
+        let is_resolved = thread["isResolved"].as_bool().unwrap_or(false);
+        let is_outdated = thread["isOutdated"].as_bool().unwrap_or(false);
+
+        // `comments` is a direct array in `gh` CLI output
+        let comments = match thread["comments"].as_array() {
+            Some(c) => c,
+            None => continue,
+        };
+        let first = match comments.first() {
+            Some(c) => c,
+            None => continue,
+        };
+
+        let comment_id = first["databaseId"].as_u64().unwrap_or(0);
+        if comment_id == 0 {
+            continue;
+        }
+
+        let author = first["author"]["login"]
+            .as_str()
+            .unwrap_or("unknown")
+            .to_string();
+
+        let body = first["body"].as_str().unwrap_or("").to_string();
+        if body.is_empty() {
+            continue;
+        }
+
+        let path = first["path"].as_str().unwrap_or("").to_string();
+
+        // `line` is the right-side line; fall back to `originalLine` for
+        // outdated threads where `line` may be null.
+        let line = first["line"]
+            .as_u64()
+            .or_else(|| first["originalLine"].as_u64())
+            .map(|l| l as usize);
+
+        threads.push(ReviewThread {
+            comment_id,
+            author,
+            body,
+            path,
+            line,
+            is_resolved,
+            is_outdated,
+        });
+    }
+
+    threads
 }
 
 /// Parse issue state string to IssueStatus.
@@ -549,6 +614,177 @@ mod tests {
         let parsed = parse_reviews(&reviews);
         assert_eq!(parsed.len(), 1);
         assert_eq!(parsed[0].id, 12345);
+    }
+
+    // ── parse_review_threads ──────────────────────────────────────────
+
+    #[test]
+    fn test_parse_review_threads_basic() {
+        let threads = json!([
+            {
+                "isResolved": false,
+                "isOutdated": false,
+                "comments": [
+                    {
+                        "databaseId": 111111,
+                        "author": { "login": "alice" },
+                        "body": "This needs error handling",
+                        "path": "src/auth.rs",
+                        "line": 42,
+                        "originalLine": 42
+                    }
+                ]
+            }
+        ]);
+
+        let parsed = parse_review_threads(&threads);
+
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].comment_id, 111111);
+        assert_eq!(parsed[0].author, "alice");
+        assert_eq!(parsed[0].body, "This needs error handling");
+        assert_eq!(parsed[0].path, "src/auth.rs");
+        assert_eq!(parsed[0].line, Some(42));
+        assert!(!parsed[0].is_resolved);
+        assert!(!parsed[0].is_outdated);
+    }
+
+    #[test]
+    fn test_parse_review_threads_resolved_included() {
+        // Resolved threads are returned — caller decides whether to skip them
+        let threads = json!([
+            {
+                "isResolved": true,
+                "isOutdated": false,
+                "comments": [
+                    {
+                        "databaseId": 222222,
+                        "author": { "login": "bob" },
+                        "body": "Already fixed this",
+                        "path": "src/lib.rs",
+                        "line": 10,
+                        "originalLine": 10
+                    }
+                ]
+            }
+        ]);
+
+        let parsed = parse_review_threads(&threads);
+        assert_eq!(parsed.len(), 1);
+        assert!(parsed[0].is_resolved);
+    }
+
+    #[test]
+    fn test_parse_review_threads_outdated_uses_original_line() {
+        let threads = json!([
+            {
+                "isResolved": false,
+                "isOutdated": true,
+                "comments": [
+                    {
+                        "databaseId": 333333,
+                        "author": { "login": "carol" },
+                        "body": "Comment on stale diff",
+                        "path": "src/foo.rs",
+                        "line": null,
+                        "originalLine": 99
+                    }
+                ]
+            }
+        ]);
+
+        let parsed = parse_review_threads(&threads);
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].line, Some(99));
+        assert!(parsed[0].is_outdated);
+    }
+
+    #[test]
+    fn test_parse_review_threads_skips_empty_body() {
+        let threads = json!([
+            {
+                "isResolved": false,
+                "isOutdated": false,
+                "comments": [
+                    {
+                        "databaseId": 444444,
+                        "author": { "login": "dave" },
+                        "body": "",
+                        "path": "src/bar.rs",
+                        "line": 5,
+                        "originalLine": 5
+                    }
+                ]
+            }
+        ]);
+
+        let parsed = parse_review_threads(&threads);
+        assert!(parsed.is_empty(), "Empty body threads should be skipped");
+    }
+
+    #[test]
+    fn test_parse_review_threads_skips_zero_database_id() {
+        let threads = json!([
+            {
+                "isResolved": false,
+                "isOutdated": false,
+                "comments": [
+                    {
+                        "author": { "login": "eve" },
+                        "body": "Some comment",
+                        "path": "src/baz.rs",
+                        "line": 1
+                    }
+                ]
+            }
+        ]);
+
+        let parsed = parse_review_threads(&threads);
+        assert!(parsed.is_empty(), "Threads without databaseId should be skipped");
+    }
+
+    #[test]
+    fn test_parse_review_threads_empty_array() {
+        let threads = json!([]);
+        let parsed = parse_review_threads(&threads);
+        assert!(parsed.is_empty());
+    }
+
+    #[test]
+    fn test_parse_review_threads_multiple() {
+        let threads = json!([
+            {
+                "isResolved": false,
+                "isOutdated": false,
+                "comments": [
+                    {
+                        "databaseId": 555555,
+                        "author": { "login": "alice" },
+                        "body": "First comment",
+                        "path": "src/a.rs",
+                        "line": 10
+                    }
+                ]
+            },
+            {
+                "isResolved": false,
+                "isOutdated": false,
+                "comments": [
+                    {
+                        "databaseId": 666666,
+                        "author": { "login": "bob" },
+                        "body": "Second comment",
+                        "path": "src/b.rs",
+                        "line": 20
+                    }
+                ]
+            }
+        ]);
+
+        let parsed = parse_review_threads(&threads);
+        assert_eq!(parsed.len(), 2);
+        assert_eq!(parsed[0].comment_id, 555555);
+        assert_eq!(parsed[1].comment_id, 666666);
     }
 
     // ── parse_issue_state ─────────────────────────────────────────────

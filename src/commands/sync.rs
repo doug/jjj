@@ -83,15 +83,18 @@ fn sync_pull(ctx: &CommandContext, provider: &GitHubProvider, dry_run: bool) -> 
 
             // Pull reviews if enabled
             if config.github.sync_critiques {
+                // Collect already-imported IDs once (covers both top-level reviews
+                // and inline threads since both use github_review_id for dedup).
+                let existing_review_ids: std::collections::HashSet<u64> = ctx
+                    .store
+                    .get_critiques_for_solution(&solution.id)?
+                    .iter()
+                    .filter_map(|c| c.github_review_id)
+                    .collect();
+
+                // --- Top-level PR reviews ---
                 match provider.pull_reviews(pr_number) {
                     Ok(reviews) => {
-                        let existing_review_ids: std::collections::HashSet<u64> = ctx
-                            .store
-                            .get_critiques_for_solution(&solution.id)?
-                            .iter()
-                            .filter_map(|c| c.github_review_id)
-                            .collect();
-
                         for review in &reviews {
                             if existing_review_ids.contains(&review.id) {
                                 continue;
@@ -148,6 +151,75 @@ fn sync_pull(ctx: &CommandContext, provider: &GitHubProvider, dry_run: bool) -> 
                     Err(e) => {
                         eprintln!(
                             "  Warning: could not pull reviews for PR #{}: {}",
+                            pr_number, e
+                        );
+                    }
+                }
+
+                // --- Inline review threads (file-level comments) ---
+                match provider.pull_review_threads(pr_number) {
+                    Ok(threads) => {
+                        for thread in &threads {
+                            // Skip resolved threads — addressed externally on GitHub
+                            if thread.is_resolved {
+                                continue;
+                            }
+                            // Dedup by comment_id stored in github_review_id
+                            if existing_review_ids.contains(&thread.comment_id) {
+                                continue;
+                            }
+
+                            if dry_run {
+                                let loc = match thread.line {
+                                    Some(l) => format!("{}:{}", thread.path, l),
+                                    None => thread.path.clone(),
+                                };
+                                println!(
+                                    "    Would import inline comment from @{} at {}",
+                                    thread.author, loc
+                                );
+                            } else {
+                                let critique_id = crate::id::generate_id();
+                                let critique = crate::sync::thread_to_critique(
+                                    thread,
+                                    &solution.id,
+                                    critique_id,
+                                );
+
+                                ctx.store.with_metadata("GitHub sync", || {
+                                    let event = Event::new(
+                                        EventType::GithubReviewImported,
+                                        critique.id.clone(),
+                                        thread.author.clone(),
+                                    )
+                                    .with_extra(EventExtra {
+                                        github_number: Some(pr_number),
+                                        target: Some(solution.id.clone()),
+                                        ..Default::default()
+                                    });
+                                    ctx.store.set_pending_event(event);
+                                    ctx.store.save_critique(&critique)?;
+                                    Ok(())
+                                })?;
+
+                                let loc = match thread.line {
+                                    Some(l) => format!("{}:{}", thread.path, l),
+                                    None => thread.path.clone(),
+                                };
+                                println!(
+                                    "    Imported inline comment from @{} at {} as critique {}",
+                                    thread.author,
+                                    loc,
+                                    &critique.id[..6.min(critique.id.len())]
+                                );
+                                imported_reviews += 1;
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        // Not all gh versions support reviewThreads — warn but don't fail
+                        eprintln!(
+                            "  Warning: could not pull inline comments for PR #{}: {}",
                             pr_number, e
                         );
                     }

@@ -5,7 +5,7 @@ pub mod mapping;
 
 use crate::error::{JjjError, Result};
 use crate::models::{Problem, Solution};
-use crate::sync::{IssueStatus, PrStatus, ReviewInfo, SyncProvider};
+use crate::sync::{IssueStatus, PrStatus, ReviewInfo, ReviewThread, SyncProvider};
 
 use self::client::GhClient;
 
@@ -124,6 +124,11 @@ impl SyncProvider for GitHubProvider {
     fn pull_reviews(&self, pr_number: u64) -> Result<Vec<ReviewInfo>> {
         let json = self.client.list_reviews(pr_number)?;
         Ok(mapping::parse_reviews(&json))
+    }
+
+    fn pull_review_threads(&self, pr_number: u64) -> Result<Vec<ReviewThread>> {
+        let json = self.client.list_review_threads(pr_number)?;
+        Ok(mapping::parse_review_threads(&json))
     }
 
     fn pr_status(&self, pr_number: u64) -> Result<PrStatus> {
