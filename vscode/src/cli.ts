@@ -231,6 +231,10 @@ export class JjjCli {
     return this.exec(["solution", "refute", solutionId]);
   }
 
+  async lgtmSolution(solutionId: string): Promise<string> {
+    return this.exec(["solution", "lgtm", solutionId]);
+  }
+
   async solveProblem(problemId: string): Promise<string> {
     return this.exec(["problem", "solve", problemId]);
   }

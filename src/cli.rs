@@ -589,6 +589,13 @@ pub enum SolutionAction {
         /// Solution ID, short prefix, or fuzzy title
         solution_id: String,
     },
+
+    /// Sign off as a reviewer — addresses your open review critique (LGTM)
+    #[command(display_order = 11)]
+    Lgtm {
+        /// Solution ID, short prefix, or fuzzy title
+        solution_id: String,
+    },
 }
 
 // =============================================================================

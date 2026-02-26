@@ -54,6 +54,7 @@ pub fn execute(ctx: &CommandContext, action: SolutionAction) -> Result<()> {
         } => refute_solution(ctx, solution_id, rationale, no_rationale),
         SolutionAction::Assign { solution_id, to } => assign_solution(ctx, solution_id, to),
         SolutionAction::Resume { solution_id } => resume_solution(ctx, solution_id),
+        SolutionAction::Lgtm { solution_id } => lgtm_solution(ctx, solution_id),
     }
 }
 
@@ -827,6 +828,74 @@ fn resume_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn lgtm_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
+    let solution_id = ctx.resolve_solution(&solution_input)?;
+    let store = &ctx.store;
+    let current_user = store.get_current_user()?;
+
+    let solution = store.load_solution(&solution_id)?;
+    let critiques = store.get_critiques_for_solution(&solution_id)?;
+
+    // Find an open review critique assigned to (or matching) the current user
+    let my_review = critiques.iter().find(|c| {
+        c.status == CritiqueStatus::Open
+            && c.reviewer.as_ref().map_or(false, |r| {
+                r.contains(&current_user) || current_user.contains(r.as_str())
+            })
+    });
+
+    let critique = match my_review {
+        Some(c) => c,
+        None => {
+            // Check if there are any open review critiques at all (assigned to others)
+            let any_review = critiques.iter().any(|c| {
+                c.status == CritiqueStatus::Open && c.reviewer.is_some()
+            });
+            if any_review {
+                return Err(crate::error::JjjError::Validation(format!(
+                    "No open review critique assigned to you on '{}'.\n\
+                     (There are review critiques assigned to others — are you the right reviewer?)\n\n\
+                     To add yourself: jjj critique new \"{}\" \"Review\" --reviewer @{}",
+                    solution.title, solution_input, current_user
+                )));
+            } else {
+                return Err(crate::error::JjjError::Validation(format!(
+                    "No review critique assigned to you on '{}'.\n\n\
+                     To request review from yourself: jjj critique new \"{}\" \"Review\" --reviewer @{}\n\
+                     Or use solution new --reviewer @{} when creating solutions.",
+                    solution.title, solution_input, current_user, current_user
+                )));
+            }
+        }
+    };
+
+    let critique_id = critique.id.clone();
+    store.with_metadata(&format!("LGTM on solution {}", solution_id), || {
+        let mut c = store.load_critique(&critique_id)?;
+        c.address();
+        store.save_critique(&c)?;
+        println!("Signed off on '{}' as @{}", solution.title, current_user);
+
+        // Check if this was the last blocking item
+        let remaining = store
+            .get_critiques_for_solution(&solution_id)?
+            .into_iter()
+            .filter(|c| {
+                c.status == CritiqueStatus::Open || c.status == CritiqueStatus::Valid
+            })
+            .count();
+
+        if remaining == 0 {
+            println!("All critiques resolved. Ready to accept:");
+            println!("  jjj solution accept \"{}\"", solution.title);
+        } else {
+            println!("{} critique(s) still open.", remaining);
+        }
+
+        Ok(())
+    })
 }
 
 fn check_for_similar_solutions(

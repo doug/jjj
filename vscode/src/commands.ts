@@ -111,6 +111,35 @@ export function registerCommands(
     vscode.window.showInformationMessage(result);
   });
 
+  register("jjj.lgtmSolution", async () => {
+    // Default to active solution; fall back to picker if none active
+    const status = cache.getStatus();
+    const activeSolution = status?.active_solution;
+    let solutionId: string | undefined;
+    let solutionTitle: string | undefined;
+
+    if (activeSolution) {
+      solutionId = activeSolution.id;
+      solutionTitle = activeSolution.title;
+    } else {
+      const solutions = cache.getSolutions().filter(s => s.status === "review");
+      if (solutions.length === 0) {
+        vscode.window.showInformationMessage("No solutions currently in review.");
+        return;
+      }
+      const pick = await vscode.window.showQuickPick(
+        solutions.map(s => ({ label: s.title, description: s.id.slice(0, 8), id: s.id })),
+        { placeHolder: "Select solution to sign off on" },
+      );
+      if (!pick) { return; }
+      solutionId = pick.id;
+      solutionTitle = pick.label;
+    }
+
+    await cli.lgtmSolution(solutionId);
+    vscode.window.showInformationMessage(`LGTM — signed off on "${solutionTitle}".`);
+  });
+
   // --- Critique ---
 
   register("jjj.newCritique", async () => {
