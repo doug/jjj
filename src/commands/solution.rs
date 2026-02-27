@@ -55,6 +55,9 @@ pub fn execute(ctx: &CommandContext, action: SolutionAction) -> Result<()> {
         SolutionAction::Assign { solution_id, to } => assign_solution(ctx, solution_id, to),
         SolutionAction::Resume { solution_id } => resume_solution(ctx, solution_id),
         SolutionAction::Lgtm { solution_id } => lgtm_solution(ctx, solution_id),
+        SolutionAction::Comment { solution_id, critique, body } => {
+            comment_solution(ctx, solution_id, critique, body)
+        }
     }
 }
 
@@ -894,6 +897,131 @@ fn lgtm_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
             println!("{} critique(s) still open.", remaining);
         }
 
+        Ok(())
+    })
+}
+
+fn comment_solution(
+    ctx: &CommandContext,
+    solution_input: Option<String>,
+    critique_input: Option<String>,
+    body: Option<String>,
+) -> Result<()> {
+    let store = &ctx.store;
+
+    // Resolve solution — use explicit input or fall back to the change attached to @
+    let solution_id = if let Some(ref input) = solution_input {
+        ctx.resolve_solution(input)?
+    } else {
+        // Try active change first
+        let change_id = ctx
+            .jj()
+            .execute(&["log", "-r", "@", "-T", "change_id", "--no-graph"])
+            .unwrap_or_default();
+        let change_id = change_id.trim();
+
+        let solutions = store.list_solutions()?;
+        let by_change = solutions
+            .iter()
+            .find(|s| s.change_ids.iter().any(|c| c == change_id));
+
+        if let Some(s) = by_change {
+            s.id.clone()
+        } else {
+            // Fall back to any active solution
+            let active: Vec<_> = solutions.iter().filter(|s| s.is_active()).collect();
+            match active.len() {
+                0 => {
+                    return Err(crate::error::JjjError::Validation(
+                        "No active solution found. Specify a solution ID.".to_string(),
+                    ))
+                }
+                1 => active[0].id.clone(),
+                _ => {
+                    return Err(crate::error::JjjError::Validation(format!(
+                        "Multiple active solutions. Specify one:\n{}",
+                        active
+                            .iter()
+                            .map(|s| format!("  jjj solution comment \"{}\"", s.title))
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    )))
+                }
+            }
+        }
+    };
+
+    // Get open critiques for the solution
+    let critiques: Vec<_> = store
+        .get_critiques_for_solution(&solution_id)?
+        .into_iter()
+        .filter(|c| c.status == CritiqueStatus::Open || c.status == CritiqueStatus::Valid)
+        .collect();
+
+    if critiques.is_empty() {
+        return Err(crate::error::JjjError::Validation(
+            "No open critiques on this solution to reply to.".to_string(),
+        ));
+    }
+
+    // Resolve critique — explicit, single, or interactive picker
+    let critique_id = if let Some(ref input) = critique_input {
+        // Resolve by prefix/title within this solution's critiques
+        let resolved = ctx.resolve_critique(input)?;
+        // Verify it belongs to this solution
+        if !critiques.iter().any(|c| c.id == resolved) {
+            return Err(crate::error::JjjError::Validation(format!(
+                "Critique '{}' is not an open critique for this solution.",
+                input
+            )));
+        }
+        resolved
+    } else if critiques.len() == 1 {
+        critiques[0].id.clone()
+    } else {
+        // Interactive picker
+        println!("Open critiques:");
+        for (i, c) in critiques.iter().enumerate() {
+            println!("  [{}] {} [{}]", i + 1, c.title, c.severity);
+        }
+        print!("Select [1-{}]: ", critiques.len());
+        io::stdout().flush()?;
+        let mut line = String::new();
+        io::stdin().read_line(&mut line)?;
+        let idx: usize = line.trim().parse().unwrap_or(0);
+        critiques
+            .get(idx.saturating_sub(1))
+            .filter(|_| idx > 0)
+            .ok_or_else(|| {
+                crate::error::JjjError::Validation("Invalid selection.".to_string())
+            })?
+            .id
+            .clone()
+    };
+
+    // Get reply body — positional arg or prompt
+    let reply_body = if let Some(b) = body {
+        b
+    } else {
+        print!("Reply: ");
+        io::stdout().flush()?;
+        let mut line = String::new();
+        io::stdin().read_line(&mut line)?;
+        let b = line.trim().to_string();
+        if b.is_empty() {
+            return Err(crate::error::JjjError::Validation(
+                "Reply cannot be empty.".to_string(),
+            ));
+        }
+        b
+    };
+
+    let user = store.get_current_user()?;
+    store.with_metadata(&format!("Reply to critique {}", critique_id), || {
+        let mut critique = store.load_critique(&critique_id)?;
+        critique.add_reply(user.clone(), reply_body.clone());
+        store.save_critique(&critique)?;
+        println!("Replied to critique '{}'.", critique.title);
         Ok(())
     })
 }

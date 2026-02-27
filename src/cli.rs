@@ -417,6 +417,10 @@ pub enum ProblemAction {
         /// Explanation of why the problem turned out to be misconceived
         #[arg(long)]
         reason: Option<String>,
+
+        /// Close the linked GitHub issue after dissolving
+        #[arg(long)]
+        github_close: bool,
     },
 
     /// Assign a problem to yourself or someone else
@@ -599,6 +603,20 @@ pub enum SolutionAction {
     Lgtm {
         /// Solution ID, short prefix, or fuzzy title
         solution_id: String,
+    },
+
+    /// Leave a reply on a critique of this solution
+    #[command(display_order = 12)]
+    Comment {
+        /// Solution ID, short prefix, or fuzzy title (defaults to active solution)
+        solution_id: Option<String>,
+
+        /// Critique to reply to — ID, prefix, or fuzzy title
+        #[arg(long, short = 'c')]
+        critique: Option<String>,
+
+        /// Reply body (prompted interactively if not given)
+        body: Option<String>,
     },
 }
 

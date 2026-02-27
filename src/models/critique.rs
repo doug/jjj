@@ -313,6 +313,8 @@ pub struct CritiqueFrontmatter {
     pub updated_at: DateTime<Utc>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub github_review_id: Option<u64>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub replies: Vec<Reply>,
 }
 
 impl From<&Critique> for CritiqueFrontmatter {
@@ -331,6 +333,7 @@ impl From<&Critique> for CritiqueFrontmatter {
             created_at: c.created_at,
             updated_at: c.updated_at,
             github_review_id: c.github_review_id,
+            replies: c.replies.clone(),
         }
     }
 }

@@ -229,17 +229,29 @@ impl MetadataStore {
     /// Ensure the metadata workspace exists and is checked out from the `jjj` bookmark.
     ///
     /// Creates a new `jj workspace` pointing at `.jj/jjj-meta/` if the directory
-    /// does not already exist. Must be called before any file-level operations on
-    /// the metadata directory.
+    /// does not already exist. If the `jjj` bookmark itself does not yet exist,
+    /// auto-initializes the metadata store so any command works on a fresh repo
+    /// without requiring an explicit `jjj init`.
     pub(super) fn ensure_meta_checkout(&self) -> Result<()> {
         if !self.meta_path.exists() {
-            // Create workspace for metadata
+            // Auto-initialize if the jjj bookmark has never been created.
+            if !self.jj_client.bookmark_exists(META_BOOKMARK)? {
+                let change_id = self
+                    .jj_client
+                    .new_empty_change("Initialize jjj metadata")?;
+                self.jj_client.create_bookmark(META_BOOKMARK, &change_id)?;
+            }
             let meta_path_str = self
                 .meta_path
                 .to_str()
                 .ok_or_else(|| JjjError::PathError(self.meta_path.clone()))?;
             self.jj_client
                 .execute(&["workspace", "add", meta_path_str, "-r", META_BOOKMARK])?;
+            // Create required subdirectories inside the newly-checked-out workspace.
+            fs::create_dir_all(self.meta_path.join(PROBLEMS_DIR))?;
+            fs::create_dir_all(self.meta_path.join(SOLUTIONS_DIR))?;
+            fs::create_dir_all(self.meta_path.join(CRITIQUES_DIR))?;
+            fs::create_dir_all(self.meta_path.join(MILESTONES_DIR))?;
         }
         Ok(())
     }

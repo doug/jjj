@@ -346,11 +346,11 @@ fn test_problem_solve_requires_accepted_solution() {
     run_jjj_success(&dir, &["solution", "review", "Fix"]);
     run_jjj_success(&dir, &["solution", "accept", "Fix"]);
 
-    // Problem is already auto-solved, explicit solve should fail
+    // Problem is already auto-solved; explicit solve is idempotent (succeeds).
     let output = run_jjj(&dir, &["problem", "solve", "Need Solution"]);
     assert!(
-        !output.status.success(),
-        "Expected failure when problem is already solved"
+        output.status.success(),
+        "Expected idempotent success when problem is already solved"
     );
 
     // Verify problem is in solved state

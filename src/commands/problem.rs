@@ -38,7 +38,7 @@ pub fn execute(ctx: &CommandContext, action: ProblemAction) -> Result<()> {
         } => edit_problem(ctx, problem_id, title, status, priority, parent),
         ProblemAction::Tree { problem_id } => show_tree(ctx, problem_id),
         ProblemAction::Solve { problem_id, github_close } => solve_problem(ctx, problem_id, github_close),
-        ProblemAction::Dissolve { problem_id, reason } => dissolve_problem(ctx, problem_id, reason),
+        ProblemAction::Dissolve { problem_id, reason, github_close } => dissolve_problem(ctx, problem_id, reason, github_close),
         ProblemAction::Assign { problem_id, to } => assign_problem(ctx, problem_id, to),
     }
 }
@@ -512,6 +512,14 @@ fn solve_problem(ctx: &CommandContext, problem_input: String, github_close: bool
     let (can_solve, message) = store.can_solve_problem(&problem_id)?;
 
     if !can_solve {
+        // Already-solved is idempotent: still honour --github-close.
+        if message == "Problem is already solved" {
+            println!("Problem {} is already marked as solved.", problem_id);
+            if let Ok(problem) = store.load_problem(&problem_id) {
+                crate::sync::hooks::auto_close_issue(ctx, &problem, github_close);
+            }
+            return Ok(());
+        }
         return Err(crate::error::JjjError::CannotSolveProblem(message));
     }
 
@@ -561,6 +569,7 @@ fn dissolve_problem(
     ctx: &CommandContext,
     problem_input: String,
     reason: Option<String>,
+    github_close: bool,
 ) -> Result<()> {
     let store = &ctx.store;
 
@@ -587,7 +596,14 @@ fn dissolve_problem(
             problem_id
         );
         Ok(())
-    })
+    })?;
+
+    // Auto-close GitHub issue if explicitly requested or configured
+    if let Ok(problem) = ctx.store.load_problem(&problem_id) {
+        crate::sync::hooks::auto_close_issue(ctx, &problem, github_close);
+    }
+
+    Ok(())
 }
 
 fn assign_problem(
