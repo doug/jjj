@@ -50,7 +50,10 @@ case "$CMD" in
   "issue view")
     # gh issue view N --json ...
     NUM="$3"
-    if [[ "$NUM" == "42" ]]; then
+    ARGS="$*"
+    if [[ "$ARGS" == *"state"* && "$ARGS" == *".state"* ]]; then
+      echo "OPEN"
+    elif [[ "$NUM" == "42" ]]; then
       cat <<'JSON'
 {"number":42,"title":"Login is slow when session expires","body":"Users are logged out after 30 minutes of inactivity.","state":"OPEN","labels":[{"name":"high"}],"author":{"login":"octocat"}}
 JSON
@@ -91,7 +94,7 @@ JSON
 [{"id":9001,"author":{"login":"alice"},"state":"CHANGES_REQUESTED","body":"The session timeout logic needs error handling for network failures."}]
 JSON
     elif [[ "$ARGS" == *"state"* ]]; then
-      echo '"OPEN"'
+      echo "OPEN"
     else
       echo '{}'
     fi
@@ -100,6 +103,11 @@ JSON
 
   "pr create")
     echo "101"
+    exit 0
+    ;;
+
+  "pr edit")
+    echo "Updated PR #$3."
     exit 0
     ;;
 
@@ -210,7 +218,17 @@ assert_success "dissolve closes problem and GitHub issue"
 assert_contains "dissolved" "problem is dissolved"
 assert_contains "auto-closed GitHub issue #43" "GitHub issue #43 closed"
 
-# ── 6: Solution comment shorthand ────────────────────────────────────────────
+# ── 6: GitHub push ───────────────────────────────────────────────────────────
+section "GitHub push"
+
+# Problems #42 and #43 are already solved/dissolved above but the mock always
+# reports them as OPEN, so github push will attempt to close them again
+# (idempotent — the mock handler echoes and exits 0).
+run_jjj github push
+assert_success "push exits cleanly"
+assert_contains "Closed issue" "push reconciles solved/dissolved problems"
+
+# ── 7: Solution comment shorthand ────────────────────────────────────────────
 section "Solution comment (critique reply)"
 
 # Set up a fresh problem/solution/critique to test comment

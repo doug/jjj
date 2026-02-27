@@ -586,19 +586,13 @@ fn accept_solution(
     let solution_id = ctx.resolve_solution(&solution_input)?;
     let store = &ctx.store;
 
-    // Validate state: must be in review (or force to override)
+    // Reject double-accept
     {
         let solution = store.load_solution(&solution_id)?;
         if solution.status == SolutionStatus::Accepted {
             return Err(crate::error::JjjError::Validation(format!(
                 "Solution '{}' is already accepted.",
                 solution.title
-            )));
-        }
-        if solution.status != SolutionStatus::Review && !force {
-            return Err(crate::error::JjjError::Validation(format!(
-                "Solution '{}' is in '{}' state. Move it to review first:\n  jjj solution review {}\n\nOr force: jjj solution accept {} --force",
-                solution.title, solution.status, solution_id, solution_id
             )));
         }
     }
@@ -614,7 +608,7 @@ fn accept_solution(
         })
         .collect();
 
-    // Check critique blocking
+    // Check critique blocking (before state check — critiques are the most actionable blocker)
     if !open_critiques.is_empty() {
         if !force {
             eprintln!(
@@ -650,6 +644,17 @@ fn accept_solution(
         );
         for c in &open_critiques {
             eprintln!("  {}: {} [{}]", c.id, c.title, c.severity);
+        }
+    }
+
+    // Validate state: must be in review (or force to override)
+    {
+        let solution = store.load_solution(&solution_id)?;
+        if solution.status != SolutionStatus::Review && !force {
+            return Err(crate::error::JjjError::Validation(format!(
+                "Solution '{}' is in '{}' state. Move it to review first:\n  jjj solution review {}\n\nOr force: jjj solution accept {} --force",
+                solution.title, solution.status, solution_id, solution_id
+            )));
         }
     }
 

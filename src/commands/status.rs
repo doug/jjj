@@ -220,12 +220,41 @@ pub(crate) fn build_next_actions(
             let problem = problems.iter().find(|p| p.id == solution.problem_id);
             let priority = problem.map(|p| &p.priority).cloned().unwrap_or_default();
 
+            // Build severity breakdown: "3 critiques: 1 critical, 2 medium"
+            let mut severity_counts: std::collections::BTreeMap<String, usize> =
+                std::collections::BTreeMap::new();
+            for c in &open_critiques {
+                *severity_counts
+                    .entry(format!("{}", c.severity))
+                    .or_insert(0) += 1;
+            }
+            // Ordered highest to lowest
+            let severity_order = ["critical", "high", "medium", "low"];
+            let parts: Vec<String> = severity_order
+                .iter()
+                .filter_map(|s| {
+                    severity_counts
+                        .get(*s)
+                        .map(|n| format!("{} {}", n, s))
+                })
+                .collect();
+            let summary = if parts.is_empty() {
+                format!("{} open critique(s)", open_critiques.len())
+            } else {
+                format!(
+                    "{} critique{}: {}",
+                    open_critiques.len(),
+                    if open_critiques.len() == 1 { "" } else { "s" },
+                    parts.join(", ")
+                )
+            };
+
             items.push(serde_json::json!({
                 "category": "blocked",
                 "entity_type": "solution",
                 "entity_id": solution.id,
                 "title": solution.title,
-                "summary": format!("{} open critique(s)", open_critiques.len()),
+                "summary": summary,
                 "suggested_command": format!("jjj critique show {}", top_critique.id),
                 "priority": format!("{}", priority),
                 "priority_sort": priority_sort_value(&priority),

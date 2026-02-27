@@ -56,9 +56,17 @@ pub enum Commands {
         json: bool,
     },
 
-    /// Print the single highest-priority next action (great for shell prompts)
+    /// Print the highest-priority next action(s) (great for shell prompts)
     #[command(display_order = 2)]
     Next {
+        /// Show top N items (default: 1; 0 means all)
+        #[arg(long)]
+        top: Option<usize>,
+
+        /// Show only your own authored work
+        #[arg(long)]
+        mine: bool,
+
         /// Output as JSON
         #[arg(long)]
         json: bool,
@@ -889,4 +897,8 @@ pub enum GitHubSyncAction {
         /// Problem ID or title
         problem_id: String,
     },
+
+    /// Push local state back to GitHub: refresh PR bodies and sync issue open/closed state
+    #[command(display_order = 6)]
+    Push,
 }

@@ -141,3 +141,17 @@ impl SyncProvider for GitHubProvider {
         Ok(mapping::parse_issue_state(&state))
     }
 }
+
+impl GitHubProvider {
+    /// Update the body of an existing PR.
+    pub fn update_pr_body(
+        &self,
+        number: u64,
+        solution: &crate::models::Solution,
+        problem: &crate::models::Problem,
+        critiques: &[crate::models::Critique],
+    ) -> Result<()> {
+        let body = mapping::format_pr_body(solution, problem, critiques);
+        self.client.update_pr_body(number, &body)
+    }
+}

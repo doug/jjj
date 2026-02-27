@@ -51,6 +51,7 @@ fn execute_github(
         Some(GitHubSyncAction::Reopen { problem_id }) => {
             sync_reopen(ctx, &provider, &problem_id, dry_run)
         }
+        Some(GitHubSyncAction::Push) => sync_push(ctx, &provider, dry_run),
     }
 }
 
@@ -687,6 +688,102 @@ fn sync_reopen(
         "Reopened issue #{} for problem '{}'",
         issue_number, problem.title
     );
+    Ok(())
+}
+
+/// Push local state to GitHub: refresh PR bodies and reconcile issue open/closed state.
+fn sync_push(ctx: &CommandContext, provider: &GitHubProvider, dry_run: bool) -> Result<()> {
+    use crate::models::{ProblemStatus};
+    let solutions = ctx.store.list_solutions()?;
+    let problems = ctx.store.list_problems()?;
+
+    let mut any_output = false;
+
+    // 1. Refresh PR bodies for solutions with a linked PR
+    for solution in &solutions {
+        let pr_number = match solution.github_pr {
+            Some(n) => n,
+            None => continue,
+        };
+
+        let problem = match problems.iter().find(|p| p.id == solution.problem_id) {
+            Some(p) => p,
+            None => continue,
+        };
+
+        let critiques = ctx.store.get_critiques_for_solution(&solution.id)?;
+
+        if dry_run {
+            println!("Would update PR #{}: {}", pr_number, solution.title);
+        } else {
+            provider.update_pr_body(pr_number, solution, problem, &critiques)?;
+            println!("Updated PR #{}: {}", pr_number, solution.title);
+        }
+        any_output = true;
+    }
+
+    // 2. Reconcile issue open/closed state for problems with a linked issue
+    for problem in &problems {
+        let issue_number = match problem.github_issue {
+            Some(n) => n,
+            None => continue,
+        };
+
+        let live_status = match provider.issue_status(issue_number) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!(
+                    "  Warning: could not check issue #{}: {}",
+                    issue_number, e
+                );
+                continue;
+            }
+        };
+
+        let should_be_closed = matches!(
+            problem.status,
+            ProblemStatus::Solved | ProblemStatus::Dissolved
+        );
+
+        match (should_be_closed, &live_status) {
+            (true, IssueStatus::Open) => {
+                if dry_run {
+                    println!(
+                        "Would close issue #{} (problem {} is {})",
+                        issue_number, problem.title, problem.status
+                    );
+                } else {
+                    provider.close_issue(issue_number)?;
+                    println!(
+                        "Closed issue #{}: {} (problem is {})",
+                        issue_number, problem.title, problem.status
+                    );
+                }
+                any_output = true;
+            }
+            (false, IssueStatus::Closed) => {
+                if dry_run {
+                    println!(
+                        "Would reopen issue #{} (problem {} is {})",
+                        issue_number, problem.title, problem.status
+                    );
+                } else {
+                    provider.reopen_issue(issue_number)?;
+                    println!(
+                        "Reopened issue #{}: {} (problem is {})",
+                        issue_number, problem.title, problem.status
+                    );
+                }
+                any_output = true;
+            }
+            _ => {} // Already in sync
+        }
+    }
+
+    if !any_output {
+        println!("Nothing to push — GitHub is already up to date.");
+    }
+
     Ok(())
 }
 
