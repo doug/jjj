@@ -64,7 +64,7 @@ impl MetadataStore {
 
         let content = to_markdown(&frontmatter, &body)?;
         let critique_path = critiques_dir.join(format!("{}.md", critique.id));
-        fs::write(critique_path, content)?;
+        super::atomic_write(&critique_path, content.as_bytes())?;
 
         // Update FTS if DB exists (best-effort)
         let db_path = self.jj_client.repo_root().join(".jj").join("jjj.db");

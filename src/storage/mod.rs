@@ -13,6 +13,15 @@ mod critiques;
 mod milestones;
 mod events;
 
+/// Write `content` to `path` atomically by writing to a `.tmp` sibling first,
+/// then renaming. This prevents torn writes from leaving corrupt entity files.
+pub(super) fn atomic_write(path: &std::path::Path, content: &[u8]) -> std::io::Result<()> {
+    let tmp = path.with_extension("md.tmp");
+    std::fs::write(&tmp, content)?;
+    std::fs::rename(&tmp, path)?;
+    Ok(())
+}
+
 pub(super) const META_BOOKMARK: &str = "jjj";
 pub(super) const CONFIG_FILE: &str = "config.toml";
 pub(super) const EVENTS_FILE: &str = "events.jsonl";

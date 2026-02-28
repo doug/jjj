@@ -172,6 +172,18 @@ impl Solution {
         self.updated_at = Utc::now();
     }
 
+    /// Validate a status transition and apply it. Returns an error string if invalid.
+    pub fn try_set_status(&mut self, status: SolutionStatus) -> Result<(), String> {
+        if !self.can_transition_to(&status) {
+            return Err(format!(
+                "Invalid status transition: {} -> {}",
+                self.status, status
+            ));
+        }
+        self.set_status(status);
+        Ok(())
+    }
+
     /// Check if a status transition is valid.
     pub fn can_transition_to(&self, target: &SolutionStatus) -> bool {
         matches!(

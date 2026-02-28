@@ -63,7 +63,7 @@ impl MetadataStore {
 
         let content = to_markdown(&frontmatter, &body)?;
         let problem_path = problems_dir.join(format!("{}.md", problem.id));
-        fs::write(problem_path, content)?;
+        super::atomic_write(&problem_path, content.as_bytes())?;
 
         // Update FTS if DB exists (best-effort)
         let db_path = self.jj_client.repo_root().join(".jj").join("jjj.db");
@@ -120,19 +120,6 @@ impl MetadataStore {
                 }
             }
             Err(e) => eprintln!("Warning: failed to list child problems of {}: {}", problem_id, e),
-        }
-
-        // Remove from parent's child_ids
-        if let Some(ref parent_id) = problem.parent_id {
-            match self.load_problem(parent_id) {
-                Ok(mut parent) => {
-                    parent.remove_child(problem_id);
-                    if let Err(e) = self.save_problem(&parent) {
-                        eprintln!("Warning: failed to update parent problem {}: {}", parent_id, e);
-                    }
-                }
-                Err(e) => eprintln!("Warning: failed to load parent problem {}: {}", parent_id, e),
-            }
         }
 
         // Delete associated solutions and their critiques
@@ -210,6 +197,21 @@ impl MetadataStore {
             for failure in &failures {
                 eprintln!("  {}", failure);
             }
+        }
+
+        // Derive child_ids from parent_id references (child_ids is not stored on disk).
+        let mut child_map: std::collections::HashMap<String, Vec<String>> =
+            std::collections::HashMap::new();
+        for p in &problems {
+            if let Some(ref pid) = p.parent_id {
+                child_map
+                    .entry(pid.clone())
+                    .or_default()
+                    .push(p.id.clone());
+            }
+        }
+        for p in &mut problems {
+            p.child_ids = child_map.remove(&p.id).unwrap_or_default();
         }
 
         Ok(problems)

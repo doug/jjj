@@ -93,6 +93,10 @@ fn sync_pull(ctx: &CommandContext, provider: &GitHubProvider, dry_run: bool) -> 
                     .filter_map(|c| c.github_review_id)
                     .collect();
 
+                // Collect all new critiques (reviews + threads) before saving any.
+                // Each entry is (critique, event, display_message).
+                let mut new_critiques: Vec<(crate::models::Critique, Event, String)> = Vec::new();
+
                 // --- Top-level PR reviews ---
                 match provider.pull_reviews(pr_number) {
                     Ok(reviews) => {
@@ -100,13 +104,9 @@ fn sync_pull(ctx: &CommandContext, provider: &GitHubProvider, dry_run: bool) -> 
                             if existing_review_ids.contains(&review.id) {
                                 continue;
                             }
-
-                            // Skip approved reviews unless sync_lgtm is enabled
                             if review.state == ReviewState::Approved && !config.github.sync_lgtm {
                                 continue;
                             }
-
-                            // Only import substantive reviews
                             if review.state == ReviewState::Commented && review.body.is_empty() {
                                 continue;
                             }
@@ -123,29 +123,22 @@ fn sync_pull(ctx: &CommandContext, provider: &GitHubProvider, dry_run: bool) -> 
                                     &solution.id,
                                     critique_id,
                                 );
-
-                                ctx.store.with_metadata("GitHub sync", || {
-                                    let event = Event::new(
-                                        EventType::GithubReviewImported,
-                                        critique.id.clone(),
-                                        review.author.clone(),
-                                    )
-                                    .with_extra(EventExtra {
-                                        github_number: Some(pr_number),
-                                        target: Some(solution.id.clone()),
-                                        ..Default::default()
-                                    });
-                                    ctx.store.set_pending_event(event);
-                                    ctx.store.save_critique(&critique)?;
-                                    Ok(())
-                                })?;
-
-                                println!(
+                                let event = Event::new(
+                                    EventType::GithubReviewImported,
+                                    critique.id.clone(),
+                                    review.author.clone(),
+                                )
+                                .with_extra(EventExtra {
+                                    github_number: Some(pr_number),
+                                    target: Some(solution.id.clone()),
+                                    ..Default::default()
+                                });
+                                let msg = format!(
                                     "    Imported review from @{} as critique {}",
                                     review.author,
                                     &critique.id[..6.min(critique.id.len())]
                                 );
-                                imported_reviews += 1;
+                                new_critiques.push((critique, event, msg));
                             }
                         }
                     }
@@ -161,20 +154,19 @@ fn sync_pull(ctx: &CommandContext, provider: &GitHubProvider, dry_run: bool) -> 
                 match provider.pull_review_threads(pr_number) {
                     Ok(threads) => {
                         for thread in &threads {
-                            // Skip resolved threads — addressed externally on GitHub
                             if thread.is_resolved {
                                 continue;
                             }
-                            // Dedup by comment_id stored in github_review_id
                             if existing_review_ids.contains(&thread.comment_id) {
                                 continue;
                             }
 
+                            let loc = match thread.line {
+                                Some(l) => format!("{}:{}", thread.path, l),
+                                None => thread.path.clone(),
+                            };
+
                             if dry_run {
-                                let loc = match thread.line {
-                                    Some(l) => format!("{}:{}", thread.path, l),
-                                    None => thread.path.clone(),
-                                };
                                 println!(
                                     "    Would import inline comment from @{} at {}",
                                     thread.author, loc
@@ -186,34 +178,23 @@ fn sync_pull(ctx: &CommandContext, provider: &GitHubProvider, dry_run: bool) -> 
                                     &solution.id,
                                     critique_id,
                                 );
-
-                                ctx.store.with_metadata("GitHub sync", || {
-                                    let event = Event::new(
-                                        EventType::GithubReviewImported,
-                                        critique.id.clone(),
-                                        thread.author.clone(),
-                                    )
-                                    .with_extra(EventExtra {
-                                        github_number: Some(pr_number),
-                                        target: Some(solution.id.clone()),
-                                        ..Default::default()
-                                    });
-                                    ctx.store.set_pending_event(event);
-                                    ctx.store.save_critique(&critique)?;
-                                    Ok(())
-                                })?;
-
-                                let loc = match thread.line {
-                                    Some(l) => format!("{}:{}", thread.path, l),
-                                    None => thread.path.clone(),
-                                };
-                                println!(
+                                let event = Event::new(
+                                    EventType::GithubReviewImported,
+                                    critique.id.clone(),
+                                    thread.author.clone(),
+                                )
+                                .with_extra(EventExtra {
+                                    github_number: Some(pr_number),
+                                    target: Some(solution.id.clone()),
+                                    ..Default::default()
+                                });
+                                let msg = format!(
                                     "    Imported inline comment from @{} at {} as critique {}",
                                     thread.author,
                                     loc,
                                     &critique.id[..6.min(critique.id.len())]
                                 );
-                                imported_reviews += 1;
+                                new_critiques.push((critique, event, msg));
                             }
                         }
                     }
@@ -224,6 +205,24 @@ fn sync_pull(ctx: &CommandContext, provider: &GitHubProvider, dry_run: bool) -> 
                             pr_number, e
                         );
                     }
+                }
+
+                // Save all new critiques in a single metadata commit.
+                if !new_critiques.is_empty() {
+                    let n = new_critiques.len();
+                    let commit_msg =
+                        format!("GitHub sync: {} review(s) for PR #{}", n, pr_number);
+                    ctx.store.with_metadata(&commit_msg, || {
+                        for (critique, event, _) in &new_critiques {
+                            ctx.store.set_pending_event(event.clone());
+                            ctx.store.save_critique(critique)?;
+                        }
+                        Ok(())
+                    })?;
+                    for (_, _, msg) in &new_critiques {
+                        println!("{}", msg);
+                    }
+                    imported_reviews += n;
                 }
             }
         }

@@ -91,14 +91,6 @@ pub trait SyncProvider {
         branch: &str,
     ) -> Result<u64>;
 
-    /// Update an existing pull request.
-    fn update_pr(
-        &self,
-        number: u64,
-        solution: &crate::models::Solution,
-        problem: &Problem,
-    ) -> Result<()>;
-
     /// Merge a pull request.
     fn merge_pr(&self, number: u64) -> Result<()>;
 

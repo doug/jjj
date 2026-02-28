@@ -40,6 +40,7 @@ pub fn execute(ctx: &CommandContext, action: ProblemAction) -> Result<()> {
         ProblemAction::Solve { problem_id, github_close } => solve_problem(ctx, problem_id, github_close),
         ProblemAction::Dissolve { problem_id, reason, github_close } => dissolve_problem(ctx, problem_id, reason, github_close),
         ProblemAction::Assign { problem_id, to } => assign_problem(ctx, problem_id, to),
+        ProblemAction::Reopen { problem_id } => reopen_problem(ctx, problem_id),
     }
 }
 
@@ -144,11 +145,6 @@ fn new_problem(
         // Set parent
         if let Some(ref parent_id) = resolved_parent {
             problem.set_parent(Some(parent_id.clone()));
-
-            // Update parent's child_ids
-            let mut parent_problem = store.load_problem(parent_id)?;
-            parent_problem.add_child(problem_id.clone());
-            store.save_problem(&parent_problem)?;
         }
 
         // Set milestone
@@ -206,6 +202,9 @@ fn list_problems(
             .parse()
             .map_err(|e: String| crate::error::JjjError::Validation(e))?;
         problems.retain(|p| p.status == status);
+    } else {
+        // Default: show only active problems (open and in_progress), like a kanban board
+        problems.retain(|p| matches!(p.status, ProblemStatus::Open | ProblemStatus::InProgress));
     }
 
     // Filter by milestone (entity resolution: UUID, prefix, or title)
@@ -436,15 +435,6 @@ fn edit_problem(
             let new_status: ProblemStatus = status_str
                 .parse()
                 .map_err(|e: String| crate::error::JjjError::Validation(e))?;
-            if !problem.can_transition_to(&new_status) {
-                return Err(crate::error::JjjError::Validation(format!(
-                    "Invalid status transition: {} -> {}. Valid transitions from {}: {}",
-                    problem.status,
-                    new_status,
-                    problem.status,
-                    valid_transitions_for_problem(&problem.status)
-                )));
-            }
 
             // Guard: solved requires at least one accepted solution
             if new_status == ProblemStatus::Solved {
@@ -459,7 +449,13 @@ fn edit_problem(
                 }
             }
 
-            problem.set_status(new_status);
+            let valid = valid_transitions_for_problem(&problem.status);
+            let cur_status_str = problem.status.to_string();
+            problem.try_set_status(new_status)
+                .map_err(|e| crate::error::JjjError::Validation(format!(
+                    "{}. Valid transitions from {}: {}",
+                    e, cur_status_str, valid
+                )))?;
         }
 
         if let Some(p_str) = priority {
@@ -632,6 +628,31 @@ fn assign_problem(
     )
 }
 
+fn reopen_problem(ctx: &CommandContext, problem_input: String) -> Result<()> {
+    let store = &ctx.store;
+    let problem_id = ctx.resolve_problem(&problem_input)?;
+
+    let problem = store.load_problem(&problem_id)?;
+    if !matches!(problem.status, ProblemStatus::Solved | ProblemStatus::Dissolved) {
+        return Err(crate::error::JjjError::Validation(format!(
+            "Problem '{}' is {} — only solved or dissolved problems can be reopened.",
+            problem.title, problem.status
+        )));
+    }
+
+    let user = store.get_current_user()?;
+    let event = Event::new(EventType::ProblemReopened, problem_id.clone(), user);
+
+    store.with_metadata(&format!("Reopen problem {}", problem_id), || {
+        store.set_pending_event(event.clone());
+        let mut problem = store.load_problem(&problem_id)?;
+        problem.set_status(ProblemStatus::Open);
+        store.save_problem(&problem)?;
+        println!("Problem '{}' reopened.", problem.title);
+        Ok(())
+    })
+}
+
 fn check_for_duplicates(
     ctx: &CommandContext,
     title: &str,
@@ -682,8 +703,8 @@ fn valid_transitions_for_problem(status: &ProblemStatus) -> &'static str {
     match status {
         ProblemStatus::Open => "in_progress, solved, dissolved",
         ProblemStatus::InProgress => "open, solved, dissolved",
-        ProblemStatus::Solved => "(none - terminal state)",
-        ProblemStatus::Dissolved => "(none - terminal state)",
+        ProblemStatus::Solved => "open",
+        ProblemStatus::Dissolved => "open",
     }
 }
 

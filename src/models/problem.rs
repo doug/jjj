@@ -216,10 +216,22 @@ impl Problem {
         self.updated_at = Utc::now();
     }
 
-    /// Update status. Returns an error string if the transition is invalid.
+    /// Update status.
     pub fn set_status(&mut self, status: ProblemStatus) {
         self.status = status;
         self.updated_at = Utc::now();
+    }
+
+    /// Validate a status transition and apply it. Returns an error string if the transition is invalid.
+    pub fn try_set_status(&mut self, status: ProblemStatus) -> Result<(), String> {
+        if !self.can_transition_to(&status) {
+            return Err(format!(
+                "Invalid status transition: {} -> {}",
+                self.status, status
+            ));
+        }
+        self.set_status(status);
+        Ok(())
     }
 
     /// Check if a status transition is valid.
@@ -232,6 +244,8 @@ impl Problem {
                 | (ProblemStatus::InProgress, ProblemStatus::Solved)
                 | (ProblemStatus::InProgress, ProblemStatus::Open)
                 | (ProblemStatus::InProgress, ProblemStatus::Dissolved)
+                | (ProblemStatus::Solved, ProblemStatus::Open)
+                | (ProblemStatus::Dissolved, ProblemStatus::Open)
         )
     }
 
@@ -282,7 +296,7 @@ pub struct ProblemFrontmatter {
     pub priority: Priority,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub solution_ids: Vec<String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(skip)]
     pub child_ids: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub milestone_id: Option<String>,

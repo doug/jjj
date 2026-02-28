@@ -441,6 +441,13 @@ pub enum ProblemAction {
         #[arg(long)]
         to: Option<String>,
     },
+
+    /// Reopen a solved or dissolved problem (transition back to open)
+    #[command(display_order = 8)]
+    Reopen {
+        /// Problem ID, short prefix, or fuzzy title
+        problem_id: String,
+    },
 }
 
 // =============================================================================
@@ -838,6 +845,17 @@ pub enum MilestoneAction {
         /// Assignee (defaults to your jj identity)
         #[arg(long)]
         to: Option<String>,
+    },
+
+    /// Show completion statistics for a milestone
+    #[command(display_order = 8)]
+    Status {
+        /// Milestone ID, short prefix, or fuzzy title
+        milestone_id: String,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
     },
 }
 

@@ -437,13 +437,8 @@ fn edit_solution(
             let new_status: SolutionStatus = status_str
                 .parse()
                 .map_err(|e: String| crate::error::JjjError::Validation(e))?;
-            if !solution.can_transition_to(&new_status) {
-                return Err(crate::error::JjjError::Validation(format!(
-                    "Invalid status transition: {} -> {}",
-                    solution.status, new_status
-                )));
-            }
-            solution.set_status(new_status);
+            solution.try_set_status(new_status)
+                .map_err(|e| crate::error::JjjError::Validation(e))?;
         }
 
         store.save_solution(&solution)?;
@@ -715,6 +710,13 @@ fn accept_solution(
             if problem.status != ProblemStatus::Solved {
                 problem.set_status(ProblemStatus::Solved);
                 store.save_problem(&problem)?;
+                // Emit ProblemSolved event so timeline shows it
+                let solve_event = Event::new(
+                    EventType::ProblemSolved,
+                    problem.id.clone(),
+                    event.by.clone(),
+                );
+                store.append_event(&solve_event)?;
                 println!(
                     "Problem {} auto-solved (accepted solution)",
                     solution.problem_id

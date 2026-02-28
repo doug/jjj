@@ -104,11 +104,6 @@ impl SyncProvider for GitHubProvider {
         self.client.create_pr(&title, &body, branch, "main")
     }
 
-    fn update_pr(&self, _number: u64, _solution: &Solution, _problem: &Problem) -> Result<()> {
-        // PR updates happen via force-pushing the branch; body updates are optional
-        Ok(())
-    }
-
     fn merge_pr(&self, number: u64) -> Result<()> {
         self.client.merge_pr(number)
     }

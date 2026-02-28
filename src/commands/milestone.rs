@@ -26,6 +26,9 @@ pub fn execute(ctx: &CommandContext, action: MilestoneAction) -> Result<()> {
         } => remove_problem(ctx, milestone_id, problem_id),
         MilestoneAction::Roadmap { json } => show_roadmap(ctx, json),
         MilestoneAction::Assign { milestone_id, to } => assign_milestone(ctx, milestone_id, to),
+        MilestoneAction::Status { milestone_id, json } => {
+            milestone_status(ctx, milestone_id, json)
+        }
     }
 }
 
@@ -423,4 +426,78 @@ fn assign_milestone(
             Ok(())
         },
     )
+}
+
+fn milestone_status(ctx: &CommandContext, milestone_input: String, json: bool) -> Result<()> {
+    let milestone_id = ctx.resolve_milestone(&milestone_input)?;
+    let store = &ctx.store;
+    let milestone = store.load_milestone(&milestone_id)?;
+
+    // Count problems by status
+    let mut total = 0usize;
+    let mut open_count = 0usize;
+    let mut in_progress_count = 0usize;
+    let mut solved_count = 0usize;
+    let mut dissolved_count = 0usize;
+
+    for problem_id in &milestone.problem_ids {
+        total += 1;
+        if let Ok(problem) = store.load_problem(problem_id) {
+            match problem.status {
+                ProblemStatus::Open => open_count += 1,
+                ProblemStatus::InProgress => in_progress_count += 1,
+                ProblemStatus::Solved => solved_count += 1,
+                ProblemStatus::Dissolved => dissolved_count += 1,
+            }
+        } else {
+            // Problem file missing — count as open for safety
+            open_count += 1;
+        }
+    }
+
+    let pct_complete = if total > 0 {
+        (solved_count + dissolved_count) * 100 / total
+    } else {
+        0
+    };
+
+    // Target date and days remaining
+    let target_date_str = milestone
+        .target_date
+        .map(|d| d.format("%Y-%m-%d").to_string());
+    let days_remaining = milestone.days_until_target();
+
+    if json {
+        let obj = serde_json::json!({
+            "title": milestone.title,
+            "status": milestone.status.to_string(),
+            "total": total,
+            "solved": solved_count,
+            "dissolved": dissolved_count,
+            "in_progress": in_progress_count,
+            "open": open_count,
+            "pct_complete": pct_complete,
+            "target_date": target_date_str,
+            "days_remaining": days_remaining,
+        });
+        println!("{}", serde_json::to_string_pretty(&obj)?);
+        return Ok(());
+    }
+
+    let summary = format!(
+        "Problems: {} total — {} solved, {} in-progress, {} open ({}% complete)",
+        total, solved_count, in_progress_count, open_count, pct_complete
+    );
+    println!("{}: {}", milestone.title, milestone.status);
+    println!("{}", summary);
+
+    if let Some(ref date_str) = target_date_str {
+        match days_remaining {
+            Some(d) if d < 0 => println!("Target: {} ({} days overdue)", date_str, -d),
+            Some(d) => println!("Target: {} ({} days remaining)", date_str, d),
+            None => println!("Target: {}", date_str),
+        }
+    }
+
+    Ok(())
 }

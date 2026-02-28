@@ -60,7 +60,7 @@ impl MetadataStore {
 
         let content = to_markdown(&frontmatter, &body)?;
         let milestone_path = milestones_dir.join(format!("{}.md", milestone.id));
-        fs::write(milestone_path, content)?;
+        super::atomic_write(&milestone_path, content.as_bytes())?;
 
         Ok(())
     }

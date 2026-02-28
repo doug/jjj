@@ -33,6 +33,15 @@ export class CritiqueCommentController implements vscode.Disposable {
   private buildBody(critique: Critique): vscode.MarkdownString {
     const lines: string[] = [];
     lines.push(`**[${critique.severity}]** ${critique.title}`);
+    if (critique.file_path && critique.line_start) {
+      const loc = critique.line_end && critique.line_end !== critique.line_start
+        ? `${critique.file_path}:${critique.line_start}-${critique.line_end}`
+        : `${critique.file_path}:${critique.line_start}`;
+      lines.push("", `📍 **Location:** ${loc}`);
+    }
+    if (critique.code_context && critique.code_context.length > 0) {
+      lines.push("", "```", ...critique.code_context, "```");
+    }
     if (critique.argument) { lines.push("", critique.argument); }
     if (critique.evidence) { lines.push("", `**Evidence:** ${critique.evidence}`); }
     const solution = this.cache.getSolution(critique.solution_id);
