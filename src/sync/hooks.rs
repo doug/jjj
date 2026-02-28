@@ -103,7 +103,9 @@ fn try_auto_create_or_update_pr(
     let pr_number = provider.create_pr(solution, &problem, &branch)?;
     solution.github_pr = Some(pr_number);
     solution.github_branch = Some(branch);
-    ctx.store.save_solution(solution)?;
+    ctx.store.with_metadata("Link GitHub PR to solution", || {
+        ctx.store.save_solution(solution)
+    })?;
 
     println!("  (auto-created GitHub PR #{})", pr_number);
     Ok(())

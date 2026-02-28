@@ -263,7 +263,7 @@ fn sync_pull(ctx: &CommandContext, provider: &GitHubProvider, dry_run: bool) -> 
             for (number, title) in &unlinked {
                 println!("  #{} — {}", number, title);
             }
-            println!("\nUse 'jjj sync github import #<number>' to import.");
+            println!("\nUse 'jjj github import <number>' to import.");
         }
         _ => {}
     }

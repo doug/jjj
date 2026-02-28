@@ -41,7 +41,7 @@ impl MetadataStore {
             file_path: frontmatter.file_path,
             line_start: frontmatter.line_start,
             line_end: frontmatter.line_end,
-            code_context: Vec::new(),
+            code_context: frontmatter.code_context,
             replies: frontmatter.replies,
             github_review_id: frontmatter.github_review_id,
         };

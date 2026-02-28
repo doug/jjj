@@ -555,11 +555,19 @@ fn detach_change(
 fn review_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
     let solution_id = ctx.resolve_solution(&solution_input)?;
     let store = &ctx.store;
+    let user = store.get_current_user().unwrap_or_default();
 
     store.with_metadata(&format!("Move solution {} to review", solution_id), || {
         let mut solution = store.load_solution(&solution_id)?;
         solution.start_review();
         store.save_solution(&solution)?;
+
+        let event = Event::new(EventType::SolutionReviewed, solution_id.clone(), user.clone())
+            .with_extra(EventExtra {
+                problem: Some(solution.problem_id.clone()),
+                ..Default::default()
+            });
+        store.set_pending_event(event);
 
         // Update problem status to in_progress if it's still open
         let mut problem = store.load_problem(&solution.problem_id)?;
@@ -1026,6 +1034,14 @@ fn comment_solution(
         let mut critique = store.load_critique(&critique_id)?;
         critique.add_reply(user.clone(), reply_body.clone());
         store.save_critique(&critique)?;
+
+        let event = Event::new(EventType::CritiqueReplied, critique_id.clone(), user.clone())
+            .with_extra(EventExtra {
+                target: Some(solution_id.clone()),
+                ..Default::default()
+            });
+        store.set_pending_event(event);
+
         println!("Replied to critique '{}'.", critique.title);
         Ok(())
     })

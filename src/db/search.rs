@@ -30,11 +30,14 @@ pub struct SearchResult {
 /// matches FTS results by entity_id and joins with the entity table to
 /// retrieve full details.
 ///
-/// Returns up to 50 results with snippets showing match context.
+/// Returns up to 50 results total across all entity types, with snippets
+/// showing match context. When no entity_type filter is given, results are
+/// drawn from all types before truncation so no single type monopolises the
+/// output.
 ///
 /// # Arguments
 /// * `conn` - Database connection
-/// * `query` - FTS5 search query (supports AND, OR, NOT, phrase matching)
+/// * `query` - Search query (words are automatically phrase-quoted for FTS5)
 /// * `entity_type` - Optional filter to limit search to a specific entity type
 ///
 /// # Example
@@ -67,8 +70,7 @@ pub fn search(
              FROM problems p
              WHERE p.id IN (
                  SELECT entity_id FROM fts WHERE fts MATCH ?1
-             )
-             LIMIT 50",
+             )",
         )?;
 
         let rows = stmt.query_map(params![fts_query], |row| {
@@ -100,8 +102,7 @@ pub fn search(
              FROM solutions s
              WHERE s.id IN (
                  SELECT entity_id FROM fts WHERE fts MATCH ?1
-             )
-             LIMIT 50",
+             )",
         )?;
 
         let rows = stmt.query_map(params![fts_query], |row| {
@@ -133,8 +134,7 @@ pub fn search(
              FROM critiques c
              WHERE c.id IN (
                  SELECT entity_id FROM fts WHERE fts MATCH ?1
-             )
-             LIMIT 50",
+             )",
         )?;
 
         let rows = stmt.query_map(params![fts_query], |row| {
@@ -165,8 +165,7 @@ pub fn search(
              FROM milestones m
              WHERE m.id IN (
                  SELECT entity_id FROM fts WHERE fts MATCH ?1
-             )
-             LIMIT 50",
+             )",
         )?;
 
         let rows = stmt.query_map(params![fts_query], |row| {
@@ -197,9 +196,10 @@ pub fn search(
 
 /// Sanitize a user query for FTS5 MATCH syntax.
 ///
-/// Escapes double quotes and wraps each word in quotes to prevent
-/// FTS5 special characters (AND, OR, NOT, -, etc.) from being
-/// interpreted as operators.
+/// Each word is double-quoted as a phrase token so it is treated as a
+/// literal string by FTS5. Without quoting, words like "AND", "OR", "NOT",
+/// or tokens starting with "-" or "^" would be parsed as FTS5 operators.
+/// Adjacent quoted tokens are implicitly AND-ed by FTS5.
 fn sanitize_fts_query(query: &str) -> String {
     let words: Vec<String> = query
         .split_whitespace()
@@ -363,13 +363,17 @@ pub fn merge_with_rrf(
 
     let mut scores: HashMap<(String, String), f32> = HashMap::new();
     let mut titles: HashMap<(String, String), String> = HashMap::new();
+    let mut snippets: HashMap<(String, String), String> = HashMap::new();
 
-    // Add FTS scores
+    // Add FTS scores (also capture snippets)
     for (rank, result) in fts_results.iter().enumerate() {
         let key = (result.entity_type.clone(), result.entity_id.clone());
         let rrf_score = 1.0 / (k as f32 + rank as f32 + 1.0);
         *scores.entry(key.clone()).or_insert(0.0) += rrf_score;
-        titles.insert(key, result.title.clone());
+        titles.insert(key.clone(), result.title.clone());
+        if !result.snippet.is_empty() {
+            snippets.entry(key).or_insert_with(|| result.snippet.clone());
+        }
     }
 
     // Add semantic scores
@@ -384,7 +388,7 @@ pub fn merge_with_rrf(
     let mut merged: Vec<_> = scores.into_iter().collect();
     merged.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
-    // Convert to SearchResult
+    // Convert to SearchResult, preserving FTS snippets where available
     merged
         .into_iter()
         .map(|((entity_type, entity_id), _score)| {
@@ -392,11 +396,15 @@ pub fn merge_with_rrf(
                 .get(&(entity_type.clone(), entity_id.clone()))
                 .cloned()
                 .unwrap_or_default();
+            let snippet = snippets
+                .get(&(entity_type.clone(), entity_id.clone()))
+                .cloned()
+                .unwrap_or_default();
             SearchResult {
                 entity_type,
                 entity_id,
                 title,
-                snippet: String::new(), // RRF results don't have snippets
+                snippet,
             }
         })
         .collect()
@@ -458,12 +466,14 @@ fn parse_event_type(s: &str) -> crate::models::EventType {
         "problem_dissolved" => EventType::ProblemDissolved,
         "problem_reopened" => EventType::ProblemReopened,
         "solution_created" => EventType::SolutionCreated,
+        "solution_reviewed" => EventType::SolutionReviewed,
         "solution_accepted" => EventType::SolutionAccepted,
         "solution_refuted" => EventType::SolutionRefuted,
         "critique_raised" => EventType::CritiqueRaised,
         "critique_addressed" => EventType::CritiqueAddressed,
         "critique_dismissed" => EventType::CritiqueDismissed,
         "critique_validated" => EventType::CritiqueValidated,
+        "critique_replied" => EventType::CritiqueReplied,
         "milestone_created" => EventType::MilestoneCreated,
         "milestone_completed" => EventType::MilestoneCompleted,
         // Default to ProblemCreated for unknown types

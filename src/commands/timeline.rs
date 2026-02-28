@@ -105,6 +105,8 @@ fn format_event_description(event: &Event) -> String {
         EventType::CritiqueAddressed => format!("{} addressed", event.entity),
         EventType::CritiqueDismissed => format!("{} dismissed", event.entity),
         EventType::CritiqueValidated => format!("{} validated", event.entity),
+        EventType::CritiqueReplied => format!("{} replied to", event.entity),
+        EventType::SolutionReviewed => format!("{} moved to review", event.entity),
         EventType::MilestoneCreated => format!("{} created", event.entity),
         EventType::MilestoneCompleted => format!("{} completed", event.entity),
         EventType::GithubIssueCreated => {

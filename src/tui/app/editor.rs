@@ -82,7 +82,7 @@ impl App {
             EntityType::Problem => {
                 let problem = self.store.load_problem(entity_id)?;
                 Ok(format!(
-                    "---\ntitle: {}\nstatus: {:?}\npriority: {}\n---\n\n## Description\n\n{}\n",
+                    "---\ntitle: {}\nstatus: {}\npriority: {}\n---\n\n## Description\n\n{}\n",
                     problem.title,
                     problem.status,
                     problem.priority,
@@ -96,7 +96,7 @@ impl App {
             EntityType::Solution => {
                 let solution = self.store.load_solution(entity_id)?;
                 Ok(format!(
-                    "---\ntitle: {}\nstatus: {:?}\n---\n\n## Description\n\n{}\n",
+                    "---\ntitle: {}\nstatus: {}\n---\n\n## Description\n\n{}\n",
                     solution.title,
                     solution.status,
                     if solution.approach.is_empty() {
@@ -109,7 +109,7 @@ impl App {
             EntityType::Critique => {
                 let critique = self.store.load_critique(entity_id)?;
                 Ok(format!(
-                    "---\ntitle: {}\nstatus: {:?}\nseverity: {}\n---\n\n## Description\n\n{}\n",
+                    "---\ntitle: {}\nstatus: {}\nseverity: {}\n---\n\n## Description\n\n{}\n",
                     critique.title,
                     critique.status,
                     critique.severity,

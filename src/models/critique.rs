@@ -309,6 +309,8 @@ pub struct CritiqueFrontmatter {
     pub line_start: Option<usize>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub line_end: Option<usize>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub code_context: Vec<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -330,6 +332,7 @@ impl From<&Critique> for CritiqueFrontmatter {
             file_path: c.file_path.clone(),
             line_start: c.line_start,
             line_end: c.line_end,
+            code_context: c.code_context.clone(),
             created_at: c.created_at,
             updated_at: c.updated_at,
             github_review_id: c.github_review_id,

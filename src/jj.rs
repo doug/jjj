@@ -100,7 +100,10 @@ impl JjClient {
     /// Check if a bookmark exists
     pub fn bookmark_exists(&self, bookmark: &str) -> Result<bool> {
         let output = self.execute(&["bookmark", "list"])?;
-        Ok(output.lines().any(|line| line.contains(bookmark)))
+        Ok(output.lines().any(|line| {
+            let name = line.split_whitespace().next().unwrap_or("");
+            name == bookmark || name.trim_end_matches(':') == bookmark
+        }))
     }
 
     /// Create a new bookmark

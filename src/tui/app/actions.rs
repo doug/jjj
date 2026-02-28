@@ -1,5 +1,6 @@
 use super::{App, InputAction, InputMode};
 use crate::error::Result;
+use crate::models::CritiqueStatus;
 use super::super::next_actions::EntityType;
 
 impl App {
@@ -290,6 +291,22 @@ impl App {
     }
 
     fn accept_solution(&mut self, solution_id: &str) -> Result<()> {
+        // Block if there are open critiques
+        let open_critiques = self
+            .store
+            .list_critiques()
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|c| c.solution_id == solution_id && c.status == CritiqueStatus::Open)
+            .count();
+        if open_critiques > 0 {
+            self.show_flash(&format!(
+                "Blocked: {} open critique(s) must be resolved first",
+                open_critiques
+            ));
+            return Ok(());
+        }
+
         let id = solution_id.to_string();
         match self
             .store

@@ -13,6 +13,7 @@ pub enum EventType {
 
     // Solution events
     SolutionCreated,
+    SolutionReviewed,
     SolutionAccepted,
     SolutionRefuted,
 
@@ -21,6 +22,7 @@ pub enum EventType {
     CritiqueAddressed,
     CritiqueDismissed,
     CritiqueValidated,
+    CritiqueReplied,
 
     // Milestone events
     MilestoneCreated,
@@ -43,12 +45,14 @@ impl std::fmt::Display for EventType {
             EventType::ProblemDissolved => write!(f, "problem_dissolved"),
             EventType::ProblemReopened => write!(f, "problem_reopened"),
             EventType::SolutionCreated => write!(f, "solution_created"),
+            EventType::SolutionReviewed => write!(f, "solution_reviewed"),
             EventType::SolutionAccepted => write!(f, "solution_accepted"),
             EventType::SolutionRefuted => write!(f, "solution_refuted"),
             EventType::CritiqueRaised => write!(f, "critique_raised"),
             EventType::CritiqueAddressed => write!(f, "critique_addressed"),
             EventType::CritiqueDismissed => write!(f, "critique_dismissed"),
             EventType::CritiqueValidated => write!(f, "critique_validated"),
+            EventType::CritiqueReplied => write!(f, "critique_replied"),
             EventType::MilestoneCreated => write!(f, "milestone_created"),
             EventType::MilestoneCompleted => write!(f, "milestone_completed"),
             EventType::GithubIssueCreated => write!(f, "github_issue_created"),

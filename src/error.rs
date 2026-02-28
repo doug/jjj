@@ -4,7 +4,7 @@
 //! grouped by concern:
 //! - **jj integration** — `JjNotFound`, `JjCommandFailed`, `JjIo`
 //! - **Entity lookup** — `ProblemNotFound`, `SolutionNotFound`, `CritiqueNotFound`,
-//!   `MilestoneNotFound`, `EntityNotFound`, `AmbiguousId`
+//!   `MilestoneNotFound`, `EntityNotFound`, `AmbiguousId`, `AmbiguousMatch`
 //! - **Parsing / data integrity** — `FrontmatterParse`, `JsonParse`, `YamlParse`,
 //!   `TomlParse`, `TomlSerialize`
 //! - **GitHub sync** — `GhNotFound`, `GhCommandFailed`, `GhAuthFailed`,
@@ -51,17 +51,8 @@ pub enum JjjError {
     #[error("Milestone {0} not found.\n\nUse 'jjj milestone list' to see all milestones.")]
     MilestoneNotFound(String),
 
-    #[error("Conflict detected in {0}. Resolve with 'jjj resolve'")]
+    #[error("Conflict detected in {0}. Run 'jj resolve' to fix conflicts in the working copy.")]
     Conflict(String),
-
-    #[error("Invalid problem ID: {0}. Expected format: P-<number>")]
-    InvalidProblemId(String),
-
-    #[error("Invalid solution ID: {0}. Expected format: S-<number>")]
-    InvalidSolutionId(String),
-
-    #[error("Invalid critique ID: {0}. Expected format: CQ-<number>")]
-    InvalidCritiqueId(String),
 
     #[error("Invalid change ID: {0}")]
     InvalidChangeId(String),

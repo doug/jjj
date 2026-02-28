@@ -105,48 +105,74 @@ impl MetadataStore {
         let problem = self.load_problem(problem_id)?;
 
         // Orphan child problems
-        if let Ok(children) = self.get_subproblems(problem_id) {
-            for child in children {
-                if let Ok(mut c) = self.load_problem(&child.id) {
-                    c.set_parent(None);
-                    let _ = self.save_problem(&c);
+        match self.get_subproblems(problem_id) {
+            Ok(children) => {
+                for child in children {
+                    match self.load_problem(&child.id) {
+                        Ok(mut c) => {
+                            c.set_parent(None);
+                            if let Err(e) = self.save_problem(&c) {
+                                eprintln!("Warning: failed to orphan child problem {}: {}", child.id, e);
+                            }
+                        }
+                        Err(e) => eprintln!("Warning: failed to load child problem {}: {}", child.id, e),
+                    }
                 }
             }
+            Err(e) => eprintln!("Warning: failed to list child problems of {}: {}", problem_id, e),
         }
 
         // Remove from parent's child_ids
         if let Some(ref parent_id) = problem.parent_id {
-            if let Ok(mut parent) = self.load_problem(parent_id) {
-                parent.remove_child(problem_id);
-                let _ = self.save_problem(&parent);
+            match self.load_problem(parent_id) {
+                Ok(mut parent) => {
+                    parent.remove_child(problem_id);
+                    if let Err(e) = self.save_problem(&parent) {
+                        eprintln!("Warning: failed to update parent problem {}: {}", parent_id, e);
+                    }
+                }
+                Err(e) => eprintln!("Warning: failed to load parent problem {}: {}", parent_id, e),
             }
         }
 
         // Delete associated solutions and their critiques
-        if let Ok(solutions) = self.get_solutions_for_problem(problem_id) {
-            for solution in solutions {
-                if let Ok(critiques) = self.get_critiques_for_solution(&solution.id) {
-                    for critique in critiques {
-                        let _ = fs::remove_file(
-                            self.meta_path
-                                .join(CRITIQUES_DIR)
-                                .join(format!("{}.md", critique.id)),
-                        );
+        match self.get_solutions_for_problem(problem_id) {
+            Ok(solutions) => {
+                for solution in solutions {
+                    match self.get_critiques_for_solution(&solution.id) {
+                        Ok(critiques) => {
+                            for critique in critiques {
+                                let path = self.meta_path
+                                    .join(CRITIQUES_DIR)
+                                    .join(format!("{}.md", critique.id));
+                                if let Err(e) = fs::remove_file(&path) {
+                                    eprintln!("Warning: failed to delete critique {}: {}", critique.id, e);
+                                }
+                            }
+                        }
+                        Err(e) => eprintln!("Warning: failed to list critiques for solution {}: {}", solution.id, e),
+                    }
+                    let path = self.meta_path
+                        .join(SOLUTIONS_DIR)
+                        .join(format!("{}.md", solution.id));
+                    if let Err(e) = fs::remove_file(&path) {
+                        eprintln!("Warning: failed to delete solution {}: {}", solution.id, e);
                     }
                 }
-                let _ = fs::remove_file(
-                    self.meta_path
-                        .join(SOLUTIONS_DIR)
-                        .join(format!("{}.md", solution.id)),
-                );
             }
+            Err(e) => eprintln!("Warning: failed to list solutions for problem {}: {}", problem_id, e),
         }
 
         // Remove from milestone
         if let Some(ref milestone_id) = problem.milestone_id {
-            if let Ok(mut milestone) = self.load_milestone(milestone_id) {
-                milestone.remove_problem(problem_id);
-                let _ = self.save_milestone(&milestone);
+            match self.load_milestone(milestone_id) {
+                Ok(mut milestone) => {
+                    milestone.remove_problem(problem_id);
+                    if let Err(e) = self.save_milestone(&milestone) {
+                        eprintln!("Warning: failed to update milestone {}: {}", milestone_id, e);
+                    }
+                }
+                Err(e) => eprintln!("Warning: failed to load milestone {}: {}", milestone_id, e),
             }
         }
 
