@@ -54,7 +54,7 @@ fn execute_with_context(ctx: &CommandContext, command: Commands) -> Result<()> {
         Commands::Milestone { action } => milestone::execute(ctx, action),
 
         // Workflow Commands
-        Commands::Submit { force } => workflow::submit(ctx, force),
+        Commands::Submit { solution, force } => workflow::submit(ctx, solution, force),
 
         // Status (replaces dashboard + next)
         Commands::Status {

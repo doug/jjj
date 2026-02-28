@@ -507,18 +507,18 @@ fn test_critique_blocks_solution_accept() {
     run_jjj_success(&dir, &["solution", "review", "Blocked"]);
     run_jjj_success(&dir, &["critique", "new", "Blocked", "Blocker"]);
 
-    // Try to accept - should fail (open critique)
-    let output = run_jjj(&dir, &["solution", "accept", "Blocked"]);
+    // Try to submit - should fail (open critique)
+    let output = run_jjj(&dir, &["submit", "Blocked"]);
     assert!(
         !output.status.success(),
-        "Accept should fail with open critique"
+        "Submit should fail with open critique"
     );
 
     // Address the critique
     run_jjj_success(&dir, &["critique", "address", "Blocker"]);
 
-    // Now accept should work
-    let stdout = run_jjj_success(&dir, &["solution", "accept", "Blocked"]);
+    // Now submit should work
+    let stdout = run_jjj_success(&dir, &["submit", "Blocked"]);
     assert!(stdout.contains("accepted"), "Expected accepted: {}", stdout);
 }
 
@@ -549,7 +549,7 @@ fn test_critique_on_finalized_solution_warns() {
         &["solution", "new", "Solution", "--problem", "Problem"],
     );
     run_jjj_success(&dir, &["solution", "review", "Solution"]);
-    run_jjj_success(&dir, &["solution", "accept", "Solution"]);
+    run_jjj_success(&dir, &["submit", "Solution"]);
 
     // Creating critique on accepted solution should warn but succeed
     let output = run_jjj(&dir, &["critique", "new", "Solution", "Late Critique"]);

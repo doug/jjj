@@ -114,7 +114,7 @@ fn test_problem_list_filter_by_status() {
         &["solution", "new", "Solution", "--problem", "Solved Problem"],
     );
     run_jjj_success(&dir, &["solution", "review", "Solution"]);
-    run_jjj_success(&dir, &["solution", "accept", "Solution"]);
+    run_jjj_success(&dir, &["submit", "Solution"]);
 
     let stdout = run_jjj_success(&dir, &["problem", "list", "--status", "open"]);
     assert!(
@@ -344,7 +344,7 @@ fn test_problem_solve_requires_accepted_solution() {
         &["solution", "new", "Fix", "--problem", "Need Solution"],
     );
     run_jjj_success(&dir, &["solution", "review", "Fix"]);
-    run_jjj_success(&dir, &["solution", "accept", "Fix"]);
+    run_jjj_success(&dir, &["submit", "Fix"]);
 
     // Problem is already auto-solved; explicit solve is idempotent (succeeds).
     let output = run_jjj(&dir, &["problem", "solve", "Need Solution"]);

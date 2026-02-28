@@ -104,10 +104,18 @@ pub enum Commands {
 
     // ── Workflow ───────────────────────────────────────────────────────────
 
-    /// Squash changes and complete the current solution (marks it for review)
+    /// Squash the current change into trunk, accepting the solution
+    ///
+    /// The solution must be in review (`jjj solution review`) and have no open
+    /// critiques. Use --force to override open critiques.
+    ///
+    /// If SOLUTION is omitted, the solution attached to the current jj change is used.
     #[command(display_order = 20)]
     Submit {
-        /// Bypass review checks and force submit
+        /// Solution ID, short prefix, or fuzzy title (optional — defaults to current change)
+        solution: Option<String>,
+
+        /// Accept despite open critiques
         #[arg(long)]
         force: bool,
     },
@@ -559,25 +567,6 @@ pub enum SolutionAction {
     Review {
         /// Solution ID, short prefix, or fuzzy title
         solution_id: String,
-    },
-
-    /// Accept a solution — no Valid critiques may remain
-    #[command(display_order = 7)]
-    Accept {
-        /// Solution ID, short prefix, or fuzzy title
-        solution_id: String,
-
-        /// Accept despite open (unresolved) critiques
-        #[arg(long)]
-        force: bool,
-
-        /// Record why this solution was accepted
-        #[arg(long)]
-        rationale: Option<String>,
-
-        /// Skip the rationale prompt
-        #[arg(long)]
-        no_rationale: bool,
     },
 
     /// Refute a solution — a critique proved it won't work

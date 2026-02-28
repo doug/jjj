@@ -228,6 +228,9 @@ fn test_workflow_submit_force() {
         String::from_utf8_lossy(&log.stderr)
     );
 
+    // Move to review before submitting (--force bypasses open critiques, not review requirement)
+    run_jjj(dir, &["solution", "review", "Solution to Submit 2"]);
+
     let output = run_jjj(dir, &["submit", "--force"]);
 
     if !output.status.success() {
@@ -270,9 +273,9 @@ fn test_solution_status_workflow() {
         stdout
     );
 
-    // Advance to review, then accept
+    // Advance to review, then submit
     run_jjj(dir, &["solution", "review", "Test Solution"]);
-    let output = run_jjj(dir, &["solution", "accept", "Test Solution"]);
+    let output = run_jjj(dir, &["submit", "Test Solution"]);
     assert!(output.status.success());
 
     let show = run_jjj(dir, &["solution", "show", "Test Solution"]);
@@ -314,16 +317,15 @@ fn test_critique_blocks_acceptance() {
         ],
     );
 
-    // Try to accept - should fail or warn due to open critique
-    let output = run_jjj(dir, &["solution", "accept", "Test Solution"]);
+    // Try to submit - should fail due to open critique
+    let output = run_jjj(dir, &["submit", "Test Solution"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
-    // Should mention critique or warning
     let combined = format!("{}{}", stdout, stderr);
     assert!(
-        combined.contains("critique") || combined.contains("warning") || combined.contains("open"),
-        "Expected warning about open critique. Got: {}",
+        !output.status.success() && (combined.contains("critique") || combined.contains("open")),
+        "Expected failure due to open critique. Got: {}",
         combined
     );
 }
@@ -359,6 +361,9 @@ fn test_submit_blocked_by_critiques() {
             "Workflow Problem",
         ],
     );
+
+    // Move to review so submit can reach the critique check
+    run_jjj(dir, &["solution", "review", "Token refresh"]);
 
     // Add a critique
     run_jjj(
@@ -464,11 +469,14 @@ fn test_no_stale_working_copy_after_metadata_writes() {
     );
     assert_not_stale("after critique new");
 
+    run_jjj(dir, &["solution", "review", "Stale Regression Solution"]);
+    assert_not_stale("after solution review");
+
     run_jjj(
         dir,
-        &["solution", "accept", "Stale Regression Solution", "--force"],
+        &["submit", "Stale Regression Solution", "--force"],
     );
-    assert_not_stale("after solution accept");
+    assert_not_stale("after submit");
 }
 
 #[test]
@@ -494,6 +502,9 @@ fn test_submit_blocked_by_awaiting_review() {
         ],
     );
 
+    // Move to review — submit now requires Review state; the awaiting-review critique blocks it
+    run_jjj(dir, &["solution", "review", "Test solution"]);
+
     // Submit should fail because awaiting review critique is open
     let output = Command::new(jjj_binary())
         .args(["submit"])
@@ -518,7 +529,7 @@ fn test_events_logged_on_status_changes() {
     let temp_dir = setup_test_repo();
     let dir = temp_dir.path();
 
-    // Create and accept a solution
+    // Create and submit a solution (force to bypass review requirement)
     run_jjj(
         dir,
         &[
@@ -529,17 +540,8 @@ fn test_events_logged_on_status_changes() {
             "Workflow Problem",
         ],
     );
-    run_jjj(
-        dir,
-        &[
-            "solution",
-            "accept",
-            "Test Solution",
-            "--rationale",
-            "Tests pass",
-            "--force",
-        ],
-    );
+    run_jjj(dir, &["solution", "review", "Test Solution"]);
+    run_jjj(dir, &["submit", "Test Solution", "--force"]);
 
     // Check events
     let output = run_jjj(dir, &["events", "--json"]);
@@ -554,5 +556,4 @@ fn test_events_logged_on_status_changes() {
         stdout.contains("solution_accepted"),
         "Missing solution_accepted event"
     );
-    assert!(stdout.contains("Tests pass"), "Missing rationale in event");
 }

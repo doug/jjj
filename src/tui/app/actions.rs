@@ -1,6 +1,6 @@
 use super::{App, InputAction, InputMode};
 use crate::error::Result;
-use crate::models::CritiqueStatus;
+use crate::models::{CritiqueStatus, Event, EventType, ProblemStatus};
 use super::super::next_actions::EntityType;
 
 impl App {
@@ -308,12 +308,26 @@ impl App {
         }
 
         let id = solution_id.to_string();
+        let user = self.store.get_current_user().unwrap_or_else(|_| "unknown".to_string());
         match self
             .store
             .with_metadata(&format!("Accept solution {}", solution_id), || {
+                let event = Event::new(EventType::SolutionAccepted, solution_id.to_string(), user.clone());
+                self.store.set_pending_event(event.clone());
                 let mut solution = self.store.load_solution(solution_id)?;
                 solution.accept();
                 self.store.save_solution(&solution)?;
+                // Auto-solve problem
+                let (can_solve, _) = self.store.can_solve_problem(&solution.problem_id)?;
+                if can_solve {
+                    let mut problem = self.store.load_problem(&solution.problem_id)?;
+                    if problem.status != ProblemStatus::Solved {
+                        problem.set_status(ProblemStatus::Solved);
+                        self.store.save_problem(&problem)?;
+                        let solve_event = Event::new(EventType::ProblemSolved, problem.id.clone(), user.clone());
+                        self.store.append_event(&solve_event)?;
+                    }
+                }
                 Ok(())
             }) {
             Ok(_) => {

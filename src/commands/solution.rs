@@ -41,12 +41,6 @@ pub fn execute(ctx: &CommandContext, action: SolutionAction) -> Result<()> {
             force,
         } => detach_change(ctx, solution_id, change_id, force),
         SolutionAction::Review { solution_id } => review_solution(ctx, solution_id),
-        SolutionAction::Accept {
-            solution_id,
-            force,
-            rationale,
-            no_rationale,
-        } => accept_solution(ctx, solution_id, force, rationale, no_rationale),
         SolutionAction::Refute {
             solution_id,
             rationale,
@@ -577,32 +571,33 @@ fn review_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
     })
 }
 
-fn accept_solution(
+/// Core acceptance logic shared by `submit` and `github merge`.
+/// Checks critiques, validates state, emits events, accepts, and auto-solves.
+/// Does NOT squash code or merge PRs — that is the caller's responsibility.
+pub(crate) fn finalize_solution(
     ctx: &CommandContext,
-    solution_input: String,
+    solution_id: &str,
     force: bool,
-    rationale: Option<String>,
-    no_rationale: bool,
 ) -> Result<()> {
-    use crate::models::{Event, EventType};
-
-    let solution_id = ctx.resolve_solution(&solution_input)?;
     let store = &ctx.store;
 
-    // Reject double-accept
-    {
-        let solution = store.load_solution(&solution_id)?;
-        if solution.status == SolutionStatus::Accepted {
-            return Err(crate::error::JjjError::Validation(format!(
-                "Solution '{}' is already accepted.",
-                solution.title
-            )));
-        }
+    let solution = store.load_solution(solution_id)?;
+
+    // Already accepted — idempotent
+    if solution.status == SolutionStatus::Accepted {
+        return Ok(());
     }
 
-    let critiques = store.list_critiques()?;
+    // Solution must be in Review to submit (or force)
+    if solution.status != SolutionStatus::Review && !force {
+        return Err(crate::error::JjjError::Validation(format!(
+            "Solution '{}' is {} — move it to review first:\n  jjj solution review {}",
+            solution.title, solution.status, solution_id,
+        )));
+    }
 
-    // Find open critiques for this solution
+    // Check open critiques (before state — critiques are the most actionable blocker)
+    let critiques = store.list_critiques()?;
     let open_critiques: Vec<_> = critiques
         .iter()
         .filter(|c| {
@@ -611,128 +606,60 @@ fn accept_solution(
         })
         .collect();
 
-    // Check critique blocking (before state check — critiques are the most actionable blocker)
     if !open_critiques.is_empty() {
         if !force {
-            eprintln!(
-                "Error: Cannot accept {} - {} open critique(s):\n",
-                solution_id,
-                open_critiques.len()
-            );
+            eprintln!("\n  {} open critique(s):", open_critiques.len());
             for c in &open_critiques {
-                let location = c
+                let loc = c
                     .file_path
                     .as_ref()
-                    .map(|f| format!(" - {}:{}", f, c.line_start.unwrap_or(0)))
+                    .map(|f| format!(" {}:{}", f, c.line_start.unwrap_or(0)))
                     .unwrap_or_default();
-                eprintln!("  {}: {} [{}]{}", c.id, c.title, c.severity, location);
+                eprintln!("    [{:}] {}{}", c.severity, c.title, loc);
+                eprintln!("       jjj critique address {}", c.id);
             }
-            eprintln!();
-            eprintln!(
-                "Resolve with: jjj critique address {}",
-                open_critiques[0].id
-            );
-            eprintln!(
-                "Or dismiss:   jjj critique dismiss {}",
-                open_critiques[0].id
-            );
-            eprintln!("Or force:     jjj solution accept {} --force", solution_id);
+            eprintln!("\nAddress critiques before submitting, or use --force to override.");
             return Err(crate::error::JjjError::CannotAcceptSolution(
-                "Open critiques block acceptance".to_string(),
+                "Unresolved critiques block submission".to_string(),
             ));
         }
         eprintln!(
-            "Warning: Accepting with {} open critique(s):",
+            "Warning: submitting with {} open critique(s).",
             open_critiques.len()
         );
-        for c in &open_critiques {
-            eprintln!("  {}: {} [{}]", c.id, c.title, c.severity);
-        }
     }
 
-    // Validate state: must be in review (or force to override)
-    {
-        let solution = store.load_solution(&solution_id)?;
-        if solution.status != SolutionStatus::Review && !force {
-            return Err(crate::error::JjjError::Validation(format!(
-                "Solution '{}' is in '{}' state. Move it to review first:\n  jjj solution review {}\n\nOr force: jjj solution accept {} --force",
-                solution.title, solution.status, solution_id, solution_id
-            )));
-        }
-    }
-
-    // Get rationale (prompt if not provided and not skipped)
-    let rationale = if let Some(r) = rationale {
-        Some(r)
-    } else if no_rationale {
-        None
-    } else {
-        print!("Rationale (optional, press Enter to skip): ");
-        io::stdout().flush()?;
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
-        let trimmed = input.trim();
-        if trimmed.is_empty() {
-            None
-        } else {
-            Some(trimmed.to_string())
-        }
-    };
-
-    // Create event
     let user = store.get_current_user()?;
-    let mut event = Event::new(EventType::SolutionAccepted, solution_id.clone(), user);
-    if let Some(r) = &rationale {
-        event = event.with_rationale(r);
-    }
+    let event = Event::new(EventType::SolutionAccepted, solution_id.to_string(), user);
 
     store.with_metadata(&format!("Accept solution {}", solution_id), || {
         store.set_pending_event(event.clone());
-
-        let mut solution = store.load_solution(&solution_id)?;
+        let mut sol = store.load_solution(solution_id)?;
         if force {
-            solution.force_accepted = true;
+            sol.force_accepted = true;
         }
-        solution.accept();
-        store.save_solution(&solution)?;
+        sol.accept();
+        store.save_solution(&sol)?;
 
-        let status = if force && !open_critiques.is_empty() {
-            "accepted (forced)"
-        } else {
-            "accepted"
-        };
-        println!("Solution {} {}", solution_id, status);
-
-        // Auto-solve the parent problem if all solutions are resolved
-        let (can_solve, _) = store.can_solve_problem(&solution.problem_id)?;
+        // Auto-solve the parent problem
+        let (can_solve, _) = store.can_solve_problem(&sol.problem_id)?;
         if can_solve {
-            let mut problem = store.load_problem(&solution.problem_id)?;
+            let mut problem = store.load_problem(&sol.problem_id)?;
             if problem.status != ProblemStatus::Solved {
                 problem.set_status(ProblemStatus::Solved);
                 store.save_problem(&problem)?;
-                // Emit ProblemSolved event so timeline shows it
                 let solve_event = Event::new(
                     EventType::ProblemSolved,
                     problem.id.clone(),
                     event.by.clone(),
                 );
                 store.append_event(&solve_event)?;
-                println!(
-                    "Problem {} auto-solved (accepted solution)",
-                    solution.problem_id
-                );
+                println!("  Problem '{}' solved.", problem.title);
             }
         }
 
         Ok(())
-    })?;
-
-    // Auto-merge GitHub PR if enabled
-    if let Ok(solution) = ctx.store.load_solution(&solution_id) {
-        crate::sync::hooks::auto_merge_pr(ctx, &solution);
-    }
-
-    Ok(())
+    })
 }
 
 fn refute_solution(

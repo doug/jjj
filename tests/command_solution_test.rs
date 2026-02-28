@@ -181,7 +181,7 @@ fn test_solution_list_filter_by_status() {
         ],
     );
     run_jjj_success(&dir, &["solution", "review", "Accepted Solution"]);
-    run_jjj_success(&dir, &["solution", "accept", "Accepted Solution"]);
+    run_jjj_success(&dir, &["submit", "Accepted Solution"]);
 
     let stdout = run_jjj_success(&dir, &["solution", "list", "--status", "accepted"]);
     assert!(
@@ -282,7 +282,7 @@ fn test_solution_show_json_output() {
 }
 
 #[test]
-fn test_solution_accept() {
+fn test_solution_submit() {
     if !jj_available() {
         return;
     }
@@ -291,18 +291,18 @@ fn test_solution_accept() {
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
     run_jjj_success(
         &dir,
-        &["solution", "new", "Acceptable", "--problem", "Problem"],
+        &["solution", "new", "Submittable", "--problem", "Problem"],
     );
-    run_jjj_success(&dir, &["solution", "review", "Acceptable"]);
+    run_jjj_success(&dir, &["solution", "review", "Submittable"]);
 
-    let stdout = run_jjj_success(&dir, &["solution", "accept", "Acceptable"]);
+    let stdout = run_jjj_success(&dir, &["submit", "Submittable"]);
     assert!(
         stdout.contains("accepted"),
         "Expected accepted confirmation: {}",
         stdout
     );
 
-    let show = run_jjj_success(&dir, &["solution", "show", "Acceptable"]);
+    let show = run_jjj_success(&dir, &["solution", "show", "Submittable"]);
     assert!(
         show.contains("Accepted") || show.contains("accepted"),
         "Expected accepted status: {}",
@@ -311,7 +311,7 @@ fn test_solution_accept() {
 }
 
 #[test]
-fn test_solution_accept_blocked_by_critiques() {
+fn test_solution_submit_blocked_by_critiques() {
     if !jj_available() {
         return;
     }
@@ -331,10 +331,10 @@ fn test_solution_accept_blocked_by_critiques() {
     run_jjj_success(&dir, &["solution", "review", "Blocked Solution"]);
     run_jjj_success(&dir, &["critique", "new", "Blocked Solution", "Major flaw"]);
 
-    let output = run_jjj(&dir, &["solution", "accept", "Blocked Solution"]);
+    let output = run_jjj(&dir, &["submit", "Blocked Solution"]);
     assert!(
         !output.status.success(),
-        "Accept should fail with open critiques"
+        "Submit should fail with open critiques"
     );
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
@@ -345,7 +345,7 @@ fn test_solution_accept_blocked_by_critiques() {
 }
 
 #[test]
-fn test_solution_accept_force() {
+fn test_solution_submit_force() {
     if !jj_available() {
         return;
     }
@@ -354,14 +354,15 @@ fn test_solution_accept_force() {
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
     run_jjj_success(
         &dir,
-        &["solution", "new", "Force Accept", "--problem", "Problem"],
+        &["solution", "new", "Force Submit", "--problem", "Problem"],
     );
-    run_jjj_success(&dir, &["critique", "new", "Force Accept", "Minor issue"]);
+    run_jjj_success(&dir, &["solution", "review", "Force Submit"]);
+    run_jjj_success(&dir, &["critique", "new", "Force Submit", "Minor issue"]);
 
-    let stdout = run_jjj_success(&dir, &["solution", "accept", "Force Accept", "--force"]);
+    let stdout = run_jjj_success(&dir, &["submit", "Force Submit", "--force"]);
     assert!(
         stdout.contains("accepted"),
-        "Expected force accepted: {}",
+        "Expected force-accepted confirmation: {}",
         stdout
     );
 }

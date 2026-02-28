@@ -582,8 +582,8 @@ fn sync_merge(
 
     provider.merge_pr(pr_number)?;
 
-    // Record event
-    ctx.store.with_metadata("GitHub sync", || {
+    // Record GithubPrMerged event
+    ctx.store.with_metadata("GitHub sync: PR merged", || {
         let event = Event::new(
             EventType::GithubPrMerged,
             solution.id.clone(),
@@ -594,12 +594,11 @@ fn sync_merge(
             ..Default::default()
         });
         ctx.store.set_pending_event(event);
-        // Accept the solution locally
-        let mut sol = ctx.store.load_solution(&sol_id)?;
-        sol.accept();
-        ctx.store.save_solution(&sol)?;
         Ok(())
     })?;
+
+    // Accept solution, emit SolutionAccepted event, auto-solve problem
+    super::solution::finalize_solution(ctx, &sol_id, false)?;
 
     println!(
         "Merged PR #{} and accepted solution '{}'",
