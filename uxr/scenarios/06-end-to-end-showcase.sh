@@ -143,6 +143,10 @@ assert_contains "BLOCKED" "open critique blocks solution"
 
 observe "BLOCKED state is immediately visible — no way to accidentally accept a critiqued solution"
 
+# Submit for review (makes critique-blocking visible on approve attempts)
+run_jjj solution submit "token bucket"
+assert_success "submit solution for review"
+
 # Trying to accept now should warn about open critiques
 run_jjj solution approve "token bucket"
 assert_failure "accept blocked by open critique"

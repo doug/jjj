@@ -188,6 +188,10 @@ assert_contains "DoS risk" "validated critique in list"
 
 observe "Validate means: this critique is confirmed correct — the solution has a flaw"
 
+# Submit for review (so approve hits critique check, not state check)
+run_jjj solution submit "JSON schema"
+assert_success "submit JSON schema for review"
+
 # Valid critiques hard-block acceptance (same as Open critiques)
 run_jjj solution approve "JSON schema" --no-rationale
 assert_failure "accept is blocked by validated critique"
@@ -237,6 +241,8 @@ assert_success "add test coverage critique"
 run_jjj critique address "edge cases"
 assert_success "address the coverage critique"
 
+run_jjj solution submit "Inline schema"
+assert_success "submit Inline schema for review"
 run_jjj solution approve "Inline schema" \
     --rationale "Zero-dependency validation eliminates size concern; test coverage added"
 assert_success "accept final solution with all critiques resolved"
@@ -249,8 +255,8 @@ section "Step 8: critique show --json"
 # ============================================================================
 
 run_jjj critique show "DoS risk" --json
-assert_success "show validated critique as JSON"
-assert_contains "\"valid\"" "JSON shows valid status"
+assert_success "show addressed critique as JSON"
+assert_contains "\"addressed\"" "JSON shows addressed status (was validated, then addressed in step 7)"
 assert_contains "\"severity\"" "JSON has severity field"
 assert_contains "\"reviewer\"" "JSON has reviewer field"
 

@@ -598,7 +598,7 @@ fn sync_merge(
     })?;
 
     // Accept solution, emit SolutionAccepted event, auto-solve problem
-    super::solution::finalize_solution(ctx, &sol_id, false)?;
+    super::solution::finalize_solution(ctx, &sol_id, false, None)?;
 
     println!(
         "Merged PR #{} and accepted solution '{}'",

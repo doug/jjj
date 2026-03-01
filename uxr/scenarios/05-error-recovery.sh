@@ -145,6 +145,7 @@ section "Accept Solution With Open Critiques"
 
 $JJJ problem new "Blocked accept test" --priority low 2>/dev/null
 $JJJ solution new "Blocked solution" --problem "Blocked accept" 2>/dev/null
+$JJJ solution submit "Blocked solution" 2>/dev/null
 $JJJ critique new "Blocked solution" "Blocking critique" --severity high 2>/dev/null
 
 run_jjj solution approve "Blocked solution" --no-rationale

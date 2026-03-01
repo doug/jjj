@@ -116,6 +116,12 @@ assert_success "list solutions for performance"
 assert_contains "caching" "alice's solution exists"
 assert_contains "database" "bob's solution exists"
 
+# Submit both solutions for review
+run_jjj solution submit "caching"
+assert_success "submit caching for review"
+run_jjj solution submit "database"
+assert_success "submit database for review"
+
 # Charlie critiques alice's solution
 run_jjj critique new "caching" "Cache invalidation is hard" --severity high
 assert_success "critique on caching solution"
@@ -213,7 +219,9 @@ assert_success "add critique"
 run_jjj critique address "Issue found"
 assert_success "address critique"
 
-# Accept solution
+# Submit then accept solution
+run_jjj solution submit "SM solution"
+assert_success "submit SM solution for review"
 run_jjj solution approve "SM solution" --no-rationale
 assert_success "accept solution"
 

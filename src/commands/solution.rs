@@ -46,7 +46,9 @@ pub fn execute(ctx: &CommandContext, action: SolutionAction) -> Result<()> {
             rationale,
             no_rationale,
         } => withdraw_solution(ctx, solution_id, rationale, no_rationale),
-        SolutionAction::Approve { solution_id, force } => approve_solution(ctx, solution_id, force),
+        SolutionAction::Approve { solution_id, force, rationale, no_rationale } => {
+            approve_solution(ctx, solution_id, force, rationale, no_rationale)
+        }
         SolutionAction::Assign { solution_id, to } => assign_solution(ctx, solution_id, to),
         SolutionAction::Resume { solution_id } => resume_solution(ctx, solution_id),
         SolutionAction::Lgtm { solution_id } => lgtm_solution(ctx, solution_id),
@@ -579,13 +581,18 @@ fn submit_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
     })
 }
 
-fn approve_solution(ctx: &CommandContext, solution_input: Option<String>, force: bool) -> Result<()> {
+fn approve_solution(
+    ctx: &CommandContext,
+    solution_input: Option<String>,
+    force: bool,
+    rationale: Option<String>,
+    no_rationale: bool,
+) -> Result<()> {
     use crate::sync::SyncProvider as _;
 
     let store = &ctx.store;
     let jj_client = ctx.jj();
 
-    // Resolve: explicit arg > current change > squash-only
     let solution = if let Some(input) = solution_input {
         let id = ctx.resolve_solution(&input)?;
         store.load_solution(&id)?
@@ -595,21 +602,19 @@ fn approve_solution(ctx: &CommandContext, solution_input: Option<String>, force:
         match solutions.into_iter().find(|s| s.change_ids.contains(&change_id)) {
             Some(s) => s,
             None => {
-                // No solution attached — just squash onto trunk
-                println!("No solution found for current change. Squashing only.");
-                let desc = jj_client.change_description("@").unwrap_or_default();
-                if let Some(trunk) = detect_trunk(jj_client) {
-                    jj_client.execute(&["rebase", "-d", trunk])?;
-                }
-                let msg = if desc.is_empty() { None } else { Some(desc.as_str()) };
-                jj_client.squash(msg)?;
-                println!("Approved and integrated successfully.");
-                return Ok(());
+                return Err(crate::error::JjjError::Validation(
+                    "No solution found for current change. Specify a solution: jjj solution approve <title-or-id>".to_string(),
+                ));
             }
         }
     };
 
-    println!("Approving {}: {}", solution.id, solution.title);
+    if solution.status == SolutionStatus::Approved {
+        return Err(crate::error::JjjError::Validation(format!(
+            "Solution '{}' is already approved.",
+            solution.title,
+        )));
+    }
 
     if solution.status == SolutionStatus::Proposed {
         return Err(crate::error::JjjError::Validation(format!(
@@ -618,40 +623,23 @@ fn approve_solution(ctx: &CommandContext, solution_input: Option<String>, force:
         )));
     }
 
-    // Finalize first (critique check, events, auto-solve) — must run before
-    // irreversible VCS ops so a blocked critique aborts cleanly.
-    finalize_solution(ctx, &solution.id, force)?;
-    println!("  Solution '{}' approved.", solution.title);
+    // Finalize (critique check, events, auto-solve).
+    let rationale_str = rationale.as_deref().filter(|_| !no_rationale);
+    finalize_solution(ctx, &solution.id, force, rationale_str)?;
+    println!("Solution '{}' approved.", solution.title);
 
-    // Integrate: PR merge if linked, otherwise rebase + squash onto trunk
+    // Merge PR if one is linked.
     if let Some(pr_number) = solution.github_pr {
         let config = store.load_config()?;
         let repo_root = jj_client.repo_root();
         let provider = crate::sync::github::GitHubProvider::from_config(repo_root, &config.github)?;
         provider.merge_pr(pr_number)?;
         println!("  Merged PR #{}", pr_number);
-    } else {
-        let desc = jj_client.change_description("@").unwrap_or_default();
-        if let Some(trunk) = detect_trunk(jj_client) {
-            jj_client.execute(&["rebase", "-d", trunk])?;
-        }
-        let msg = if desc.is_empty() { None } else { Some(desc.as_str()) };
-        jj_client.squash(msg)?;
-        println!("  Integrated into trunk.");
     }
 
     Ok(())
 }
 
-/// Find the trunk branch name for this repo (`main`, `master`, or `trunk`).
-fn detect_trunk(jj_client: &crate::jj::JjClient) -> Option<&'static str> {
-    for name in &["main", "master", "trunk"] {
-        if jj_client.bookmark_exists(name).unwrap_or(false) {
-            return Some(name);
-        }
-    }
-    None
-}
 
 /// Core acceptance logic shared by `submit` and `github merge`.
 /// Checks critiques, validates state, emits events, accepts, and auto-solves.
@@ -661,9 +649,10 @@ pub(crate) fn finalize_solution(
     ctx: &CommandContext,
     solution_id: &str,
     force: bool,
+    rationale: Option<&str>,
 ) -> Result<()> {
     let store = &ctx.store;
-    
+
 
     let solution = store.load_solution(solution_id)?;
 
@@ -714,7 +703,10 @@ pub(crate) fn finalize_solution(
     }
 
     let user = store.get_current_user()?;
-    let event = Event::new(EventType::SolutionApproved, solution_id.to_string(), user);
+    let mut event = Event::new(EventType::SolutionApproved, solution_id.to_string(), user);
+    if let Some(r) = rationale {
+        event = event.with_rationale(r);
+    }
 
     store.with_metadata(&format!("Approve solution {}", solution_id), || {
         store.set_pending_event(event.clone());

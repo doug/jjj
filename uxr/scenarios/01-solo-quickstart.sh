@@ -102,7 +102,9 @@ assert_not_contains "BLOCKED" "no more blocked items"
 section "Step 8: Accept the Solution"
 # ============================================================================
 
-# Accept should work now (no open critiques)
+# Submit for review, then approve (no open critiques)
+run_jjj solution submit "search index"
+assert_success "submit solution for review"
 run_jjj solution approve "search index" --no-rationale
 assert_success "accept solution with all critiques resolved"
 

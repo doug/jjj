@@ -52,7 +52,9 @@ assert_success "add critical critique"
 run_jjj critique address "not properly cleaned"
 assert_success "address the critique"
 
-# Accept the solution with a rationale that we can search for later
+# Submit then accept with a rationale that we can search for later
+run_jjj solution submit "Fix worker"
+assert_success "submit solution for review"
 run_jjj solution approve "Fix worker" \
     --rationale "RAII-based cleanup eliminates the leak class entirely"
 assert_success "accept solution with searchable rationale"

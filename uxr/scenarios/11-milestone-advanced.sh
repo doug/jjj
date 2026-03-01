@@ -162,11 +162,15 @@ run_jjj critique new "Add nil check" "Test coverage missing" --severity low
 assert_success "add low-severity critique"
 run_jjj critique address "Test coverage"
 assert_success "address the critique"
+run_jjj solution submit "Add nil check"
+assert_success "submit nil check for review"
 run_jjj solution approve "Add nil check" --no-rationale
 assert_success "accept login crash solution"
 
 run_jjj solution new "Fix flexbox order in settings" --problem "Settings page"
 assert_success "create solution for layout bug"
+run_jjj solution submit "Fix flexbox"
+assert_success "submit flexbox for review"
 run_jjj solution approve "Fix flexbox" --no-rationale
 assert_success "accept settings layout solution"
 

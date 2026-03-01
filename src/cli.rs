@@ -563,6 +563,14 @@ pub enum SolutionAction {
         /// Approve despite open critiques
         #[arg(long)]
         force: bool,
+
+        /// Record why this solution was approved
+        #[arg(long)]
+        rationale: Option<String>,
+
+        /// Skip the rationale prompt
+        #[arg(long)]
+        no_rationale: bool,
     },
 
     /// Withdraw a solution — pull it back from review

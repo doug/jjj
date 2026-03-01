@@ -106,6 +106,10 @@ assert_success "charlie critiques elasticsearch solution"
 section "Check: Acceptance Should Be Blocked"
 # ============================================================================
 
+# Submit so approval attempts hit critique check (not state check)
+run_jjj solution submit "OAuth token"
+assert_success "submit OAuth solution for review"
+
 run_jjj solution approve "OAuth token" --no-rationale
 assert_failure "cannot accept with open critiques"
 assert_contains "critique" "error mentions critiques"

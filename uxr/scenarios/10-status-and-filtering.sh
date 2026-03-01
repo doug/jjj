@@ -87,7 +87,9 @@ run_jjj critique new "Extend token lifetime" \
     --reviewer "security@example.com"
 assert_success "add security critique"
 
-# FTS is auto-indexed on save — no db rebuild needed
+# Build FTS index before search tests
+run_jjj db rebuild
+assert_success "db rebuild populates FTS index"
 
 # ============================================================================
 section "Step 1: status flags"
@@ -138,7 +140,7 @@ run_jjj problem list --assignee "bob@example.com"
 assert_success "problem list --assignee bob (exact email also works)"
 assert_contains "Auth tokens" "bob's problem in list"
 
-# search filter uses FTS (auto-indexed on save — no db rebuild needed)
+# search filter uses FTS (index built by db rebuild above)
 # Porter stemmer: "token" matches "tokens", "Auth" matches "auth"
 run_jjj problem list --search "token"
 assert_success "problem list --search token (stemmed: matches tokens)"
@@ -201,7 +203,7 @@ assert_contains "Extend token" "solution for auth problem listed"
 assert_contains "Add token refresh" "competing solution listed"
 assert_not_contains "search result cache" "unrelated solution excluded"
 
-# search uses FTS (populated by db rebuild above)
+# search uses FTS (index built by db rebuild at start of scenario)
 run_jjj solution list --search "token"
 assert_success "solution list --search token"
 assert_contains "token" "search finds token solutions"
