@@ -15,7 +15,7 @@ Skills live in `~/.claude/skills/`. Download the jjj skill with:
 
 ```bash
 mkdir -p ~/.claude/skills/jjj && \
-  curl -fsSL https://jjj.recursivewhy.com/skill.md \
+  curl -fsSL https://jjj.recursivewhy.com/SKILL.md \
     -o ~/.claude/skills/jjj/SKILL.md
 ```
 
@@ -27,7 +27,7 @@ Add the skill as a custom slash command in your `GEMINI.md`:
 
 ```bash
 mkdir -p ~/.gemini/skills/jjj && \
-  curl -fsSL https://jjj.recursivewhy.com/skill.md \
+  curl -fsSL https://jjj.recursivewhy.com/SKILL.md \
     -o ~/.gemini/skills/jjj/SKILL.md
 ```
 
@@ -38,7 +38,7 @@ Or paste the skill content directly into your project's `GEMINI.md` under a `## 
 The skill file is plain Markdown and works with any agent that accepts context files:
 
 ```
-https://jjj.recursivewhy.com/skill.md
+https://jjj.recursivewhy.com/SKILL.md
 ```
 
 ## What the Skill Teaches
@@ -87,9 +87,9 @@ Search the event log for any decisions we made about caching.
 
 ## Keeping the Skill Current
 
-The skill file at `jjj.recursivewhy.com/skill.md` is updated with each release. Re-run the install command to get the latest version:
+The skill file at `jjj.recursivewhy.com/SKILL.md` is updated with each release. Re-run the install command to get the latest version:
 
 ```bash
-curl -fsSL https://jjj.recursivewhy.com/skill.md \
+curl -fsSL https://jjj.recursivewhy.com/SKILL.md \
   -o ~/.claude/skills/jjj/SKILL.md
 ```
