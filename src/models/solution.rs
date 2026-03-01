@@ -28,9 +28,9 @@ pub struct Solution {
     /// Assigned owner
     pub assignee: Option<String>,
 
-    /// Force-accepted without full sign-off
-    #[serde(default)]
-    pub force_accepted: bool,
+    /// Force-approved without full sign-off
+    #[serde(default, alias = "force_accepted")]
+    pub force_approved: bool,
 
     /// Creation timestamp
     pub created_at: DateTime<Utc>,
@@ -63,27 +63,27 @@ pub struct Solution {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "snake_case")]
 pub enum SolutionStatus {
-    /// Conjecture put forward, not yet tested
+    /// Conjecture put forward, not yet submitted for review
     #[default]
     Proposed,
 
-    /// Under review — ready for criticism
-    Review,
+    /// Submitted for review — open for critique
+    Submitted,
 
-    /// Criticism has shown this won't work
-    Refuted,
+    /// Critique proved this won't work — withdrawn by author
+    Withdrawn,
 
-    /// Survived criticism, adopted as current best solution
-    Accepted,
+    /// Survived critique, approved and integrated
+    Approved,
 }
 
 impl std::fmt::Display for SolutionStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             SolutionStatus::Proposed => write!(f, "proposed"),
-            SolutionStatus::Review => write!(f, "review"),
-            SolutionStatus::Refuted => write!(f, "refuted"),
-            SolutionStatus::Accepted => write!(f, "accepted"),
+            SolutionStatus::Submitted => write!(f, "submitted"),
+            SolutionStatus::Withdrawn => write!(f, "withdrawn"),
+            SolutionStatus::Approved => write!(f, "approved"),
         }
     }
 }
@@ -94,11 +94,11 @@ impl std::str::FromStr for SolutionStatus {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "proposed" => Ok(SolutionStatus::Proposed),
-            "review" => Ok(SolutionStatus::Review),
-            "refuted" => Ok(SolutionStatus::Refuted),
-            "accepted" => Ok(SolutionStatus::Accepted),
+            "submitted" => Ok(SolutionStatus::Submitted),
+            "withdrawn" => Ok(SolutionStatus::Withdrawn),
+            "approved" => Ok(SolutionStatus::Approved),
             _ => Err(format!(
-                "Unknown solution status: '{}'. Valid values: proposed, review, refuted, accepted",
+                "Unknown solution status: '{}'. Valid values: proposed, submitted, withdrawn, approved",
                 s
             )),
         }
@@ -117,7 +117,7 @@ impl Solution {
             critique_ids: Vec::new(),
             change_ids: Vec::new(),
             assignee: None,
-            force_accepted: false,
+            force_approved: false,
             created_at: now,
             updated_at: now,
             approach: String::new(),
@@ -188,11 +188,12 @@ impl Solution {
     pub fn can_transition_to(&self, target: &SolutionStatus) -> bool {
         matches!(
             (&self.status, target),
-            (SolutionStatus::Proposed, SolutionStatus::Review)
-                | (SolutionStatus::Proposed, SolutionStatus::Refuted)
-                | (SolutionStatus::Review, SolutionStatus::Accepted)
-                | (SolutionStatus::Review, SolutionStatus::Refuted)
-                | (SolutionStatus::Review, SolutionStatus::Proposed)
+            (SolutionStatus::Proposed, SolutionStatus::Submitted)
+                | (SolutionStatus::Proposed, SolutionStatus::Withdrawn)
+                | (SolutionStatus::Submitted, SolutionStatus::Approved)
+                | (SolutionStatus::Submitted, SolutionStatus::Withdrawn)
+                | (SolutionStatus::Submitted, SolutionStatus::Proposed)
+                | (SolutionStatus::Withdrawn, SolutionStatus::Proposed)
         )
     }
 
@@ -200,15 +201,15 @@ impl Solution {
     pub fn is_active(&self) -> bool {
         matches!(
             self.status,
-            SolutionStatus::Proposed | SolutionStatus::Review
+            SolutionStatus::Proposed | SolutionStatus::Submitted
         )
     }
 
-    /// Check if solution is finalized (accepted or refuted)
+    /// Check if solution is finalized (approved or withdrawn)
     pub fn is_finalized(&self) -> bool {
         matches!(
             self.status,
-            SolutionStatus::Accepted | SolutionStatus::Refuted
+            SolutionStatus::Approved | SolutionStatus::Withdrawn
         )
     }
 
@@ -217,34 +218,34 @@ impl Solution {
         self.status == SolutionStatus::Proposed
     }
 
-    /// Check if solution is in review status
-    pub fn is_review(&self) -> bool {
-        self.status == SolutionStatus::Review
+    /// Check if solution has been submitted for review
+    pub fn is_submitted(&self) -> bool {
+        self.status == SolutionStatus::Submitted
     }
 
-    /// Check if solution has been accepted
-    pub fn is_accepted(&self) -> bool {
-        self.status == SolutionStatus::Accepted
+    /// Check if solution has been approved
+    pub fn is_approved(&self) -> bool {
+        self.status == SolutionStatus::Approved
     }
 
-    /// Check if solution has been refuted
-    pub fn is_refuted(&self) -> bool {
-        self.status == SolutionStatus::Refuted
+    /// Check if solution has been withdrawn
+    pub fn is_withdrawn(&self) -> bool {
+        self.status == SolutionStatus::Withdrawn
     }
 
-    /// Mark solution as under review
-    pub fn start_review(&mut self) {
-        self.set_status(SolutionStatus::Review);
+    /// Submit solution for review
+    pub fn submit(&mut self) {
+        self.set_status(SolutionStatus::Submitted);
     }
 
-    /// Accept the solution (survived criticism)
-    pub fn accept(&mut self) {
-        self.set_status(SolutionStatus::Accepted);
+    /// Approve the solution (survived critique)
+    pub fn approve(&mut self) {
+        self.set_status(SolutionStatus::Approved);
     }
 
-    /// Refute the solution (criticism showed it won't work)
-    pub fn refute(&mut self) {
-        self.set_status(SolutionStatus::Refuted);
+    /// Withdraw the solution
+    pub fn withdraw(&mut self) {
+        self.set_status(SolutionStatus::Withdrawn);
     }
 }
 
@@ -261,8 +262,8 @@ pub struct SolutionFrontmatter {
     pub change_ids: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub assignee: Option<String>,
-    #[serde(default)]
-    pub force_accepted: bool,
+    #[serde(default, alias = "force_accepted")]
+    pub force_approved: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub supersedes: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -283,7 +284,7 @@ impl From<&Solution> for SolutionFrontmatter {
             critique_ids: s.critique_ids.clone(),
             change_ids: s.change_ids.clone(),
             assignee: s.assignee.clone(),
-            force_accepted: s.force_accepted,
+            force_approved: s.force_approved,
             supersedes: s.supersedes.clone(),
             github_pr: s.github_pr,
             github_branch: s.github_branch.clone(),
@@ -318,23 +319,23 @@ mod tests {
         assert_eq!(solution.status, SolutionStatus::Proposed);
         assert!(solution.is_active());
 
-        solution.start_review();
-        assert_eq!(solution.status, SolutionStatus::Review);
+        solution.submit();
+        assert_eq!(solution.status, SolutionStatus::Submitted);
         assert!(solution.is_active());
 
-        solution.accept();
-        assert_eq!(solution.status, SolutionStatus::Accepted);
+        solution.approve();
+        assert_eq!(solution.status, SolutionStatus::Approved);
         assert!(solution.is_finalized());
     }
 
     #[test]
-    fn test_refutation() {
+    fn test_withdrawal() {
         let mut solution = Solution::new("S-1".to_string(), "Test".to_string(), "P-1".to_string());
 
-        solution.start_review();
-        solution.refute();
+        solution.submit();
+        solution.withdraw();
 
-        assert_eq!(solution.status, SolutionStatus::Refuted);
+        assert_eq!(solution.status, SolutionStatus::Withdrawn);
         assert!(solution.is_finalized());
     }
 
@@ -367,16 +368,16 @@ mod tests {
             SolutionStatus::Proposed
         );
         assert_eq!(
-            "review".parse::<SolutionStatus>().unwrap(),
-            SolutionStatus::Review
+            "submitted".parse::<SolutionStatus>().unwrap(),
+            SolutionStatus::Submitted
         );
         assert_eq!(
-            "refuted".parse::<SolutionStatus>().unwrap(),
-            SolutionStatus::Refuted
+            "withdrawn".parse::<SolutionStatus>().unwrap(),
+            SolutionStatus::Withdrawn
         );
         assert_eq!(
-            "accepted".parse::<SolutionStatus>().unwrap(),
-            SolutionStatus::Accepted
+            "approved".parse::<SolutionStatus>().unwrap(),
+            SolutionStatus::Approved
         );
     }
 

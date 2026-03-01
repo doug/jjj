@@ -125,7 +125,7 @@ function createTestProviderWithSolutions(): ProjectTreeProvider {
     getBacklogProblems: () => [],
     getSolutionsForProblem: () => [
       { id: "s1", title: "Proposed", status: "proposed", change_ids: [] },
-      { id: "s2", title: "Accepted", status: "accepted", change_ids: [] },
+      { id: "s2", title: "Accepted", status: "approved", change_ids: [] },
     ],
     getCritiquesForSolution: () => [],
     getProblem: () => undefined,

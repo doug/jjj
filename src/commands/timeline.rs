@@ -91,8 +91,8 @@ fn format_event_description(event: &Event) -> String {
                 .unwrap_or_default();
             format!("{} proposed{}", event.entity, supersedes)
         }
-        EventType::SolutionAccepted => format!("{} accepted", event.entity),
-        EventType::SolutionRefuted => format!("{} refuted", event.entity),
+        EventType::SolutionApproved => format!("{} accepted", event.entity),
+        EventType::SolutionWithdrawn => format!("{} refuted", event.entity),
         EventType::CritiqueRaised => {
             let title = event
                 .extra
@@ -106,7 +106,7 @@ fn format_event_description(event: &Event) -> String {
         EventType::CritiqueDismissed => format!("{} dismissed", event.entity),
         EventType::CritiqueValidated => format!("{} validated", event.entity),
         EventType::CritiqueReplied => format!("{} replied to", event.entity),
-        EventType::SolutionReviewed => format!("{} moved to review", event.entity),
+        EventType::SolutionSubmitted => format!("{} moved to review", event.entity),
         EventType::MilestoneCreated => format!("{} created", event.entity),
         EventType::MilestoneCompleted => format!("{} completed", event.entity),
         EventType::GithubIssueCreated => {

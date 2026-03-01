@@ -466,9 +466,9 @@ fn parse_event_type(s: &str) -> crate::models::EventType {
         "problem_dissolved" => EventType::ProblemDissolved,
         "problem_reopened" => EventType::ProblemReopened,
         "solution_created" => EventType::SolutionCreated,
-        "solution_reviewed" => EventType::SolutionReviewed,
-        "solution_accepted" => EventType::SolutionAccepted,
-        "solution_refuted" => EventType::SolutionRefuted,
+        "solution_submitted" => EventType::SolutionSubmitted,
+        "solution_approved" => EventType::SolutionApproved,
+        "solution_withdrawn" => EventType::SolutionWithdrawn,
         "critique_raised" => EventType::CritiqueRaised,
         "critique_addressed" => EventType::CritiqueAddressed,
         "critique_dismissed" => EventType::CritiqueDismissed,
@@ -588,7 +588,7 @@ mod tests {
         insert_event(conn, &event1).expect("Failed to insert event");
 
         let event2 = Event::new(
-            EventType::SolutionAccepted,
+            EventType::SolutionApproved,
             "s1".to_string(),
             "bob".to_string(),
         )

@@ -388,13 +388,13 @@ fn validate_critique(ctx: &CommandContext, critique_input: String) -> Result<()>
 
         // Optionally refute the solution
         let solution = store.load_solution(&solution_id)?;
-        if solution.status != SolutionStatus::Refuted {
+        if solution.status != SolutionStatus::Withdrawn {
             println!(
                 "\nThe target solution {} should likely be refuted.",
                 solution_id
             );
             println!(
-                "Use 'jjj solution refute {}' to mark it as refuted.",
+                "Use 'jjj solution withdraw {}' to mark it as refuted.",
                 solution_id
             );
         }

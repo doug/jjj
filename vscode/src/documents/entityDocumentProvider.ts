@@ -99,7 +99,7 @@ export class EntityDocumentProvider implements vscode.TextDocumentContentProvide
       `${s.title}`,
       "\u2501".repeat(60),
       `Status: ${s.status}  \u2502  Problem: ${s.problem_id}  \u2502  Assignee: ${s.assignee || "unassigned"}`,
-      s.force_accepted ? "Force accepted: yes" : "",
+      s.force_approved ? "Force approved: yes" : "",
       s.supersedes ? `Supersedes: ${s.supersedes}` : "",
       "",
       "## Approach",

@@ -61,9 +61,9 @@ fn status_color_problem(status: &crate::models::ProblemStatus) -> Color {
 fn status_color_solution(status: &crate::models::SolutionStatus) -> Color {
     use crate::models::SolutionStatus;
     match status {
-        SolutionStatus::Accepted => Color::Green,
-        SolutionStatus::Refuted => Color::Red,
-        SolutionStatus::Review => Color::Yellow,
+        SolutionStatus::Approved => Color::Green,
+        SolutionStatus::Withdrawn => Color::Red,
+        SolutionStatus::Submitted => Color::Yellow,
         SolutionStatus::Proposed => Color::Cyan,
     }
 }

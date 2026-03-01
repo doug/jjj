@@ -18,10 +18,10 @@ function makeProblem(overrides: Partial<Problem> = {}): Problem {
 
 function makeSolution(overrides: Partial<Solution> = {}): Solution {
   return {
-    id: "s1", title: "Add search index", problem_id: "p1", status: "review",
+    id: "s1", title: "Add search index", problem_id: "p1", status: "submitted",
     critique_ids: ["c1"], change_ids: ["kxq2p"],
     assignee: "doug",
-    force_accepted: false, created_at: "", updated_at: "",
+    force_approved: false, created_at: "", updated_at: "",
     approach: "Add a B-tree index", tradeoffs: "Extra storage",
     supersedes: null,
     ...overrides,

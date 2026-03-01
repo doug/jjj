@@ -211,11 +211,11 @@ fn show_milestone(ctx: &CommandContext, milestone_input: String, json: bool) -> 
                     .unwrap_or_default();
                 let accepted_solutions = solutions
                     .iter()
-                    .filter(|s| s.status == SolutionStatus::Accepted)
+                    .filter(|s| s.status == SolutionStatus::Approved)
                     .count();
                 let testing_solutions = solutions
                     .iter()
-                    .filter(|s| s.status == SolutionStatus::Review)
+                    .filter(|s| s.status == SolutionStatus::Submitted)
                     .count();
 
                 let status_icon = match problem.status {

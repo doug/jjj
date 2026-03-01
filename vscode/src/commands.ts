@@ -67,41 +67,41 @@ export function registerCommands(
     vscode.window.showInformationMessage(result);
   });
 
-  register("jjj.requestReview", async () => {
+  register("jjj.submitSolution", async () => {
     const solutions = cache.getSolutions().filter(s => s.status === "proposed");
     const pick = await vscode.window.showQuickPick(
       solutions.map(s => ({ label: s.title, description: s.id.slice(0, 8), id: s.id })),
-      { placeHolder: "Select solution to move to review" },
+      { placeHolder: "Select solution to submit for review" },
     );
     if (!pick) { return; }
-    await cli.reviewSolution(pick.id);
-    vscode.window.showInformationMessage(`Solution "${pick.label}" moved to review.`);
+    await cli.submitSolution(pick.id);
+    vscode.window.showInformationMessage(`Solution "${pick.label}" submitted for review.`);
   });
 
-  register("jjj.acceptSolution", async () => {
-    const solutions = cache.getSolutions().filter(s => s.status === "review");
+  register("jjj.approveSolution", async () => {
+    const solutions = cache.getSolutions().filter(s => s.status === "submitted");
     const pick = await vscode.window.showQuickPick(
       solutions.map(s => ({ label: s.title, description: s.id.slice(0, 8), id: s.id })),
-      { placeHolder: "Select solution to accept" },
+      { placeHolder: "Select solution to approve" },
     );
     if (!pick) { return; }
-    await cli.acceptSolution(pick.id);
-    vscode.window.showInformationMessage(`Solution "${pick.label}" accepted.`);
+    await cli.approveSolution(pick.id);
+    vscode.window.showInformationMessage(`Solution "${pick.label}" approved.`);
   });
 
-  register("jjj.refuteSolution", async () => {
-    const solutions = cache.getSolutions().filter(s => s.status === "review" || s.status === "proposed");
+  register("jjj.withdrawSolution", async () => {
+    const solutions = cache.getSolutions().filter(s => s.status === "submitted" || s.status === "proposed");
     const pick = await vscode.window.showQuickPick(
       solutions.map(s => ({ label: s.title, description: s.id.slice(0, 8), id: s.id })),
-      { placeHolder: "Select solution to refute" },
+      { placeHolder: "Select solution to withdraw" },
     );
     if (!pick) { return; }
-    await cli.refuteSolution(pick.id);
-    vscode.window.showInformationMessage(`Solution "${pick.label}" refuted.`);
+    await cli.withdrawSolution(pick.id);
+    vscode.window.showInformationMessage(`Solution "${pick.label}" withdrawn.`);
   });
 
   register("jjj.resumeSolution", async () => {
-    const solutions = cache.getSolutions().filter(s => s.status === "review" || s.status === "proposed");
+    const solutions = cache.getSolutions().filter(s => s.status === "submitted" || s.status === "proposed");
     const pick = await vscode.window.showQuickPick(
       solutions.map(s => ({ label: `${s.id}: ${s.title}`, id: s.id })),
       { placeHolder: "Select solution to resume" },
@@ -122,9 +122,9 @@ export function registerCommands(
       solutionId = activeSolution.id;
       solutionTitle = activeSolution.title;
     } else {
-      const solutions = cache.getSolutions().filter(s => s.status === "review");
+      const solutions = cache.getSolutions().filter(s => s.status === "submitted");
       if (solutions.length === 0) {
-        vscode.window.showInformationMessage("No solutions currently in review.");
+        vscode.window.showInformationMessage("No solutions currently submitted for review.");
         return;
       }
       const pick = await vscode.window.showQuickPick(
@@ -143,7 +143,7 @@ export function registerCommands(
   // --- Critique ---
 
   register("jjj.newCritique", async () => {
-    const solutions = cache.getSolutions().filter(s => s.status === "review" || s.status === "proposed");
+    const solutions = cache.getSolutions().filter(s => s.status === "submitted" || s.status === "proposed");
     const solutionPick = await vscode.window.showQuickPick(
       solutions.map(s => ({ label: `${s.id}: ${s.title}`, id: s.id })),
       { placeHolder: "Which solution to critique?" },
@@ -247,7 +247,7 @@ export function registerCommands(
     const line = editor.selection.active.line + 1; // 1-based
     const filePath = vscode.workspace.asRelativePath(editor.document.uri);
 
-    const solutions = cache.getSolutions().filter(s => s.status === "review" || s.status === "proposed");
+    const solutions = cache.getSolutions().filter(s => s.status === "submitted" || s.status === "proposed");
     const solutionPick = await vscode.window.showQuickPick(
       solutions.map(s => ({ label: `${s.id}: ${s.title}`, id: s.id })),
       { placeHolder: "Which solution to critique?" },

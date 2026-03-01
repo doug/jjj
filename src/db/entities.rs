@@ -163,7 +163,7 @@ pub fn upsert_solution(conn: &Connection, solution: &Solution) -> SqliteResult<(
             change_ids_json,
             solution.supersedes,
             solution.assignee,
-            solution.force_accepted,
+            solution.force_approved,
             solution.created_at.to_rfc3339(),
             solution.updated_at.to_rfc3339(),
             solution.approach,
@@ -246,7 +246,7 @@ fn row_to_solution(row: &rusqlite::Row) -> SqliteResult<Solution> {
         change_ids: parse_json_vec(&change_ids_json, "change_ids"),
         supersedes: row.get(5)?,
         assignee: row.get(6)?,
-        force_accepted: row.get(7)?,
+        force_approved: row.get(7)?,
         created_at: parse_datetime(&created_at_str, "created_at", "solution"),
         updated_at: parse_datetime(&updated_at_str, "updated_at", "solution"),
         approach: row.get::<_, Option<String>>(10)?.unwrap_or_default(),
@@ -688,14 +688,14 @@ mod tests {
         assert_eq!(loaded.status, SolutionStatus::Proposed);
 
         // Update
-        solution.set_status(SolutionStatus::Review);
+        solution.set_status(SolutionStatus::Submitted);
         solution.attach_change("ghi789".to_string());
         upsert_solution(conn, &solution).expect("Failed to update");
 
         let loaded = load_solution(conn, "s1")
             .expect("Failed to load")
             .expect("Not found");
-        assert_eq!(loaded.status, SolutionStatus::Review);
+        assert_eq!(loaded.status, SolutionStatus::Submitted);
         assert_eq!(loaded.change_ids.len(), 3);
 
         // List for problem

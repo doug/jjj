@@ -106,7 +106,7 @@ assert_success "charlie critiques elasticsearch solution"
 section "Check: Acceptance Should Be Blocked"
 # ============================================================================
 
-run_jjj solution accept "OAuth token" --no-rationale
+run_jjj solution approve "OAuth token" --no-rationale
 assert_failure "cannot accept with open critiques"
 assert_contains "critique" "error mentions critiques"
 
@@ -130,24 +130,24 @@ section "Bob: Refute Elasticsearch, Accept OAuth"
 # ============================================================================
 
 # Refute the heavier solution
-run_jjj solution refute "elasticsearch" --rationale "Too heavyweight for our needs" --no-rationale
+run_jjj solution withdraw "elasticsearch" --rationale "Too heavyweight for our needs" --no-rationale
 assert_success "refute elasticsearch solution"
 
 # Check it's refuted
 run_jjj solution show "elasticsearch"
 assert_success "show refuted solution"
-assert_contains "refuted" "solution is refuted"
+assert_contains "withdrawn" "solution is refuted"
 
 # Address the review critique (bob's sign-off)
 run_jjj critique list --solution "OAuth" --status open
 observe "Open critiques before accept: $OUTPUT"
 
 # Try to accept OAuth (may need to address review critique first)
-run_jjj solution accept "OAuth token" --no-rationale
+run_jjj solution approve "OAuth token" --no-rationale
 if [[ $EXIT_CODE -ne 0 ]]; then
     observe "Accept failed, likely review critique still open"
     # Force accept as the reviewer
-    run_jjj solution accept "OAuth token" --force --no-rationale
+    run_jjj solution approve "OAuth token" --force --no-rationale
     assert_success "force accept with review critique"
 else
     assert_success "accept OAuth solution"

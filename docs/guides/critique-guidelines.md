@@ -17,7 +17,7 @@ A solution cannot be accepted until all critiques against it are resolved. This 
 
 This means:
 
-- Every critique must be resolved (addressed, dismissed, or validated) before a solution can be accepted.
+- Every critique must be resolved (addressed, dismissed, or validated) before a solution can be approved.
 - "Resolved" does not mean "agreed with." Dismissing a critique is a legitimate resolution, provided you have a reason.
 - The goal is not consensus but error elimination. A single valid critique can refute an otherwise popular solution.
 
@@ -96,7 +96,7 @@ jjj critique address "race condition"
 
 What it means: "You were right. I have changed the solution to handle this."
 
-After addressing, the solution can proceed toward acceptance (assuming no other open critiques remain).
+After addressing, the solution can proceed toward approval (assuming no other open critiques remain).
 
 ### Dismiss the critique
 
@@ -118,7 +118,7 @@ Dismissing without explanation is technically valid but makes it harder for othe
 
 ### Validate the critique
 
-Use this when the critique is correct and the flaw it identifies is fundamental enough that the solution should be refuted. This is the honest thing to do when a critique reveals that your approach will not work.
+Use this when the critique is correct and the flaw it identifies is fundamental enough that the solution should be withdrawn. This is the honest thing to do when a critique reveals that your approach will not work.
 
 ```bash
 jjj critique validate "sql injection"
@@ -126,10 +126,10 @@ jjj critique validate "sql injection"
 
 What it means: "This criticism is correct. The solution is fundamentally flawed."
 
-After validation, the typical next step is to refute the solution and propose a new one (potentially noting what was learned):
+After validation, the typical next step is to withdraw the solution and propose a new one (potentially noting what was learned):
 
 ```bash
-jjj solution refute "direct queries"
+jjj solution withdraw "direct queries"
 jjj solution new "Use parameterized queries for all DB access" --problem "db security" --supersedes "direct queries"
 ```
 
@@ -202,18 +202,18 @@ jjj critique reply "unmaintained" "The library had a release last month and has 
 jjj critique dismiss "unmaintained"
 
 # All critiques resolved -- solution can now be accepted
-jjj solution accept "Redis caching"
+jjj solution approve "Redis caching"
 ```
 
 ## Critiques and Sign-offs: Two Gates to Acceptance
 
-jjj has two mechanisms that gate solution acceptance, both unified under the solution model:
+jjj has two mechanisms that gate solution approveance, both unified under the solution model:
 
 1. **Critiques** -- Evaluate the solution's approach, design, and correctness. Anyone can raise a critique at any time. All critiques must be resolved (addressed, dismissed, or validated).
 
-2. **Reviewer sign-offs** -- Assigned reviewers must sign off before the solution can be accepted. Sign-offs are recorded when a reviewer addresses their review critique.
+2. **Reviewer sign-offs** -- Assigned reviewers must sign off before the solution can be approved. Sign-offs are recorded when a reviewer addresses their review critique.
 
-Both gates must be satisfied for `jjj submit` to succeed (unless `--force` is used). The acceptance check runs in order: first critiques, then sign-offs.
+Both gates must be satisfied for `jjj solution approve` to succeed (unless `--force` is used). The acceptance check runs in order: first critiques, then sign-offs.
 
 Review is per-solution: assign reviewers with `--reviewer` when creating a solution, or add review critiques later. Solutions without assigned reviewers skip the sign-off gate entirely.
 

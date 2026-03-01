@@ -90,16 +90,16 @@ describe("JjjCli", () => {
       ]);
     });
 
-    it("acceptSolution with force flag", async () => {
+    it("approveSolution with force flag", async () => {
       execStub.resolves("ok");
-      await cli.acceptSolution("s1", true);
-      assert.deepStrictEqual(execStub.firstCall.args[0], ["solution", "accept", "s1", "--force"]);
+      await cli.approveSolution("s1", true);
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["solution", "approve", "s1", "--force"]);
     });
 
-    it("acceptSolution without force", async () => {
+    it("approveSolution without force", async () => {
       execStub.resolves("ok");
-      await cli.acceptSolution("s1");
-      assert.deepStrictEqual(execStub.firstCall.args[0], ["solution", "accept", "s1"]);
+      await cli.approveSolution("s1");
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["solution", "approve", "s1"]);
     });
 
     it("assignProblem uses --to flag", async () => {

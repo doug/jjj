@@ -157,7 +157,7 @@ fn check_and_prompt_accept_solve(store: &MetadataStore) -> Result<()> {
                 solution.id, solution.title
             )) {
                 let mut solution = store.load_solution(&solution.id)?;
-                solution.accept();
+                solution.approve();
                 store.save_solution(&solution)?;
                 println!("  Solution {} accepted.", solution.id);
 

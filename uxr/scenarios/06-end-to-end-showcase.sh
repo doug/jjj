@@ -9,7 +9,7 @@
 # test and a living example of the core jjj workflow.
 #
 # Tests: init, problem new, solution new (with change attachment), critique
-#        new, critique address, solution accept, status at each stage,
+#        new, critique address, solution approve, status at each stage,
 #        push/fetch metadata transport, ui launch check
 
 source "$(dirname "$0")/../lib.sh"
@@ -144,7 +144,7 @@ assert_contains "BLOCKED" "open critique blocks solution"
 observe "BLOCKED state is immediately visible — no way to accidentally accept a critiqued solution"
 
 # Trying to accept now should warn about open critiques
-run_jjj solution accept "token bucket"
+run_jjj solution approve "token bucket"
 assert_failure "accept blocked by open critique"
 assert_contains "critique" "error mentions the blocking critique"
 
@@ -168,9 +168,9 @@ observe "Once addressed, the path to acceptance is clear"
 section "Step 7: Accept the solution"
 # ============================================================================
 
-run_jjj solution accept "token bucket" --force
-assert_success "solution accepted with all critiques resolved"
-assert_contains "accepted" "solution is now accepted"
+run_jjj solution approve "token bucket" --force
+assert_success "solution approved with all critiques resolved"
+assert_contains "approved" "solution is now approved"
 
 # Only solution for that problem → problem auto-closes
 run_jjj problem show "rate limiting"

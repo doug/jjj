@@ -53,12 +53,12 @@ run_jjj critique address "not properly cleaned"
 assert_success "address the critique"
 
 # Accept the solution with a rationale that we can search for later
-run_jjj solution accept "Fix worker" \
+run_jjj solution approve "Fix worker" \
     --rationale "RAII-based cleanup eliminates the leak class entirely"
 assert_success "accept solution with searchable rationale"
 
 # Refute the second solution
-run_jjj solution refute "Lazy-load" \
+run_jjj solution withdraw "Lazy-load" \
     --rationale "Lazy loading increases first-request latency, not acceptable"
 assert_success "refute second solution"
 
@@ -98,9 +98,9 @@ assert_success "filter by problem_created"
 assert_contains "problem_created" "filtered results are correct type"
 assert_not_contains "solution_created" "no solution events in problem_created filter"
 
-run_jjj events --event-type solution_accepted
-assert_success "filter by solution_accepted"
-assert_contains "solution_accepted" "accepted event present"
+run_jjj events --event-type solution_approved
+assert_success "filter by solution_approved"
+assert_contains "solution_approved" "accepted event present"
 assert_not_contains "problem_created" "no problem events in solution filter"
 
 run_jjj events --event-type critique_raised
@@ -119,7 +119,7 @@ observe "Problem-scoped event view shows the complete history of one problem"
 run_jjj events --solution "Fix worker"
 assert_success "events filtered by solution title"
 assert_contains "solution_created" "solution creation event in filter"
-assert_contains "solution_accepted" "solution acceptance in filter"
+assert_contains "solution_approved" "solution acceptance in filter"
 
 # ============================================================================
 section "Step 5: events --search (rationale full-text)"
@@ -127,11 +127,11 @@ section "Step 5: events --search (rationale full-text)"
 
 run_jjj events --search "RAII"
 assert_success "search events by rationale keyword"
-assert_contains "solution_accepted" "rationale search finds the acceptance event"
+assert_contains "solution_approved" "rationale search finds the acceptance event"
 
 run_jjj events --search "latency"
 assert_success "search events for refutation rationale"
-assert_contains "solution_refuted" "latency rationale event found"
+assert_contains "solution_withdrawn" "latency rationale event found"
 
 run_jjj events --search "200ms"
 assert_success "search events for dissolve reason"
@@ -188,9 +188,9 @@ assert_contains "\"entity\"" "JSON has entity field"
 assert_contains "\"when\"" "JSON has timestamp"
 assert_contains "\"by\"" "JSON has author field"
 
-run_jjj events --event-type solution_accepted --json
+run_jjj events --event-type solution_approved --json
 assert_success "events filtered by event-type with --json"
-assert_contains "\"solution_accepted\"" "correct type in JSON"
+assert_contains "\"solution_approved\"" "correct type in JSON"
 
 observe "JSON output enables structured processing of the event log in scripts and pipelines"
 

@@ -34,11 +34,11 @@ function makeSolution(overrides: Partial<Solution> = {}): Solution {
     id: "s1",
     title: "Fix the bug",
     problem_id: "p1",
-    status: "review",
+    status: "submitted",
     critique_ids: [],
     change_ids: [],
     assignee: null,
-    force_accepted: false,
+    force_approved: false,
     created_at: "",
     updated_at: "",
     approach: "",
@@ -431,7 +431,7 @@ describe("CritiqueCommentController", () => {
     it("creates a critique with correct solution, title, severity, file, and line", async () => {
       cache.getCritiquesWithLocations.returns([]);
       cache.getStatus.returns({
-        active_solution: { id: "s-active", title: "Fix bug", problem_id: "p1", status: "review" },
+        active_solution: { id: "s-active", title: "Fix bug", problem_id: "p1", status: "submitted" },
         items: [], total_count: 0, user: "test",
         summary: { open_problems: 0, review_solutions: 0, open_critiques: 0 },
       });
@@ -520,7 +520,7 @@ describe("CritiqueCommentController", () => {
     it("uses single candidate solution without a second quick pick", async () => {
       cache.getCritiquesWithLocations.returns([]);
       cache.getStatus.returns(null);
-      cache.getSolutions.returns([makeSolution({ id: "s-solo", status: "review" })]);
+      cache.getSolutions.returns([makeSolution({ id: "s-solo", status: "submitted" })]);
       cli.newCritique.resolves("nid");
 
       const qpStub = sinon.stub(vscode.window, "showQuickPick")
@@ -546,7 +546,7 @@ describe("CritiqueCommentController", () => {
       cache.getCritiquesWithLocations.returns([]);
       cache.getStatus.returns(null);
       cache.getSolutions.returns([
-        makeSolution({ id: "s1", title: "Fix A", status: "review" }),
+        makeSolution({ id: "s1", title: "Fix A", status: "submitted" }),
         makeSolution({ id: "s2", title: "Fix B", status: "proposed" }),
       ]);
       cli.newCritique.resolves("nid");
@@ -574,8 +574,8 @@ describe("CritiqueCommentController", () => {
       cache.getCritiquesWithLocations.returns([]);
       cache.getStatus.returns(null);
       cache.getSolutions.returns([
-        makeSolution({ id: "s1", status: "review" }),
-        makeSolution({ id: "s2", status: "review" }),
+        makeSolution({ id: "s1", status: "submitted" }),
+        makeSolution({ id: "s2", status: "submitted" }),
       ]);
 
       const qpStub = sinon.stub(vscode.window, "showQuickPick");
@@ -600,14 +600,14 @@ describe("CritiqueCommentController", () => {
     it("active solution takes priority over candidates — no solution quick pick shown", async () => {
       cache.getCritiquesWithLocations.returns([]);
       cache.getStatus.returns({
-        active_solution: { id: "s-active", title: "Active", problem_id: "p1", status: "review" },
+        active_solution: { id: "s-active", title: "Active", problem_id: "p1", status: "submitted" },
         items: [], total_count: 0, user: "test",
         summary: { open_problems: 0, review_solutions: 0, open_critiques: 0 },
       });
       // Even with multiple solutions available, active_solution should win
       cache.getSolutions.returns([
-        makeSolution({ id: "s1", status: "review" }),
-        makeSolution({ id: "s2", status: "review" }),
+        makeSolution({ id: "s1", status: "submitted" }),
+        makeSolution({ id: "s2", status: "submitted" }),
       ]);
       cli.newCritique.resolves("nid");
 

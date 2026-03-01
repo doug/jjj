@@ -111,13 +111,13 @@ fn test_solution_status_transitions() {
     );
     assert!(solution.is_proposed());
 
-    // When: I move to review
-    solution.start_review();
-    assert!(solution.is_review());
+    // When: I submit for review
+    solution.submit();
+    assert!(solution.is_submitted());
 
-    // When: I accept the solution
-    solution.accept();
-    assert!(solution.is_accepted());
+    // When: I approve the solution
+    solution.approve();
+    assert!(solution.is_approved());
 }
 
 #[test]
@@ -128,13 +128,13 @@ fn test_solution_refute() {
         "Test solution".to_string(),
         "p1".to_string(),
     );
-    solution.start_review();
+    solution.submit();
 
     // When: I refute it
-    solution.refute();
+    solution.withdraw();
 
-    // Then: It should be refuted
-    assert!(solution.is_refuted());
+    // Then: It should be withdrawn
+    assert!(solution.is_withdrawn());
 }
 
 #[test]

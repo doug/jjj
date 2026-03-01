@@ -229,9 +229,9 @@ fn test_workflow_submit_force() {
     );
 
     // Move to review before submitting (--force bypasses open critiques, not review requirement)
-    run_jjj(dir, &["solution", "review", "Solution to Submit 2"]);
+    run_jjj(dir, &["solution", "submit", "Solution to Submit 2"]);
 
-    let output = run_jjj(dir, &["submit", "--force"]);
+    let output = run_jjj(dir, &["solution", "approve", "--force"]);
 
     if !output.status.success() {
         println!("Submit failed: {}", String::from_utf8_lossy(&output.stderr));
@@ -239,9 +239,9 @@ fn test_workflow_submit_force() {
     assert!(output.status.success());
 
     // Verify solution is Accepted
-    let list = run_jjj(dir, &["solution", "list", "--status", "accepted"]);
+    let list = run_jjj(dir, &["solution", "list", "--status", "approved"]);
     let stdout = String::from_utf8_lossy(&list.stdout);
-    assert!(stdout.contains("Solution to Submit 2") || stdout.contains("accepted"));
+    assert!(stdout.contains("Solution to Submit 2") || stdout.contains("approved"));
 }
 
 #[test]
@@ -274,13 +274,13 @@ fn test_solution_status_workflow() {
     );
 
     // Advance to review, then submit
-    run_jjj(dir, &["solution", "review", "Test Solution"]);
-    let output = run_jjj(dir, &["submit", "Test Solution"]);
+    run_jjj(dir, &["solution", "submit", "Test Solution"]);
+    let output = run_jjj(dir, &["solution", "approve", "Test Solution"]);
     assert!(output.status.success());
 
     let show = run_jjj(dir, &["solution", "show", "Test Solution"]);
     let stdout = String::from_utf8_lossy(&show.stdout);
-    assert!(stdout.contains("Accepted") || stdout.contains("accepted"));
+    assert!(stdout.contains("Approved") || stdout.contains("approved"));
 }
 
 #[test]
@@ -302,7 +302,7 @@ fn test_critique_blocks_acceptance() {
             "Workflow Problem",
         ],
     );
-    run_jjj(dir, &["solution", "review", "Test Solution"]);
+    run_jjj(dir, &["solution", "submit", "Test Solution"]);
 
     // Add a critique
     run_jjj(
@@ -318,7 +318,7 @@ fn test_critique_blocks_acceptance() {
     );
 
     // Try to submit - should fail due to open critique
-    let output = run_jjj(dir, &["submit", "Test Solution"]);
+    let output = run_jjj(dir, &["solution", "approve", "Test Solution"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
@@ -363,7 +363,7 @@ fn test_submit_blocked_by_critiques() {
     );
 
     // Move to review so submit can reach the critique check
-    run_jjj(dir, &["solution", "review", "Token refresh"]);
+    run_jjj(dir, &["solution", "submit", "Token refresh"]);
 
     // Add a critique
     run_jjj(
@@ -379,7 +379,7 @@ fn test_submit_blocked_by_critiques() {
     );
 
     // Submit without --force should fail
-    let output = run_jjj(dir, &["submit"]);
+    let output = run_jjj(dir, &["solution", "approve"]);
     assert!(
         !output.status.success(),
         "Expected submit to fail with open critiques"
@@ -469,12 +469,12 @@ fn test_no_stale_working_copy_after_metadata_writes() {
     );
     assert_not_stale("after critique new");
 
-    run_jjj(dir, &["solution", "review", "Stale Regression Solution"]);
+    run_jjj(dir, &["solution", "submit", "Stale Regression Solution"]);
     assert_not_stale("after solution review");
 
     run_jjj(
         dir,
-        &["submit", "Stale Regression Solution", "--force"],
+        &["solution", "approve", "Stale Regression Solution", "--force"],
     );
     assert_not_stale("after submit");
 }
@@ -503,11 +503,11 @@ fn test_submit_blocked_by_awaiting_review() {
     );
 
     // Move to review — submit now requires Review state; the awaiting-review critique blocks it
-    run_jjj(dir, &["solution", "review", "Test solution"]);
+    run_jjj(dir, &["solution", "submit", "Test solution"]);
 
     // Submit should fail because awaiting review critique is open
     let output = Command::new(jjj_binary())
-        .args(["submit"])
+        .args(["solution", "approve"])
         .current_dir(dir)
         .output()
         .expect("Failed to execute jjj submit");
@@ -540,8 +540,8 @@ fn test_events_logged_on_status_changes() {
             "Workflow Problem",
         ],
     );
-    run_jjj(dir, &["solution", "review", "Test Solution"]);
-    run_jjj(dir, &["submit", "Test Solution", "--force"]);
+    run_jjj(dir, &["solution", "submit", "Test Solution"]);
+    run_jjj(dir, &["solution", "approve", "Test Solution", "--force"]);
 
     // Check events
     let output = run_jjj(dir, &["events", "--json"]);
@@ -553,7 +553,7 @@ fn test_events_logged_on_status_changes() {
         "Missing solution_created event"
     );
     assert!(
-        stdout.contains("solution_accepted"),
-        "Missing solution_accepted event"
+        stdout.contains("solution_approved"),
+        "Missing solution_approved event"
     );
 }

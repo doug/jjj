@@ -20,7 +20,7 @@ export class SolutionStatusBar implements vscode.Disposable {
       return;
     }
     const sol = status.active_solution;
-    const icon = sol.status === "review" ? "$(beaker)" : "$(lightbulb)";
+    const icon = sol.status === "submitted" ? "$(beaker)" : "$(lightbulb)";
     const critiques = cache.getCritiques().filter(
       c => c.solution_id === sol.id && (c.status === "open" || c.status === "valid"),
     );

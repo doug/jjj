@@ -172,7 +172,7 @@ Critique 01958b dismissed (shown to be incorrect or irrelevant)
 
 Dismissing the "Awaiting review" critique is Bob's sign-off. It means "I've looked at this and have no concerns."
 
-## Step 8: Alice Accepts the Solution
+## Step 8: Alice Approves the Solution
 
 Alice checks her status:
 
@@ -182,7 +182,7 @@ $ jjj status
 Next actions:
 
 1. [READY] s/01958a: JWT-based authentication -- All critiques resolved
-   -> jjj solution accept "JWT"
+   -> jjj solution approve "JWT"
 ```
 
 All critiques are resolved:
@@ -192,8 +192,8 @@ All critiques are resolved:
 Alice accepts the solution:
 
 ```bash
-$ jjj solution accept "JWT"
-Solution 01958a accepted
+$ jjj solution approve "JWT"
+Solution 01958a approved
 Solution accepted. Mark problem 01957d as solved? [y/N] y
 Problem 01957d marked as solved
 ```
@@ -216,7 +216,7 @@ Alice                              Bob
                                    9. (checks fix is good)
                                    10. critique dismiss "review" (LGTM)
 11. status → ready
-12. solution accept "JWT"
+12. solution approve "JWT"
 ```
 
 ## Key Concepts
@@ -225,7 +225,7 @@ Alice                              Bob
 
 When you use `--reviewer bob`, jjj creates an "Awaiting review from @bob" critique. This critique:
 - Has `reviewer: bob` set
-- Blocks solution acceptance until resolved
+- Blocks solution approveance until resolved
 - Is resolved when Bob dismisses it (LGTM) or addresses it
 
 ### Multiple Reviewers
@@ -236,7 +236,7 @@ You can request multiple reviewers:
 jjj solution new "Feature" --problem "auth" --reviewer alice --reviewer bob --reviewer carol
 ```
 
-Each reviewer gets their own review critique. All must be resolved before acceptance.
+Each reviewer gets their own review critique. All must be resolved before approval.
 
 ### Reviewer Severity
 

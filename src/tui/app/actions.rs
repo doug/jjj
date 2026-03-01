@@ -312,10 +312,10 @@ impl App {
         match self
             .store
             .with_metadata(&format!("Accept solution {}", solution_id), || {
-                let event = Event::new(EventType::SolutionAccepted, solution_id.to_string(), user.clone());
+                let event = Event::new(EventType::SolutionApproved, solution_id.to_string(), user.clone());
                 self.store.set_pending_event(event.clone());
                 let mut solution = self.store.load_solution(solution_id)?;
-                solution.accept();
+                solution.approve();
                 self.store.save_solution(&solution)?;
                 // Auto-solve problem
                 let (can_solve, _) = self.store.can_solve_problem(&solution.problem_id)?;
@@ -347,7 +347,7 @@ impl App {
             .store
             .with_metadata(&format!("Refute solution {}", solution_id), || {
                 let mut solution = self.store.load_solution(solution_id)?;
-                solution.refute();
+                solution.withdraw();
                 self.store.save_solution(&solution)?;
                 Ok(())
             }) {

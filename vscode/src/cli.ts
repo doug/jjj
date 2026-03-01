@@ -25,11 +25,11 @@ export interface Solution {
   id: string;
   title: string;
   problem_id: string;
-  status: "proposed" | "review" | "accepted" | "refuted";
+  status: "proposed" | "submitted" | "approved" | "withdrawn";
   critique_ids: string[];
   change_ids: string[];
   assignee: string | null;
-  force_accepted: boolean;
+  force_approved: boolean;
   created_at: string;
   updated_at: string;
   approach: string;
@@ -217,18 +217,18 @@ export class JjjCli {
     return this.exec(["critique", "validate", critiqueId]);
   }
 
-  async reviewSolution(solutionId: string): Promise<string> {
-    return this.exec(["solution", "review", solutionId]);
+  async submitSolution(solutionId: string): Promise<string> {
+    return this.exec(["solution", "submit", solutionId]);
   }
 
-  async acceptSolution(solutionId: string, force = false): Promise<string> {
-    const args = ["solution", "accept", solutionId];
+  async approveSolution(solutionId: string, force = false): Promise<string> {
+    const args = ["solution", "approve", solutionId];
     if (force) { args.push("--force"); }
     return this.exec(args);
   }
 
-  async refuteSolution(solutionId: string): Promise<string> {
-    return this.exec(["solution", "refute", solutionId]);
+  async withdrawSolution(solutionId: string): Promise<string> {
+    return this.exec(["solution", "withdraw", solutionId]);
   }
 
   async lgtmSolution(solutionId: string): Promise<string> {

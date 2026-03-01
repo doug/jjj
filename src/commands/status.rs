@@ -52,7 +52,7 @@ pub fn execute(
         let open_problems = problems.iter().filter(|p| p.is_open()).count();
         let review_solutions = solutions
             .iter()
-            .filter(|s| s.status == SolutionStatus::Review)
+            .filter(|s| s.status == SolutionStatus::Submitted)
             .count();
         let open_critiques = critiques
             .iter()
@@ -179,7 +179,7 @@ pub fn execute(
             .count();
         let review_solutions = solutions
             .iter()
-            .filter(|s| s.status == SolutionStatus::Review)
+            .filter(|s| s.status == SolutionStatus::Submitted)
             .count();
         let open_critiques = critiques
             .iter()
@@ -283,7 +283,7 @@ pub(crate) fn build_next_actions(
                 "entity_id": solution.id,
                 "title": solution.title,
                 "summary": "All critiques resolved",
-                "suggested_command": format!("jjj solution accept {}", solution.id),
+                "suggested_command": format!("jjj solution approve {}", solution.id),
                 "priority": format!("{}", priority),
                 "priority_sort": priority_sort_value(&priority),
                 "details": [],

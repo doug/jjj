@@ -14,7 +14,6 @@ pub mod status;
 pub mod sync;
 pub mod timeline;
 pub mod ui;
-pub mod workflow;
 
 use crate::cli::{Cli, Commands};
 use crate::context::CommandContext;
@@ -52,9 +51,6 @@ fn execute_with_context(ctx: &CommandContext, command: Commands) -> Result<()> {
         Commands::Solution { action } => solution::execute(ctx, action),
         Commands::Critique { action } => critique::execute(ctx, action),
         Commands::Milestone { action } => milestone::execute(ctx, action),
-
-        // Workflow Commands
-        Commands::Submit { solution, force } => workflow::submit(ctx, solution, force),
 
         // Status (replaces dashboard + next)
         Commands::Status {

@@ -388,7 +388,7 @@ mod tests {
         // A refuted solution should not appear in BLOCKED even with open critiques
         let problems = vec![make_problem("P-1", "Auth bug")];
         let mut sol = make_solution("S-1", "Bad approach", "P-1");
-        sol.set_status(SolutionStatus::Refuted);
+        sol.set_status(SolutionStatus::Withdrawn);
         let critiques = vec![make_critique("C-1", "Fatal flaw", "S-1")];
 
         let actions = build_next_actions(&problems, &[sol], &critiques, "alice");

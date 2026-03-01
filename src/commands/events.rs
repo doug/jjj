@@ -259,12 +259,12 @@ fn rebuild_events(ctx: &CommandContext) -> Result<()> {
         }
 
         match solution.status {
-            SolutionStatus::Accepted => {
-                let key = format!("{}:{}", solution.id, EventType::SolutionAccepted);
+            SolutionStatus::Approved => {
+                let key = format!("{}:{}", solution.id, EventType::SolutionApproved);
                 if !existing_keys.contains(&key) {
                     synthesized.push(
                         Event::new(
-                            EventType::SolutionAccepted,
+                            EventType::SolutionApproved,
                             solution.id.clone(),
                             user.clone(),
                         )
@@ -273,12 +273,12 @@ fn rebuild_events(ctx: &CommandContext) -> Result<()> {
                     );
                 }
             }
-            SolutionStatus::Refuted => {
-                let key = format!("{}:{}", solution.id, EventType::SolutionRefuted);
+            SolutionStatus::Withdrawn => {
+                let key = format!("{}:{}", solution.id, EventType::SolutionWithdrawn);
                 if !existing_keys.contains(&key) {
                     synthesized.push(
                         Event::new(
-                            EventType::SolutionRefuted,
+                            EventType::SolutionWithdrawn,
                             solution.id.clone(),
                             user.clone(),
                         )
@@ -515,10 +515,10 @@ fn validate_events(ctx: &CommandContext) -> Result<()> {
 
     for (id, status) in &solution_statuses {
         match status {
-            SolutionStatus::Accepted => {
+            SolutionStatus::Approved => {
                 if !events
                     .iter()
-                    .any(|e| e.entity == *id && e.event_type == EventType::SolutionAccepted)
+                    .any(|e| e.entity == *id && e.event_type == EventType::SolutionApproved)
                 {
                     errors.push(format!(
                         "Solution '{}' is Accepted but has no solution_accepted event",
@@ -526,10 +526,10 @@ fn validate_events(ctx: &CommandContext) -> Result<()> {
                     ));
                 }
             }
-            SolutionStatus::Refuted => {
+            SolutionStatus::Withdrawn => {
                 if !events
                     .iter()
-                    .any(|e| e.entity == *id && e.event_type == EventType::SolutionRefuted)
+                    .any(|e| e.entity == *id && e.event_type == EventType::SolutionWithdrawn)
                 {
                     errors.push(format!(
                         "Solution '{}' is Refuted but has no solution_refuted event",

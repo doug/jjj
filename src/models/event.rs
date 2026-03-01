@@ -13,9 +13,9 @@ pub enum EventType {
 
     // Solution events
     SolutionCreated,
-    SolutionReviewed,
-    SolutionAccepted,
-    SolutionRefuted,
+    SolutionSubmitted,
+    SolutionApproved,
+    SolutionWithdrawn,
 
     // Critique events
     CritiqueRaised,
@@ -45,9 +45,9 @@ impl std::fmt::Display for EventType {
             EventType::ProblemDissolved => write!(f, "problem_dissolved"),
             EventType::ProblemReopened => write!(f, "problem_reopened"),
             EventType::SolutionCreated => write!(f, "solution_created"),
-            EventType::SolutionReviewed => write!(f, "solution_reviewed"),
-            EventType::SolutionAccepted => write!(f, "solution_accepted"),
-            EventType::SolutionRefuted => write!(f, "solution_refuted"),
+            EventType::SolutionSubmitted => write!(f, "solution_submitted"),
+            EventType::SolutionApproved => write!(f, "solution_approved"),
+            EventType::SolutionWithdrawn => write!(f, "solution_withdrawn"),
             EventType::CritiqueRaised => write!(f, "critique_raised"),
             EventType::CritiqueAddressed => write!(f, "critique_addressed"),
             EventType::CritiqueDismissed => write!(f, "critique_dismissed"),

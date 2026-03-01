@@ -193,10 +193,10 @@ section "Solve with --github-close"
 run_jjj solution new "Add session keepalive" --problem "Login is slow"
 assert_success "create solution for login problem"
 
-run_jjj solution review "Add session keepalive"
+run_jjj solution submit "Add session keepalive"
 assert_success "move solution to review"
 
-run_jjj solution accept "Add session keepalive" --force
+run_jjj solution approve "Add session keepalive" --force
 assert_success "force-accept solution"
 
 run_jjj problem solve "Login is slow" --github-close

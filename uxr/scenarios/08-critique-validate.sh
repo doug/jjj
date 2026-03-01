@@ -13,8 +13,8 @@
 #   critique show --json  (structured output)
 #
 # Note: --file/--line/--reviewer appear in critique show text output and --json.
-# Note: Both Open and Valid critiques hard-block solution accept.
-# Address or dismiss blocking critiques before accepting.
+# Note: Both Open and Valid critiques hard-block solution approve.
+# Address or dismiss blocking critiques before approving.
 #
 # Tests: validate, dismiss, reply, edit, file/line annotations,
 #        reviewer assignment, list filters, show --json
@@ -189,7 +189,7 @@ assert_contains "DoS risk" "validated critique in list"
 observe "Validate means: this critique is confirmed correct — the solution has a flaw"
 
 # Valid critiques hard-block acceptance (same as Open critiques)
-run_jjj solution accept "JSON schema" --no-rationale
+run_jjj solution approve "JSON schema" --no-rationale
 assert_failure "accept is blocked by validated critique"
 observe "Validated critiques hard-block acceptance — must resolve them first"
 
@@ -197,9 +197,9 @@ observe "Validated critiques hard-block acceptance — must resolve them first"
 run_jjj critique address "DoS risk"
 assert_success "address the validated critique"
 
-run_jjj solution accept "JSON schema" --no-rationale
+run_jjj solution approve "JSON schema" --no-rationale
 assert_success "accept succeeds after addressing the blocking critique"
-assert_contains "accepted" "solution accepted"
+assert_contains "approved" "solution accepted"
 
 observe "Address or dismiss a validated critique to unblock acceptance"
 observe "Convention: if a critique is validated, fix the flaw, address the critique, then accept"
@@ -217,10 +217,10 @@ assert_success "add low-severity critique to new solution"
 run_jjj critique validate "adds 2MB"
 assert_success "validate the size critique"
 
-run_jjj solution refute "Rewrite validation" \
+run_jjj solution withdraw "Rewrite validation" \
     --rationale "2MB binary increase violates our 1MB size budget for this service"
 assert_success "refute solution because validated critique confirms it violates constraints"
-assert_contains "refuted" "solution is now refuted"
+assert_contains "withdrawn" "solution is now refuted"
 
 observe "Validated critique → explicit refute → clear audit trail of why the approach failed"
 
@@ -237,10 +237,10 @@ assert_success "add test coverage critique"
 run_jjj critique address "edge cases"
 assert_success "address the coverage critique"
 
-run_jjj solution accept "Inline schema" \
+run_jjj solution approve "Inline schema" \
     --rationale "Zero-dependency validation eliminates size concern; test coverage added"
 assert_success "accept final solution with all critiques resolved"
-assert_contains "accepted" "solution accepted"
+assert_contains "approved" "solution accepted"
 
 observe "Full validate→refute→new solution→accept cycle completes cleanly"
 

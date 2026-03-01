@@ -39,7 +39,7 @@ impl MetadataStore {
             approach: sections.get("Approach").cloned().unwrap_or_default(),
             tradeoffs: sections.get("Trade-offs").cloned().unwrap_or_default(),
             supersedes: frontmatter.supersedes,
-            force_accepted: frontmatter.force_accepted,
+            force_approved: frontmatter.force_approved,
             github_pr: frontmatter.github_pr,
             github_branch: frontmatter.github_branch,
         };

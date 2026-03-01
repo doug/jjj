@@ -504,11 +504,11 @@ fn test_critique_blocks_solution_accept() {
         &dir,
         &["solution", "new", "Blocked", "--problem", "Problem"],
     );
-    run_jjj_success(&dir, &["solution", "review", "Blocked"]);
+    run_jjj_success(&dir, &["solution", "submit", "Blocked"]);
     run_jjj_success(&dir, &["critique", "new", "Blocked", "Blocker"]);
 
     // Try to submit - should fail (open critique)
-    let output = run_jjj(&dir, &["submit", "Blocked"]);
+    let output = run_jjj(&dir, &["solution", "approve", "Blocked"]);
     assert!(
         !output.status.success(),
         "Submit should fail with open critique"
@@ -518,8 +518,8 @@ fn test_critique_blocks_solution_accept() {
     run_jjj_success(&dir, &["critique", "address", "Blocker"]);
 
     // Now submit should work
-    let stdout = run_jjj_success(&dir, &["submit", "Blocked"]);
-    assert!(stdout.contains("accepted"), "Expected accepted: {}", stdout);
+    let stdout = run_jjj_success(&dir, &["solution", "approve", "Blocked"]);
+    assert!(stdout.contains("approved") || stdout.contains("Approved"), "Expected approved: {}", stdout);
 }
 
 #[test]
@@ -548,8 +548,8 @@ fn test_critique_on_finalized_solution_warns() {
         &dir,
         &["solution", "new", "Solution", "--problem", "Problem"],
     );
-    run_jjj_success(&dir, &["solution", "review", "Solution"]);
-    run_jjj_success(&dir, &["submit", "Solution"]);
+    run_jjj_success(&dir, &["solution", "submit", "Solution"]);
+    run_jjj_success(&dir, &["solution", "approve", "Solution"]);
 
     // Creating critique on accepted solution should warn but succeed
     let output = run_jjj(&dir, &["critique", "new", "Solution", "Late Critique"]);
@@ -562,7 +562,7 @@ fn test_critique_on_finalized_solution_warns() {
     // Should contain warning about finalized solution
     assert!(
         combined.contains("Warning")
-            || combined.contains("Accepted")
+            || combined.contains("Approved")
             || combined.contains("already"),
         "Expected warning about finalized solution: {}",
         combined

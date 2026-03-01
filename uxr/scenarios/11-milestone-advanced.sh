@@ -162,12 +162,12 @@ run_jjj critique new "Add nil check" "Test coverage missing" --severity low
 assert_success "add low-severity critique"
 run_jjj critique address "Test coverage"
 assert_success "address the critique"
-run_jjj solution accept "Add nil check" --no-rationale
+run_jjj solution approve "Add nil check" --no-rationale
 assert_success "accept login crash solution"
 
 run_jjj solution new "Fix flexbox order in settings" --problem "Settings page"
 assert_success "create solution for layout bug"
-run_jjj solution accept "Fix flexbox" --no-rationale
+run_jjj solution approve "Fix flexbox" --no-rationale
 assert_success "accept settings layout solution"
 
 # Both v1.0 problems are now solved — check roadmap reflects this

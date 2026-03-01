@@ -103,7 +103,7 @@ section "Step 8: Accept the Solution"
 # ============================================================================
 
 # Accept should work now (no open critiques)
-run_jjj solution accept "search index" --no-rationale
+run_jjj solution approve "search index" --no-rationale
 assert_success "accept solution with all critiques resolved"
 
 # Problem should auto-transition to solved (only solution)

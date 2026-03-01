@@ -102,24 +102,6 @@ pub enum Commands {
         action: MilestoneAction,
     },
 
-    // ── Workflow ───────────────────────────────────────────────────────────
-
-    /// Squash the current change into trunk, accepting the solution
-    ///
-    /// The solution must be in review (`jjj solution review`) and have no open
-    /// critiques. Use --force to override open critiques.
-    ///
-    /// If SOLUTION is omitted, the solution attached to the current jj change is used.
-    #[command(display_order = 20)]
-    Submit {
-        /// Solution ID, short prefix, or fuzzy title (optional — defaults to current change)
-        solution: Option<String>,
-
-        /// Accept despite open critiques
-        #[arg(long)]
-        force: bool,
-    },
-
     // ── Discover ───────────────────────────────────────────────────────────
 
     /// Search problems, solutions, and critiques by text or semantic similarity
@@ -494,7 +476,7 @@ pub enum SolutionAction {
         #[arg(long)]
         problem: Option<String>,
 
-        /// Filter by status: proposed, review, accepted, refuted
+        /// Filter by status: proposed, submitted, approved, withdrawn
         #[arg(long)]
         status: Option<String>,
 
@@ -532,7 +514,7 @@ pub enum SolutionAction {
         #[arg(long)]
         title: Option<String>,
 
-        /// New status: proposed, review, accepted, refuted
+        /// New status: proposed, submitted, approved, withdrawn
         #[arg(long)]
         status: Option<String>,
     },
@@ -562,20 +544,34 @@ pub enum SolutionAction {
         force: bool,
     },
 
-    /// Mark a solution as ready for review
+    /// Submit a solution for review — opens it for critique
     #[command(display_order = 6)]
-    Review {
+    Submit {
         /// Solution ID, short prefix, or fuzzy title
         solution_id: String,
     },
 
-    /// Refute a solution — a critique proved it won't work
+    /// Approve a solution — accept critique, integrate code, solve the problem
+    ///
+    /// The solution must be submitted (`jjj solution submit`) with no open
+    /// critiques. Use --force to override open critiques.
+    #[command(display_order = 7)]
+    Approve {
+        /// Solution ID, short prefix, or fuzzy title (optional — defaults to current change)
+        solution_id: Option<String>,
+
+        /// Approve despite open critiques
+        #[arg(long)]
+        force: bool,
+    },
+
+    /// Withdraw a solution — pull it back from review
     #[command(display_order = 8)]
-    Refute {
+    Withdraw {
         /// Solution ID, short prefix, or fuzzy title
         solution_id: String,
 
-        /// Record why this solution was refuted
+        /// Record why this solution was withdrawn
         #[arg(long)]
         rationale: Option<String>,
 

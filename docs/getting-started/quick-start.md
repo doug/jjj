@@ -46,7 +46,7 @@ multiple competing solutions.
 ## Start Working
 
 The `solution new` command creates a solution, a new jj change, and attaches
-it. The solution stays `proposed` until you run `solution review` to submit it
+it. The solution stays `proposed` until you run `solution submit` to submit it
 for review. To resume work on an existing solution:
 
 ```bash
@@ -82,17 +82,21 @@ Other resolution options:
   should be refuted
 - `jjj critique dismiss "Missing error"` -- the critique is incorrect or irrelevant
 
-## Submit
+## Submit and Approve
 
-When your work is ready, submit squashes the change and completes the
-solution:
+When your work is ready for review, submit it:
 
 ```bash
-jjj submit
+jjj solution submit "Add search index"
 ```
 
-Submit auto-accepts the solution if all critiques are resolved and all
-assigned reviewers have signed off. If this is the only solution for the
+Once all critiques are resolved and any assigned reviewers have signed off, approve it:
+
+```bash
+jjj solution approve "Add search index"
+```
+
+Approve integrates the change and marks the solution approved. If this is the only solution for the
 problem, it offers to mark the problem as solved too.
 
 ## Check What's Next
@@ -130,8 +134,8 @@ Key bindings:
 | `Tab` | Switch between Next Actions and Project Tree |
 | `↑` / `↓` or `j` / `k` | Navigate items |
 | `→` / `←` | Expand / collapse tree nodes |
-| `a` | Accept selected solution |
-| `r` | Refute selected solution |
+| `a` | Approve selected solution |
+| `r` | Withdraw selected solution |
 | `d` | Dismiss selected critique |
 | `/` | Search / filter |
 | `?` | Show all key bindings |
@@ -153,7 +157,7 @@ break.
 history (`jjj`). It never pollutes your project history and can be
 pushed or fetched independently.
 
-**Critique Blocking** -- A solution cannot be accepted while it has open
+**Critique Blocking** -- A solution cannot be approved while it has open
 critiques. All criticism must be explicitly addressed, validated, or dismissed.
 This enforces intellectual honesty.
 
@@ -175,9 +179,11 @@ problems surface first.
 | `jjj solution new "title" --problem "Search" --reviewer @alice` | Propose with reviewer |
 | `jjj solution list` | List all solutions |
 | `jjj solution resume "search index"` | Switch to a solution's change |
+| `jjj solution submit "search index"` | Submit solution for review |
+| `jjj solution approve "search index"` | Approve solution, integrate code |
+| `jjj solution withdraw "search index"` | Withdraw solution |
 | `jjj critique new "search index" "title" --severity medium` | Critique a solution |
 | `jjj critique address "Missing error"` | Mark critique as addressed |
-| `jjj submit` | Squash, accept solution, solve problem |
 | `jjj push` | Push code and metadata to remote |
 | `jjj fetch` | Fetch code and metadata from remote |
 | `jjj milestone new "v1.0" --date 2025-06-01` | Create a milestone |

@@ -759,12 +759,12 @@ OUTPUT=$(jjj_alice status)
 assert_contains "$OUTPUT" "READY" "Solution shows as ready"
 
 # Alice accepts the solution
-OUTPUT=$(jjj_alice solution accept s1 <<< "n")
-assert_contains "$OUTPUT" "accepted" "Solution accepted"
+OUTPUT=$(jjj_alice solution approve s1 <<< "n")
+assert_contains "$OUTPUT" "approved" "Solution approved"
 
 # Verify the solution is accepted
 OUTPUT=$(jjj_alice solution show s1)
-assert_contains "$OUTPUT" "accepted" "Solution status is accepted"
+assert_contains "$OUTPUT" "approved" "Solution status is approved"
 
 # ============================================================================
 section "VERIFICATION: Check final state"

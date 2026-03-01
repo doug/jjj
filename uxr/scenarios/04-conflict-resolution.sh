@@ -121,11 +121,11 @@ run_jjj critique new "caching" "Cache invalidation is hard" --severity high
 assert_success "critique on caching solution"
 
 # Alice tries to accept her solution (should be blocked)
-run_jjj solution accept "caching" --no-rationale
+run_jjj solution approve "caching" --no-rationale
 assert_failure "cannot accept with open critique"
 
 # Bob's solution has no critiques, can be accepted
-run_jjj solution accept "database" --no-rationale
+run_jjj solution approve "database" --no-rationale
 assert_success "accept bob's uncontested solution"
 
 # ============================================================================
@@ -214,11 +214,11 @@ run_jjj critique address "Issue found"
 assert_success "address critique"
 
 # Accept solution
-run_jjj solution accept "SM solution" --no-rationale
+run_jjj solution approve "SM solution" --no-rationale
 assert_success "accept solution"
 
 # Double-accept should be rejected
-run_jjj solution accept "SM solution" --no-rationale
+run_jjj solution approve "SM solution" --no-rationale
 assert_failure "double-accept is rejected"
 
 # Try invalid transitions

@@ -40,10 +40,10 @@ jjj implements Popperian epistemology for software development:
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                            SOLUTIONS (Conjectures)                          │
 │                                                                              │
-│  proposed ────► review ────► accepted                                       │
+│  proposed ────► submitted ────► approved                                       │
 │                    │              │                                          │
 │                    ▼              └───► Problem can be solved               │
-│                 refuted                                                      │
+│                 withdrawn                                                      │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
                                           │
@@ -87,7 +87,7 @@ jjj solution new "Use JWT with explicit refresh handling" --problem "Token refre
 
 # 5. Start working on the solution
 jjj solution resume "JWT with explicit"
-# → Creates jj change, attaches to solution (stays "proposed" until solution review)
+# → Creates jj change, attaches to solution (stays "proposed" until solution submit)
 # → "Token refresh" moves to "in_progress"
 
 # 6. Write code...

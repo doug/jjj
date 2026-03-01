@@ -313,7 +313,7 @@ fn test_solution_supersedes() {
         dir_path,
         &["solution", "new", "Add index", "--problem", "Slow queries"],
     );
-    run_jjj(dir_path, &["solution", "refute", "Add index"]);
+    run_jjj(dir_path, &["solution", "withdraw", "Add index"]);
 
     let output = run_jjj(
         dir_path,

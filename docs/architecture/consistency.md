@@ -34,6 +34,6 @@ Events are ordered by their timestamps and parent relationships.
 
 ### 4. Verified Transitions
 Every state change (proposed $\rightarrow$ testing $\rightarrow$ accepted) is verified at the moment of the request.
-- `jjj solution accept` doesn't just check the SQLite cache.
+- `jjj solution approve` doesn't just check the SQLite cache.
 - It scans the shadow graph for any critiques that might have been fetched recently and have not yet been addressed.
-- The "accepted" state is a logical conclusion of the surviving events, not just a cached row in the SQLite index.
+- The "approved" state is a logical conclusion of the surviving events, not just a cached row in the SQLite index.

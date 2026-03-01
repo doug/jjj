@@ -305,7 +305,7 @@ fn print_problem_tree(store: &MetadataStore, problem: &Problem, depth: usize) ->
     } else {
         let accepted = solutions
             .iter()
-            .filter(|s| s.status == crate::models::SolutionStatus::Accepted)
+            .filter(|s| s.status == crate::models::SolutionStatus::Approved)
             .count();
         format!(" ({} solutions, {} accepted)", solutions.len(), accepted)
     };
@@ -373,9 +373,9 @@ fn show_problem(ctx: &CommandContext, problem_input: String, json: bool) -> Resu
         for solution in &solutions {
             let status_icon = match solution.status {
                 crate::models::SolutionStatus::Proposed => " ",
-                crate::models::SolutionStatus::Review => ">",
-                crate::models::SolutionStatus::Accepted => "+",
-                crate::models::SolutionStatus::Refuted => "x",
+                crate::models::SolutionStatus::Submitted => ">",
+                crate::models::SolutionStatus::Approved => "+",
+                crate::models::SolutionStatus::Withdrawn => "x",
             };
             println!(
                 "  {} {} - {} [{}]",
@@ -440,11 +440,11 @@ fn edit_problem(
             if new_status == ProblemStatus::Solved {
                 let solutions = store.get_solutions_for_problem(&problem_id)?;
                 let has_accepted = solutions.iter().any(|s| {
-                    s.status == crate::models::SolutionStatus::Accepted
+                    s.status == crate::models::SolutionStatus::Approved
                 });
                 if !has_accepted {
                     return Err(crate::error::JjjError::Validation(
-                        "Cannot mark as solved: no accepted solution. Use 'jjj solution accept' first, or 'jjj problem dissolve' if the problem is no longer relevant.".to_string(),
+                        "Cannot mark as solved: no approved solution. Use 'jjj solution approve' first, or 'jjj problem dissolve' if the problem is no longer relevant.".to_string(),
                     ));
                 }
             }

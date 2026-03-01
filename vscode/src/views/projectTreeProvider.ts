@@ -9,7 +9,7 @@ function isOpenProblem(p: Problem): boolean {
 }
 
 function isOpenSolution(s: Solution): boolean {
-  return s.status !== "accepted" && s.status !== "refuted";
+  return s.status !== "approved" && s.status !== "withdrawn";
 }
 
 function isOpenCritique(c: Critique): boolean {
@@ -59,11 +59,11 @@ class SolutionNode extends vscode.TreeItem {
     const critDesc = critiqueCount > 0 ? ` — ${critiqueCount} critiques` : "";
     const changeDesc = solution.change_ids.length > 0 ? ` [${solution.change_ids.length} changes]` : "";
     this.description = `${solution.id} [${solution.status}]${critDesc}${changeDesc}`;
-    this.iconPath = solution.status === "accepted"
+    this.iconPath = solution.status === "approved"
       ? new vscode.ThemeIcon("check", new vscode.ThemeColor("testing.iconPassed"))
-      : solution.status === "refuted"
+      : solution.status === "withdrawn"
         ? new vscode.ThemeIcon("x", new vscode.ThemeColor("errorForeground"))
-        : solution.status === "review"
+        : solution.status === "submitted"
           ? new vscode.ThemeIcon("beaker")
           : new vscode.ThemeIcon("lightbulb");
     this.command = {

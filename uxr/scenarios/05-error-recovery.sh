@@ -147,12 +147,12 @@ $JJJ problem new "Blocked accept test" --priority low 2>/dev/null
 $JJJ solution new "Blocked solution" --problem "Blocked accept" 2>/dev/null
 $JJJ critique new "Blocked solution" "Blocking critique" --severity high 2>/dev/null
 
-run_jjj solution accept "Blocked solution" --no-rationale
+run_jjj solution approve "Blocked solution" --no-rationale
 assert_failure "accept blocked by open critique"
 assert_contains "critique" "error mentions the blocking critique"
 
 # Force accept should work
-run_jjj solution accept "Blocked solution" --force --no-rationale
+run_jjj solution approve "Blocked solution" --force --no-rationale
 assert_success "force accept bypasses critique check"
 
 # ============================================================================

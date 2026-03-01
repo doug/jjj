@@ -180,12 +180,12 @@ fn test_solution_list_filter_by_status() {
             "Problem",
         ],
     );
-    run_jjj_success(&dir, &["solution", "review", "Accepted Solution"]);
-    run_jjj_success(&dir, &["submit", "Accepted Solution"]);
+    run_jjj_success(&dir, &["solution", "submit", "Accepted Solution"]);
+    run_jjj_success(&dir, &["solution", "approve", "Accepted Solution"]);
 
-    let stdout = run_jjj_success(&dir, &["solution", "list", "--status", "accepted"]);
+    let stdout = run_jjj_success(&dir, &["solution", "list", "--status", "approved"]);
     assert!(
-        stdout.contains("Accepted Solution"),
+        stdout.contains("Accepted Solution") || stdout.contains("Approved Solution") || stdout.contains("Accepted Solution"),
         "Expected accepted solution: {}",
         stdout
     );
@@ -293,18 +293,18 @@ fn test_solution_submit() {
         &dir,
         &["solution", "new", "Submittable", "--problem", "Problem"],
     );
-    run_jjj_success(&dir, &["solution", "review", "Submittable"]);
+    run_jjj_success(&dir, &["solution", "submit", "Submittable"]);
 
-    let stdout = run_jjj_success(&dir, &["submit", "Submittable"]);
+    let stdout = run_jjj_success(&dir, &["solution", "approve", "Submittable"]);
     assert!(
-        stdout.contains("accepted"),
+        stdout.contains("approved"),
         "Expected accepted confirmation: {}",
         stdout
     );
 
     let show = run_jjj_success(&dir, &["solution", "show", "Submittable"]);
     assert!(
-        show.contains("Accepted") || show.contains("accepted"),
+        show.contains("Approved") || show.contains("approved"),
         "Expected accepted status: {}",
         show
     );
@@ -328,10 +328,10 @@ fn test_solution_submit_blocked_by_critiques() {
             "Problem",
         ],
     );
-    run_jjj_success(&dir, &["solution", "review", "Blocked Solution"]);
+    run_jjj_success(&dir, &["solution", "submit", "Blocked Solution"]);
     run_jjj_success(&dir, &["critique", "new", "Blocked Solution", "Major flaw"]);
 
-    let output = run_jjj(&dir, &["submit", "Blocked Solution"]);
+    let output = run_jjj(&dir, &["solution", "approve", "Blocked Solution"]);
     assert!(
         !output.status.success(),
         "Submit should fail with open critiques"
@@ -356,12 +356,12 @@ fn test_solution_submit_force() {
         &dir,
         &["solution", "new", "Force Submit", "--problem", "Problem"],
     );
-    run_jjj_success(&dir, &["solution", "review", "Force Submit"]);
+    run_jjj_success(&dir, &["solution", "submit", "Force Submit"]);
     run_jjj_success(&dir, &["critique", "new", "Force Submit", "Minor issue"]);
 
-    let stdout = run_jjj_success(&dir, &["submit", "Force Submit", "--force"]);
+    let stdout = run_jjj_success(&dir, &["solution", "approve", "Force Submit", "--force"]);
     assert!(
-        stdout.contains("accepted"),
+        stdout.contains("approved"),
         "Expected force-accepted confirmation: {}",
         stdout
     );
@@ -380,17 +380,17 @@ fn test_solution_refute() {
         &["solution", "new", "Bad Solution", "--problem", "Problem"],
     );
 
-    let stdout = run_jjj_success(&dir, &["solution", "refute", "Bad Solution"]);
+    let stdout = run_jjj_success(&dir, &["solution", "withdraw", "Bad Solution"]);
     assert!(
-        stdout.contains("refuted"),
-        "Expected refuted confirmation: {}",
+        stdout.contains("withdrawn"),
+        "Expected withdrawn confirmation: {}",
         stdout
     );
 
     let show = run_jjj_success(&dir, &["solution", "show", "Bad Solution"]);
     assert!(
-        show.contains("Refuted") || show.contains("refuted"),
-        "Expected refuted status: {}",
+        show.contains("Withdrawn") || show.contains("withdrawn"),
+        "Expected withdrawn status: {}",
         show
     );
 }
@@ -413,7 +413,7 @@ fn test_solution_supersedes() {
             "Problem",
         ],
     );
-    run_jjj_success(&dir, &["solution", "refute", "Original Solution"]);
+    run_jjj_success(&dir, &["solution", "withdraw", "Original Solution"]);
     run_jjj_success(
         &dir,
         &[
@@ -456,11 +456,11 @@ fn test_solution_test_status() {
         show
     );
 
-    run_jjj_success(&dir, &["solution", "review", "Test Status"]);
+    run_jjj_success(&dir, &["solution", "submit", "Test Status"]);
     let show = run_jjj_success(&dir, &["solution", "show", "Test Status"]);
     assert!(
-        show.contains("Review") || show.contains("review"),
-        "Expected review status after solution review: {}",
+        show.contains("Submitted") || show.contains("submitted"),
+        "Expected submitted status after solution submit: {}",
         show
     );
 }

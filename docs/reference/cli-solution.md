@@ -5,7 +5,7 @@ description: CLI reference for creating, listing, attaching, accepting, and refu
 
 # Solution Commands
 
-Solutions are conjectures proposed to solve problems. They go through a lifecycle: proposed, review, accepted, or refuted. Solutions can have jj changes attached, be critiqued, and have reviewers assigned whose sign-offs gate acceptance.
+Solutions are conjectures proposed to solve problems. They go through a lifecycle: proposed, submitted, approved, or withdrawn. Solutions can have jj changes attached, be critiqued, and have reviewers assigned whose sign-offs gate acceptance.
 
 ## `jjj solution new`
 
@@ -22,7 +22,7 @@ jjj solution new <title> [OPTIONS]
 | `--reviewer` | string (repeatable) | no | Assign reviewers at creation (e.g., `@alice`) |
 | `--force`, `-f` | flag | no | Create even if a similar solution already exists |
 
-When `--problem` is not provided, lists open problems and prompts you to select one interactively. After creation, automatically creates a jj change and attaches it to the solution. The solution stays in `proposed` status until you explicitly run `solution review`.
+When `--problem` is not provided, lists open problems and prompts you to select one interactively. After creation, automatically creates a jj change and attaches it to the solution. The solution stays in `proposed` status until you explicitly run `solution submit`.
 
 ```bash,test
 jjj init
@@ -38,7 +38,7 @@ Assign reviewers at creation:
 jjj solution new "Add caching" --problem "Login is too slow" --reviewer @alice --reviewer @bob
 ```
 
-When reviewers are assigned, the solution requires all of them to sign off before it can be accepted. Sign-offs are recorded via review-type critiques. Review is not required by default -- it is enabled per-solution by assigning reviewers.
+When reviewers are assigned, the solution requires all of them to sign off before it can be approved. Sign-offs are recorded via review-type critiques. Review is not required by default -- it is enabled per-solution by assigning reviewers.
 
 ## `jjj solution list`
 
@@ -51,13 +51,13 @@ jjj solution list [OPTIONS]
 | Flag | Type | Description |
 |------|------|-------------|
 | `--problem` | string | Filter by problem |
-| `--status` | string | Filter by status (proposed, review, refuted, accepted) |
+| `--status` | string | Filter by status (proposed, submitted, withdrawn, approved) |
 | `--search` | string | Search solutions by title text |
 | `--json` | bool | Output in JSON format |
 
 ```bash,test
 jjj solution list --problem "Login is too slow"
-jjj solution list --status review
+jjj solution list --status submitted
 jjj solution list --json
 ```
 
@@ -122,29 +122,29 @@ jjj solution detach "Add connection"
 jjj solution detach "Add connection" abc123
 ```
 
-## `jjj solution review`
+## `jjj solution submit`
 
-Mark a solution as ready for review.
+Submit a solution for review — opens it for critique.
 
 ```
-jjj solution review <solution_id>
+jjj solution submit <solution_id>
 ```
 
 ```bash
-jjj solution review "Add connection"
+jjj solution submit "Add connection"
 ```
 
-## `jjj solution accept`
+## `jjj solution approve`
 
-Accept a solution. Requires no open critiques (including review critiques).
+Approve a solution — accept critique, integrate code, solve the problem. Requires no open critiques (including critique-based review).
 
 ```
-jjj solution accept <solution_id> [OPTIONS]
+jjj solution approve <solution_id> [OPTIONS]
 ```
 
 | Flag | Type | Description |
 |------|------|-------------|
-| `--force` | bool | Force accept even with open critiques (sets `force_accepted` flag) |
+| `--force` | bool | Force approve even with open critiques (sets `force_approved` flag) |
 | `--rationale` | string | Reason for accepting |
 | `--no-rationale` | flag | Skip the rationale prompt |
 
@@ -153,19 +153,19 @@ The acceptance gate checks that all critiques are resolved (addressed, dismissed
 1. **Regular critiques** -- issues raised about the solution's approach
 2. **Review critiques** -- review requests (critiques with `--reviewer` flag) that must be addressed by the assigned reviewer
 
-Using `--force` bypasses the check and sets the `force_accepted` flag on the solution.
+Using `--force` bypasses the check and sets the `force_approved` flag on the solution.
 
 ```bash
-jjj solution accept "Add connection"
-jjj solution accept "Add connection" --force
+jjj solution approve "Add connection"
+jjj solution approve "Add connection" --force
 ```
 
-## `jjj solution refute`
+## `jjj solution withdraw`
 
 Refute a solution (criticism showed it will not work).
 
 ```
-jjj solution refute <solution_id> [OPTIONS]
+jjj solution withdraw <solution_id> [OPTIONS]
 ```
 
 | Flag | Type | Description |
@@ -174,7 +174,7 @@ jjj solution refute <solution_id> [OPTIONS]
 | `--no-rationale` | flag | Skip the rationale prompt |
 
 ```bash
-jjj solution refute "Add connection"
+jjj solution withdraw "Add connection"
 ```
 
 ## `jjj solution assign`

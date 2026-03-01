@@ -3,7 +3,7 @@
 //! Entities follow a three-tier model:
 //! - **Problems**: things to solve, forming a DAG via `parent_id`
 //! - **Solutions**: conjectures attached to jj Change IDs (not commit hashes)
-//! - **Critiques**: error-elimination feedback that can block solution acceptance
+//! - **Critiques**: error-elimination feedback that can block solution approval
 //!
 //! All metadata lives in an orphaned `jjj` bookmark and syncs via `jj git push/fetch`.
 //! There is no central server and no database required for the core workflow.

@@ -164,7 +164,7 @@ columns = ["TODO", "In Progress", "Review", "Done"]
 allowed = ["backend", "frontend", "api", "ui"]
 
 # Review is now per-solution via assigned reviewers.
-# See solution --review flag and jjj solution review.
+# See solution --submit flag and jjj solution submit.
 ```
 
 #### Markdown with YAML Frontmatter for Work Items

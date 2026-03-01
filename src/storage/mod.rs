@@ -322,7 +322,7 @@ impl MetadataStore {
         let solutions = self.get_solutions_for_problem(problem_id)?;
         let has_accepted = solutions
             .iter()
-            .any(|s| s.status == SolutionStatus::Accepted);
+            .any(|s| s.status == SolutionStatus::Approved);
 
         if has_accepted {
             return Ok((true, String::new()));

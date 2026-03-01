@@ -65,9 +65,9 @@ section "Step 3: Solve 1 problem → 33%"
 
 run_jjj solution new "Add nil guard to auth handler" --problem "Fix login crash" --force
 assert_success "create solution for crash fix"
-run_jjj solution review "Add nil guard"
+run_jjj solution submit "Add nil guard"
 assert_success "review solution"
-run_jjj solution accept "Add nil guard" --no-rationale
+run_jjj solution approve "Add nil guard" --no-rationale
 assert_success "accept solution"
 run_jjj problem solve "Fix login crash"
 assert_success "solve first problem"

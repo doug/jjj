@@ -40,12 +40,13 @@ pub fn execute(ctx: &CommandContext, action: SolutionAction) -> Result<()> {
             change_id,
             force,
         } => detach_change(ctx, solution_id, change_id, force),
-        SolutionAction::Review { solution_id } => review_solution(ctx, solution_id),
-        SolutionAction::Refute {
+        SolutionAction::Submit { solution_id } => submit_solution(ctx, solution_id),
+        SolutionAction::Withdraw {
             solution_id,
             rationale,
             no_rationale,
-        } => refute_solution(ctx, solution_id, rationale, no_rationale),
+        } => withdraw_solution(ctx, solution_id, rationale, no_rationale),
+        SolutionAction::Approve { solution_id, force } => approve_solution(ctx, solution_id, force),
         SolutionAction::Assign { solution_id, to } => assign_solution(ctx, solution_id, to),
         SolutionAction::Resume { solution_id } => resume_solution(ctx, solution_id),
         SolutionAction::Lgtm { solution_id } => lgtm_solution(ctx, solution_id),
@@ -64,6 +65,7 @@ fn new_solution(
     force: bool,
 ) -> Result<()> {
     let store = &ctx.store;
+    
     let jj_client = ctx.jj();
 
     // Validate title is not empty
@@ -258,6 +260,7 @@ fn list_solutions(
     json: bool,
 ) -> Result<()> {
     let store = &ctx.store;
+    
 
     let mut solutions = store.list_solutions()?;
 
@@ -325,9 +328,9 @@ fn list_solutions(
     {
         let status_icon = match solution.status {
             SolutionStatus::Proposed => " ",
-            SolutionStatus::Review => ">",
-            SolutionStatus::Accepted => "+",
-            SolutionStatus::Refuted => "x",
+            SolutionStatus::Submitted => ">",
+            SolutionStatus::Approved => "+",
+            SolutionStatus::Withdrawn => "x",
         };
 
         println!(
@@ -340,8 +343,9 @@ fn list_solutions(
 }
 
 fn show_solution(ctx: &CommandContext, solution_input: String, json: bool) -> Result<()> {
-    let solution_id = ctx.resolve_solution(&solution_input)?;
     let store = &ctx.store;
+    let solution_id = ctx.resolve_solution(&solution_input)?;
+    
 
     let solution = store.load_solution(&solution_id)?;
 
@@ -352,7 +356,7 @@ fn show_solution(ctx: &CommandContext, solution_input: String, json: bool) -> Re
 
     println!("Solution: {} - {}", solution.id, solution.title);
     println!("Status: {}", solution.status);
-    if solution.force_accepted {
+    if solution.force_approved {
         println!("Force accepted: yes");
     }
     println!("Addresses: {}", solution.problem_id);
@@ -417,8 +421,9 @@ fn edit_solution(
     title: Option<String>,
     status: Option<String>,
 ) -> Result<()> {
-    let solution_id = ctx.resolve_solution(&solution_input)?;
     let store = &ctx.store;
+    let solution_id = ctx.resolve_solution(&solution_input)?;
+    
 
     store.with_metadata(&format!("Edit solution {}", solution_id), || {
         let mut solution = store.load_solution(&solution_id)?;
@@ -442,8 +447,9 @@ fn edit_solution(
 }
 
 fn attach_change(ctx: &CommandContext, solution_input: String, force: bool) -> Result<()> {
-    let solution_id = ctx.resolve_solution(&solution_input)?;
     let store = &ctx.store;
+    let solution_id = ctx.resolve_solution(&solution_input)?;
+    
     let jj_client = ctx.jj();
 
     let change_id = jj_client.current_change_id()?;
@@ -487,8 +493,9 @@ fn detach_change(
     change_id: Option<String>,
     force: bool,
 ) -> Result<()> {
-    let solution_id = ctx.resolve_solution(&solution_input)?;
     let store = &ctx.store;
+    let solution_id = ctx.resolve_solution(&solution_input)?;
+    
     let jj_client = ctx.jj();
 
     let change_id = match change_id {
@@ -501,9 +508,9 @@ fn detach_change(
         let solution = store.load_solution(&solution_id)?;
 
         // Block detach from Review solutions
-        if solution.status == SolutionStatus::Review {
+        if solution.status == SolutionStatus::Submitted {
             return Err(crate::error::JjjError::Validation(format!(
-                "Cannot detach change from solution {} while in Review state. Use --force to override.",
+                "Cannot detach change from solution {} while in Submitted state. Use --force to override.",
                 solution_id
             )));
         }
@@ -541,17 +548,18 @@ fn detach_change(
     )
 }
 
-fn review_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
-    let solution_id = ctx.resolve_solution(&solution_input)?;
+fn submit_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
     let store = &ctx.store;
+    let solution_id = ctx.resolve_solution(&solution_input)?;
+    
     let user = store.get_current_user().unwrap_or_default();
 
-    store.with_metadata(&format!("Move solution {} to review", solution_id), || {
+    store.with_metadata(&format!("Submit solution {} for review", solution_id), || {
         let mut solution = store.load_solution(&solution_id)?;
-        solution.start_review();
+        solution.submit();
         store.save_solution(&solution)?;
 
-        let event = Event::new(EventType::SolutionReviewed, solution_id.clone(), user.clone())
+        let event = Event::new(EventType::SolutionSubmitted, solution_id.clone(), user.clone())
             .with_extra(EventExtra {
                 problem: Some(solution.problem_id.clone()),
                 ..Default::default()
@@ -566,32 +574,108 @@ fn review_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
             println!("Problem {} moved to in_progress", problem.id);
         }
 
-        println!("Solution {} moved to review", solution_id);
+        println!("Solution {} submitted for review", solution_id);
         Ok(())
     })
+}
+
+fn approve_solution(ctx: &CommandContext, solution_input: Option<String>, force: bool) -> Result<()> {
+    use crate::sync::SyncProvider as _;
+
+    let store = &ctx.store;
+    let jj_client = ctx.jj();
+
+    // Resolve: explicit arg > current change > squash-only
+    let solution = if let Some(input) = solution_input {
+        let id = ctx.resolve_solution(&input)?;
+        store.load_solution(&id)?
+    } else {
+        let change_id = jj_client.current_change_id()?;
+        let solutions = store.list_solutions()?;
+        match solutions.into_iter().find(|s| s.change_ids.contains(&change_id)) {
+            Some(s) => s,
+            None => {
+                // No solution attached — just squash onto trunk
+                println!("No solution found for current change. Squashing only.");
+                let desc = jj_client.change_description("@").unwrap_or_default();
+                if let Some(trunk) = detect_trunk(jj_client) {
+                    jj_client.execute(&["rebase", "-d", trunk])?;
+                }
+                let msg = if desc.is_empty() { None } else { Some(desc.as_str()) };
+                jj_client.squash(msg)?;
+                println!("Approved and integrated successfully.");
+                return Ok(());
+            }
+        }
+    };
+
+    println!("Approving {}: {}", solution.id, solution.title);
+
+    if solution.status == SolutionStatus::Proposed {
+        return Err(crate::error::JjjError::Validation(format!(
+            "Solution '{}' is proposed — submit it for review first:\n  jjj solution submit {}",
+            solution.title, solution.id,
+        )));
+    }
+
+    // Finalize first (critique check, events, auto-solve) — must run before
+    // irreversible VCS ops so a blocked critique aborts cleanly.
+    finalize_solution(ctx, &solution.id, force)?;
+    println!("  Solution '{}' approved.", solution.title);
+
+    // Integrate: PR merge if linked, otherwise rebase + squash onto trunk
+    if let Some(pr_number) = solution.github_pr {
+        let config = store.load_config()?;
+        let repo_root = jj_client.repo_root();
+        let provider = crate::sync::github::GitHubProvider::from_config(repo_root, &config.github)?;
+        provider.merge_pr(pr_number)?;
+        println!("  Merged PR #{}", pr_number);
+    } else {
+        let desc = jj_client.change_description("@").unwrap_or_default();
+        if let Some(trunk) = detect_trunk(jj_client) {
+            jj_client.execute(&["rebase", "-d", trunk])?;
+        }
+        let msg = if desc.is_empty() { None } else { Some(desc.as_str()) };
+        jj_client.squash(msg)?;
+        println!("  Integrated into trunk.");
+    }
+
+    Ok(())
+}
+
+/// Find the trunk branch name for this repo (`main`, `master`, or `trunk`).
+fn detect_trunk(jj_client: &crate::jj::JjClient) -> Option<&'static str> {
+    for name in &["main", "master", "trunk"] {
+        if jj_client.bookmark_exists(name).unwrap_or(false) {
+            return Some(name);
+        }
+    }
+    None
 }
 
 /// Core acceptance logic shared by `submit` and `github merge`.
 /// Checks critiques, validates state, emits events, accepts, and auto-solves.
 /// Does NOT squash code or merge PRs — that is the caller's responsibility.
+
 pub(crate) fn finalize_solution(
     ctx: &CommandContext,
     solution_id: &str,
     force: bool,
 ) -> Result<()> {
     let store = &ctx.store;
+    
 
     let solution = store.load_solution(solution_id)?;
 
     // Already accepted — idempotent
-    if solution.status == SolutionStatus::Accepted {
+    if solution.status == SolutionStatus::Approved {
         return Ok(());
     }
 
     // Solution must be in Review to submit (or force)
-    if solution.status != SolutionStatus::Review && !force {
+    if solution.status != SolutionStatus::Submitted && !force {
         return Err(crate::error::JjjError::Validation(format!(
-            "Solution '{}' is {} — move it to review first:\n  jjj solution review {}",
+            "Solution '{}' is {} — move it to review first:\n  jjj solution submit {}",
             solution.title, solution.status, solution_id,
         )));
     }
@@ -630,15 +714,15 @@ pub(crate) fn finalize_solution(
     }
 
     let user = store.get_current_user()?;
-    let event = Event::new(EventType::SolutionAccepted, solution_id.to_string(), user);
+    let event = Event::new(EventType::SolutionApproved, solution_id.to_string(), user);
 
-    store.with_metadata(&format!("Accept solution {}", solution_id), || {
+    store.with_metadata(&format!("Approve solution {}", solution_id), || {
         store.set_pending_event(event.clone());
         let mut sol = store.load_solution(solution_id)?;
         if force {
-            sol.force_accepted = true;
+            sol.force_approved = true;
         }
-        sol.accept();
+        sol.approve();
         store.save_solution(&sol)?;
 
         // Auto-solve the parent problem
@@ -662,16 +746,17 @@ pub(crate) fn finalize_solution(
     })
 }
 
-fn refute_solution(
+fn withdraw_solution(
     ctx: &CommandContext,
     solution_input: String,
     rationale: Option<String>,
     no_rationale: bool,
 ) -> Result<()> {
+    let store = &ctx.store;
     use crate::models::{Event, EventType};
 
     let solution_id = ctx.resolve_solution(&solution_input)?;
-    let store = &ctx.store;
+    
 
     // Get rationale (prompt if not provided and not skipped)
     let rationale = if let Some(r) = rationale {
@@ -693,19 +778,19 @@ fn refute_solution(
 
     // Create event
     let user = store.get_current_user()?;
-    let mut event = Event::new(EventType::SolutionRefuted, solution_id.clone(), user);
+    let mut event = Event::new(EventType::SolutionWithdrawn, solution_id.clone(), user);
     if let Some(r) = &rationale {
         event = event.with_rationale(r);
     }
 
-    store.with_metadata(&format!("Refute solution {}", solution_id), || {
+    store.with_metadata(&format!("Withdraw solution {}", solution_id), || {
         store.set_pending_event(event.clone());
 
         let mut solution = store.load_solution(&solution_id)?;
-        solution.refute();
+        solution.withdraw();
         store.save_solution(&solution)?;
         println!(
-            "Solution {} refuted (criticism showed it won't work)",
+            "Solution {} withdrawn",
             solution_id
         );
         Ok(())
@@ -717,8 +802,9 @@ fn assign_solution(
     solution_input: String,
     assignee: Option<String>,
 ) -> Result<()> {
-    let solution_id = ctx.resolve_solution(&solution_input)?;
     let store = &ctx.store;
+    let solution_id = ctx.resolve_solution(&solution_input)?;
+    
 
     let assignee_name = match assignee {
         Some(name) => name,
@@ -738,8 +824,9 @@ fn assign_solution(
 }
 
 fn resume_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
-    let solution_id = ctx.resolve_solution(&solution_input)?;
     let store = &ctx.store;
+    let solution_id = ctx.resolve_solution(&solution_input)?;
+    
     let jj_client = ctx.jj();
 
     let solution = store.load_solution(&solution_id)?;
@@ -758,7 +845,7 @@ fn resume_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
 
             let mut solution = store.load_solution(&solution_id)?;
             solution.attach_change(change_id);
-            solution.start_review();
+            solution.submit();
             store.save_solution(&solution)?;
 
             // Update problem status
@@ -776,8 +863,9 @@ fn resume_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
 }
 
 fn lgtm_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
-    let solution_id = ctx.resolve_solution(&solution_input)?;
     let store = &ctx.store;
+    let solution_id = ctx.resolve_solution(&solution_input)?;
+    
     let current_user = store.get_current_user()?;
 
     let solution = store.load_solution(&solution_id)?;
@@ -834,7 +922,7 @@ fn lgtm_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
 
         if remaining == 0 {
             println!("All critiques resolved. Ready to accept:");
-            println!("  jjj solution accept \"{}\"", solution.title);
+            println!("  jjj solution approve \"{}\"", solution.title);
         } else {
             println!("{} critique(s) still open.", remaining);
         }
@@ -850,6 +938,7 @@ fn comment_solution(
     body: Option<String>,
 ) -> Result<()> {
     let store = &ctx.store;
+    
 
     // Resolve solution — use explicit input or fall back to the change attached to @
     let solution_id = if let Some(ref input) = solution_input {
