@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Sync Tailwind dark: utilities with the data-theme toggle */
+@variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
 :root {
   --background: #fdfbf7;
   --surface: #f7f5f0;

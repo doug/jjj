@@ -38,13 +38,13 @@ export function CollaborationDiagram() {
         viewBox="0 0 600 410"
         className="w-full h-auto"
         xmlns="http://www.w3.org/2000/svg"
-        style={{ fontFamily: 'Inter, system-ui, sans-serif', color: 'var(--text-secondary)' }}
+        style={{ fontFamily: 'Inter, system-ui, sans-serif', color: 'var(--text-primary)' }}
         aria-label="Collaboration flow: a problem branches to two competing solutions; each is critiqued; one is approved and one is withdrawn"
       >
         <defs>
           {/* Single marker reused for all arrows */}
           <marker id="flow-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-            <polygon points="0 0, 8 3, 0 6" fill="currentColor" opacity="0.45" />
+            <polygon points="0 0, 8 3, 0 6" fill="currentColor" opacity="0.7" />
           </marker>
         </defs>
 
@@ -53,12 +53,12 @@ export function CollaborationDiagram() {
         {/* Root → Solutions (branching quadratic curves) */}
         <path
           d={`M ${ROOT_CX} ${bot(ROOT.y, ROOT.h)} Q ${(ROOT_CX + SOL_A_CX) / 2} ${bot(ROOT.y, ROOT.h) + 32} ${SOL_A_CX} ${SOL_A.y}`}
-          fill="none" stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.32"
+          fill="none" stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.55"
           markerEnd="url(#flow-arrow)" strokeLinecap="round"
         />
         <path
           d={`M ${ROOT_CX} ${bot(ROOT.y, ROOT.h)} Q ${(ROOT_CX + SOL_B_CX) / 2} ${bot(ROOT.y, ROOT.h) + 32} ${SOL_B_CX} ${SOL_B.y}`}
-          fill="none" stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.32"
+          fill="none" stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.55"
           markerEnd="url(#flow-arrow)" strokeLinecap="round"
         />
 
@@ -66,13 +66,13 @@ export function CollaborationDiagram() {
         <line
           x1={SOL_A_CX}  y1={bot(SOL_A.y,  SOL_A.h)}
           x2={CRIT_A_CX} y2={CRIT_A.y}
-          stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.28"
+          stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.55"
           markerEnd="url(#flow-arrow)"
         />
         <line
           x1={SOL_B_CX}  y1={bot(SOL_B.y,  SOL_B.h)}
           x2={CRIT_B_CX} y2={CRIT_B.y}
-          stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.28"
+          stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.55"
           markerEnd="url(#flow-arrow)"
         />
 
@@ -80,13 +80,13 @@ export function CollaborationDiagram() {
         <line
           x1={CRIT_A_CX}   y1={bot(CRIT_A.y,   CRIT_A.h)}
           x2={ACCEPTED_CX}  y2={ACCEPTED.y}
-          stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.28"
+          stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.55"
           markerEnd="url(#flow-arrow)"
         />
         <line
           x1={CRIT_B_CX}  y1={bot(CRIT_B.y,  CRIT_B.h)}
           x2={REFUTED_CX} y2={REFUTED.y}
-          stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.28"
+          stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.55"
           markerEnd="url(#flow-arrow)"
         />
 
