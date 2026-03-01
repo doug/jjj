@@ -15,22 +15,22 @@ const mid  = (x: number, w: number) => x + w / 2;
 const bot  = (y: number, h: number) => y + h;
 
 // Box dimensions & positions (top-left x/y)
-const ROOT     = { x: 210, y: 20,  w: 180, h: 48 };
-const SOL_A    = { x:  65, y: 140, w: 158, h: 44 };
-const SOL_B    = { x: 377, y: 140, w: 158, h: 44 };
-const CRIT_A   = { x:  74, y: 252, w: 140, h: 38 };
-const CRIT_B   = { x: 386, y: 252, w: 140, h: 38 };
-const ACCEPTED = { x:  72, y: 358, w: 148, h: 44 };
-const REFUTED  = { x: 383, y: 358, w: 134, h: 44 };
+const ROOT     = { x: 210, y: 20,  width: 180, height: 48 };
+const SOL_A    = { x:  65, y: 140, width: 158, height: 44 };
+const SOL_B    = { x: 377, y: 140, width: 158, height: 44 };
+const CRIT_A   = { x:  74, y: 252, width: 140, height: 38 };
+const CRIT_B   = { x: 386, y: 252, width: 140, height: 38 };
+const ACCEPTED = { x:  72, y: 358, width: 148, height: 44 };
+const REFUTED  = { x: 383, y: 358, width: 134, height: 44 };
 
 // Centre-x of each node
-const ROOT_CX     = mid(ROOT.x,     ROOT.w);     // 300
-const SOL_A_CX    = mid(SOL_A.x,    SOL_A.w);    // 144
-const SOL_B_CX    = mid(SOL_B.x,    SOL_B.w);    // 456
-const CRIT_A_CX   = mid(CRIT_A.x,   CRIT_A.w);   // 144
-const CRIT_B_CX   = mid(CRIT_B.x,   CRIT_B.w);   // 456
-const ACCEPTED_CX = mid(ACCEPTED.x, ACCEPTED.w);  // 146
-const REFUTED_CX  = mid(REFUTED.x,  REFUTED.w);   // 450
+const ROOT_CX     = mid(ROOT.x,     ROOT.width);     // 300
+const SOL_A_CX    = mid(SOL_A.x,    SOL_A.width);    // 144
+const SOL_B_CX    = mid(SOL_B.x,    SOL_B.width);    // 456
+const CRIT_A_CX   = mid(CRIT_A.x,   CRIT_A.width);   // 144
+const CRIT_B_CX   = mid(CRIT_B.x,   CRIT_B.width);   // 456
+const ACCEPTED_CX = mid(ACCEPTED.x, ACCEPTED.width);  // 146
+const REFUTED_CX  = mid(REFUTED.x,  REFUTED.width);   // 450
 
 const WHITE       = { fill: 'white' } as const;
 const WHITE_FAINT = { fill: 'rgba(255,255,255,0.72)' } as const;
@@ -57,25 +57,25 @@ export function CollaborationDiagram() {
 
         {/* Root → Solutions (branching quadratic curves) */}
         <path
-          d={`M ${ROOT_CX} ${bot(ROOT.y, ROOT.h)} Q ${(ROOT_CX + SOL_A_CX) / 2} ${bot(ROOT.y, ROOT.h) + 32} ${SOL_A_CX} ${SOL_A.y}`}
+          d={`M ${ROOT_CX} ${bot(ROOT.y, ROOT.height)} Q ${(ROOT_CX + SOL_A_CX) / 2} ${bot(ROOT.y, ROOT.height) + 32} ${SOL_A_CX} ${SOL_A.y}`}
           style={{ fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeOpacity: 0.55, strokeLinecap: 'round' }}
           markerEnd="url(#flow-arrow)"
         />
         <path
-          d={`M ${ROOT_CX} ${bot(ROOT.y, ROOT.h)} Q ${(ROOT_CX + SOL_B_CX) / 2} ${bot(ROOT.y, ROOT.h) + 32} ${SOL_B_CX} ${SOL_B.y}`}
+          d={`M ${ROOT_CX} ${bot(ROOT.y, ROOT.height)} Q ${(ROOT_CX + SOL_B_CX) / 2} ${bot(ROOT.y, ROOT.height) + 32} ${SOL_B_CX} ${SOL_B.y}`}
           style={{ fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeOpacity: 0.55, strokeLinecap: 'round' }}
           markerEnd="url(#flow-arrow)"
         />
 
         {/* Solutions → Critiques */}
         <line
-          x1={SOL_A_CX}  y1={bot(SOL_A.y,  SOL_A.h)}
+          x1={SOL_A_CX}  y1={bot(SOL_A.y,  SOL_A.height)}
           x2={CRIT_A_CX} y2={CRIT_A.y}
           style={{ stroke: 'currentColor', strokeWidth: 1.5, strokeOpacity: 0.55 }}
           markerEnd="url(#flow-arrow)"
         />
         <line
-          x1={SOL_B_CX}  y1={bot(SOL_B.y,  SOL_B.h)}
+          x1={SOL_B_CX}  y1={bot(SOL_B.y,  SOL_B.height)}
           x2={CRIT_B_CX} y2={CRIT_B.y}
           style={{ stroke: 'currentColor', strokeWidth: 1.5, strokeOpacity: 0.55 }}
           markerEnd="url(#flow-arrow)"
@@ -83,13 +83,13 @@ export function CollaborationDiagram() {
 
         {/* Critiques → Outcomes */}
         <line
-          x1={CRIT_A_CX}   y1={bot(CRIT_A.y,   CRIT_A.h)}
+          x1={CRIT_A_CX}   y1={bot(CRIT_A.y,   CRIT_A.height)}
           x2={ACCEPTED_CX}  y2={ACCEPTED.y}
           style={{ stroke: 'currentColor', strokeWidth: 1.5, strokeOpacity: 0.55 }}
           markerEnd="url(#flow-arrow)"
         />
         <line
-          x1={CRIT_B_CX}  y1={bot(CRIT_B.y,  CRIT_B.h)}
+          x1={CRIT_B_CX}  y1={bot(CRIT_B.y,  CRIT_B.height)}
           x2={REFUTED_CX} y2={REFUTED.y}
           style={{ stroke: 'currentColor', strokeWidth: 1.5, strokeOpacity: 0.55 }}
           markerEnd="url(#flow-arrow)"
@@ -99,61 +99,61 @@ export function CollaborationDiagram() {
 
         {/* ROOT PROBLEM */}
         <rect {...ROOT} rx="10" style={{ fill: '#ef4444' }} />
-        <text x={ROOT_CX} y={ROOT.y + ROOT.h / 2} textAnchor="middle" dominantBaseline="middle"
+        <text x={ROOT_CX} y={ROOT.y + ROOT.height / 2} textAnchor="middle" dominantBaseline="middle"
           fontSize="13" fontWeight="800" style={WHITE}>
           PROBLEM
         </text>
 
         {/* SOLUTION A */}
         <rect {...SOL_A} rx="9" style={{ fill: '#3b82f6' }} />
-        <text x={SOL_A_CX} y={SOL_A.y + SOL_A.h / 2 - 7} textAnchor="middle" dominantBaseline="middle"
+        <text x={SOL_A_CX} y={SOL_A.y + SOL_A.height / 2 - 7} textAnchor="middle" dominantBaseline="middle"
           fontSize="11" fontWeight="800" style={WHITE}>
           SOLUTION A
         </text>
-        <text x={SOL_A_CX} y={SOL_A.y + SOL_A.h / 2 + 8} textAnchor="middle" dominantBaseline="middle"
+        <text x={SOL_A_CX} y={SOL_A.y + SOL_A.height / 2 + 8} textAnchor="middle" dominantBaseline="middle"
           fontSize="9" style={WHITE_FAINT}>
           (Alice)
         </text>
 
         {/* SOLUTION B */}
         <rect {...SOL_B} rx="9" style={{ fill: '#3b82f6' }} />
-        <text x={SOL_B_CX} y={SOL_B.y + SOL_B.h / 2 - 7} textAnchor="middle" dominantBaseline="middle"
+        <text x={SOL_B_CX} y={SOL_B.y + SOL_B.height / 2 - 7} textAnchor="middle" dominantBaseline="middle"
           fontSize="11" fontWeight="800" style={WHITE}>
           SOLUTION B
         </text>
-        <text x={SOL_B_CX} y={SOL_B.y + SOL_B.h / 2 + 8} textAnchor="middle" dominantBaseline="middle"
+        <text x={SOL_B_CX} y={SOL_B.y + SOL_B.height / 2 + 8} textAnchor="middle" dominantBaseline="middle"
           fontSize="9" style={WHITE_FAINT}>
           (Bob)
         </text>
 
         {/* CRITIQUE A */}
         <rect {...CRIT_A} rx="8" style={{ fill: '#a855f7' }} />
-        <text x={CRIT_A_CX} y={CRIT_A.y + CRIT_A.h / 2} textAnchor="middle" dominantBaseline="middle"
+        <text x={CRIT_A_CX} y={CRIT_A.y + CRIT_A.height / 2} textAnchor="middle" dominantBaseline="middle"
           fontSize="11" fontWeight="800" style={WHITE}>
           CRITIQUE
         </text>
 
         {/* CRITIQUE B */}
         <rect {...CRIT_B} rx="8" style={{ fill: '#a855f7' }} />
-        <text x={CRIT_B_CX} y={CRIT_B.y + CRIT_B.h / 2} textAnchor="middle" dominantBaseline="middle"
+        <text x={CRIT_B_CX} y={CRIT_B.y + CRIT_B.height / 2} textAnchor="middle" dominantBaseline="middle"
           fontSize="11" fontWeight="800" style={WHITE}>
           CRITIQUE
         </text>
 
         {/* APPROVED */}
         <rect {...ACCEPTED} rx="10" style={{ fill: '#22c55e' }} />
-        <text x={ACCEPTED_CX} y={ACCEPTED.y + ACCEPTED.h / 2} textAnchor="middle" dominantBaseline="middle"
+        <text x={ACCEPTED_CX} y={ACCEPTED.y + ACCEPTED.height / 2} textAnchor="middle" dominantBaseline="middle"
           fontSize="12" fontWeight="800" style={WHITE}>
           APPROVED ✓
         </text>
 
         {/* WITHDRAWN — muted to show it's a valid but terminal outcome */}
         <rect {...REFUTED} rx="10" style={{ fill: '#71717a' }} />
-        <text x={REFUTED_CX} y={REFUTED.y + REFUTED.h / 2 - 7} textAnchor="middle" dominantBaseline="middle"
+        <text x={REFUTED_CX} y={REFUTED.y + REFUTED.height / 2 - 7} textAnchor="middle" dominantBaseline="middle"
           fontSize="12" fontWeight="800" style={WHITE}>
           WITHDRAWN ✗
         </text>
-        <text x={REFUTED_CX} y={REFUTED.y + REFUTED.h / 2 + 8} textAnchor="middle" dominantBaseline="middle"
+        <text x={REFUTED_CX} y={REFUTED.y + REFUTED.height / 2 + 8} textAnchor="middle" dominantBaseline="middle"
           fontSize="8" style={WHITE_MUTED}>
           documented
         </text>
