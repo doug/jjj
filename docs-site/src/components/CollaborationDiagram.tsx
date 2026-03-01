@@ -39,7 +39,7 @@ export function CollaborationDiagram() {
         className="w-full h-auto"
         xmlns="http://www.w3.org/2000/svg"
         style={{ fontFamily: 'Inter, system-ui, sans-serif', color: 'var(--text-secondary)' }}
-        aria-label="Collaboration flow: a problem branches to two competing solutions; each is critiqued; one is accepted and one is refuted"
+        aria-label="Collaboration flow: a problem branches to two competing solutions; each is critiqued; one is approved and one is withdrawn"
       >
         <defs>
           {/* Single marker reused for all arrows */}
@@ -135,18 +135,18 @@ export function CollaborationDiagram() {
           CRITIQUE
         </text>
 
-        {/* ACCEPTED */}
+        {/* APPROVED */}
         <rect {...ACCEPTED} rx="10" fill="#22c55e" />
         <text x={ACCEPTED_CX} y={ACCEPTED.y + ACCEPTED.h / 2} textAnchor="middle" dominantBaseline="middle"
           fontSize="12" fontWeight="800" fill="white">
-          ACCEPTED ✓
+          APPROVED ✓
         </text>
 
-        {/* REFUTED — muted to show it's a valid but terminal outcome */}
+        {/* WITHDRAWN — muted to show it's a valid but terminal outcome */}
         <rect {...REFUTED} rx="10" fill="#71717a" />
         <text x={REFUTED_CX} y={REFUTED.y + REFUTED.h / 2 - 7} textAnchor="middle" dominantBaseline="middle"
           fontSize="12" fontWeight="800" fill="white">
-          REFUTED ✗
+          WITHDRAWN ✗
         </text>
         <text x={REFUTED_CX} y={REFUTED.y + REFUTED.h / 2 + 8} textAnchor="middle" dominantBaseline="middle"
           fontSize="8" fill="rgba(255,255,255,0.65)">
@@ -159,13 +159,13 @@ export function CollaborationDiagram() {
         <div className="p-5 rounded-2xl border border-border/50 bg-surface/60">
           <h4 className="font-bold text-sm text-text-primary mb-2">Distributed Collaboration</h4>
           <p className="text-xs leading-relaxed text-text-secondary">
-            Multiple people propose competing solutions for the same problem. Critiques happen asynchronously — only the most robust conjecture is accepted.
+            Multiple people propose competing solutions for the same problem. Critiques happen asynchronously — only the most robust conjecture is approved.
           </p>
         </div>
         <div className="p-5 rounded-2xl border border-border/50 bg-surface/60">
-          <h4 className="font-bold text-sm text-text-primary mb-2">Refutation is Progress</h4>
+          <h4 className="font-bold text-sm text-text-primary mb-2">Withdrawal is Progress</h4>
           <p className="text-xs leading-relaxed text-text-secondary">
-            A refuted solution isn't wasted work — it's documented knowledge. The critique that caused it is preserved, preventing the same mistake twice.
+            A withdrawn solution isn't wasted work — it's documented knowledge. The critique that caused it is preserved, preventing the same mistake twice.
           </p>
         </div>
       </div>

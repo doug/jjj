@@ -31,7 +31,7 @@ export function Features() {
           Why jjj?
         </h2>
         <p className="text-center text-text-secondary max-w-2xl mx-auto mb-12">
-          Built for developers who use Jujutsu and want project management that lives in their repository — not a SaaS dashboard.
+          Built for people who want project management that lives in their repository — not a SaaS dashboard.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {features.map((feature) => (
