@@ -4,6 +4,8 @@
 
 No server. No database. No browser. Sync via standard `jj git push/pull`.
 
+**[Documentation → jjj.recursivewhy.com](https://jjj.recursivewhy.com)**
+
 ## Why Jujutsu?
 
 Previous attempts at distributed review (like git-appraise) suffered a fatal flaw: **the fragility of the commit hash**. In Git, rebasing changes every commit hash, orphaning any attached metadata.
