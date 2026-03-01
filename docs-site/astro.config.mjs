@@ -7,7 +7,7 @@ import tailwindcss from '@tailwindcss/vite';
 
 // https://astro.build/config
 export default defineConfig({
-  site: 'https://dougfritz.com',
+  site: 'https://recursivewhy.com',
   base: '/jjj/',
   integrations: [starlight({
     title: 'jjj',
