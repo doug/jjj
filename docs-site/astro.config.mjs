@@ -42,6 +42,7 @@ export default defineConfig({
           { label: 'TUI & Status', slug: 'guides/board-dashboard' },
           { label: 'Jujutsu Integration', slug: 'guides/jujutsu-integration' },
           { label: 'VS Code Extension', slug: 'guides/vscode-extension' },
+          { label: 'AI Agents (Claude / Gemini)', slug: 'guides/ai-agents' },
         ],
       },
       {
