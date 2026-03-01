@@ -4,9 +4,10 @@ import React from 'react';
  * Scalable SVG tree diagram showing distributed collaboration:
  *   ROOT PROBLEM → [Solution A (Alice), Solution B (Bob)]
  *                → each gets a CRITIQUE
- *                → ACCEPTED ✓ and REFUTED ✗
+ *                → APPROVED ✓ and WITHDRAWN ✗
  *
  * Uses viewBox so it scales cleanly at any viewport width.
+ * All fills use inline style (not presentation attributes) so CSS resets can't override them.
  */
 
 // Node geometry helpers
@@ -31,6 +32,10 @@ const CRIT_B_CX   = mid(CRIT_B.x,   CRIT_B.w);   // 456
 const ACCEPTED_CX = mid(ACCEPTED.x, ACCEPTED.w);  // 146
 const REFUTED_CX  = mid(REFUTED.x,  REFUTED.w);   // 450
 
+const WHITE       = { fill: 'white' } as const;
+const WHITE_FAINT = { fill: 'rgba(255,255,255,0.72)' } as const;
+const WHITE_MUTED = { fill: 'rgba(255,255,255,0.65)' } as const;
+
 export function CollaborationDiagram() {
   return (
     <div className="w-full max-w-2xl mx-auto px-4">
@@ -44,7 +49,7 @@ export function CollaborationDiagram() {
         <defs>
           {/* Single marker reused for all arrows */}
           <marker id="flow-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-            <polygon points="0 0, 8 3, 0 6" fill="currentColor" opacity="0.7" />
+            <polygon points="0 0, 8 3, 0 6" style={{ fill: 'currentColor', opacity: 0.7 }} />
           </marker>
         </defs>
 
@@ -53,26 +58,26 @@ export function CollaborationDiagram() {
         {/* Root → Solutions (branching quadratic curves) */}
         <path
           d={`M ${ROOT_CX} ${bot(ROOT.y, ROOT.h)} Q ${(ROOT_CX + SOL_A_CX) / 2} ${bot(ROOT.y, ROOT.h) + 32} ${SOL_A_CX} ${SOL_A.y}`}
-          fill="none" stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.55"
-          markerEnd="url(#flow-arrow)" strokeLinecap="round"
+          style={{ fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeOpacity: 0.55, strokeLinecap: 'round' }}
+          markerEnd="url(#flow-arrow)"
         />
         <path
           d={`M ${ROOT_CX} ${bot(ROOT.y, ROOT.h)} Q ${(ROOT_CX + SOL_B_CX) / 2} ${bot(ROOT.y, ROOT.h) + 32} ${SOL_B_CX} ${SOL_B.y}`}
-          fill="none" stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.55"
-          markerEnd="url(#flow-arrow)" strokeLinecap="round"
+          style={{ fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeOpacity: 0.55, strokeLinecap: 'round' }}
+          markerEnd="url(#flow-arrow)"
         />
 
         {/* Solutions → Critiques */}
         <line
           x1={SOL_A_CX}  y1={bot(SOL_A.y,  SOL_A.h)}
           x2={CRIT_A_CX} y2={CRIT_A.y}
-          stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.55"
+          style={{ stroke: 'currentColor', strokeWidth: 1.5, strokeOpacity: 0.55 }}
           markerEnd="url(#flow-arrow)"
         />
         <line
           x1={SOL_B_CX}  y1={bot(SOL_B.y,  SOL_B.h)}
           x2={CRIT_B_CX} y2={CRIT_B.y}
-          stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.55"
+          style={{ stroke: 'currentColor', strokeWidth: 1.5, strokeOpacity: 0.55 }}
           markerEnd="url(#flow-arrow)"
         />
 
@@ -80,76 +85,76 @@ export function CollaborationDiagram() {
         <line
           x1={CRIT_A_CX}   y1={bot(CRIT_A.y,   CRIT_A.h)}
           x2={ACCEPTED_CX}  y2={ACCEPTED.y}
-          stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.55"
+          style={{ stroke: 'currentColor', strokeWidth: 1.5, strokeOpacity: 0.55 }}
           markerEnd="url(#flow-arrow)"
         />
         <line
           x1={CRIT_B_CX}  y1={bot(CRIT_B.y,  CRIT_B.h)}
           x2={REFUTED_CX} y2={REFUTED.y}
-          stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.55"
+          style={{ stroke: 'currentColor', strokeWidth: 1.5, strokeOpacity: 0.55 }}
           markerEnd="url(#flow-arrow)"
         />
 
         {/* ── Nodes ─────────────────────────────────────────────── */}
 
         {/* ROOT PROBLEM */}
-        <rect {...ROOT} rx="10" fill="#ef4444" />
+        <rect {...ROOT} rx="10" style={{ fill: '#ef4444' }} />
         <text x={ROOT_CX} y={ROOT.y + ROOT.h / 2} textAnchor="middle" dominantBaseline="middle"
-          fontSize="13" fontWeight="800" fill="white">
+          fontSize="13" fontWeight="800" style={WHITE}>
           PROBLEM
         </text>
 
         {/* SOLUTION A */}
-        <rect {...SOL_A} rx="9" fill="#3b82f6" />
+        <rect {...SOL_A} rx="9" style={{ fill: '#3b82f6' }} />
         <text x={SOL_A_CX} y={SOL_A.y + SOL_A.h / 2 - 7} textAnchor="middle" dominantBaseline="middle"
-          fontSize="11" fontWeight="800" fill="white">
+          fontSize="11" fontWeight="800" style={WHITE}>
           SOLUTION A
         </text>
         <text x={SOL_A_CX} y={SOL_A.y + SOL_A.h / 2 + 8} textAnchor="middle" dominantBaseline="middle"
-          fontSize="9" fill="rgba(255,255,255,0.72)">
+          fontSize="9" style={WHITE_FAINT}>
           (Alice)
         </text>
 
         {/* SOLUTION B */}
-        <rect {...SOL_B} rx="9" fill="#3b82f6" />
+        <rect {...SOL_B} rx="9" style={{ fill: '#3b82f6' }} />
         <text x={SOL_B_CX} y={SOL_B.y + SOL_B.h / 2 - 7} textAnchor="middle" dominantBaseline="middle"
-          fontSize="11" fontWeight="800" fill="white">
+          fontSize="11" fontWeight="800" style={WHITE}>
           SOLUTION B
         </text>
         <text x={SOL_B_CX} y={SOL_B.y + SOL_B.h / 2 + 8} textAnchor="middle" dominantBaseline="middle"
-          fontSize="9" fill="rgba(255,255,255,0.72)">
+          fontSize="9" style={WHITE_FAINT}>
           (Bob)
         </text>
 
         {/* CRITIQUE A */}
-        <rect {...CRIT_A} rx="8" fill="#a855f7" />
+        <rect {...CRIT_A} rx="8" style={{ fill: '#a855f7' }} />
         <text x={CRIT_A_CX} y={CRIT_A.y + CRIT_A.h / 2} textAnchor="middle" dominantBaseline="middle"
-          fontSize="11" fontWeight="800" fill="white">
+          fontSize="11" fontWeight="800" style={WHITE}>
           CRITIQUE
         </text>
 
         {/* CRITIQUE B */}
-        <rect {...CRIT_B} rx="8" fill="#a855f7" />
+        <rect {...CRIT_B} rx="8" style={{ fill: '#a855f7' }} />
         <text x={CRIT_B_CX} y={CRIT_B.y + CRIT_B.h / 2} textAnchor="middle" dominantBaseline="middle"
-          fontSize="11" fontWeight="800" fill="white">
+          fontSize="11" fontWeight="800" style={WHITE}>
           CRITIQUE
         </text>
 
         {/* APPROVED */}
-        <rect {...ACCEPTED} rx="10" fill="#22c55e" />
+        <rect {...ACCEPTED} rx="10" style={{ fill: '#22c55e' }} />
         <text x={ACCEPTED_CX} y={ACCEPTED.y + ACCEPTED.h / 2} textAnchor="middle" dominantBaseline="middle"
-          fontSize="12" fontWeight="800" fill="white">
+          fontSize="12" fontWeight="800" style={WHITE}>
           APPROVED ✓
         </text>
 
         {/* WITHDRAWN — muted to show it's a valid but terminal outcome */}
-        <rect {...REFUTED} rx="10" fill="#71717a" />
+        <rect {...REFUTED} rx="10" style={{ fill: '#71717a' }} />
         <text x={REFUTED_CX} y={REFUTED.y + REFUTED.h / 2 - 7} textAnchor="middle" dominantBaseline="middle"
-          fontSize="12" fontWeight="800" fill="white">
+          fontSize="12" fontWeight="800" style={WHITE}>
           WITHDRAWN ✗
         </text>
         <text x={REFUTED_CX} y={REFUTED.y + REFUTED.h / 2 + 8} textAnchor="middle" dominantBaseline="middle"
-          fontSize="8" fill="rgba(255,255,255,0.65)">
+          fontSize="8" style={WHITE_MUTED}>
           documented
         </text>
       </svg>
