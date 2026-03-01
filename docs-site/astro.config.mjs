@@ -7,8 +7,7 @@ import tailwindcss from '@tailwindcss/vite';
 
 // https://astro.build/config
 export default defineConfig({
-  site: 'https://recursivewhy.com',
-  base: '/jjj/',
+  site: 'https://jjj.recursivewhy.com',
   integrations: [starlight({
     title: 'jjj',
     logo: {

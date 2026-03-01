@@ -91,5 +91,5 @@ echo "  jjj ui"
 echo
 echo "Documentation:"
 echo "  README.md          - Project overview"
-echo "  https://recursivewhy.com/jjj/ - Full documentation"
+echo "  https://jjj.recursivewhy.com - Full documentation"
 echo
