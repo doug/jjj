@@ -16,7 +16,7 @@ jjj organizes work around Karl Popper's theory of knowledge growth: bold conject
 
 - **Problems** — Things that need solving. Can form hierarchies via parent/child relationships.
 - **Solutions** — Conjectures to solve problems. Linked to jj Change IDs.
-- **Critiques** — Error elimination. Block solution acceptance until addressed.
+- **Critiques** — Error elimination. Block solution approval until addressed.
 - **Milestones** — Time-based goals grouping problems.
 
 ## Quick Start
@@ -40,8 +40,9 @@ jjj critique new "search index" "Missing error handling" --severity medium
 # Address the critique after fixing
 jjj critique address "Missing error"
 
-# Accept the solution and mark problem solved
-jjj solution accept "search index"
+# Submit for review, then approve when critiques are resolved
+jjj solution submit "search index"
+jjj solution approve "search index"
 jjj problem solve "Search is slow"
 ```
 
@@ -52,7 +53,6 @@ jjj problem solve "Search is slow"
 jjj init                    # Initialize jjj bookmark
 jjj status                  # Show next actions (what to work on)
 jjj ui                      # Launch interactive TUI
-jjj submit                  # Squash changes and complete solution
 jjj fetch                   # Fetch code and metadata from remote
 jjj push                    # Push code and metadata to remote
 ```
@@ -73,9 +73,9 @@ jjj problem dissolve "Search"          # Mark dissolved (false premises)
 jjj solution new "Title" --problem "Search"       # Create solution
 jjj solution attach "search index"                 # Link current change
 jjj solution resume "search index"                 # Resume working on solution
-jjj solution test "search index"                   # Move to testing status
-jjj solution accept "search index"                 # Accept (no open critiques)
-jjj solution refute "search index"                 # Refute (criticism showed it won't work)
+jjj solution submit "search index"                 # Submit for review
+jjj solution approve "search index"                # Approve (no open critiques)
+jjj solution withdraw "search index"               # Withdraw (criticism showed it won't work)
 ```
 
 ### Critiques

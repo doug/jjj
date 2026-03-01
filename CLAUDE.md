@@ -44,7 +44,7 @@ cd docs-site && npm run build  # Build docs
 ### Core Model
 - **Problems**: Things to solve (can form DAG via parent_id)
 - **Solutions**: Conjectures attached to jj Change IDs (not commit hashes)
-- **Critiques**: Error-elimination feedback that blocks solution acceptance
+- **Critiques**: Error-elimination feedback that blocks solution approval
 - **Milestones**: Time-based goals grouping problems
 
 ### Storage: Shadow Graph
