@@ -321,3 +321,113 @@ fn test_events_filter_by_type() {
         "Filtered output should not contain solution_created events"
     );
 }
+
+#[test]
+fn test_events_no_jsonl_file() {
+    // Events are embedded in jjj commit descriptions, not written to a file.
+    // events.jsonl must never be created — its absence is what makes merges
+    // conflict-free.
+    if jjj::jj::find_executable("jj").is_none() {
+        return;
+    }
+    let temp_dir = setup_test_repo();
+    let dir = temp_dir.path();
+
+    // Create entities to trigger event emission
+    let output = run_jjj(dir, &["problem", "new", "No File Problem"]);
+    assert!(
+        output.status.success(),
+        "problem new failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let output = run_jjj(
+        dir,
+        &[
+            "solution",
+            "new",
+            "No File Solution",
+            "--problem",
+            "No File Problem",
+        ],
+    );
+    assert!(output.status.success());
+
+    // events.jsonl must NOT exist anywhere under .jj/jjj-meta/
+    let events_file = dir.join(".jj").join("jjj-meta").join("events.jsonl");
+    assert!(
+        !events_file.exists(),
+        "events.jsonl must not exist — events live in commit descriptions, not a file"
+    );
+
+    // Events are still readable from commit history
+    let output = run_jjj(dir, &["events", "--json"]);
+    assert!(output.status.success(), "events --json failed");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("problem_created"),
+        "problem_created event missing from commit history. Got: {}",
+        stdout
+    );
+    assert!(
+        stdout.contains("solution_created"),
+        "solution_created event missing from commit history. Got: {}",
+        stdout
+    );
+}
+
+#[test]
+fn test_events_approve_emits_two_events_in_one_commit() {
+    // Approving a solution that fully resolves its parent problem should emit
+    // BOTH solution_approved AND problem_solved. Both are queued via
+    // set_pending_event() inside the same with_metadata() closure, so they
+    // land in a single commit as two `jjj: <json>` lines.
+    if jjj::jj::find_executable("jj").is_none() {
+        return;
+    }
+    let temp_dir = setup_test_repo();
+    let dir = temp_dir.path();
+
+    // Create an isolated problem+solution pair (setup_test_repo already made
+    // "Workflow Problem"; use a fresh name to avoid interference)
+    let output = run_jjj(dir, &["problem", "new", "Two-Event Problem"]);
+    assert!(output.status.success());
+
+    let output = run_jjj(
+        dir,
+        &[
+            "solution",
+            "new",
+            "Two-Event Solution",
+            "--problem",
+            "Two-Event Problem",
+        ],
+    );
+    assert!(output.status.success());
+
+    // Submit then approve (--force skips the review-required check)
+    run_jjj(dir, &["solution", "submit", "Two-Event Solution"]);
+    let output = run_jjj(
+        dir,
+        &["solution", "approve", "Two-Event Solution", "--force"],
+    );
+    assert!(
+        output.status.success(),
+        "approve failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    // Both events must appear — they came from the same commit
+    let output = run_jjj(dir, &["events", "--json"]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("solution_approved"),
+        "Missing solution_approved event. Events: {}",
+        stdout
+    );
+    assert!(
+        stdout.contains("problem_solved"),
+        "Missing problem_solved (auto-solve should be emitted in same commit as solution_approved). Events: {}",
+        stdout
+    );
+}

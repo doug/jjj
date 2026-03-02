@@ -204,7 +204,7 @@ run_jjj events rebuild
 assert_success "events rebuild runs without error"
 assert_contains "rebuilt" "rebuild reports completion"
 
-observe "events rebuild synthesizes any missing events by replaying entity state — safe to run repeatedly"
+observe "events rebuild replays commit history — lossless, author/timestamp/rationale preserved exactly"
 
 # After rebuild, the log should still be consistent
 run_jjj events
@@ -220,6 +220,57 @@ assert_success "events validate passes on clean repo"
 assert_contains "valid" "validation reports clean state"
 
 observe "events validate confirms the event log is internally consistent — useful in CI"
+
+# ============================================================================
+section "Step 11: no events.jsonl — events live in commit history"
+# ============================================================================
+
+# events.jsonl must not exist. Events are embedded as `jjj: <json>` lines in
+# commit descriptions, so the history IS the event log. This means bookmark
+# merges never produce conflict markers in an events file.
+EVENTS_FILE=".jj/jjj-meta/events.jsonl"
+if [[ -f "$EVENTS_FILE" ]]; then
+    echo "    FAIL events.jsonl must not exist (found at $EVENTS_FILE)"
+    _FAIL=$((_FAIL + 1))
+else
+    echo -e "    ${GREEN}PASS${RESET} no events.jsonl file — events embedded in commit descriptions"
+    _PASS=$((_PASS + 1))
+fi
+
+# Events are still fully readable despite having no file
+run_jjj events
+assert_success "events readable with no events.jsonl"
+assert_contains "problem_created" "problem events present from commit history"
+
+observe "No events.jsonl means no merge conflicts. Two contributors can push independently; after fetch, ::@ traversal includes both sides of the merge and all events appear automatically."
+
+# ============================================================================
+section "Step 12: approve emits two events in one commit"
+# ============================================================================
+
+# Approving a solution that fully resolves its parent problem emits both
+# solution_approved and problem_solved in the SAME commit (two jjj: lines).
+run_jjj problem new "Two-Event Problem" --priority high
+assert_success "create problem for two-event test"
+
+run_jjj solution new "Two-Event Solution" --problem "Two-Event Problem"
+assert_success "create solution"
+
+run_jjj solution submit "Two-Event Solution"
+assert_success "submit solution"
+
+run_jjj solution approve "Two-Event Solution" --force
+assert_success "approve solution (--force skips review requirement)"
+
+run_jjj events --event-type solution_approved --json
+assert_success "solution_approved event recorded"
+assert_contains "solution_approved" "solution_approved in event log"
+
+run_jjj events --event-type problem_solved --json
+assert_success "problem_solved event recorded"
+assert_contains "problem_solved" "problem_solved auto-emitted in same commit"
+
+observe "Approving a solution records both solution_approved and problem_solved in one atomic commit — the timeline shows the full causal chain with no gaps."
 
 # ============================================================================
 end_scenario
