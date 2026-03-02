@@ -191,7 +191,11 @@ impl Problem {
         }
     }
 
-    /// Add a child problem (sub-problem)
+    /// Add a child ID to the in-memory list.
+    ///
+    /// **Note:** `child_ids` is not persisted to disk — it is derived at read
+    /// time in [`MetadataStore::list_problems`]. Calling this method has no
+    /// lasting effect; use [`MetadataStore::get_subproblems`] to query children.
     pub fn add_child(&mut self, child_id: String) {
         if !self.child_ids.contains(&child_id) {
             self.child_ids.push(child_id);
@@ -199,7 +203,11 @@ impl Problem {
         }
     }
 
-    /// Remove a child problem
+    /// Remove a child ID from the in-memory list.
+    ///
+    /// **Note:** `child_ids` is not persisted to disk — it is derived at read
+    /// time in [`MetadataStore::list_problems`]. Calling this method has no
+    /// lasting effect; use [`MetadataStore::get_subproblems`] to query children.
     pub fn remove_child(&mut self, child_id: &str) -> bool {
         if let Some(pos) = self.child_ids.iter().position(|id| id == child_id) {
             self.child_ids.remove(pos);

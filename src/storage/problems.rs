@@ -7,7 +7,11 @@ use crate::models::{Problem, ProblemFrontmatter};
 use std::fs;
 
 impl MetadataStore {
-    /// Load a problem by ID
+    /// Load a problem by ID.
+    ///
+    /// **Note:** `child_ids` is always empty on the returned value because
+    /// children are derived from `parent_id` references across all problems.
+    /// Use [`MetadataStore::get_subproblems`] to get the children of a problem.
     pub fn load_problem(&self, problem_id: &str) -> Result<Problem> {
         self.ensure_meta_checkout()?;
 

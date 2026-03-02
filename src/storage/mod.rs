@@ -13,10 +13,17 @@ mod critiques;
 mod milestones;
 mod events;
 
-/// Write `content` to `path` atomically by writing to a `.tmp` sibling first,
-/// then renaming. This prevents torn writes from leaving corrupt entity files.
+/// Write `content` to `path` atomically by writing to a uniquely-named `.tmp`
+/// sibling first, then renaming. The temp name includes the process ID and
+/// sub-second nanoseconds so concurrent writers cannot clobber each other's
+/// temp file.
 pub(super) fn atomic_write(path: &std::path::Path, content: &[u8]) -> std::io::Result<()> {
-    let tmp = path.with_extension("md.tmp");
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.subsec_nanos())
+        .unwrap_or(0);
+    let tmp = path.with_extension(format!("md.{}.{}.tmp", std::process::id(), nanos));
     std::fs::write(&tmp, content)?;
     std::fs::rename(&tmp, path)?;
     Ok(())
