@@ -710,13 +710,24 @@ fn sync_push(ctx: &CommandContext, provider: &GitHubProvider, dry_run: bool) -> 
         };
 
         let critiques = ctx.store.get_critiques_for_solution(&solution.id)?;
+        let new_body = crate::sync::github::mapping::format_pr_body(solution, problem, &critiques);
 
         if dry_run {
             println!("Would update PR #{}: {}", pr_number, solution.title);
-        } else {
-            provider.update_pr_body(pr_number, solution, problem, &critiques)?;
-            println!("Updated PR #{}: {}", pr_number, solution.title);
+            any_output = true;
+            continue;
         }
+
+        // Skip write if the body is already up to date
+        match provider.get_pr_body(pr_number) {
+            Ok(current) if current.trim() == new_body.trim() => {
+                continue;
+            }
+            _ => {}
+        }
+
+        provider.update_pr_body(pr_number, solution, problem, &critiques)?;
+        println!("Updated PR #{}: {}", pr_number, solution.title);
         any_output = true;
     }
 

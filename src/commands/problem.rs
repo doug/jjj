@@ -224,18 +224,16 @@ fn list_problems(
         });
     }
 
-    // Filter by search query using FTS
+    // Filter by search query using FTS (auto-populate DB if needed)
     if let Some(query) = search_query {
         let jj_client = ctx.jj();
         let db_path = jj_client.repo_root().join(".jj").join("jjj.db");
-
-        if db_path.exists() {
-            let db = Database::open(&db_path)?;
-            let results = search::search(db.conn(), query, Some("problem"))?;
-            let matching_ids: std::collections::HashSet<_> =
-                results.iter().map(|r| r.entity_id.as_str()).collect();
-            problems.retain(|p| matching_ids.contains(p.id.as_str()));
-        }
+        let db = Database::open(&db_path)?;
+        crate::db::load_from_markdown(&db, &ctx.store)?;
+        let results = search::search(db.conn(), query, Some("problem"))?;
+        let matching_ids: std::collections::HashSet<_> =
+            results.iter().map(|r| r.entity_id.as_str()).collect();
+        problems.retain(|p| matching_ids.contains(p.id.as_str()));
     }
 
     // Sort

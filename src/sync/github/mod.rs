@@ -138,6 +138,11 @@ impl SyncProvider for GitHubProvider {
 }
 
 impl GitHubProvider {
+    /// Get the current body text of a PR.
+    pub fn get_pr_body(&self, number: u64) -> Result<String> {
+        self.client.get_pr_body(number)
+    }
+
     /// Update the body of an existing PR.
     pub fn update_pr_body(
         &self,

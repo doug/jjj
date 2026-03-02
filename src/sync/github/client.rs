@@ -211,6 +211,12 @@ impl GhClient {
         serde_json::from_str(&output).map_err(|e| JjjError::Validation(e.to_string()))
     }
 
+    /// Get a PR's current body text.
+    pub fn get_pr_body(&self, number: u64) -> Result<String> {
+        let num_str = number.to_string();
+        self.execute(&["pr", "view", &num_str, "--json", "body", "--jq", ".body"])
+    }
+
     /// Update a PR's body text.
     pub fn update_pr_body(&self, number: u64, body: &str) -> Result<()> {
         let num_str = number.to_string();
