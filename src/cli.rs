@@ -438,6 +438,17 @@ pub enum ProblemAction {
         /// Problem ID, short prefix, or fuzzy title
         problem_id: String,
     },
+
+    /// Mark a problem as a duplicate of another — dissolves it with a back-reference
+    #[command(display_order = 9)]
+    Duplicate {
+        /// The duplicate problem to dissolve (ID, prefix, or title)
+        problem_id: String,
+
+        /// The canonical problem this is a duplicate of (ID, prefix, or title)
+        #[arg(long)]
+        of: String,
+    },
 }
 
 // =============================================================================
@@ -479,6 +490,10 @@ pub enum SolutionAction {
         /// Filter by status: proposed, submitted, approved, withdrawn
         #[arg(long)]
         status: Option<String>,
+
+        /// Filter by assignee
+        #[arg(long)]
+        assignee: Option<String>,
 
         /// Filter by title keyword
         #[arg(long)]

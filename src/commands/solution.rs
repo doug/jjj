@@ -24,10 +24,11 @@ pub fn execute(ctx: &CommandContext, action: SolutionAction) -> Result<()> {
         SolutionAction::List {
             problem,
             status,
+            assignee,
             search,
             sort,
             json,
-        } => list_solutions(ctx, problem, status, search.as_deref(), &sort, json),
+        } => list_solutions(ctx, problem, status, assignee, search.as_deref(), &sort, json),
         SolutionAction::Show { solution_id, json } => show_solution(ctx, solution_id, json),
         SolutionAction::Edit {
             solution_id,
@@ -257,12 +258,12 @@ fn list_solutions(
     ctx: &CommandContext,
     problem_filter: Option<String>,
     status_filter: Option<String>,
+    assignee_filter: Option<String>,
     search_query: Option<&str>,
     sort: &str,
     json: bool,
 ) -> Result<()> {
     let store = &ctx.store;
-    
 
     let mut solutions = store.list_solutions()?;
 
@@ -278,6 +279,17 @@ fn list_solutions(
             .parse()
             .map_err(|e: String| crate::error::JjjError::Validation(e))?;
         solutions.retain(|s| s.status == status);
+    }
+
+    // Filter by assignee (substring match)
+    if let Some(ref assignee_pattern) = assignee_filter {
+        let pattern = assignee_pattern.trim_start_matches('@').to_lowercase();
+        solutions.retain(|s| {
+            s.assignee
+                .as_deref()
+                .map(|a| a.to_lowercase().contains(&pattern))
+                .unwrap_or(false)
+        });
     }
 
     // Filter by search query using FTS (auto-populate DB if needed)

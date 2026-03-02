@@ -258,6 +258,7 @@ pub(crate) fn build_next_actions(
                 "suggested_command": format!("jjj critique show {}", top_critique.id),
                 "priority": format!("{}", priority),
                 "priority_sort": priority_sort_value(&priority),
+                "created_at": solution.created_at.to_rfc3339(),
                 "details": open_critiques.iter().map(|c| serde_json::json!({
                     "id": c.id,
                     "text": c.title,
@@ -286,6 +287,7 @@ pub(crate) fn build_next_actions(
                 "suggested_command": format!("jjj solution approve {}", solution.id),
                 "priority": format!("{}", priority),
                 "priority_sort": priority_sort_value(&priority),
+                "created_at": solution.created_at.to_rfc3339(),
                 "details": [],
             }));
         }
@@ -313,6 +315,7 @@ pub(crate) fn build_next_actions(
                         "suggested_command": format!("jjj critique show {}", critique.id),
                         "priority": format!("{}", priority),
                         "priority_sort": priority_sort_value(&priority),
+                        "created_at": critique.created_at.to_rfc3339(),
                         "details": [],
                     }));
                 }
@@ -358,6 +361,7 @@ pub(crate) fn build_next_actions(
                     "suggested_command": "",
                     "priority": format!("{}", priority),
                     "priority_sort": priority_sort_value(&priority),
+                    "created_at": solution.created_at.to_rfc3339(),
                     "details": [],
                 }));
             }
@@ -380,12 +384,13 @@ pub(crate) fn build_next_actions(
                 "suggested_command": format!("jjj solution new \"title\" --problem {}", problem.id),
                 "priority": format!("{}", problem.priority),
                 "priority_sort": priority_sort_value(&problem.priority),
+                "created_at": problem.created_at.to_rfc3339(),
                 "details": [],
             }));
         }
     }
 
-    // Sort: category order first, then priority descending within each category
+    // Sort: category order, then priority descending, then age ascending (older first)
     items.sort_by(|a, b| {
         let cat_order = |cat: &str| -> i32 {
             match cat {
@@ -405,7 +410,13 @@ pub(crate) fn build_next_actions(
         // Within same category, sort by priority descending
         let a_pri = a["priority_sort"].as_i64().unwrap_or(0);
         let b_pri = b["priority_sort"].as_i64().unwrap_or(0);
-        b_pri.cmp(&a_pri)
+        if a_pri != b_pri {
+            return b_pri.cmp(&a_pri);
+        }
+        // Tiebreak: older items first (smaller created_at string sorts earlier for RFC3339)
+        let a_ts = a["created_at"].as_str().unwrap_or("");
+        let b_ts = b["created_at"].as_str().unwrap_or("");
+        a_ts.cmp(b_ts)
     });
 
     items

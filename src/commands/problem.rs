@@ -41,6 +41,7 @@ pub fn execute(ctx: &CommandContext, action: ProblemAction) -> Result<()> {
         ProblemAction::Dissolve { problem_id, reason, github_close } => dissolve_problem(ctx, problem_id, reason, github_close),
         ProblemAction::Assign { problem_id, to } => assign_problem(ctx, problem_id, to),
         ProblemAction::Reopen { problem_id } => reopen_problem(ctx, problem_id),
+        ProblemAction::Duplicate { problem_id, of } => duplicate_problem(ctx, problem_id, of),
     }
 }
 
@@ -649,6 +650,46 @@ fn reopen_problem(ctx: &CommandContext, problem_input: String) -> Result<()> {
         println!("Problem '{}' reopened.", problem.title);
         Ok(())
     })
+}
+
+fn duplicate_problem(ctx: &CommandContext, input: String, canonical_input: String) -> Result<()> {
+    let store = &ctx.store;
+    let dup_id = ctx.resolve_problem(&input)?;
+    let canonical_id = ctx.resolve_problem(&canonical_input)?;
+
+    if dup_id == canonical_id {
+        return Err(crate::error::JjjError::Validation(
+            "A problem cannot be a duplicate of itself.".to_string(),
+        ));
+    }
+
+    let canonical = store.load_problem(&canonical_id)?;
+    let reason = format!("Duplicate of '{}'", canonical.title);
+
+    let user = store.get_current_user()?;
+    let event = Event::new(EventType::ProblemDissolved, dup_id.clone(), user)
+        .with_rationale(reason.clone());
+
+    store.with_metadata(
+        &format!("Mark problem {} as duplicate of {}", dup_id, canonical_id),
+        || {
+            store.set_pending_event(event.clone());
+            let mut problem = store.load_problem(&dup_id)?;
+            if problem.is_resolved() {
+                return Err(crate::error::JjjError::Validation(format!(
+                    "Problem '{}' is already {} — cannot mark as duplicate.",
+                    problem.title, problem.status
+                )));
+            }
+            problem.dissolve(reason.clone());
+            store.save_problem(&problem)?;
+            println!(
+                "Problem '{}' dissolved as duplicate of '{}'.",
+                problem.title, canonical.title
+            );
+            Ok(())
+        },
+    )
 }
 
 fn check_for_duplicates(
