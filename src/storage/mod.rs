@@ -31,7 +31,6 @@ pub(super) fn atomic_write(path: &std::path::Path, content: &[u8]) -> std::io::R
 
 pub(super) const META_BOOKMARK: &str = "jjj";
 pub(super) const CONFIG_FILE: &str = "config.toml";
-pub(super) const EVENTS_FILE: &str = "events.jsonl";
 pub(super) const PROBLEMS_DIR: &str = "problems";
 pub(super) const SOLUTIONS_DIR: &str = "solutions";
 pub(super) const CRITIQUES_DIR: &str = "critiques";
@@ -56,8 +55,8 @@ pub struct MetadataStore {
     /// JJ client for the metadata workspace
     pub meta_client: JjClient,
 
-    /// Event to append during commit
-    pending_event: RefCell<Option<Event>>,
+    /// Events to embed in the next commit description
+    pending_events: RefCell<Vec<Event>>,
 
 }
 
@@ -199,7 +198,7 @@ impl MetadataStore {
             meta_path,
             jj_client,
             meta_client,
-            pending_event: RefCell::new(None),
+            pending_events: RefCell::new(Vec::new()),
         })
     }
 
@@ -399,12 +398,21 @@ impl MetadataStore {
 
     /// Commit changes to the metadata
     pub fn commit_changes(&self, message: &str) -> Result<()> {
-        // Handle pending event
-        let event_suffix = if let Some(event) = self.pending_event.borrow_mut().take() {
-            self.append_event(&event)?;
-            format!("\n\n{}", event.to_commit_suffix()?)
-        } else {
-            String::new()
+        // Embed all pending events as `jjj: <json>` lines in the commit
+        // description. The commit history is the sole authoritative event
+        // store; there is no separate events.jsonl file to update.
+        let event_suffix = {
+            let mut pending = self.pending_events.borrow_mut();
+            if pending.is_empty() {
+                String::new()
+            } else {
+                let lines: String = pending
+                    .drain(..)
+                    .filter_map(|e| e.to_commit_suffix().ok())
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                format!("\n\n{}", lines)
+            }
         };
 
         let full_message = format!("{}{}", message, event_suffix);
@@ -443,9 +451,12 @@ impl MetadataStore {
     ///
     /// This is the primary mechanism for all metadata writes. The `operation`
     /// closure runs first; if it succeeds, changes are committed to the `jjj`
-    /// bookmark with `message` as the commit description. Any pending event set
-    /// via [`set_pending_event`](MetadataStore::set_pending_event) is appended to
-    /// the message and cleared.
+    /// bookmark with `message` as the commit description. Any events queued
+    /// via [`set_pending_event`](MetadataStore::set_pending_event) are
+    /// embedded as `jjj: <json>` lines in the commit description.
+    ///
+    /// The commit history is the sole authoritative event store — there is no
+    /// separate cache file. Events are replayed from `::@` on demand.
     ///
     /// If `operation` returns an error, no commit is made.
     pub fn with_metadata<F, R>(&self, message: &str, operation: F) -> Result<R>

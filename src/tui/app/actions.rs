@@ -325,7 +325,7 @@ impl App {
                         problem.set_status(ProblemStatus::Solved);
                         self.store.save_problem(&problem)?;
                         let solve_event = Event::new(EventType::ProblemSolved, problem.id.clone(), user.clone());
-                        self.store.append_event(&solve_event)?;
+                        self.store.set_pending_event(solve_event);
                     }
                 }
                 Ok(())

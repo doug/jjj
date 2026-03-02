@@ -739,7 +739,7 @@ pub(crate) fn finalize_solution(
                     problem.id.clone(),
                     event.by.clone(),
                 );
-                store.append_event(&solve_event)?;
+                store.set_pending_event(solve_event);
                 println!("  Problem '{}' solved.", problem.title);
             }
         }

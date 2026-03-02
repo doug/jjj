@@ -137,6 +137,28 @@ impl JjClient {
         Ok(output.trim().to_string())
     }
 
+    /// Return the commit description strings for every commit matched by `revset`.
+    ///
+    /// Descriptions are NUL-delimited in the raw `jj log` output so that
+    /// multi-line descriptions are returned intact as single entries.
+    pub fn log_descriptions(&self, revset: &str) -> Result<Vec<String>> {
+        // NUL byte as record separator — safe because commit messages never
+        // contain NUL bytes.
+        let output = self.execute(&[
+            "log",
+            "--no-graph",
+            "-r",
+            revset,
+            "-T",
+            r#"description ++ "\x00""#,
+        ])?;
+        Ok(output
+            .split('\x00')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect())
+    }
+
     /// Get the author of a change
     pub fn change_author(&self, change_id: &str) -> Result<String> {
         let output = self.execute(&["log", "--no-graph", "-r", change_id, "-T", "author"])?;

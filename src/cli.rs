@@ -282,7 +282,7 @@ pub enum DbAction {
 
 #[derive(Subcommand)]
 pub enum EventsAction {
-    /// Rebuild events.jsonl by replaying the jjj commit history
+    /// Verify event count by replaying the jjj commit history
     Rebuild,
 
     /// Check that event log states match current entity states

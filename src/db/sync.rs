@@ -3,10 +3,6 @@
 //! This module handles loading metadata from the shadow branch (markdown files)
 //! into SQLite for fast queries, and dumping SQLite data back to markdown.
 
-use std::fs;
-use std::io::{BufRead, BufReader, Write};
-use std::path::Path;
-
 use rusqlite::{params, Connection};
 
 use crate::db::entities::{
@@ -14,13 +10,11 @@ use crate::db::entities::{
     populate_problem_computed_fields, populate_solution_computed_fields, upsert_critique,
     upsert_milestone, upsert_problem, upsert_solution,
 };
-use crate::db::events::{clear_events, insert_event, list_events};
+use crate::db::events::{clear_events, insert_event};
 use crate::db::Database;
 use crate::error::Result;
-use crate::models::Event;
 use crate::storage::MetadataStore;
 
-const EVENTS_FILE: &str = "events.jsonl";
 
 /// Load all metadata from markdown files into SQLite.
 ///
@@ -59,8 +53,11 @@ pub fn load_from_markdown(db: &Database, store: &MetadataStore) -> Result<()> {
         upsert_critique(conn, critique)?;
     }
 
-    // Load events from JSONL file
-    load_events_from_jsonl(conn, store.meta_path())?;
+    // Load events from the jjj commit history (the canonical source)
+    let events = store.list_events()?;
+    for event in &events {
+        insert_event(conn, event)?;
+    }
 
     // Rebuild FTS index
     rebuild_fts(db)?;
@@ -104,8 +101,7 @@ pub fn dump_to_markdown(db: &Database, store: &MetadataStore) -> Result<()> {
         store.save_milestone(milestone)?;
     }
 
-    // Dump events to JSONL file
-    dump_events_to_jsonl(conn, store.meta_path())?;
+    // Events live in commit history — nothing to dump.
 
     Ok(())
 }
@@ -283,49 +279,6 @@ fn clear_all_tables(conn: &Connection) -> Result<()> {
     conn.execute("DELETE FROM milestones", [])?;
     clear_events(conn)?;
     conn.execute("DELETE FROM fts", [])?;
-    Ok(())
-}
-
-/// Load events from the events.jsonl file.
-fn load_events_from_jsonl(conn: &Connection, meta_path: &Path) -> Result<()> {
-    let events_path = meta_path.join(EVENTS_FILE);
-
-    if !events_path.exists() {
-        return Ok(());
-    }
-
-    let file = fs::File::open(&events_path)?;
-    let reader = BufReader::new(file);
-
-    for line in reader.lines() {
-        let line = line?;
-        if line.trim().is_empty() {
-            continue;
-        }
-
-        let event: Event = serde_json::from_str(&line)?;
-        insert_event(conn, &event)?;
-    }
-
-    Ok(())
-}
-
-/// Dump events to the events.jsonl file.
-fn dump_events_to_jsonl(conn: &Connection, meta_path: &Path) -> Result<()> {
-    let events_path = meta_path.join(EVENTS_FILE);
-
-    // List all events (they come in DESC order, we want ASC for the file)
-    // Use a reasonable limit instead of usize::MAX to avoid SQLite integer overflow
-    let mut events = list_events(conn, None, None, 1_000_000)?;
-    events.sort_by(|a, b| a.when.cmp(&b.when));
-
-    let mut file = fs::File::create(&events_path)?;
-
-    for event in &events {
-        let json = event.to_json_line()?;
-        writeln!(file, "{}", json)?;
-    }
-
     Ok(())
 }
 
