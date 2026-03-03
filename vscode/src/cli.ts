@@ -267,6 +267,10 @@ export class JjjCli {
     return this.exec(["solution", "assign", solutionId, "--to", assignee]);
   }
 
+  async reopenProblem(problemId: string): Promise<string> {
+    return this.exec(["problem", "reopen", problemId]);
+  }
+
   // --- GitHub Sync ---
 
   async syncGithub(): Promise<string> {

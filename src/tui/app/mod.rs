@@ -53,6 +53,9 @@ pub enum InputAction {
         entity_id: String,
     },
     Search,
+    DissolveP {
+        problem_id: String,
+    },
 }
 
 /// A pending request to suspend the TUI and open an entity in an external editor.
@@ -308,6 +311,8 @@ impl App {
             KeyCode::Char('e') => self.start_edit_title()?,
             KeyCode::Char('s') => self.handle_action_s()?,
             KeyCode::Char('o') => self.handle_action_o()?,
+            KeyCode::Char('D') => self.handle_action_shift_d()?,
+            KeyCode::Char('A') => self.handle_action_shift_a()?,
             KeyCode::Char('v') => self.handle_action_v()?,
             KeyCode::Char('f') => self.toggle_filter(),
             KeyCode::Char('/') => self.start_search(),
@@ -423,6 +428,9 @@ impl App {
                 entity_id,
             } => {
                 self.update_title(entity_type, entity_id, title)?;
+            }
+            InputAction::DissolveP { problem_id } => {
+                self.dissolve_problem(problem_id, title)?;
             }
             InputAction::Search => {
                 // Search is handled directly in handle_input_key

@@ -138,26 +138,40 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                     title,
                     status,
                     priority,
+                    assignee,
                     ..
                 } => {
                     let priority_sym = priority_prefix(priority);
                     let dim = matches!(priority, Priority::Low);
+                    let assignee_suffix = assignee.as_deref().map(|a| {
+                        // Extract name from "Name <email>" format
+                        let name = a.split('<').next().unwrap_or(a).trim();
+                        let name = if name.len() > 12 { &name[..12] } else { name };
+                        format!(" @{}", name)
+                    }).unwrap_or_default();
                     (
                         format!(
-                            "{}{}{}{}{}: {}",
-                            indent, expand_char, priority_sym, action_sym, id, title
+                            "{}{}{}{}{}: {}{}",
+                            indent, expand_char, priority_sym, action_sym, id, title, assignee_suffix
                         ),
                         status_color_problem(status),
                         dim,
                     )
                 }
                 TreeNode::Solution {
-                    id, title, status, ..
-                } => (
-                    format!("{}{}{}{}: {}", indent, expand_char, action_sym, id, title),
-                    status_color_solution(status),
-                    false,
-                ),
+                    id, title, status, assignee, ..
+                } => {
+                    let assignee_suffix = assignee.as_deref().map(|a| {
+                        let name = a.split('<').next().unwrap_or(a).trim();
+                        let name = if name.len() > 12 { &name[..12] } else { name };
+                        format!(" @{}", name)
+                    }).unwrap_or_default();
+                    (
+                        format!("{}{}{}{}: {}{}", indent, expand_char, action_sym, id, title, assignee_suffix),
+                        status_color_solution(status),
+                        false,
+                    )
+                }
                 TreeNode::Critique {
                     id,
                     title,
@@ -434,7 +448,8 @@ fn get_context_actions(app: &App) -> Vec<Line<'static>> {
             lines.push(Line::from("    n       New solution"));
             lines.push(Line::from("    s       Mark solved"));
             lines.push(Line::from("    o       Reopen"));
-            lines.push(Line::from("    d       Dissolve"));
+            lines.push(Line::from("    D       Dissolve (with reason)"));
+            lines.push(Line::from("    A       Assign to me"));
             lines.push(Line::from("    e       Edit title"));
             lines.push(Line::from("    E       Edit in $EDITOR"));
         }
@@ -442,6 +457,7 @@ fn get_context_actions(app: &App) -> Vec<Line<'static>> {
             lines.push(Line::from("    n       New critique"));
             lines.push(Line::from("    a       Accept"));
             lines.push(Line::from("    r       Refute"));
+            lines.push(Line::from("    A       Assign to me"));
             lines.push(Line::from("    g       Go to change"));
             lines.push(Line::from("    e       Edit title"));
             lines.push(Line::from("    E       Edit in $EDITOR"));

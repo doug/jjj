@@ -21,12 +21,14 @@ pub enum TreeNode {
         title: String,
         status: ProblemStatus,
         priority: Priority,
+        assignee: Option<String>,
         expanded: bool,
     },
     Solution {
         id: String,
         title: String,
         status: SolutionStatus,
+        assignee: Option<String>,
         expanded: bool,
     },
     Critique {
@@ -183,6 +185,7 @@ fn add_problems(
                 title: problem.title.clone(),
                 status: problem.status.clone(),
                 priority: problem.priority.clone(),
+                assignee: problem.assignee.clone(),
                 expanded,
             },
             depth,
@@ -203,6 +206,7 @@ fn add_problems(
                         id: solution.id.clone(),
                         title: solution.title.clone(),
                         status: solution.status.clone(),
+                        assignee: solution.assignee.clone(),
                         expanded: sol_expanded,
                     },
                     depth: depth + 1,
@@ -817,6 +821,7 @@ mod tests {
             title: "Bug".to_string(),
             status: ProblemStatus::Open,
             priority: Priority::Medium,
+            assignee: None,
             expanded: false,
         };
         assert!(!node.is_expanded());

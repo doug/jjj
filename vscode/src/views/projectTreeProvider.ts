@@ -21,8 +21,9 @@ class MilestoneNode extends vscode.TreeItem {
     const label = milestone ? milestone.title : "Backlog";
     super(label, vscode.TreeItemCollapsibleState.Expanded);
     this.contextValue = milestone ? "milestone" : "backlog";
+    const leadSuffix = milestone?.assignee ? ` · @${milestone.assignee.split("<")[0].trim().slice(0, 15)}` : "";
     this.description = milestone
-      ? `(${solvedCount}/${problemCount} solved)`
+      ? `(${solvedCount}/${problemCount} solved)${leadSuffix}`
       : `(${problemCount} problems)`;
     this.iconPath = milestone
       ? new vscode.ThemeIcon("milestone")
@@ -36,7 +37,8 @@ class ProblemNode extends vscode.TreeItem {
       ? vscode.TreeItemCollapsibleState.Expanded
       : vscode.TreeItemCollapsibleState.Collapsed);
     this.contextValue = "problem";
-    this.description = `${problem.id} [${problem.status}]${problem.priority !== "medium" ? ` ${problem.priority}` : ""}`;
+    const assigneeSuffix = problem.assignee ? ` · @${problem.assignee.split("<")[0].trim().slice(0, 15)}` : "";
+    this.description = `${problem.id} [${problem.status}]${problem.priority !== "medium" ? ` ${problem.priority}` : ""}${assigneeSuffix}`;
     this.iconPath = problem.status === "solved"
       ? new vscode.ThemeIcon("check", new vscode.ThemeColor("testing.iconPassed"))
       : problem.status === "in_progress"
@@ -58,7 +60,8 @@ class SolutionNode extends vscode.TreeItem {
     this.contextValue = `solution-${solution.status}`;
     const critDesc = critiqueCount > 0 ? ` — ${critiqueCount} critiques` : "";
     const changeDesc = solution.change_ids.length > 0 ? ` [${solution.change_ids.length} changes]` : "";
-    this.description = `${solution.id} [${solution.status}]${critDesc}${changeDesc}`;
+    const assigneeSuffix = solution.assignee ? ` · @${solution.assignee.split("<")[0].trim().slice(0, 15)}` : "";
+    this.description = `${solution.id} [${solution.status}]${critDesc}${changeDesc}${assigneeSuffix}`;
     this.iconPath = solution.status === "approved"
       ? new vscode.ThemeIcon("check", new vscode.ThemeColor("testing.iconPassed"))
       : solution.status === "withdrawn"

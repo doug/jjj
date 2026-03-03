@@ -40,6 +40,10 @@ pub struct GitHubConfig {
     /// Label applied to synced GitHub issues
     #[serde(default = "default_problem_label")]
     pub problem_label: String,
+
+    /// Map GitHub issue labels to jjj priority (e.g., "P0" → "critical", "P1" → "high")
+    #[serde(default)]
+    pub label_priority: HashMap<String, String>,
 }
 
 impl Default for GitHubConfig {
@@ -52,6 +56,7 @@ impl Default for GitHubConfig {
             sync_lgtm: true,
             auto_close_on_solve: false,
             problem_label: default_problem_label(),
+            label_priority: HashMap::new(),
         }
     }
 }

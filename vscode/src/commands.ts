@@ -291,4 +291,148 @@ export function registerCommands(
     });
     await vscode.window.showTextDocument(doc, { preview: true });
   });
+  // --- Assign ---
+
+  // Node-aware assign-to-me: receives tree node from context menu
+  context.subscriptions.push(
+    vscode.commands.registerCommand("jjj.assignToMe", async (node?: unknown) => {
+      try {
+        const status = cache.getStatus();
+        const currentUser = status?.user;
+        if (!currentUser) {
+          vscode.window.showWarningMessage("Could not determine current user.");
+          return;
+        }
+
+        let result: string;
+        // Check if called from context menu with a node
+        if (node && typeof node === "object" && "problem" in node) {
+          const problemNode = node as { problem: { id: string; title: string } };
+          result = await cli.assignProblem(problemNode.problem.id, currentUser);
+        } else if (node && typeof node === "object" && "solution" in node) {
+          const solutionNode = node as { solution: { id: string; title: string } };
+          result = await cli.assignSolution(solutionNode.solution.id, currentUser);
+        } else {
+          // Fallback: quickpick
+          const problems = cache.getProblems().filter(p => p.status === "open" || p.status === "in_progress");
+          const pick = await vscode.window.showQuickPick(
+            problems.map(p => ({ label: `${p.id}: ${p.title}`, id: p.id, type: "problem" as const })),
+            { placeHolder: `Assign to ${currentUser}` },
+          );
+          if (!pick) { return; }
+          result = await cli.assignProblem(pick.id, currentUser);
+        }
+
+        vscode.window.showInformationMessage(result || `Assigned to ${currentUser}`);
+        await cache.refresh();
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e);
+        vscode.window.showErrorMessage(`JJJ: ${message}`);
+      }
+    }),
+  );
+
+  // --- Move to Milestone ---
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("jjj.moveProblemToMilestone", async (node?: unknown) => {
+      try {
+        let problemId: string | undefined;
+        if (node && typeof node === "object" && "problem" in node) {
+          problemId = (node as { problem: { id: string } }).problem.id;
+        } else {
+          const problems = cache.getProblems().filter(p => p.status === "open" || p.status === "in_progress");
+          const pick = await vscode.window.showQuickPick(
+            problems.map(p => ({ label: `${p.id}: ${p.title}`, id: p.id })),
+            { placeHolder: "Select problem to move" },
+          );
+          problemId = pick?.id;
+        }
+        if (!problemId) { return; }
+
+        const problem = cache.getProblems().find(p => p.id === problemId);
+        const milestones = cache.getMilestones();
+
+        const items: ({ label: string; id: string | null })[] = [
+          { label: "$(inbox) Backlog (no milestone)", id: null },
+          ...milestones.map(m => ({ label: `$(milestone) ${m.title}`, id: m.id })),
+        ];
+        const pick2 = await vscode.window.showQuickPick(items, { placeHolder: "Move to milestone" });
+        if (!pick2) { return; }
+
+        // Remove from old milestone if any
+        if (problem?.milestone_id) {
+          await cli.milestoneRemoveProblem(problem.milestone_id, problemId);
+        }
+        // Add to new milestone (unless Backlog)
+        if (pick2.id) {
+          await cli.milestoneAddProblem(pick2.id, problemId);
+        }
+
+        await cache.refresh();
+        vscode.window.showInformationMessage(`Problem moved to ${pick2.label.replace(/^\$\([^)]+\) /, "")}.`);
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e);
+        vscode.window.showErrorMessage(`JJJ: ${message}`);
+      }
+    }),
+  );
+
+  // --- New Problem in Milestone ---
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("jjj.newProblemInMilestone", async (node?: unknown) => {
+      try {
+        let milestoneId: string | null = null;
+        let milestoneName = "Backlog";
+
+        if (node && typeof node === "object" && "milestone" in node) {
+          const milestoneNode = node as { milestone: { id: string; title: string } | null };
+          if (milestoneNode.milestone) {
+            milestoneId = milestoneNode.milestone.id;
+            milestoneName = milestoneNode.milestone.title;
+          }
+        }
+
+        const title = await vscode.window.showInputBox({ prompt: `Problem title (will be added to ${milestoneName})` });
+        if (!title) { return; }
+
+        await cli.newProblem(title);
+
+        // If a milestone is targeted, find the newly created problem and add it
+        if (milestoneId) {
+          await cache.refresh();
+          const problems = cache.getProblems();
+          const newest = problems.find(p => p.title === title);
+          if (newest) {
+            await cli.milestoneAddProblem(milestoneId, newest.id);
+          }
+        }
+
+        await cache.refresh();
+        vscode.window.showInformationMessage(`Problem "${title}" created in ${milestoneName}.`);
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e);
+        vscode.window.showErrorMessage(`JJJ: ${message}`);
+      }
+    }),
+  );
+
+  // --- Reopen Problem ---
+
+  register("jjj.reopenProblem", async () => {
+    const problems = cache.getProblems().filter(p => p.status === "solved" || p.status === "dissolved");
+    if (problems.length === 0) {
+      vscode.window.showInformationMessage("No solved or dissolved problems to reopen.");
+      return;
+    }
+    const pick = await vscode.window.showQuickPick(
+      problems.map(p => ({ label: `${p.id}: ${p.title}`, description: p.status, id: p.id })),
+      { placeHolder: "Select problem to reopen" },
+    );
+    if (!pick) { return; }
+    const result = await cli.reopenProblem(pick.id);
+    vscode.window.showInformationMessage(result || `Problem "${pick.label}" reopened.`);
+  });
+
 }

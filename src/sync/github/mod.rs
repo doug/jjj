@@ -16,15 +16,18 @@ pub struct GitHubProvider {
     repo_override: Option<String>,
     /// Label to apply to synced issues
     problem_label: String,
+    /// Label-to-priority mapping from config
+    label_priority: std::collections::HashMap<String, String>,
 }
 
 impl GitHubProvider {
     /// Create a new GitHubProvider.
-    pub fn new(client: GhClient, repo_override: Option<String>, problem_label: String) -> Self {
+    pub fn new(client: GhClient, repo_override: Option<String>, problem_label: String, label_priority: std::collections::HashMap<String, String>) -> Self {
         Self {
             client,
             repo_override,
             problem_label,
+            label_priority,
         }
     }
 
@@ -38,6 +41,7 @@ impl GitHubProvider {
             client,
             config.repo.clone(),
             config.problem_label.clone(),
+            config.label_priority.clone(),
         ))
     }
 }
@@ -67,7 +71,23 @@ impl SyncProvider for GitHubProvider {
 
     fn import_issue(&self, number: u64) -> Result<Problem> {
         let json = self.client.get_issue(number)?;
-        mapping::issue_to_problem(&json, number)
+        let mut problem = mapping::issue_to_problem(&json, number)?;
+        // Apply label → priority mapping if configured
+        if !self.label_priority.is_empty() {
+            if let Some(labels) = json["labels"].as_array() {
+                for label in labels {
+                    if let Some(name) = label["name"].as_str() {
+                        if let Some(priority_str) = self.label_priority.get(name) {
+                            if let Ok(priority) = priority_str.parse::<crate::models::Priority>() {
+                                problem.priority = priority;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(problem)
     }
 
     fn list_unlinked_issues(&self, existing: &[(String, u64)], label: Option<&str>) -> Result<Vec<(u64, String)>> {

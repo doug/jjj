@@ -432,4 +432,89 @@ impl App {
         );
         self.update_selected_detail();
     }
+
+    pub(super) fn handle_action_shift_d(&mut self) -> Result<()> {
+        use super::super::tree::TreeNode;
+        use crate::models::ProblemStatus;
+
+        if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
+            if let TreeNode::Problem { id, status, .. } = &item.node {
+                if matches!(status, ProblemStatus::Open | ProblemStatus::InProgress) {
+                    self.ui.input_mode = super::InputMode::Input {
+                        prompt: "Dissolve reason: ".to_string(),
+                        buffer: String::new(),
+                        action: super::InputAction::DissolveP {
+                            problem_id: id.clone(),
+                        },
+                    };
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub(super) fn dissolve_problem(&mut self, problem_id: &str, reason: &str) -> Result<()> {
+        let id = problem_id.to_string();
+        match self
+            .store
+            .with_metadata(&format!("Dissolve problem {}", problem_id), || {
+                let mut problem = self.store.load_problem(problem_id)?;
+                problem.dissolve(reason.to_string());
+                self.store.save_problem(&problem)
+            }) {
+            Ok(_) => {
+                self.show_flash(&format!("{} dissolved", id));
+                self.refresh_data()?;
+            }
+            Err(e) => {
+                self.show_flash(&format!("Error: {}", e));
+            }
+        }
+        Ok(())
+    }
+
+    pub(super) fn handle_action_shift_a(&mut self) -> Result<()> {
+        let user = self.store.get_current_user().unwrap_or_else(|_| "unknown".to_string());
+
+        if let Some((id, entity_type)) = self.get_selected_entity() {
+            let id_clone = id.clone();
+            let user_clone = user.clone();
+            match entity_type {
+                EntityType::Problem => {
+                    match self.store.with_metadata(
+                        &format!("Assign problem {} to {}", id, user),
+                        || {
+                            let mut problem = self.store.load_problem(&id)?;
+                            problem.assignee = Some(user.clone());
+                            self.store.save_problem(&problem)
+                        },
+                    ) {
+                        Ok(_) => {
+                            self.show_flash(&format!("{} assigned to {}", id_clone, user_clone));
+                            self.refresh_data()?;
+                        }
+                        Err(e) => self.show_flash(&format!("Error: {}", e)),
+                    }
+                }
+                EntityType::Solution => {
+                    match self.store.with_metadata(
+                        &format!("Assign solution {} to {}", id, user),
+                        || {
+                            let mut solution = self.store.load_solution(&id)?;
+                            solution.assignee = Some(user.clone());
+                            self.store.save_solution(&solution)
+                        },
+                    ) {
+                        Ok(_) => {
+                            self.show_flash(&format!("{} assigned to {}", id_clone, user_clone));
+                            self.refresh_data()?;
+                        }
+                        Err(e) => self.show_flash(&format!("Error: {}", e)),
+                    }
+                }
+                EntityType::Critique => {}
+            }
+        }
+        Ok(())
+    }
 }

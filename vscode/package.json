@@ -12,7 +12,9 @@
   "engines": {
     "vscode": "^1.85.0"
   },
-  "categories": ["Other"],
+  "categories": [
+    "Other"
+  ],
   "main": "./out/extension.js",
   "activationEvents": [],
   "contributes": {
@@ -26,44 +28,171 @@
         },
         "jjj.filterMode": {
           "type": "string",
-          "enum": ["all", "open"],
+          "enum": [
+            "all",
+            "open"
+          ],
           "default": "open",
           "description": "Tree view filter mode: 'all' shows everything, 'open' hides completed items"
         }
       }
     },
     "commands": [
-      { "command": "jjj.refreshAll", "title": "JJJ: Refresh All", "icon": "$(refresh)" },
-      { "command": "jjj.newProblem", "title": "JJJ: New Problem", "icon": "$(plus)" },
-      { "command": "jjj.newSolution", "title": "JJJ: New Solution", "icon": "$(plus)" },
-      { "command": "jjj.newCritique", "title": "JJJ: New Critique" },
-      { "command": "jjj.newMilestone", "title": "JJJ: New Milestone", "icon": "$(plus)" },
-      { "command": "jjj.approveSolution", "title": "JJJ: Approve Solution" },
-      { "command": "jjj.withdrawSolution", "title": "JJJ: Withdraw Solution" },
-      { "command": "jjj.submitSolution", "title": "JJJ: Submit Solution", "icon": "$(beaker)" },
-      { "command": "jjj.lgtmSolution", "title": "JJJ: LGTM (Sign Off)", "icon": "$(thumbsup)" },
-      { "command": "jjj.openActiveSolution", "title": "JJJ: Open Active Solution" },
-      { "command": "jjj.solveProblem", "title": "JJJ: Solve Problem" },
-      { "command": "jjj.dissolveProblem", "title": "JJJ: Dissolve Problem" },
-      { "command": "jjj.addressCritique", "title": "JJJ: Address Critique" },
-      { "command": "jjj.dismissCritique", "title": "JJJ: Dismiss Critique" },
-      { "command": "jjj.addCritiqueHere", "title": "JJJ: Add Critique Here" },
-      { "command": "jjj.resumeSolution", "title": "JJJ: Resume Solution" },
-      { "command": "jjj.switchToChange", "title": "JJJ: Switch to Change", "icon": "$(git-branch)" },
-      { "command": "jjj.openEntity", "title": "JJJ: Open Entity" },
-      { "command": "jjj.showOpenOnly", "title": "JJJ: Show Open Only", "icon": "$(filter)" },
-      { "command": "jjj.showAll", "title": "JJJ: Show All", "icon": "$(filter-filled)" },
-      { "command": "jjj.toggleTreeFilter", "title": "JJJ: Toggle Filter" },
-      { "command": "jjj.nextOpenItem", "title": "JJJ: Next Open Item" },
-      { "command": "jjj.prevOpenItem", "title": "JJJ: Previous Open Item" },
-      { "command": "jjj.syncGithub", "title": "JJJ: Sync GitHub", "icon": "$(cloud-download)" },
-      { "command": "jjj.syncGithubImport", "title": "JJJ: Import GitHub Issue" },
-      { "command": "jjj.syncGithubStatus", "title": "JJJ: GitHub Sync Status" },
-      { "command": "jjj.validateCritique", "title": "JJJ: Validate Critique", "icon": "$(error)" },
-      { "command": "jjj.commentSubmitCritique", "title": "Submit" },
-      { "command": "jjj.commentAddressCritique", "title": "Address", "icon": "$(check)" },
-      { "command": "jjj.commentDismissCritique", "title": "Dismiss", "icon": "$(close)" },
-      { "command": "jjj.commentValidateCritique", "title": "Validate (Confirmed Flaw)", "icon": "$(error)" }
+      {
+        "command": "jjj.refreshAll",
+        "title": "JJJ: Refresh All",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "jjj.newProblem",
+        "title": "JJJ: New Problem",
+        "icon": "$(plus)"
+      },
+      {
+        "command": "jjj.newSolution",
+        "title": "JJJ: New Solution",
+        "icon": "$(plus)"
+      },
+      {
+        "command": "jjj.newCritique",
+        "title": "JJJ: New Critique"
+      },
+      {
+        "command": "jjj.newMilestone",
+        "title": "JJJ: New Milestone",
+        "icon": "$(plus)"
+      },
+      {
+        "command": "jjj.approveSolution",
+        "title": "JJJ: Approve Solution"
+      },
+      {
+        "command": "jjj.withdrawSolution",
+        "title": "JJJ: Withdraw Solution"
+      },
+      {
+        "command": "jjj.submitSolution",
+        "title": "JJJ: Submit Solution",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "jjj.lgtmSolution",
+        "title": "JJJ: LGTM (Sign Off)",
+        "icon": "$(thumbsup)"
+      },
+      {
+        "command": "jjj.openActiveSolution",
+        "title": "JJJ: Open Active Solution"
+      },
+      {
+        "command": "jjj.solveProblem",
+        "title": "JJJ: Solve Problem"
+      },
+      {
+        "command": "jjj.dissolveProblem",
+        "title": "JJJ: Dissolve Problem"
+      },
+      {
+        "command": "jjj.addressCritique",
+        "title": "JJJ: Address Critique"
+      },
+      {
+        "command": "jjj.dismissCritique",
+        "title": "JJJ: Dismiss Critique"
+      },
+      {
+        "command": "jjj.addCritiqueHere",
+        "title": "JJJ: Add Critique Here"
+      },
+      {
+        "command": "jjj.resumeSolution",
+        "title": "JJJ: Resume Solution"
+      },
+      {
+        "command": "jjj.switchToChange",
+        "title": "JJJ: Switch to Change",
+        "icon": "$(git-branch)"
+      },
+      {
+        "command": "jjj.openEntity",
+        "title": "JJJ: Open Entity"
+      },
+      {
+        "command": "jjj.showOpenOnly",
+        "title": "JJJ: Show Open Only",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "jjj.showAll",
+        "title": "JJJ: Show All",
+        "icon": "$(filter-filled)"
+      },
+      {
+        "command": "jjj.toggleTreeFilter",
+        "title": "JJJ: Toggle Filter"
+      },
+      {
+        "command": "jjj.nextOpenItem",
+        "title": "JJJ: Next Open Item"
+      },
+      {
+        "command": "jjj.prevOpenItem",
+        "title": "JJJ: Previous Open Item"
+      },
+      {
+        "command": "jjj.syncGithub",
+        "title": "JJJ: Sync GitHub",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "jjj.syncGithubImport",
+        "title": "JJJ: Import GitHub Issue"
+      },
+      {
+        "command": "jjj.syncGithubStatus",
+        "title": "JJJ: GitHub Sync Status"
+      },
+      {
+        "command": "jjj.validateCritique",
+        "title": "JJJ: Validate Critique",
+        "icon": "$(error)"
+      },
+      {
+        "command": "jjj.commentSubmitCritique",
+        "title": "Submit"
+      },
+      {
+        "command": "jjj.commentAddressCritique",
+        "title": "Address",
+        "icon": "$(check)"
+      },
+      {
+        "command": "jjj.commentDismissCritique",
+        "title": "Dismiss",
+        "icon": "$(close)"
+      },
+      {
+        "command": "jjj.commentValidateCritique",
+        "title": "Validate (Confirmed Flaw)",
+        "icon": "$(error)"
+      },
+      {
+        "command": "jjj.assignToMe",
+        "title": "JJJ: Assign to Me"
+      },
+      {
+        "command": "jjj.moveProblemToMilestone",
+        "title": "JJJ: Move to Milestone…"
+      },
+      {
+        "command": "jjj.newProblemInMilestone",
+        "title": "JJJ: New Problem in Milestone",
+        "icon": "$(plus)"
+      },
+      {
+        "command": "jjj.reopenProblem",
+        "title": "JJJ: Reopen Problem"
+      }
     ],
     "viewsContainers": {
       "activitybar": [
@@ -76,35 +205,142 @@
     },
     "views": {
       "jjj-sidebar": [
-        { "id": "jjj-project-tree", "name": "Project" }
+        {
+          "id": "jjj-project-tree",
+          "name": "Project"
+        }
       ]
     },
     "menus": {
       "view/title": [
-        { "command": "jjj.showOpenOnly", "when": "view == jjj-project-tree && jjj.filterMode == all", "group": "navigation@1" },
-        { "command": "jjj.showAll", "when": "view == jjj-project-tree && jjj.filterMode == open", "group": "navigation@1" },
-        { "command": "jjj.refreshAll", "when": "view == jjj-project-tree", "group": "navigation@2" },
-        { "command": "jjj.newProblem", "when": "view == jjj-project-tree", "group": "navigation@3" },
-        { "command": "jjj.newMilestone", "when": "view == jjj-project-tree", "group": "navigation@4" }
+        {
+          "command": "jjj.showOpenOnly",
+          "when": "view == jjj-project-tree && jjj.filterMode == all",
+          "group": "navigation@1"
+        },
+        {
+          "command": "jjj.showAll",
+          "when": "view == jjj-project-tree && jjj.filterMode == open",
+          "group": "navigation@1"
+        },
+        {
+          "command": "jjj.refreshAll",
+          "when": "view == jjj-project-tree",
+          "group": "navigation@2"
+        },
+        {
+          "command": "jjj.newProblem",
+          "when": "view == jjj-project-tree",
+          "group": "navigation@3"
+        },
+        {
+          "command": "jjj.newMilestone",
+          "when": "view == jjj-project-tree",
+          "group": "navigation@4"
+        }
       ],
       "view/item/context": [
-        { "command": "jjj.newSolution", "when": "viewItem == problem", "group": "1_actions@1" },
-        { "command": "jjj.solveProblem", "when": "viewItem == problem", "group": "1_actions@2" },
-        { "command": "jjj.dissolveProblem", "when": "viewItem == problem", "group": "1_actions@3" },
-        { "command": "jjj.submitSolution", "when": "viewItem == solution-proposed", "group": "1_actions@1" },
-        { "command": "jjj.lgtmSolution", "when": "viewItem == solution-submitted", "group": "1_actions@1" },
-        { "command": "jjj.approveSolution", "when": "viewItem == solution-submitted", "group": "1_actions@2" },
-        { "command": "jjj.withdrawSolution", "when": "viewItem =~ /^solution-(proposed|submitted)$/", "group": "1_actions@3" },
-        { "command": "jjj.newCritique", "when": "viewItem =~ /^solution-(proposed|submitted)$/", "group": "1_actions@3" },
-        { "command": "jjj.resumeSolution", "when": "viewItem =~ /^solution-(proposed|submitted)$/", "group": "1_actions@4" },
-        { "command": "jjj.switchToChange", "when": "viewItem =~ /^solution-/", "group": "2_navigate@1" },
-        { "command": "jjj.addressCritique", "when": "viewItem =~ /^critique-(open|valid)$/", "group": "1_actions@1" },
-        { "command": "jjj.dismissCritique", "when": "viewItem =~ /^critique-(open|valid)$/", "group": "1_actions@2" },
-        { "command": "jjj.validateCritique", "when": "viewItem == critique-open", "group": "1_actions@3" },
-        { "command": "jjj.newProblem", "when": "viewItem == milestone || viewItem == backlog", "group": "1_actions@1" }
+        {
+          "command": "jjj.newSolution",
+          "when": "viewItem == problem",
+          "group": "1_actions@1"
+        },
+        {
+          "command": "jjj.solveProblem",
+          "when": "viewItem == problem",
+          "group": "1_actions@2"
+        },
+        {
+          "command": "jjj.dissolveProblem",
+          "when": "viewItem == problem",
+          "group": "1_actions@3"
+        },
+        {
+          "command": "jjj.submitSolution",
+          "when": "viewItem == solution-proposed",
+          "group": "1_actions@1"
+        },
+        {
+          "command": "jjj.lgtmSolution",
+          "when": "viewItem == solution-submitted",
+          "group": "1_actions@1"
+        },
+        {
+          "command": "jjj.approveSolution",
+          "when": "viewItem == solution-submitted",
+          "group": "1_actions@2"
+        },
+        {
+          "command": "jjj.withdrawSolution",
+          "when": "viewItem =~ /^solution-(proposed|submitted)$/",
+          "group": "1_actions@3"
+        },
+        {
+          "command": "jjj.newCritique",
+          "when": "viewItem =~ /^solution-(proposed|submitted)$/",
+          "group": "1_actions@3"
+        },
+        {
+          "command": "jjj.resumeSolution",
+          "when": "viewItem =~ /^solution-(proposed|submitted)$/",
+          "group": "1_actions@4"
+        },
+        {
+          "command": "jjj.switchToChange",
+          "when": "viewItem =~ /^solution-/",
+          "group": "2_navigate@1"
+        },
+        {
+          "command": "jjj.addressCritique",
+          "when": "viewItem =~ /^critique-(open|valid)$/",
+          "group": "1_actions@1"
+        },
+        {
+          "command": "jjj.dismissCritique",
+          "when": "viewItem =~ /^critique-(open|valid)$/",
+          "group": "1_actions@2"
+        },
+        {
+          "command": "jjj.validateCritique",
+          "when": "viewItem == critique-open",
+          "group": "1_actions@3"
+        },
+        {
+          "command": "jjj.newProblem",
+          "when": "viewItem == milestone || viewItem == backlog",
+          "group": "1_actions@1"
+        },
+        {
+          "command": "jjj.assignToMe",
+          "when": "viewItem == problem",
+          "group": "2_assign@1"
+        },
+        {
+          "command": "jjj.assignToMe",
+          "when": "viewItem =~ /^solution-/",
+          "group": "2_assign@1"
+        },
+        {
+          "command": "jjj.moveProblemToMilestone",
+          "when": "viewItem == problem",
+          "group": "2_assign@2"
+        },
+        {
+          "command": "jjj.newProblemInMilestone",
+          "when": "viewItem == milestone || viewItem == backlog",
+          "group": "1_actions@2"
+        },
+        {
+          "command": "jjj.reopenProblem",
+          "when": "viewItem == problem",
+          "group": "3_status@1"
+        }
       ],
       "editor/context": [
-        { "command": "jjj.addCritiqueHere", "group": "jjj@1" }
+        {
+          "command": "jjj.addCritiqueHere",
+          "group": "jjj@1"
+        }
       ],
       "comments/commentThread/title": [
         {
