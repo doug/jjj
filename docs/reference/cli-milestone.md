@@ -120,6 +120,45 @@ jjj milestone roadmap [OPTIONS]
 jjj milestone roadmap
 ```
 
+## `jjj milestone status`
+
+Show completion statistics for a milestone.
+
+```
+jjj milestone status <milestone> [OPTIONS]
+```
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `--json` | bool | Output in JSON format |
+
+**Text output example:**
+
+```
+v1.0 Release [active] — target: 2025-06-01 (88 days remaining)
+Problems: 8 total — 5 solved, 1 in-progress, 2 open (62% complete)
+```
+
+**JSON output fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `title` | string | Milestone title |
+| `status` | string | Milestone status |
+| `total` | number | Total problem count |
+| `solved` | number | Number of solved problems |
+| `in_progress` | number | Number of in-progress problems |
+| `open` | number | Number of open problems |
+| `dissolved` | number | Number of dissolved problems |
+| `pct_complete` | number | Percentage complete (solved / total × 100) |
+| `target_date` | string \| null | Target date (YYYY-MM-DD) |
+| `days_remaining` | number \| null | Days until target date |
+
+```bash
+jjj milestone status "v1.0 Release"
+jjj milestone status "v1.0" --json
+```
+
 ## `jjj milestone assign`
 
 Assign a milestone to a person.

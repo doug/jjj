@@ -141,6 +141,20 @@ jjj problem dissolve <problem> [OPTIONS]
 jjj problem dissolve "test coverage" --reason "Turned out to be expected behavior"
 ```
 
+## `jjj problem reopen`
+
+Transition a solved or dissolved problem back to open.
+
+```
+jjj problem reopen <problem>
+```
+
+Useful when a previously solved problem recurs or a dissolved problem turns out to be real after all.
+
+```bash
+jjj problem reopen "App crashes"
+```
+
 ## `jjj problem assign`
 
 Assign a problem to a person.

@@ -253,5 +253,89 @@ assert_success "critique show"
 assert_contains "Good point" "reply body persisted"
 assert_contains "flow control" "full reply text present"
 
+# ── 8: Custom label_priority config ──────────────────────────────────────────
+section "Custom label_priority config"
+
+# Fresh repo so we don't collide with issues already imported above.
+setup_repo "label-priority-config"
+
+# New fake gh stub that returns issue #50 with a custom label "team-priority-1"
+cat > "$FAKE_BIN/gh" << 'GHEOF2'
+#!/usr/bin/env bash
+CMD="$1 $2"
+case "$CMD" in
+  "auth status")
+    echo "Logged in to github.com account testuser (keyring)"
+    exit 0
+    ;;
+  "api user")
+    echo "testuser"
+    exit 0
+    ;;
+  "repo view")
+    echo "testowner/testrepo"
+    exit 0
+    ;;
+  "issue view")
+    NUM="$3"
+    ARGS="$*"
+    if [[ "$ARGS" == *"state"* && "$ARGS" == *".state"* ]]; then
+      echo "OPEN"
+    else
+      cat <<'JSON'
+{"number":50,"title":"Custom priority label test issue","body":"This issue has a custom team priority label.","state":"OPEN","labels":[{"name":"team-priority-1"}],"author":{"login":"testuser"}}
+JSON
+    fi
+    exit 0
+    ;;
+  "issue list")
+    cat <<'JSON'
+[{"number":50,"title":"Custom priority label test issue","state":"OPEN","labels":[{"name":"team-priority-1"}]}]
+JSON
+    exit 0
+    ;;
+  "issue create")
+    echo "50"
+    exit 0
+    ;;
+  "issue close")
+    echo "Closed issue #$3."
+    exit 0
+    ;;
+  *)
+    echo "fake-gh: unhandled: $*" >&2
+    exit 1
+    ;;
+esac
+GHEOF2
+chmod +x "$FAKE_BIN/gh"
+
+# Initialize jjj in the fresh repo
+run_jjj init
+assert_success "init label-priority-config repo"
+
+# Write the label_priority mapping directly to config.toml using TOML syntax.
+# label_priority is a HashMap<String, String> under [github] in ProjectConfig.
+# `jjj init` already emits an empty [github.label_priority] section at the end
+# of config.toml, so we only need to append the key-value pair (no header).
+CONFIG_PATH="$(pwd)/.jj/jjj-meta/config.toml"
+cat >> "$CONFIG_PATH" << 'TOMLEOF'
+"team-priority-1" = "critical"
+TOMLEOF
+
+# Import issue #50 — the "team-priority-1" label should map to "critical"
+run_jjj github import 50
+assert_success "import issue #50 with custom label"
+assert_contains "Custom priority label" "problem title from issue body"
+
+# Verify the priority was resolved to "critical" (not the default "medium")
+run_jjj problem list --json
+assert_success "problem list JSON after custom-label import"
+assert_contains '"critical"' "priority mapped from custom label team-priority-1"
+assert_not_contains '"medium"' "default priority NOT used when custom mapping present"
+
+observe "label_priority in [github] config maps arbitrary GitHub labels to jjj priorities"
+observe "Without the mapping, team-priority-1 would not match any built-in label and priority would default to medium"
+
 end_scenario
 uxr_exit
