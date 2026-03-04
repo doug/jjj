@@ -183,6 +183,7 @@ fn new_problem(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn list_problems(
     ctx: &CommandContext,
     status_filter: Option<String>,

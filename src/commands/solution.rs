@@ -449,7 +449,7 @@ fn edit_solution(
                 .parse()
                 .map_err(|e: String| crate::error::JjjError::Validation(e))?;
             solution.try_set_status(new_status)
-                .map_err(|e| crate::error::JjjError::Validation(e))?;
+                .map_err(crate::error::JjjError::Validation)?;
         }
 
         store.save_solution(&solution)?;
@@ -654,7 +654,6 @@ fn approve_solution(
 /// Core acceptance logic shared by `submit` and `github merge`.
 /// Checks critiques, validates state, emits events, accepts, and auto-solves.
 /// Does NOT squash code or merge PRs — that is the caller's responsibility.
-
 pub(crate) fn finalize_solution(
     ctx: &CommandContext,
     solution_id: &str,
@@ -876,7 +875,7 @@ fn lgtm_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
     // Find an open review critique assigned to (or matching) the current user
     let my_review = critiques.iter().find(|c| {
         c.status == CritiqueStatus::Open
-            && c.reviewer.as_ref().map_or(false, |r| {
+            && c.reviewer.as_ref().is_some_and(|r| {
                 r.contains(&current_user) || current_user.contains(r.as_str())
             })
     });
