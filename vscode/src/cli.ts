@@ -271,6 +271,14 @@ export class JjjCli {
     return this.exec(["problem", "reopen", problemId]);
   }
 
+  async editProblem(problemId: string, title: string): Promise<string> {
+    return this.exec(["problem", "edit", problemId, "--title", title]);
+  }
+
+  async editSolution(solutionId: string, title: string): Promise<string> {
+    return this.exec(["solution", "edit", solutionId, "--title", title]);
+  }
+
   // --- GitHub Sync ---
 
   async syncGithub(): Promise<string> {

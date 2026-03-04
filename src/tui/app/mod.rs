@@ -313,6 +313,7 @@ impl App {
             KeyCode::Char('o') => self.handle_action_o()?,
             KeyCode::Char('D') => self.handle_action_shift_d()?,
             KeyCode::Char('A') => self.handle_action_shift_a()?,
+            KeyCode::Char('u') => self.handle_action_u()?,
             KeyCode::Char('v') => self.handle_action_v()?,
             KeyCode::Char('f') => self.toggle_filter(),
             KeyCode::Char('/') => self.start_search(),

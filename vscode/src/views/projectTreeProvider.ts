@@ -22,9 +22,13 @@ class MilestoneNode extends vscode.TreeItem {
     super(label, vscode.TreeItemCollapsibleState.Expanded);
     this.contextValue = milestone ? "milestone" : "backlog";
     const leadSuffix = milestone?.assignee ? ` · @${milestone.assignee.split("<")[0].trim().slice(0, 15)}` : "";
-    this.description = milestone
-      ? `(${solvedCount}/${problemCount} solved)${leadSuffix}`
-      : `(${problemCount} problems)`;
+    if (milestone) {
+      const pct = problemCount === 0 ? 0 : Math.round(solvedCount * 100 / problemCount);
+      const progress = pct === 100 ? "complete" : `${solvedCount}/${problemCount} · ${pct}%`;
+      this.description = `${progress}${leadSuffix}`;
+    } else {
+      this.description = `(${problemCount} problems)`;
+    }
     this.iconPath = milestone
       ? new vscode.ThemeIcon("milestone")
       : new vscode.ThemeIcon("inbox");

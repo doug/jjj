@@ -1,6 +1,6 @@
 use super::{App, InputAction, InputMode};
 use crate::error::Result;
-use crate::models::{CritiqueStatus, Event, EventType, ProblemStatus};
+use crate::models::{CritiqueStatus, Event, EventExtra, EventType, ProblemStatus};
 use super::super::next_actions::EntityType;
 
 impl App {
@@ -187,7 +187,7 @@ impl App {
     pub(super) fn handle_action_a(&mut self) -> Result<()> {
         if let Some((id, entity_type)) = self.get_selected_entity() {
             match entity_type {
-                EntityType::Solution => self.accept_solution(&id)?,
+                EntityType::Solution => self.approve_solution(&id)?,
                 EntityType::Critique => self.address_critique(&id)?,
                 EntityType::Problem => {} // No 'a' action for problems
             }
@@ -198,7 +198,16 @@ impl App {
     pub(super) fn handle_action_r(&mut self) -> Result<()> {
         if let Some((id, entity_type)) = self.get_selected_entity() {
             if entity_type == EntityType::Solution {
-                self.refute_solution(&id)?;
+                self.withdraw_solution(&id)?;
+            }
+        }
+        Ok(())
+    }
+
+    pub(super) fn handle_action_u(&mut self) -> Result<()> {
+        if let Some((id, entity_type)) = self.get_selected_entity() {
+            if entity_type == EntityType::Solution {
+                self.submit_solution(&id)?;
             }
         }
         Ok(())
@@ -290,7 +299,7 @@ impl App {
         Ok(())
     }
 
-    fn accept_solution(&mut self, solution_id: &str) -> Result<()> {
+    fn approve_solution(&mut self, solution_id: &str) -> Result<()> {
         // Block if there are open critiques
         let open_critiques = self
             .store
@@ -311,7 +320,7 @@ impl App {
         let user = self.store.get_current_user().unwrap_or_else(|_| "unknown".to_string());
         match self
             .store
-            .with_metadata(&format!("Accept solution {}", solution_id), || {
+            .with_metadata(&format!("Approve solution {}", solution_id), || {
                 let event = Event::new(EventType::SolutionApproved, solution_id.to_string(), user.clone());
                 self.store.set_pending_event(event.clone());
                 let mut solution = self.store.load_solution(solution_id)?;
@@ -331,7 +340,7 @@ impl App {
                 Ok(())
             }) {
             Ok(_) => {
-                self.show_flash(&format!("{} accepted", id));
+                self.show_flash(&format!("{} approved", id));
                 self.refresh_data()?;
             }
             Err(e) => {
@@ -341,18 +350,52 @@ impl App {
         Ok(())
     }
 
-    fn refute_solution(&mut self, solution_id: &str) -> Result<()> {
+    fn withdraw_solution(&mut self, solution_id: &str) -> Result<()> {
         let id = solution_id.to_string();
         match self
             .store
-            .with_metadata(&format!("Refute solution {}", solution_id), || {
+            .with_metadata(&format!("Withdraw solution {}", solution_id), || {
                 let mut solution = self.store.load_solution(solution_id)?;
                 solution.withdraw();
                 self.store.save_solution(&solution)?;
                 Ok(())
             }) {
             Ok(_) => {
-                self.show_flash(&format!("{} refuted", id));
+                self.show_flash(&format!("{} withdrawn", id));
+                self.refresh_data()?;
+            }
+            Err(e) => {
+                self.show_flash(&format!("Error: {}", e));
+            }
+        }
+        Ok(())
+    }
+
+    fn submit_solution(&mut self, solution_id: &str) -> Result<()> {
+        let id = solution_id.to_string();
+        let user = self.store.get_current_user().unwrap_or_else(|_| "unknown".to_string());
+        match self
+            .store
+            .with_metadata(&format!("Submit solution {} for review", solution_id), || {
+                let mut solution = self.store.load_solution(solution_id)?;
+                solution.submit();
+                self.store.save_solution(&solution)?;
+                let event = Event::new(EventType::SolutionSubmitted, solution_id.to_string(), user.clone())
+                    .with_extra(EventExtra {
+                        problem: Some(solution.problem_id.clone()),
+                        ..Default::default()
+                    });
+                self.store.set_pending_event(event);
+                // Auto-set problem to InProgress if it's Open
+                let mut problem = self.store.load_problem(&solution.problem_id)?;
+                if problem.status == ProblemStatus::Open {
+                    problem.set_status(ProblemStatus::InProgress);
+                    self.store.save_problem(&problem)?;
+                }
+                Ok(())
+            }) {
+            Ok(_) => {
+                self.show_flash(&format!("{} submitted for review", id));
                 self.refresh_data()?;
             }
             Err(e) => {

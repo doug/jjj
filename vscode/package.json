@@ -192,6 +192,16 @@
       {
         "command": "jjj.reopenProblem",
         "title": "JJJ: Reopen Problem"
+      },
+      {
+        "command": "jjj.editProblem",
+        "title": "Rename Problem",
+        "category": "JJJ"
+      },
+      {
+        "command": "jjj.editSolution",
+        "title": "Rename Solution",
+        "category": "JJJ"
       }
     ],
     "viewsContainers": {
@@ -334,6 +344,16 @@
           "command": "jjj.reopenProblem",
           "when": "viewItem == problem",
           "group": "3_status@1"
+        },
+        {
+          "command": "jjj.editProblem",
+          "when": "viewItem == problem",
+          "group": "3_status@2"
+        },
+        {
+          "command": "jjj.editSolution",
+          "when": "viewItem =~ /^solution-/",
+          "group": "3_status@2"
         }
       ],
       "editor/context": [

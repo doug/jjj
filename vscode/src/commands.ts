@@ -435,4 +435,74 @@ export function registerCommands(
     vscode.window.showInformationMessage(result || `Problem "${pick.label}" reopened.`);
   });
 
+  // --- Edit (Rename) ---
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("jjj.editProblem", async (node?: unknown) => {
+      try {
+        let problemId: string;
+        let currentTitle: string;
+
+        if (node && typeof node === "object" && "problem" in node) {
+          const problemNode = node as { problem: { id: string; title: string } };
+          problemId = problemNode.problem.id;
+          currentTitle = problemNode.problem.title;
+        } else {
+          const problems = cache.getProblems();
+          const pick = await vscode.window.showQuickPick(
+            problems.map(p => ({ label: p.title, description: p.id.slice(0, 8), id: p.id, title: p.title })),
+            { placeHolder: "Select problem to rename" },
+          );
+          if (!pick) { return; }
+          problemId = pick.id;
+          currentTitle = pick.title;
+        }
+
+        const newTitle = await vscode.window.showInputBox({ prompt: "New title", value: currentTitle });
+        if (!newTitle) { return; }
+
+        await cli.editProblem(problemId, newTitle);
+        vscode.window.showInformationMessage(`Renamed to '${newTitle}'`);
+        await cache.refresh();
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e);
+        vscode.window.showErrorMessage(`JJJ: ${message}`);
+      }
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("jjj.editSolution", async (node?: unknown) => {
+      try {
+        let solutionId: string;
+        let currentTitle: string;
+
+        if (node && typeof node === "object" && "solution" in node) {
+          const solutionNode = node as { solution: { id: string; title: string } };
+          solutionId = solutionNode.solution.id;
+          currentTitle = solutionNode.solution.title;
+        } else {
+          const solutions = cache.getSolutions();
+          const pick = await vscode.window.showQuickPick(
+            solutions.map(s => ({ label: s.title, description: s.id.slice(0, 8), id: s.id, title: s.title })),
+            { placeHolder: "Select solution to rename" },
+          );
+          if (!pick) { return; }
+          solutionId = pick.id;
+          currentTitle = pick.title;
+        }
+
+        const newTitle = await vscode.window.showInputBox({ prompt: "New title", value: currentTitle });
+        if (!newTitle) { return; }
+
+        await cli.editSolution(solutionId, newTitle);
+        vscode.window.showInformationMessage(`Renamed to '${newTitle}'`);
+        await cache.refresh();
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e);
+        vscode.window.showErrorMessage(`JJJ: ${message}`);
+      }
+    }),
+  );
+
 }

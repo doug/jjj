@@ -152,7 +152,7 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                     (
                         format!(
                             "{}{}{}{}{}: {}{}",
-                            indent, expand_char, priority_sym, action_sym, id, title, assignee_suffix
+                            indent, expand_char, priority_sym, action_sym, &id[..8.min(id.len())], title, assignee_suffix
                         ),
                         status_color_problem(status),
                         dim,
@@ -167,7 +167,7 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                         format!(" @{}", name)
                     }).unwrap_or_default();
                     (
-                        format!("{}{}{}{}: {}{}", indent, expand_char, action_sym, id, title, assignee_suffix),
+                        format!("{}{}{}{}: {}{}", indent, expand_char, action_sym, &id[..8.min(id.len())], title, assignee_suffix),
                         status_color_solution(status),
                         false,
                     )
@@ -180,7 +180,7 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                 } => (
                     format!(
                         "{}{}{}{}: {} [{}]",
-                        indent, expand_char, action_sym, id, title, severity
+                        indent, expand_char, action_sym, &id[..8.min(id.len())], title, severity
                     ),
                     status_color_critique(status),
                     false,
@@ -455,8 +455,9 @@ fn get_context_actions(app: &App) -> Vec<Line<'static>> {
         }
         Some(EntityType::Solution) => {
             lines.push(Line::from("    n       New critique"));
-            lines.push(Line::from("    a       Accept"));
-            lines.push(Line::from("    r       Refute"));
+            lines.push(Line::from("    u       Submit for review"));
+            lines.push(Line::from("    a       Approve"));
+            lines.push(Line::from("    r       Withdraw"));
             lines.push(Line::from("    A       Assign to me"));
             lines.push(Line::from("    g       Go to change"));
             lines.push(Line::from("    e       Edit title"));
