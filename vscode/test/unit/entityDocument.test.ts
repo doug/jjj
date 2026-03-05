@@ -119,7 +119,7 @@ describe("EntityDocumentProvider", () => {
       const uri = vscode.Uri.parse("jjj:///problem/p1.md");
       const content = provider.provideTextDocumentContent(uri);
       assert.ok(content.includes("s1: Add search index"));
-      assert.ok(content.includes("[review]"));
+      assert.ok(content.includes("[submitted]"));
     });
 
     it("includes priority", () => {
@@ -154,7 +154,7 @@ describe("EntityDocumentProvider", () => {
       const uri = vscode.Uri.parse("jjj:///solution/s1.md");
       const content = provider.provideTextDocumentContent(uri);
       assert.ok(content.includes("Add search index"));
-      assert.ok(content.includes("Status: review"));
+      assert.ok(content.includes("Status: submitted"));
     });
 
     it("lists critiques", () => {

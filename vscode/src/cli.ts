@@ -62,6 +62,8 @@ export interface Critique {
   line_start: number | null;
   line_end: number | null;
   code_context: string[];
+  context_before?: string[];
+  context_after?: string[];
   replies: Reply[];
   github_review_id?: number | null;
 }

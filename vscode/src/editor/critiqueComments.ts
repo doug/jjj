@@ -2,6 +2,94 @@ import * as vscode from "vscode";
 import { DataCache } from "../cache";
 import { JjjCli, Critique } from "../cli";
 
+// ---------------------------------------------------------------------------
+// Pure anchor-finding logic (no VS Code API dependencies)
+// ---------------------------------------------------------------------------
+
+/** Result of searching for a critique's code in the current document. */
+export interface AnchorResult {
+  /** 1-indexed line where the critiqued code was found (or best guess). */
+  line: number;
+  /** Match quality 0.0–1.0. Below ANCHOR_THRESHOLD means "outdated". */
+  score: number;
+  /** True if confidence is too low — code may have been deleted/rewritten. */
+  outdated: boolean;
+}
+
+/** Minimum similarity fraction to consider a window a valid match. */
+export const ANCHOR_THRESHOLD = 0.5;
+
+/** Normalize a line for fuzzy comparison: trim + collapse whitespace. */
+export function normalizeLine(line: string): string {
+  return line.trim().replace(/\s+/g, ' ');
+}
+
+/** Score similarity between two normalized lines (0.0 or 1.0 for exact, 0.8 for substring). */
+export function lineSimilarity(a: string, b: string): number {
+  const na = normalizeLine(a);
+  const nb = normalizeLine(b);
+  if (na === nb) { return 1.0; }
+  if (na === '' && nb === '') { return 1.0; }
+  if (na.includes(nb) || nb.includes(na)) { return 0.8; }
+  return 0.0;
+}
+
+/**
+ * Search document lines for the best position matching the critique's context window.
+ * Returns the 1-indexed line where `code_context` starts (i.e., after context_before).
+ *
+ * Algorithm:
+ * 1. Build search window = context_before + code_context + context_after
+ * 2. Slide window across document, score each position
+ * 3. Return highest-scoring position, tiebreak by proximity to original line_start
+ * 4. If best score < ANCHOR_THRESHOLD, mark as outdated
+ */
+export function findAnchorLine(
+  docLines: string[],
+  lineStart: number,          // 1-indexed original line
+  codeContext: string[],
+  contextBefore: string[],
+  contextAfter: string[],
+): AnchorResult {
+  const searchWindow = [...contextBefore, ...codeContext, ...contextAfter];
+
+  if (searchWindow.length === 0 || codeContext.length === 0) {
+    return { line: lineStart, score: 0, outdated: true };
+  }
+
+  let bestScore = -1;
+  let bestLine = lineStart;
+
+  const maxStart = docLines.length - searchWindow.length;
+  for (let i = 0; i <= maxStart; i++) {
+    let total = 0;
+    for (let j = 0; j < searchWindow.length; j++) {
+      total += lineSimilarity(docLines[i + j], searchWindow[j]);
+    }
+    const score = total / searchWindow.length;
+
+    // The 1-indexed line where code_context begins within this window
+    const candidateLine = i + contextBefore.length + 1;
+    const candidateDist = Math.abs(candidateLine - lineStart);
+    const bestDist = Math.abs(bestLine - lineStart);
+
+    if (score > bestScore || (score === bestScore && candidateDist < bestDist)) {
+      bestScore = score;
+      bestLine = candidateLine;
+    }
+  }
+
+  return {
+    line: bestLine,
+    score: bestScore,
+    outdated: bestScore < ANCHOR_THRESHOLD,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Comment controller
+// ---------------------------------------------------------------------------
+
 export class CritiqueCommentController implements vscode.Disposable {
   private controller: vscode.CommentController;
   // critiqueId → CommentThread for update/delete on cache refresh
@@ -20,8 +108,8 @@ export class CritiqueCommentController implements vscode.Disposable {
       },
     };
     this.disposables.push(this.controller);
-    this.disposables.push(cache.onDidChange(() => this.syncThreads()));
-    this.syncThreads();
+    this.disposables.push(cache.onDidChange(() => { void this.syncThreads(); }));
+    void this.syncThreads();
   }
 
   private getWorkspaceUri(filePath: string): vscode.Uri | undefined {
@@ -67,7 +155,7 @@ export class CritiqueCommentController implements vscode.Disposable {
     return [primary, ...replies];
   }
 
-  syncThreads(): void {
+  async syncThreads(): Promise<void> {
     const critiques = this.cache.getCritiquesWithLocations();
     const activeIds = new Set(critiques.map(c => c.id));
 
@@ -84,8 +172,30 @@ export class CritiqueCommentController implements vscode.Disposable {
       const uri = this.getWorkspaceUri(critique.file_path);
       if (!uri) { continue; }
 
-      const lineStart = critique.line_start - 1; // 0-indexed
-      const lineEnd = critique.line_end ? critique.line_end - 1 : lineStart;
+      // Try to re-anchor using fuzzy context search
+      let lineStart = critique.line_start - 1; // 0-indexed for VS Code
+      let lineEnd = critique.line_end ? critique.line_end - 1 : lineStart;
+      let isOutdated = false;
+
+      if (critique.code_context && critique.code_context.length > 0) {
+        try {
+          const doc = await vscode.workspace.openTextDocument(uri);
+          const docLines = doc.getText().split('\n');
+          const anchor = findAnchorLine(
+            docLines,
+            critique.line_start,
+            critique.code_context,
+            critique.context_before ?? [],
+            critique.context_after ?? [],
+          );
+          lineStart = anchor.line - 1; // convert back to 0-indexed
+          lineEnd = lineStart + (critique.line_end ?? critique.line_start) - critique.line_start;
+          isOutdated = anchor.outdated;
+        } catch {
+          // File may not exist in workspace — use stored line numbers
+        }
+      }
+
       const range = new vscode.Range(lineStart, 0, lineEnd, Number.MAX_VALUE);
       const isResolved = critique.status === "addressed" || critique.status === "dismissed";
       const solution = this.cache.getSolution(critique.solution_id);
@@ -101,9 +211,18 @@ export class CritiqueCommentController implements vscode.Disposable {
         existing.collapsibleState = isResolved
           ? vscode.CommentThreadCollapsibleState.Collapsed
           : vscode.CommentThreadCollapsibleState.Expanded;
+        if (isOutdated) {
+          existing.label = `⚠️ Outdated — ${solution?.title ?? "jjj Critique"}`;
+        } else {
+          existing.label = solution?.title ?? "jjj Critique";
+        }
       } else {
         const thread = this.controller.createCommentThread(uri, range, this.buildComments(critique));
-        thread.label = solution?.title ?? "jjj Critique";
+        if (isOutdated) {
+          thread.label = `⚠️ Outdated — ${solution?.title ?? "jjj Critique"}`;
+        } else {
+          thread.label = solution?.title ?? "jjj Critique";
+        }
         thread.state = isResolved
           ? vscode.CommentThreadState.Resolved
           : vscode.CommentThreadState.Unresolved;

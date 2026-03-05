@@ -57,6 +57,14 @@ pub struct Critique {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub code_context: Vec<String>,
 
+    /// Lines immediately before the critiqued code (for re-anchoring after edits)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub context_before: Vec<String>,
+
+    /// Lines immediately after the critiqued code (for re-anchoring after edits)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub context_after: Vec<String>,
+
     /// Discussion thread
     #[serde(default)]
     pub replies: Vec<Reply>,
@@ -194,6 +202,8 @@ impl Critique {
             line_start: None,
             line_end: None,
             code_context: Vec::new(),
+            context_before: Vec::new(),
+            context_after: Vec::new(),
             replies: Vec::new(),
             github_review_id: None,
         }
@@ -277,11 +287,15 @@ impl Critique {
         line_start: usize,
         line_end: Option<usize>,
         code_context: Vec<String>,
+        context_before: Vec<String>,
+        context_after: Vec<String>,
     ) {
         self.file_path = Some(file_path);
         self.line_start = Some(line_start);
         self.line_end = line_end.or(Some(line_start));
         self.code_context = code_context;
+        self.context_before = context_before;
+        self.context_after = context_after;
         self.updated_at = Utc::now();
     }
 
@@ -311,6 +325,10 @@ pub struct CritiqueFrontmatter {
     pub line_end: Option<usize>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub code_context: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub context_before: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub context_after: Vec<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -333,6 +351,8 @@ impl From<&Critique> for CritiqueFrontmatter {
             line_start: c.line_start,
             line_end: c.line_end,
             code_context: c.code_context.clone(),
+            context_before: c.context_before.clone(),
+            context_after: c.context_after.clone(),
             created_at: c.created_at,
             updated_at: c.updated_at,
             github_review_id: c.github_review_id,
@@ -477,6 +497,8 @@ mod tests {
             42,
             Some(45),
             vec!["let query = format!(...)".to_string()],
+            vec![],
+            vec![],
         );
 
         assert_eq!(critique.file_path, Some("src/db.rs".to_string()));

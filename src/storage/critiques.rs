@@ -42,6 +42,8 @@ impl MetadataStore {
             line_start: frontmatter.line_start,
             line_end: frontmatter.line_end,
             code_context: frontmatter.code_context,
+            context_before: frontmatter.context_before,
+            context_after: frontmatter.context_after,
             replies: frontmatter.replies,
             github_review_id: frontmatter.github_review_id,
         };

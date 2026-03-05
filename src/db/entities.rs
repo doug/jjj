@@ -389,6 +389,8 @@ fn row_to_critique(row: &rusqlite::Row) -> SqliteResult<Critique> {
         argument: row.get::<_, Option<String>>(11)?.unwrap_or_default(),
         evidence: row.get::<_, Option<String>>(12)?.unwrap_or_default(),
         code_context: Vec::new(), // Not stored in DB
+        context_before: Vec::new(), // Not stored in DB
+        context_after: Vec::new(), // Not stored in DB
         replies: parse_json_vec(&replies_json, "replies"),
         github_review_id: row.get::<_, Option<i64>>(14)?.map(|n| n as u64),
     })

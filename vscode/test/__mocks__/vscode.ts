@@ -159,6 +159,9 @@ export const workspace = {
   textDocuments: [] as unknown[],
   registerTextDocumentContentProvider: () => ({ dispose: () => {} }),
   onDidSaveTextDocument: () => ({ dispose: () => {} }),
+  openTextDocument: async (_uri: unknown): Promise<{ getText: () => string; lineCount: number; uri: Uri; fileName: string }> => {
+    return { getText: () => '', lineCount: 0, uri: new Uri('file', ''), fileName: '' };
+  },
   asRelativePath: (uri: unknown) => {
     if (uri instanceof Uri) {
       const wsRoot = "/mock/workspace/";

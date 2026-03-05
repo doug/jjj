@@ -89,19 +89,40 @@ fn new_critique(
             // Set location if provided
             if let (Some(file_path), Some(line_num)) = (file.clone(), line) {
                 // Try to read context from file
-                let context = store
+                let (code_context, context_before, context_after) = store
                     .jj_client
                     .file_at_revision("@", &file_path)
                     .ok()
                     .map(|content| {
                         let lines: Vec<String> = content.lines().map(|s| s.to_string()).collect();
-                        let start = line_num.saturating_sub(2);
-                        let end = (line_num + 2).min(lines.len());
-                        lines[start..end].to_vec()
+                        // line_num is 1-indexed; convert to 0-indexed for slicing
+                        let idx = line_num.saturating_sub(1);
+
+                        // context_before: up to 3 lines before the critiqued line
+                        let before_start = idx.saturating_sub(3);
+                        let context_before = lines[before_start..idx].to_vec();
+
+                        // code_context: just the critiqued line itself
+                        let code_end = (idx + 1).min(lines.len());
+                        let code_context = lines[idx..code_end].to_vec();
+
+                        // context_after: up to 3 lines after
+                        let after_start = (idx + 1).min(lines.len());
+                        let after_end = (idx + 1 + 3).min(lines.len());
+                        let context_after = lines[after_start..after_end].to_vec();
+
+                        (code_context, context_before, context_after)
                     })
                     .unwrap_or_default();
 
-                critique.set_location(file_path, line_num, None, context);
+                critique.set_location(
+                    file_path,
+                    line_num,
+                    None,
+                    code_context,
+                    context_before,
+                    context_after,
+                );
             }
 
             // Create event for decision log
