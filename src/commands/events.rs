@@ -147,7 +147,7 @@ fn list_events(
         let rationale = event
             .rationale
             .as_ref()
-            .map(|r| format!(" - {}", truncate(r, 50)))
+            .map(|r| format!(" - {}", crate::utils::truncate(r, 50)))
             .unwrap_or_default();
 
         println!(
@@ -166,23 +166,15 @@ fn list_events(
 fn parse_date_filter(s: &str) -> Option<chrono::DateTime<Utc>> {
     // Try YYYY-MM-DD
     if let Ok(date) = NaiveDate::parse_from_str(s, "%Y-%m-%d") {
-        return Some(Utc.from_utc_datetime(&date.and_hms_opt(0, 0, 0).unwrap()));
+        return date.and_hms_opt(0, 0, 0).map(|dt| Utc.from_utc_datetime(&dt));
     }
     // Try YYYY-MM (first of month)
     if let Ok(date) = NaiveDate::parse_from_str(&format!("{}-01", s), "%Y-%m-%d") {
-        return Some(Utc.from_utc_datetime(&date.and_hms_opt(0, 0, 0).unwrap()));
+        return date.and_hms_opt(0, 0, 0).map(|dt| Utc.from_utc_datetime(&dt));
     }
     None
 }
 
-fn truncate(s: &str, max: usize) -> String {
-    if s.chars().count() <= max {
-        s.to_string()
-    } else {
-        let truncated: String = s.chars().take(max.saturating_sub(3)).collect();
-        format!("{}...", truncated)
-    }
-}
 
 fn rebuild_events(ctx: &CommandContext) -> Result<()> {
     let store = &ctx.store;

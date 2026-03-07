@@ -53,11 +53,8 @@ pub fn do_create_or_update_pr(
     let provider = GitHubProvider::from_config(repo_root, &config.github)?;
     let problem = ctx.store.load_problem(&solution.problem_id)?;
 
-    if solution.github_pr.is_some() {
-        println!(
-            "  (GitHub PR #{} will be updated on push)",
-            solution.github_pr.unwrap()
-        );
+    if let Some(pr_number) = solution.github_pr {
+        println!("  (GitHub PR #{} will be updated on push)", pr_number);
         return Ok(());
     }
 
@@ -130,30 +127,3 @@ pub fn auto_close_issue(ctx: &CommandContext, problem: &Problem, force: bool) {
     }
 }
 
-/// Auto-create or update a GitHub PR after submit.
-pub fn auto_create_or_update_pr(ctx: &CommandContext, solution: &mut Solution) {
-    let config = match ctx.store.load_config() {
-        Ok(c) => c,
-        Err(_) => return,
-    };
-    if !config.github.auto_push {
-        return;
-    }
-    if let Err(e) = do_create_or_update_pr(ctx, solution) {
-        eprintln!("Warning: auto-push PR to GitHub failed: {}", e);
-    }
-}
-
-/// Auto-merge a GitHub PR after a solution is accepted.
-pub fn auto_merge_pr(ctx: &CommandContext, solution: &Solution) {
-    let config = match ctx.store.load_config() {
-        Ok(c) => c,
-        Err(_) => return,
-    };
-    if !config.github.auto_push {
-        return;
-    }
-    if let Err(e) = do_merge_pr(ctx, solution) {
-        eprintln!("Warning: auto-merge GitHub PR failed: {}", e);
-    }
-}

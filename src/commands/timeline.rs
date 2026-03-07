@@ -98,7 +98,7 @@ fn format_event_description(event: &Event) -> String {
                 .extra
                 .title
                 .as_ref()
-                .map(|t| format!(": \"{}\"", truncate(t, 25)))
+                .map(|t| format!(": \"{}\"", crate::utils::truncate(t, 25)))
                 .unwrap_or_default();
             format!("{} raised{}", event.entity, title)
         }
@@ -160,11 +160,3 @@ fn format_event_description(event: &Event) -> String {
     }
 }
 
-fn truncate(s: &str, max: usize) -> String {
-    if s.chars().count() <= max {
-        s.to_string()
-    } else {
-        let truncated: String = s.chars().take(max.saturating_sub(3)).collect();
-        format!("{}...", truncated)
-    }
-}

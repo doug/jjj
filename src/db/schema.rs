@@ -76,7 +76,6 @@ impl Database {
     }
 
     /// Set or clear the dirty flag.
-    #[allow(dead_code)]
     pub fn set_dirty(&self, dirty: bool) -> SqliteResult<()> {
         self.conn.execute(
             "INSERT OR REPLACE INTO meta (key, value) VALUES ('dirty', ?1)",

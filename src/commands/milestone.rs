@@ -46,7 +46,14 @@ fn create_milestone(ctx: &CommandContext, title: String, date: Option<String>) -
                     date_str
                 ))
             })?;
-            Some(naive_date.and_hms_opt(0, 0, 0).unwrap().and_utc())
+            match naive_date.and_hms_opt(0, 0, 0) {
+                Some(dt) => Some(dt.and_utc()),
+                None => {
+                    return Err(crate::error::JjjError::Validation(format!(
+                        "Invalid date: {}", date_str
+                    )));
+                }
+            }
         } else {
             None
         };
@@ -87,7 +94,10 @@ fn edit_milestone(
                     d
                 ))
             })?;
-            milestone.set_target_date(Some(naive_date.and_hms_opt(0, 0, 0).unwrap().and_utc()));
+            let dt = naive_date.and_hms_opt(0, 0, 0).ok_or_else(|| {
+                crate::error::JjjError::Validation(format!("Invalid date: {}", d))
+            })?;
+            milestone.set_target_date(Some(dt.and_utc()));
         }
 
         if let Some(s) = status {

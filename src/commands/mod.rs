@@ -179,9 +179,5 @@ pub(crate) fn show_related_items(
 }
 
 pub(crate) fn truncate_title(s: &str, max_len: usize) -> String {
-    if s.len() <= max_len {
-        s.to_string()
-    } else {
-        format!("{}...", &s[..max_len - 3])
-    }
+    crate::utils::truncate(s, max_len)
 }

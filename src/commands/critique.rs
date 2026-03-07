@@ -171,6 +171,7 @@ fn new_critique(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn list_critiques(
     ctx: &CommandContext,
     solution_filter: Option<String>,
