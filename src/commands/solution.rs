@@ -646,8 +646,17 @@ fn approve_solution(
     println!("Solution '{}' approved.", solution.title);
 
     // Automation rules
-    let approve_event = Event::new(EventType::SolutionApproved, solution.id.clone(), store.get_current_user().unwrap_or_default());
+    let auto_user = store.get_current_user().unwrap_or_default();
+    let approve_event = Event::new(EventType::SolutionApproved, solution.id.clone(), auto_user.clone());
     crate::automation::run(ctx, &approve_event, &solution.id);
+
+    // If finalize_solution auto-solved the parent problem, fire problem_solved automation too
+    if let Ok(problem) = store.load_problem(&solution.problem_id) {
+        if problem.status == ProblemStatus::Solved {
+            let solve_event = Event::new(EventType::ProblemSolved, problem.id.clone(), auto_user);
+            crate::automation::run(ctx, &solve_event, &problem.id);
+        }
+    }
 
     // Merge PR if one is linked.
     if let Some(pr_number) = solution.github_pr {
