@@ -19,7 +19,7 @@ Verify the jjj skill works correctly in Claude Code or another AI agent.
 
 ## Test Prompts
 
-Run each prompt in Claude Code inside the test repository. Verify the agent uses the correct command and the output makes sense.
+Tests must be run in order — each builds on the state created by previous tests.
 
 ### 1. Problem creation
 
@@ -39,35 +39,35 @@ Run each prompt in Claude Code inside the test repository. Verify the agent uses
 
 **Expected:** Agent runs `jjj critique new "nil guard" "Missing test for empty string vs nil" --severity medium`
 
-### 4. Address a critique
+### 4. JSON output
+
+**Prompt:** "List all problems as JSON"
+
+**Expected:** Agent runs `jjj problem list --json`. Output should be a JSON array containing the login crash problem with `"status": "open"` (it has not been approved yet).
+
+### 5. Address a critique
 
 **Prompt:** "Mark the 'Missing test' critique as addressed"
 
 **Expected:** Agent runs `jjj critique address "Missing test"`
 
-### 5. Submit and approve
+### 6. Submit and approve
 
 **Prompt:** "Submit the nil guard solution for review, then approve it"
 
-**Expected:** Agent runs `jjj solution submit "nil guard"` then `jjj solution approve "nil guard"`
+**Expected:** Agent runs `jjj solution submit "nil guard"` then `jjj solution approve "nil guard"`. The problem auto-transitions to solved.
 
-### 6. Status check
+### 7. Status check
 
 **Prompt:** "What should I work on next?"
 
-**Expected:** Agent runs `jjj status` or `jjj next`
+**Expected:** Agent runs `jjj status` or `jjj next`. Output should show nothing pending (the only problem is solved).
 
-### 7. Entity resolution — fuzzy title
+### 8. Entity resolution — fuzzy title
 
 **Prompt:** "Show me the login problem"
 
-**Expected:** Agent runs `jjj problem show "login"` (fuzzy match, not full title)
-
-### 8. JSON output
-
-**Prompt:** "List all problems as JSON"
-
-**Expected:** Agent runs `jjj problem list --json`
+**Expected:** Agent runs `jjj problem show "login"` (fuzzy match, not full title). Output shows the solved problem and its approved solution.
 
 ### 9. Milestone workflow
 
@@ -77,9 +77,16 @@ Run each prompt in Claude Code inside the test repository. Verify the agent uses
 
 ### 10. Withdraw a solution
 
-**Prompt:** "Withdraw the nil guard solution with rationale 'Superseded by input validation approach'"
+**Requires setup:** The nil guard solution is already approved, so it cannot be withdrawn. Before this test, reopen the problem and create a new solution:
 
-**Expected:** Agent runs `jjj solution withdraw "nil guard" --rationale "Superseded by input validation approach"`
+```bash
+jjj problem reopen "Login page crashes"
+jjj solution new "Input validation approach" --problem "Login page crashes"
+```
+
+**Prompt:** "Withdraw the input validation solution with rationale 'Superseded by nil guard approach'"
+
+**Expected:** Agent runs `jjj solution withdraw "Input validation" --rationale "Superseded by nil guard approach"`
 
 ## Pass Criteria
 
