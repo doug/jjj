@@ -43,7 +43,7 @@ Tests must be run in order — each builds on the state created by previous test
 
 **Prompt:** "List all problems as JSON"
 
-**Expected:** Agent runs `jjj problem list --json`. Output should be a JSON array containing the login crash problem with `"status": "open"` (it has not been approved yet).
+**Expected:** Agent runs `jjj problem list --json`. Output should be a JSON array containing the login crash problem with `"status": "in_progress"` (it auto-transitioned from `open` when a solution was created in test 2).
 
 ### 5. Address a critique
 
