@@ -46,6 +46,8 @@ jjj critique list [OPTIONS]
 | `--solution` | string | Filter by solution |
 | `--status` | string | Filter by status (open, addressed, valid, dismissed) |
 | `--reviewer` | string | Filter by reviewer (e.g., `@alice`) |
+| `--author` | string | Filter by critique author (substring match) |
+| `--mine` | flag | Show only critiques authored by you |
 | `--search` | string | Search critiques by title text |
 | `--json` | bool | Output in JSON format |
 

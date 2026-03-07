@@ -205,3 +205,17 @@ jjj solution resume <solution_id>
 jjj solution resume "Add connection"
 ```
 
+## `jjj solution diff`
+
+Show the `jj diff` output for all change IDs attached to a solution.
+
+```
+jjj solution diff <solution_id>
+```
+
+Prints `=== Change: <id> ===` before each diff. If a change is not present in the local repo, a note is shown and the next change is tried. If no change IDs are attached, prints an informative message.
+
+```bash
+jjj solution diff "Add connection"
+```
+

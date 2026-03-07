@@ -97,11 +97,20 @@ Right-click any item in the tree for relevant actions:
 | Solution (submitted) | LGTM (Sign Off), Approve, New Critique, Resume, Withdraw, Assign to Me, Switch to Change |
 | Critique (open/valid) | Address, Dismiss, Validate |
 
+### Status Bar
+
+The extension adds two items to the VS Code status bar:
+
+- **Left bar** (active solution): shows the current solution's title and an open-critique badge (e.g. `$(beaker) Fix auth flow $(warning)2`). Clicking opens the solution's entity document.
+- **Right bar** (next action summary): shows project-wide counts — `$(issues) 3  $(beaker) 2  $(warning) 1` for open problems, solutions in review, and open critiques. Hidden when all counts are zero. Clicking runs **JJJ: Next Open Item**.
+
 ### Inline Critique Display
 
 Critiques with file and line location (imported from PR review threads via `jjj github import`) appear as comment threads anchored to the relevant line in the editor. Thread actions (Address, Dismiss, Validate) are available inline without switching to the tree.
 
 Use **JJJ: Add Critique Here** from the editor right-click menu to raise a critique pinned to the current cursor position.
+
+Critique threads are **re-anchored immediately on every file save** — if the surrounding code has moved, the thread relocates to the best matching position without waiting for a full cache refresh. Threads that can no longer be confidently anchored are marked **⚠️ Outdated**. A full cache refresh (adds/removes threads) still runs 500ms after each save.
 
 ### Command Palette
 

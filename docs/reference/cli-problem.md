@@ -155,6 +155,40 @@ Useful when a previously solved problem recurs or a dissolved problem turns out 
 jjj problem reopen "App crashes"
 ```
 
+## `jjj problem graph`
+
+Render the problem hierarchy as an ASCII DAG (directed acyclic graph).
+
+```
+jjj problem graph [OPTIONS]
+```
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `--all` | flag | Include solved and dissolved problems (default: active only) |
+| `--milestone` | string | Filter to problems in a specific milestone |
+
+By default only open and in-progress problems are shown. Use `--all` to include solved (`◉`) and dissolved (`×`) problems.
+
+```bash
+jjj problem graph
+jjj problem graph --all
+jjj problem graph --milestone "Q1 Release"
+```
+
+Example output:
+
+```
+○ Authentication system [open]
+├─ ○ Login flow [in_progress]
+│  └─ ○ OAuth2 integration [open]
+└─ ○ Session management [open]
+○ Performance monitoring [open]
+└─ ○ Request latency tracking [open]
+```
+
+Icons: `○` open/in-progress, `◉` solved, `×` dissolved.
+
 ## `jjj problem assign`
 
 Assign a problem to a person.
