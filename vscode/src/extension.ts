@@ -5,7 +5,7 @@ import { ProjectTreeProvider } from "./views/projectTreeProvider";
 import { EntityDocumentProvider } from "./documents/entityDocumentProvider";
 import { CritiqueCommentController } from "./editor/critiqueComments";
 import { registerCommands } from "./commands";
-import { SolutionStatusBar } from "./statusBar";
+import { SolutionStatusBar, NextActionStatusBar } from "./statusBar";
 
 export function activate(context: vscode.ExtensionContext) {
   const cli = new JjjCli();
@@ -102,7 +102,8 @@ export function activate(context: vscode.ExtensionContext) {
 
   // --- Status Bar ---
   const statusBar = new SolutionStatusBar(cache);
-  context.subscriptions.push(statusBar);
+  const nextActionBar = new NextActionStatusBar(cache);
+  context.subscriptions.push(statusBar, nextActionBar);
   context.subscriptions.push(
     vscode.commands.registerCommand("jjj.openActiveSolution", async () => {
       const status = cache.getStatus();
@@ -124,6 +125,14 @@ export function activate(context: vscode.ExtensionContext) {
   const interval = setInterval(() => cache.refresh(), 30000);
   context.subscriptions.push({ dispose: () => clearInterval(interval) });
 
+  // Immediate re-anchor on save (no CLI calls, just adjust thread ranges)
+  context.subscriptions.push(
+    vscode.workspace.onDidSaveTextDocument(doc => {
+      void critiqueComments.syncThreadsForUri(doc.uri);
+    }),
+  );
+
+  // Debounced cache refresh (adds/removes critiques after 500ms)
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
   context.subscriptions.push(
     vscode.workspace.onDidSaveTextDocument(() => {

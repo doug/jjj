@@ -21,9 +21,11 @@ pub fn execute(ctx: &CommandContext, action: CritiqueAction) -> Result<()> {
             solution,
             status,
             reviewer,
+            author,
+            mine,
             search,
             json,
-        } => list_critiques(ctx, solution, status, reviewer, search.as_deref(), json),
+        } => list_critiques(ctx, solution, status, reviewer, author, mine, search.as_deref(), json),
         CritiqueAction::Show { critique_id, json } => show_critique(ctx, critique_id, json),
         CritiqueAction::Edit {
             critique_id,
@@ -163,6 +165,8 @@ fn list_critiques(
     solution_filter: Option<String>,
     status_filter: Option<String>,
     reviewer_filter: Option<String>,
+    author_filter: Option<String>,
+    mine: bool,
     search_query: Option<&str>,
     json: bool,
 ) -> Result<()> {
@@ -191,6 +195,22 @@ fn list_critiques(
             c.reviewer
                 .as_deref()
                 .map(|r| r.to_lowercase().contains(&pattern))
+                .unwrap_or(false)
+        });
+    }
+
+    // Filter by author (--mine or --author)
+    let author_pattern = if mine {
+        Some(store.get_current_user()?)
+    } else {
+        author_filter
+    };
+    if let Some(ref pattern) = author_pattern {
+        let pat = pattern.trim_start_matches('@').to_lowercase();
+        critiques.retain(|c| {
+            c.author
+                .as_deref()
+                .map(|a| a.to_lowercase().contains(&pat))
                 .unwrap_or(false)
         });
     }

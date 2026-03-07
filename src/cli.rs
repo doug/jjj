@@ -449,6 +449,18 @@ pub enum ProblemAction {
         #[arg(long)]
         of: String,
     },
+
+    /// Render problem hierarchy as ASCII DAG
+    #[command(display_order = 10)]
+    Graph {
+        /// Filter to problems in a specific milestone
+        #[arg(long)]
+        milestone: Option<String>,
+
+        /// Include solved and dissolved problems
+        #[arg(long)]
+        all: bool,
+    },
 }
 
 // =============================================================================
@@ -641,6 +653,13 @@ pub enum SolutionAction {
         /// Reply body (prompted interactively if not given)
         body: Option<String>,
     },
+
+    /// Show jj diff for a solution's attached change IDs
+    #[command(display_order = 13)]
+    Diff {
+        /// Solution ID, short prefix, or fuzzy title
+        solution_id: String,
+    },
 }
 
 // =============================================================================
@@ -689,6 +708,14 @@ pub enum CritiqueAction {
         /// Filter by assigned reviewer
         #[arg(long)]
         reviewer: Option<String>,
+
+        /// Filter by author (substring match)
+        #[arg(long)]
+        author: Option<String>,
+
+        /// Show only critiques authored by you
+        #[arg(long)]
+        mine: bool,
 
         /// Filter by title keyword
         #[arg(long)]

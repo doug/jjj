@@ -42,6 +42,7 @@ pub fn execute(ctx: &CommandContext, action: ProblemAction) -> Result<()> {
         ProblemAction::Assign { problem_id, to } => assign_problem(ctx, problem_id, to),
         ProblemAction::Reopen { problem_id } => reopen_problem(ctx, problem_id),
         ProblemAction::Duplicate { problem_id, of } => duplicate_problem(ctx, problem_id, of),
+        ProblemAction::Graph { milestone, all } => graph_problems(ctx, milestone, all),
     }
 }
 
@@ -736,6 +737,115 @@ fn check_for_duplicates(
         Ok(None)
     } else {
         Ok(Some(similar))
+    }
+}
+
+fn graph_problems(
+    ctx: &CommandContext,
+    milestone_filter: Option<String>,
+    show_all: bool,
+) -> Result<()> {
+    let store = &ctx.store;
+
+    // Resolve milestone ID if provided
+    let milestone_id = if let Some(ref m) = milestone_filter {
+        Some(ctx.resolve_milestone(m)?)
+    } else {
+        None
+    };
+
+    let mut problems = store.list_problems()?;
+
+    // Filter by status unless --all
+    if !show_all {
+        problems.retain(|p| {
+            p.status == ProblemStatus::Open || p.status == ProblemStatus::InProgress
+        });
+    }
+
+    // Filter by milestone
+    if let Some(ref mid) = milestone_id {
+        problems.retain(|p| p.milestone_id.as_deref() == Some(mid.as_str()));
+    }
+
+    if problems.is_empty() {
+        println!("No problems found.");
+        return Ok(());
+    }
+
+    // Build set of IDs in filtered set
+    let id_set: std::collections::HashSet<&str> =
+        problems.iter().map(|p| p.id.as_str()).collect();
+
+    // Find roots: problems whose parent is None or not in the filtered set
+    let roots: Vec<&Problem> = problems
+        .iter()
+        .filter(|p| {
+            p.parent_id
+                .as_deref()
+                .map(|pid| !id_set.contains(pid))
+                .unwrap_or(true)
+        })
+        .collect();
+
+    // Build children map: parent_id -> children
+    let mut children_map: std::collections::HashMap<&str, Vec<&Problem>> =
+        std::collections::HashMap::new();
+    for p in &problems {
+        if let Some(ref parent_id) = p.parent_id {
+            if id_set.contains(parent_id.as_str()) {
+                children_map
+                    .entry(parent_id.as_str())
+                    .or_default()
+                    .push(p);
+            }
+        }
+    }
+
+    for root in &roots {
+        print_graph_node(root, &children_map, &[], true);
+    }
+
+    Ok(())
+}
+
+fn print_graph_node(
+    problem: &Problem,
+    children_map: &std::collections::HashMap<&str, Vec<&Problem>>,
+    prefix_stack: &[bool], // true = last child at that level
+    is_last: bool,
+) {
+    let icon = match problem.status {
+        ProblemStatus::Open | ProblemStatus::InProgress => "○",
+        ProblemStatus::Solved => "◉",
+        ProblemStatus::Dissolved => "×",
+    };
+
+    // Build the line prefix from the stack
+    let mut prefix = String::new();
+    for &last in prefix_stack {
+        if last {
+            prefix.push_str("   ");
+        } else {
+            prefix.push_str("│  ");
+        }
+    }
+
+    if prefix_stack.is_empty() {
+        // Root node — no connector
+        println!("{} {} [{}]", icon, problem.title, problem.status);
+    } else if is_last {
+        println!("{}└─ {} {} [{}]", prefix, icon, problem.title, problem.status);
+    } else {
+        println!("{}├─ {} {} [{}]", prefix, icon, problem.title, problem.status);
+    }
+
+    let children = children_map.get(problem.id.as_str()).map(|v| v.as_slice()).unwrap_or(&[]);
+    let mut new_stack = prefix_stack.to_vec();
+    new_stack.push(is_last);
+    for (i, child) in children.iter().enumerate() {
+        let child_is_last = i == children.len() - 1;
+        print_graph_node(child, children_map, &new_stack, child_is_last);
     }
 }
 

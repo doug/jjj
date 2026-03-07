@@ -236,6 +236,44 @@ export class CritiqueCommentController implements vscode.Disposable {
     }
   }
 
+  async syncThreadsForUri(uri: vscode.Uri): Promise<void> {
+    const relativePath = vscode.workspace.asRelativePath(uri);
+    const critiques = this.cache.getCritiquesWithLocations().filter(
+      c => c.file_path === relativePath,
+    );
+
+    for (const critique of critiques) {
+      const thread = this.threads.get(critique.id);
+      if (!thread) { continue; }
+      if (!critique.line_start) { continue; }
+
+      if (critique.code_context && critique.code_context.length > 0) {
+        try {
+          const doc = await vscode.workspace.openTextDocument(uri);
+          const docLines = doc.getText().split('\n');
+          const anchor = findAnchorLine(
+            docLines,
+            critique.line_start,
+            critique.code_context,
+            critique.context_before ?? [],
+            critique.context_after ?? [],
+          );
+          const lineStart = anchor.line - 1;
+          const lineEnd = lineStart + (critique.line_end ?? critique.line_start) - critique.line_start;
+          thread.range = new vscode.Range(lineStart, 0, lineEnd, Number.MAX_VALUE);
+          const solution = this.cache.getSolution(critique.solution_id);
+          if (anchor.outdated) {
+            thread.label = `⚠️ Outdated — ${solution?.title ?? "jjj Critique"}`;
+          } else {
+            thread.label = solution?.title ?? "jjj Critique";
+          }
+        } catch {
+          // File not accessible — leave thread as-is
+        }
+      }
+    }
+  }
+
   findCritiqueIdForThread(thread: vscode.CommentThread): string | undefined {
     for (const [id, t] of this.threads) {
       if (t === thread) { return id; }

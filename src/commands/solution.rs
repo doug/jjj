@@ -56,6 +56,7 @@ pub fn execute(ctx: &CommandContext, action: SolutionAction) -> Result<()> {
         SolutionAction::Comment { solution_id, critique, body } => {
             comment_solution(ctx, solution_id, critique, body)
         }
+        SolutionAction::Diff { solution_id } => diff_solution(ctx, solution_id),
     }
 }
 
@@ -1131,4 +1132,25 @@ fn prompt_create_solution_anyway(similar: &[search::SimilarityResult]) -> Result
     let input = input.trim().to_lowercase();
 
     Ok(input == "y" || input == "yes")
+}
+
+fn diff_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
+    let solution_id = ctx.resolve_solution(&solution_input)?;
+    let solution = ctx.store.load_solution(&solution_id)?;
+
+    if solution.change_ids.is_empty() {
+        println!("No change IDs attached to this solution.");
+        return Ok(());
+    }
+
+    let jj_client = ctx.jj();
+    for change_id in &solution.change_ids {
+        println!("=== Change: {} ===", change_id);
+        match jj_client.show_diff(change_id) {
+            Ok(diff) => println!("{}", diff),
+            Err(_) => println!("  (change {} not available in this repo)", change_id),
+        }
+    }
+
+    Ok(())
 }

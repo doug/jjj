@@ -128,11 +128,25 @@ export class EntityDocumentProvider implements vscode.TextDocumentContentProvide
       ).join("\n\n")
       : "(no replies)";
 
-    return [
+    const sections: string[] = [
       `${c.title}`,
       "\u2501".repeat(60),
       `Status: ${c.status}  \u2502  Solution: ${c.solution_id}  \u2502  Severity: ${c.severity}`,
       `Location: ${location}  \u2502  Author: ${c.author || "unknown"}`,
+    ];
+
+    if (c.code_context && c.code_context.length > 0) {
+      const lang = c.file_path?.split('.').pop() ?? '';
+      const snippet = [
+        ...(c.context_before ?? []),
+        ...c.code_context.map(l => `▶ ${l}`),
+        ...(c.context_after ?? []),
+      ].join('\n');
+      sections.push(`\`\`\`${lang}\n${snippet}\n\`\`\``);
+    }
+
+    return [
+      ...sections,
       "",
       "## Argument",
       "",
