@@ -166,6 +166,24 @@ npm run package
 npm run install-ext
 ```
 
+## AI Agent Integration
+
+jjj ships a skill file that teaches Claude Code, Gemini CLI, or any AI coding assistant to use jjj commands natively.
+
+```bash
+# Claude Code
+mkdir -p ~/.claude/skills/jjj && \
+  curl -fsSL https://jjj.recursivewhy.com/SKILL.md \
+    -o ~/.claude/skills/jjj/SKILL.md
+
+# Gemini CLI
+mkdir -p ~/.gemini/skills/jjj && \
+  curl -fsSL https://jjj.recursivewhy.com/SKILL.md \
+    -o ~/.gemini/skills/jjj/SKILL.md
+```
+
+Once installed, invoke with `/jjj` or let the agent detect it automatically. See the [AI Agents guide](https://jjj.recursivewhy.com/guides/ai-agents/) for details.
+
 ## Documentation
 
 Full documentation available at [jjj.recursivewhy.com](https://jjj.recursivewhy.com), or serve locally:
