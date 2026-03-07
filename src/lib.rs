@@ -9,6 +9,7 @@
 //! There is no central server and no database required for the core workflow.
 //! SQLite is used as a local cache for search and embeddings only.
 
+pub mod automation;
 pub mod cli;
 pub mod commands;
 pub mod context;
