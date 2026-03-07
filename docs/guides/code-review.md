@@ -117,7 +117,7 @@ After examining the solution, Alice has two paths.
 
 #### If issues are found: raise a critique
 
-Critiques are the formal mechanism for identifying problems with a solution. They must be resolved before the solution can be accepted.
+Critiques are the formal mechanism for identifying problems with a solution. They must be resolved before the solution can be approved.
 
 ```bash
 # Design-level critique

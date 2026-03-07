@@ -44,7 +44,7 @@ problem_label = "jjj"
 | `default_reviewers` | string[] | Reviewers added to all new solutions |
 | `settings` | map | Arbitrary key-value pairs for custom settings |
 
-> **Deprecated:** `review.default_required` has been removed. Review is now per-solution: a solution requires review when it has assigned reviewers. Use `--review` on `jjj solution new` or `jjj solution review` to assign reviewers. Solutions without assigned reviewers do not require sign-offs.
+> **Deprecated:** `review.default_required` has been removed. Review is now per-solution: a solution requires review when it has assigned reviewers. Use `--reviewer` on `jjj solution new` to assign reviewers at creation, or create review critiques with `jjj critique new "solution" "Review requested" --reviewer @name`. Solutions without assigned reviewers do not require sign-offs.
 
 ## `[github]` Section
 
@@ -116,10 +116,18 @@ enabled = false
 | `problem_created` | A new problem is created |
 | `problem_solved` | A problem is marked solved |
 | `problem_dissolved` | A problem is dissolved |
+| `problem_reopened` | A solved/dissolved problem is reopened |
+| `solution_created` | A new solution is proposed |
 | `solution_submitted` | A solution is submitted for review |
 | `solution_approved` | A solution is approved |
 | `solution_withdrawn` | A solution is withdrawn |
-| `critique_created` | A new critique is raised |
+| `critique_raised` | A new critique is raised |
+| `critique_addressed` | A critique is addressed |
+| `critique_dismissed` | A critique is dismissed |
+| `critique_validated` | A critique is validated |
+| `critique_replied` | A reply is added to a critique |
+| `milestone_created` | A new milestone is created |
+| `milestone_completed` | A milestone is completed |
 
 ### Built-in Actions
 

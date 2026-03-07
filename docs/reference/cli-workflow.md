@@ -53,7 +53,7 @@ jjj next [OPTIONS]
 
 | Flag | Type | Description |
 |------|------|-------------|
-| `--top` | integer | Number of items to show (default: 3) |
+| `--top` | integer | Number of items to show (default: 1, 0 for all) |
 | `--mine` | bool | Only show items assigned to you |
 | `--json` | bool | Output as JSON |
 

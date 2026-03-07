@@ -153,7 +153,7 @@ pub enum Commands {
         #[arg(long)]
         solution: Option<String>,
 
-        /// Filter by event type (e.g. problem_created, solution_accepted)
+        /// Filter by event type (e.g. problem_created, solution_approved)
         #[arg(long, name = "type")]
         event_type: Option<String>,
 

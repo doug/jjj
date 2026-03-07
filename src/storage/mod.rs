@@ -299,7 +299,7 @@ impl MetadataStore {
     /// Check whether a problem can transition to `Solved` status.
     ///
     /// A problem is solvable if:
-    /// 1. It has at least one `Accepted` solution, **or**
+    /// 1. It has at least one `Approved` solution, **or**
     /// 2. All of its direct subproblems are `Solved`.
     ///
     /// Returns `(can_solve, reason)` where `reason` is non-empty when `can_solve`
@@ -314,13 +314,13 @@ impl MetadataStore {
             return Ok((false, "Problem is already solved".to_string()));
         }
 
-        // Check for accepted solutions
+        // Check for approved solutions
         let solutions = self.list_solutions_for_problem(problem_id)?;
-        let has_accepted = solutions
+        let has_approved = solutions
             .iter()
             .any(|s| s.status == SolutionStatus::Approved);
 
-        if has_accepted {
+        if has_approved {
             return Ok((true, String::new()));
         }
 
@@ -335,23 +335,23 @@ impl MetadataStore {
             }
             return Ok((
                 false,
-                "Not all subproblems are solved and no accepted solution exists".to_string(),
+                "Not all subproblems are solved and no approved solution exists".to_string(),
             ));
         }
 
-        Ok((false, "No accepted solution exists".to_string()))
+        Ok((false, "No approved solution exists".to_string()))
     }
 
-    /// Determine whether a solution is eligible for `Accepted` status.
+    /// Determine whether a solution is eligible for `Approved` status.
     ///
-    /// A solution can be accepted if:
-    /// 1. It is not already in a finalized state (`Accepted` or `Refuted`), **and**
-    /// 2. It has no `Valid` critiques (refuting critiques block acceptance).
+    /// A solution can be approved if:
+    /// 1. It is not already in a finalized state (`Approved` or `Withdrawn`), **and**
+    /// 2. It has no `Valid` critiques (validated critiques block approval).
     ///
-    /// Open critiques do not block acceptance but produce a warning in the returned
-    /// message. Returns `(can_accept, message)` where `message` may describe
+    /// Open critiques do not block approval but produce a warning in the returned
+    /// message. Returns `(can_approve, message)` where `message` may describe
     /// blockers or warnings.
-    pub fn can_accept_solution(&self, solution_id: &str) -> Result<(bool, String)> {
+    pub fn can_approve_solution(&self, solution_id: &str) -> Result<(bool, String)> {
         let solution = self.load_solution(solution_id)?;
 
         // Check if already finalized

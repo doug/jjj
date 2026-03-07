@@ -303,7 +303,7 @@ fn validate_events(ctx: &CommandContext) -> Result<()> {
                     .any(|e| e.entity == *id && e.event_type == EventType::SolutionApproved)
                 {
                     errors.push(format!(
-                        "Solution '{}' is Accepted but has no solution_accepted event",
+                        "Solution '{}' is Approved but has no solution_approved event",
                         id
                     ));
                 }
@@ -314,7 +314,7 @@ fn validate_events(ctx: &CommandContext) -> Result<()> {
                     .any(|e| e.entity == *id && e.event_type == EventType::SolutionWithdrawn)
                 {
                     errors.push(format!(
-                        "Solution '{}' is Refuted but has no solution_refuted event",
+                        "Solution '{}' is Withdrawn but has no solution_withdrawn event",
                         id
                     ));
                 }

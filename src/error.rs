@@ -60,8 +60,8 @@ pub enum JjjError {
     #[error("Cannot mark problem as solved: {0}")]
     CannotSolveProblem(String),
 
-    #[error("Cannot accept solution: {0}")]
-    CannotAcceptSolution(String),
+    #[error("Cannot approve solution: {0}")]
+    CannotApproveSolution(String),
 
     #[error("Failed to parse {entity_type} '{entity_id}': {message}\n\nRun 'jjj db validate' to check for corrupted entities.")]
     FrontmatterParse {

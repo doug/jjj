@@ -602,11 +602,11 @@ fn sync_merge(
         Ok(())
     })?;
 
-    // Accept solution, emit SolutionAccepted event, auto-solve problem
+    // Approve solution, emit SolutionApproved event, auto-solve problem
     super::solution::finalize_solution(ctx, &sol_id, false, None)?;
 
     println!(
-        "Merged PR #{} and accepted solution '{}'",
+        "Merged PR #{} and approved solution '{}'",
         pr_number, solution.title
     );
     Ok(())

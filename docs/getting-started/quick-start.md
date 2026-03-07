@@ -112,7 +112,7 @@ Items are grouped by urgency:
 | Category  | Meaning                                          |
 |-----------|--------------------------------------------------|
 | BLOCKED   | Solutions blocked by open critiques               |
-| READY     | Solutions ready to accept (critiques resolved)    |
+| READY     | Solutions ready to approve (critiques resolved)   |
 | REVIEW    | Solutions waiting for your review                 |
 | WAITING   | Solutions in review, waiting on others             |
 | TODO      | Open problems without solutions yet                |
@@ -125,18 +125,20 @@ The interactive TUI gives you a two-pane overview of your project:
 jjj ui
 ```
 
-The left pane shows **Next Actions** — the same prioritized list as `jjj status`, updated live. The right pane shows the **Project Tree**: problems, their solutions, and any attached critiques, expanded into a hierarchy.
+The left pane shows the **Project Tree**: problems, their solutions, and any attached critiques, expanded into a hierarchy. The right pane shows **Detail** for the selected item. Use `Tab` to jump between action items.
 
 Key bindings:
 
 | Key | Action |
 |-----|--------|
-| `Tab` | Switch between Next Actions and Project Tree |
-| `↑` / `↓` or `j` / `k` | Navigate items |
+| `Tab` / `S-Tab` | Jump to next / previous action |
+| `↑` / `↓` | Navigate items |
+| `j` / `k` | Scroll detail pane |
 | `→` / `←` | Expand / collapse tree nodes |
-| `a` | Approve selected solution |
+| `a` | Approve solution / Address critique |
 | `r` | Withdraw selected solution |
 | `d` | Dismiss selected critique |
+| `n` | New (solution or critique, context-dependent) |
 | `/` | Search / filter |
 | `?` | Show all key bindings |
 | `q` | Quit |

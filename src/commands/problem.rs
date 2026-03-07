@@ -337,7 +337,7 @@ fn print_problem_tree(store: &MetadataStore, problem: &Problem, depth: usize) ->
             .iter()
             .filter(|s| s.status == crate::models::SolutionStatus::Approved)
             .count();
-        format!(" ({} solutions, {} accepted)", solutions.len(), accepted)
+        format!(" ({} solutions, {} approved)", solutions.len(), accepted)
     };
 
     println!(
@@ -466,13 +466,13 @@ fn edit_problem(
                 .parse()
                 .map_err(|e: String| crate::error::JjjError::Validation(e))?;
 
-            // Guard: solved requires at least one accepted solution
+            // Guard: solved requires at least one approved solution
             if new_status == ProblemStatus::Solved {
                 let solutions = store.list_solutions_for_problem(&problem_id)?;
-                let has_accepted = solutions.iter().any(|s| {
+                let has_approved = solutions.iter().any(|s| {
                     s.status == crate::models::SolutionStatus::Approved
                 });
-                if !has_accepted {
+                if !has_approved {
                     return Err(crate::error::JjjError::Validation(
                         "Cannot mark as solved: no approved solution. Use 'jjj solution approve' first, or 'jjj problem dissolve' if the problem is no longer relevant.".to_string(),
                     ));

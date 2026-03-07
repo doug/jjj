@@ -97,7 +97,7 @@ pub fn build_next_actions(
         }
     }
 
-    // 2. READY: Solutions ready to accept
+    // 2. READY: Solutions ready to approve
     for solution in solutions.iter().filter(|s| s.is_active()) {
         let has_open = critiques
             .iter()

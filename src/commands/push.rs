@@ -128,13 +128,13 @@ pub fn execute(
 
     // 3. Smart prompts (unless --no-prompt)
     if !no_prompt {
-        check_and_prompt_accept_solve(store)?;
+        check_and_prompt_approve_solve(store)?;
     }
 
     Ok(())
 }
 
-fn check_and_prompt_accept_solve(store: &MetadataStore) -> Result<()> {
+fn check_and_prompt_approve_solve(store: &MetadataStore) -> Result<()> {
     // Find user's active solutions
     let solutions = store.list_solutions()?;
     let user = store.jj_client.user_name().unwrap_or_default();
@@ -151,15 +151,15 @@ fn check_and_prompt_accept_solve(store: &MetadataStore) -> Result<()> {
             .collect();
 
         if open_critiques.is_empty() && !critiques.is_empty() {
-            // All critiques resolved - prompt to accept
+            // All critiques resolved - prompt to approve
             if prompt_yes_no(&format!(
-                "All critiques on {} \"{}\" resolved. Accept solution?",
+                "All critiques on {} \"{}\" resolved. Approve solution?",
                 solution.id, solution.title
             )) {
                 let mut solution = store.load_solution(&solution.id)?;
                 solution.approve();
                 store.save_solution(&solution)?;
-                println!("  Solution {} accepted.", solution.id);
+                println!("  Solution {} approved.", solution.id);
 
                 // Check if problem can be solved
                 let problem = store.load_problem(&solution.problem_id)?;

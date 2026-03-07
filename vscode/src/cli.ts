@@ -284,14 +284,14 @@ export class JjjCli {
   // --- GitHub Sync ---
 
   async syncGithub(): Promise<string> {
-    return this.exec(["sync", "github"]);
+    return this.exec(["github"]);
   }
 
   async syncGithubImport(issue: string): Promise<string> {
-    return this.exec(["sync", "github", "import", issue]);
+    return this.exec(["github", "import", issue]);
   }
 
   async syncGithubStatus(): Promise<string> {
-    return this.exec(["sync", "github", "status"]);
+    return this.exec(["github", "status"]);
   }
 }

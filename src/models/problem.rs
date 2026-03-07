@@ -108,7 +108,7 @@ pub enum ProblemStatus {
     /// Actively working on solutions
     InProgress,
 
-    /// A solution has been accepted
+    /// A solution has been approved
     Solved,
 
     /// Problem was based on false premises or became irrelevant

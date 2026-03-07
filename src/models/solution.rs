@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 /// A solution is a conjecture - a tentative attempt to solve a problem.
-/// Solutions must face explicit criticism to survive or be refuted.
+/// Solutions must face explicit criticism to survive or be withdrawn.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Solution {
     /// Unique solution identifier (e.g., "S-1")

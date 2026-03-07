@@ -101,7 +101,7 @@ pub enum CritiqueStatus {
     /// Solution modified to address this critique
     Addressed,
 
-    /// Critique accepted as valid - solution should be refuted
+    /// Critique confirmed as valid - solution should be withdrawn
     Valid,
 
     /// Critique shown to be incorrect or irrelevant
@@ -243,7 +243,7 @@ impl Critique {
         self.set_status(CritiqueStatus::Addressed);
     }
 
-    /// Validate the critique (it's correct, solution should be refuted)
+    /// Validate the critique (it's correct, solution should be withdrawn)
     pub fn validate(&mut self) {
         self.set_status(CritiqueStatus::Valid);
     }

@@ -306,7 +306,7 @@ impl App {
                 }
                 TreeNode::Solution { id, .. } => {
                     format!(
-                        "{}: [a]ccept [r]efute [g]o to change [n]ew critique [e]dit",
+                        "{}: [a]pprove [r] withdraw [g]o to change [n]ew critique [e]dit",
                         id
                     )
                 }

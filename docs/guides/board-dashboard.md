@@ -17,17 +17,19 @@ jjj ui
 
 The TUI provides two panes:
 
-**Next Actions** (left pane) — A prioritized list of items requiring attention, grouped by urgency:
+The TUI shows a **Project Tree** on the left and a **Detail** pane on the right. Use `Tab` to jump to the next action item in the tree.
+
+Items are grouped by urgency:
 
 | Category | Meaning |
 |----------|---------|
 | BLOCKED | Solutions blocked by open critiques |
-| READY | Solutions ready to accept (critiques resolved) |
+| READY | Solutions ready to approve (critiques resolved) |
 | REVIEW | Solutions waiting for your review |
 | WAITING | Solutions in review, waiting on others |
 | TODO | Open problems without solutions yet |
 
-**Project Tree** (right pane) — A hierarchical view of the project:
+**Project Tree** (left pane) — A hierarchical view of the project:
 
 ```
 Milestones
@@ -44,15 +46,28 @@ Milestones
 
 | Key | Action |
 |-----|--------|
-| `Tab` | Switch between panes |
-| `↑/↓` | Navigate within pane |
-| `←` | Collapse tree node |
-| `→` | Expand tree node |
+| `Tab` | Jump to next action |
+| `S-Tab` | Jump to previous action |
+| `↑/↓` | Navigate items |
+| `←/→` | Collapse / expand tree node |
 | `j/k` | Scroll detail pane |
 | `Space` | Page down in detail |
-| `a` | Accept solution |
-| `r` | Refute solution |
-| `d` | Address critique / Dismiss |
+| `f` | Toggle filter (full / actions only) |
+| `R` | Toggle related view |
+| `a` | Approve solution / Address critique |
+| `r` | Withdraw solution |
+| `u` | Submit solution for review |
+| `d` | Dismiss critique |
+| `v` | Validate critique |
+| `o` | Reopen problem |
+| `D` | Dissolve problem (with reason) |
+| `A` | Assign to me |
+| `e` | Edit title |
+| `E` | Edit in $EDITOR |
+| `n` | New (solution for problem, critique for solution) |
+| `g` | Go to solution's jj change |
+| `/` | Search / filter |
+| `?` | Show all key bindings |
 | `q` | Quit |
 
 ## Status

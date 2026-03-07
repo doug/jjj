@@ -91,8 +91,8 @@ fn format_event_description(event: &Event) -> String {
                 .unwrap_or_default();
             format!("{} proposed{}", event.entity, supersedes)
         }
-        EventType::SolutionApproved => format!("{} accepted", event.entity),
-        EventType::SolutionWithdrawn => format!("{} refuted", event.entity),
+        EventType::SolutionApproved => format!("{} approved", event.entity),
+        EventType::SolutionWithdrawn => format!("{} withdrawn", event.entity),
         EventType::CritiqueRaised => {
             let title = event
                 .extra

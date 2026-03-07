@@ -136,7 +136,7 @@ jjj solution submit "Add connection"
 
 ## `jjj solution approve`
 
-Approve a solution — accept critique, integrate code, solve the problem. Requires no open critiques (including critique-based review).
+Approve a solution. Requires no open critiques (including critique-based review). Auto-solves the problem if this is the only active solution.
 
 ```
 jjj solution approve <solution_id> [OPTIONS]
@@ -145,10 +145,10 @@ jjj solution approve <solution_id> [OPTIONS]
 | Flag | Type | Description |
 |------|------|-------------|
 | `--force` | bool | Force approve even with open critiques (sets `force_approved` flag) |
-| `--rationale` | string | Reason for accepting |
+| `--rationale` | string | Reason for approving |
 | `--no-rationale` | flag | Skip the rationale prompt |
 
-The acceptance gate checks that all critiques are resolved (addressed, dismissed, or validated). This includes:
+The approval gate checks that all critiques are resolved (addressed, dismissed, or validated). This includes:
 
 1. **Regular critiques** -- issues raised about the solution's approach
 2. **Review critiques** -- review requests (critiques with `--reviewer` flag) that must be addressed by the assigned reviewer
@@ -162,7 +162,7 @@ jjj solution approve "Add connection" --force
 
 ## `jjj solution withdraw`
 
-Refute a solution (criticism showed it will not work).
+Withdraw a solution (criticism showed it will not work).
 
 ```
 jjj solution withdraw <solution_id> [OPTIONS]
@@ -170,7 +170,7 @@ jjj solution withdraw <solution_id> [OPTIONS]
 
 | Flag | Type | Description |
 |------|------|-------------|
-| `--rationale` | string | Reason for refuting |
+| `--rationale` | string | Reason for withdrawing |
 | `--no-rationale` | flag | Skip the rationale prompt |
 
 ```bash

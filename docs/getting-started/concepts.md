@@ -16,8 +16,8 @@ description: Mapping traditional project management terms to jjj's Popperian con
 | **Review Comment** | **Critique** | Error elimination through explicit criticism. |
 | **Roadmap** | **Milestone** | Time-boxed cycles of problems to solve. |
 | **Invalid Issue** | **Dissolved** | A problem found to be based on false premises. |
-| **Merged** | **Accepted** | A solution that has survived all current criticism. |
-| **Closed / Won't Fix** | **Refuted** | A solution proven to be flawed by criticism. |
+| **Merged** | **Approved** | A solution that has survived all current criticism. |
+| **Closed / Won't Fix** | **Withdrawn** | A solution proven to be flawed by criticism. |
 
 ---
 

@@ -218,11 +218,11 @@ fn show_milestone(ctx: &CommandContext, milestone_input: String, json: bool) -> 
                 let solutions = store
                     .list_solutions_for_problem(problem_id)
                     .unwrap_or_default();
-                let accepted_solutions = solutions
+                let approved_solutions = solutions
                     .iter()
                     .filter(|s| s.status == SolutionStatus::Approved)
                     .count();
-                let testing_solutions = solutions
+                let submitted_solutions = solutions
                     .iter()
                     .filter(|s| s.status == SolutionStatus::Submitted)
                     .count();
@@ -241,13 +241,13 @@ fn show_milestone(ctx: &CommandContext, milestone_input: String, json: bool) -> 
                 }
 
                 println!(
-                    "  {} {} - {} ({} solutions, {} accepted, {} testing)",
+                    "  {} {} - {} ({} solutions, {} approved, {} submitted)",
                     status_icon,
                     problem.id,
                     problem.title,
                     solutions.len(),
-                    accepted_solutions,
-                    testing_solutions
+                    approved_solutions,
+                    submitted_solutions
                 );
             }
         }

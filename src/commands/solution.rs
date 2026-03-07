@@ -382,7 +382,7 @@ fn show_solution(ctx: &CommandContext, solution_input: String, json: bool) -> Re
     println!("Solution: {} - {}", solution.id, solution.title);
     println!("Status: {}", solution.status);
     if solution.force_approved {
-        println!("Force accepted: yes");
+        println!("Force approved: yes");
     }
     println!("Addresses: {}", solution.problem_id);
     if let Some(ref sup) = solution.supersedes {
@@ -696,8 +696,8 @@ fn approve_solution(
     Ok(())
 }
 
-/// Core acceptance logic shared by `submit` and `github merge`.
-/// Checks critiques, validates state, emits events, accepts, and auto-solves.
+/// Core approval logic shared by `approve` and `github merge`.
+/// Checks critiques, validates state, emits events, approves, and auto-solves.
 /// Does NOT squash code or merge PRs — that is the caller's responsibility.
 pub(crate) fn finalize_solution(
     ctx: &CommandContext,
@@ -709,7 +709,7 @@ pub(crate) fn finalize_solution(
 
     let solution = store.load_solution(solution_id)?;
 
-    // Already accepted — idempotent
+    // Already approved — idempotent
     if solution.status == SolutionStatus::Approved {
         return Ok(());
     }
@@ -745,7 +745,7 @@ pub(crate) fn finalize_solution(
                 eprintln!("       jjj critique address {}", c.id);
             }
             eprintln!("\nAddress critiques before submitting, or use --force to override.");
-            return Err(crate::error::JjjError::CannotAcceptSolution(
+            return Err(crate::error::JjjError::CannotApproveSolution(
                 "Unresolved critiques block submission".to_string(),
             ));
         }
@@ -959,7 +959,7 @@ fn lgtm_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
             .count();
 
         if remaining == 0 {
-            println!("All critiques resolved. Ready to accept:");
+            println!("All critiques resolved. Ready to approve:");
             println!("  jjj solution approve \"{}\"", solution.title);
         } else {
             println!("{} critique(s) still open.", remaining);
