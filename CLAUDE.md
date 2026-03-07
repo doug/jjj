@@ -61,9 +61,23 @@ events.jsonl
 
 Entity files use YAML frontmatter + markdown body.
 
+### Automation Rules
+Config-driven automation in `config.toml` fires actions on jjj events:
+```toml
+[[automation]]
+on = "solution_submitted"  # EventType (snake_case)
+action = "github_pr"       # built-in action or "shell"
+command = "echo '{{title}}'"  # required for shell actions
+enabled = true             # optional, default true
+```
+Built-in actions: `github_issue`, `github_pr`, `github_merge`, `github_close`, `github_sync`.
+Shell actions support `{{var}}` template expansion (`{{title}}`, `{{id}}`, `{{user}}`, `{{problem.title}}`, `{{pr_number}}`, etc.).
+
 ### Component Layers
 ```
 CLI (src/commands/)           # Clap-based command handlers
+    ↓
+Automation (src/automation.rs) # Config-driven event→action dispatch
     ↓
 Storage (src/storage.rs)      # MetadataStore: CRUD, YAML parsing (~30KB)
     ↓
