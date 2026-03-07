@@ -11,7 +11,7 @@ impl MetadataStore {
     ///
     /// **Note:** `child_ids` is always empty on the returned value because
     /// children are derived from `parent_id` references across all problems.
-    /// Use [`MetadataStore::get_subproblems`] to get the children of a problem.
+    /// Use [`MetadataStore::list_subproblems`] to get the children of a problem.
     pub fn load_problem(&self, problem_id: &str) -> Result<Problem> {
         self.ensure_meta_checkout()?;
 
@@ -109,41 +109,57 @@ impl MetadataStore {
         let problem = self.load_problem(problem_id)?;
 
         // Orphan child problems
-        match self.get_subproblems(problem_id) {
+        match self.list_subproblems(problem_id) {
             Ok(children) => {
                 for child in children {
                     match self.load_problem(&child.id) {
                         Ok(mut c) => {
                             c.set_parent(None);
                             if let Err(e) = self.save_problem(&c) {
-                                eprintln!("Warning: failed to orphan child problem {}: {}", child.id, e);
+                                eprintln!(
+                                    "Warning: failed to orphan child problem {}: {}",
+                                    child.id, e
+                                );
                             }
                         }
-                        Err(e) => eprintln!("Warning: failed to load child problem {}: {}", child.id, e),
+                        Err(e) => {
+                            eprintln!("Warning: failed to load child problem {}: {}", child.id, e)
+                        }
                     }
                 }
             }
-            Err(e) => eprintln!("Warning: failed to list child problems of {}: {}", problem_id, e),
+            Err(e) => eprintln!(
+                "Warning: failed to list child problems of {}: {}",
+                problem_id, e
+            ),
         }
 
         // Delete associated solutions and their critiques
-        match self.get_solutions_for_problem(problem_id) {
+        match self.list_solutions_for_problem(problem_id) {
             Ok(solutions) => {
                 for solution in solutions {
-                    match self.get_critiques_for_solution(&solution.id) {
+                    match self.list_critiques_for_solution(&solution.id) {
                         Ok(critiques) => {
                             for critique in critiques {
-                                let path = self.meta_path
+                                let path = self
+                                    .meta_path
                                     .join(CRITIQUES_DIR)
                                     .join(format!("{}.md", critique.id));
                                 if let Err(e) = fs::remove_file(&path) {
-                                    eprintln!("Warning: failed to delete critique {}: {}", critique.id, e);
+                                    eprintln!(
+                                        "Warning: failed to delete critique {}: {}",
+                                        critique.id, e
+                                    );
                                 }
                             }
                         }
-                        Err(e) => eprintln!("Warning: failed to list critiques for solution {}: {}", solution.id, e),
+                        Err(e) => eprintln!(
+                            "Warning: failed to list critiques for solution {}: {}",
+                            solution.id, e
+                        ),
                     }
-                    let path = self.meta_path
+                    let path = self
+                        .meta_path
                         .join(SOLUTIONS_DIR)
                         .join(format!("{}.md", solution.id));
                     if let Err(e) = fs::remove_file(&path) {
@@ -151,7 +167,10 @@ impl MetadataStore {
                     }
                 }
             }
-            Err(e) => eprintln!("Warning: failed to list solutions for problem {}: {}", problem_id, e),
+            Err(e) => eprintln!(
+                "Warning: failed to list solutions for problem {}: {}",
+                problem_id, e
+            ),
         }
 
         // Remove from milestone
@@ -160,7 +179,10 @@ impl MetadataStore {
                 Ok(mut milestone) => {
                     milestone.remove_problem(problem_id);
                     if let Err(e) = self.save_milestone(&milestone) {
-                        eprintln!("Warning: failed to update milestone {}: {}", milestone_id, e);
+                        eprintln!(
+                            "Warning: failed to update milestone {}: {}",
+                            milestone_id, e
+                        );
                     }
                 }
                 Err(e) => eprintln!("Warning: failed to load milestone {}: {}", milestone_id, e),
@@ -208,10 +230,7 @@ impl MetadataStore {
             std::collections::HashMap::new();
         for p in &problems {
             if let Some(ref pid) = p.parent_id {
-                child_map
-                    .entry(pid.clone())
-                    .or_default()
-                    .push(p.id.clone());
+                child_map.entry(pid.clone()).or_default().push(p.id.clone());
             }
         }
         for p in &mut problems {
@@ -227,7 +246,7 @@ impl MetadataStore {
     }
 
     /// Get subproblems of a problem
-    pub fn get_subproblems(&self, problem_id: &str) -> Result<Vec<Problem>> {
+    pub fn list_subproblems(&self, problem_id: &str) -> Result<Vec<Problem>> {
         let problems = self.list_problems()?;
         Ok(problems
             .into_iter()
@@ -236,7 +255,7 @@ impl MetadataStore {
     }
 
     /// Get root problems (problems without parents)
-    pub fn get_root_problems(&self) -> Result<Vec<Problem>> {
+    pub fn list_root_problems(&self) -> Result<Vec<Problem>> {
         let problems = self.list_problems()?;
         Ok(problems
             .into_iter()
@@ -245,7 +264,7 @@ impl MetadataStore {
     }
 
     /// Get the parent chain for a problem (ancestors up to root)
-    pub fn get_parent_chain(&self, problem_id: &str) -> Result<Vec<Problem>> {
+    pub fn parent_chain(&self, problem_id: &str) -> Result<Vec<Problem>> {
         let mut chain = Vec::new();
         let mut current_id = Some(problem_id.to_string());
         let mut visited = std::collections::HashSet::new();

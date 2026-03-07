@@ -1,9 +1,7 @@
 use crate::cli::EventsAction;
 use crate::context::CommandContext;
 use crate::error::Result;
-use crate::models::{
-    CritiqueStatus, EventType, MilestoneStatus, ProblemStatus, SolutionStatus,
-};
+use crate::models::{CritiqueStatus, EventType, MilestoneStatus, ProblemStatus, SolutionStatus};
 use chrono::{NaiveDate, TimeZone, Utc};
 use std::collections::{HashMap, HashSet};
 
@@ -166,15 +164,18 @@ fn list_events(
 fn parse_date_filter(s: &str) -> Option<chrono::DateTime<Utc>> {
     // Try YYYY-MM-DD
     if let Ok(date) = NaiveDate::parse_from_str(s, "%Y-%m-%d") {
-        return date.and_hms_opt(0, 0, 0).map(|dt| Utc.from_utc_datetime(&dt));
+        return date
+            .and_hms_opt(0, 0, 0)
+            .map(|dt| Utc.from_utc_datetime(&dt));
     }
     // Try YYYY-MM (first of month)
     if let Ok(date) = NaiveDate::parse_from_str(&format!("{}-01", s), "%Y-%m-%d") {
-        return date.and_hms_opt(0, 0, 0).map(|dt| Utc.from_utc_datetime(&dt));
+        return date
+            .and_hms_opt(0, 0, 0)
+            .map(|dt| Utc.from_utc_datetime(&dt));
     }
     None
 }
-
 
 fn rebuild_events(ctx: &CommandContext) -> Result<()> {
     let store = &ctx.store;

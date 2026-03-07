@@ -102,7 +102,7 @@ impl MetadataStore {
         let solution = self.load_solution(solution_id)?;
 
         // Delete associated critiques
-        if let Ok(critiques) = self.get_critiques_for_solution(solution_id) {
+        if let Ok(critiques) = self.list_critiques_for_solution(solution_id) {
             for critique in critiques {
                 let _ = fs::remove_file(
                     self.meta_path
@@ -163,7 +163,7 @@ impl MetadataStore {
     }
 
     /// Get solutions for a problem
-    pub fn get_solutions_for_problem(&self, problem_id: &str) -> Result<Vec<Solution>> {
+    pub fn list_solutions_for_problem(&self, problem_id: &str) -> Result<Vec<Solution>> {
         let solutions = self.list_solutions()?;
         Ok(solutions
             .into_iter()

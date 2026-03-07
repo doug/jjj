@@ -232,11 +232,7 @@ pub(crate) fn build_next_actions(
             let severity_order = ["critical", "high", "medium", "low"];
             let parts: Vec<String> = severity_order
                 .iter()
-                .filter_map(|s| {
-                    severity_counts
-                        .get(*s)
-                        .map(|n| format!("{} {}", n, s))
-                })
+                .filter_map(|s| severity_counts.get(*s).map(|n| format!("{} {}", n, s)))
                 .collect();
             let summary = if parts.is_empty() {
                 format!("{} open critique(s)", open_critiques.len())

@@ -145,11 +145,11 @@ impl std::str::FromStr for ProblemStatus {
 
 impl Problem {
     /// Create a new problem
-    pub fn new(id: String, title: String) -> Self {
+    pub fn new(id: impl Into<String>, title: impl Into<String>) -> Self {
         let now = Utc::now();
         Self {
-            id,
-            title,
+            id: id.into(),
+            title: title.into(),
             parent_id: None,
             status: ProblemStatus::Open,
             priority: Priority::default(),
@@ -173,7 +173,8 @@ impl Problem {
     }
 
     /// Add a solution to this problem
-    pub fn add_solution(&mut self, solution_id: String) {
+    pub fn add_solution(&mut self, solution_id: impl Into<String>) {
+        let solution_id = solution_id.into();
         if !self.solution_ids.contains(&solution_id) {
             self.solution_ids.push(solution_id);
             self.updated_at = Utc::now();
@@ -195,8 +196,9 @@ impl Problem {
     ///
     /// **Note:** `child_ids` is not persisted to disk — it is derived at read
     /// time in [`MetadataStore::list_problems`]. Calling this method has no
-    /// lasting effect; use [`MetadataStore::get_subproblems`] to query children.
-    pub fn add_child(&mut self, child_id: String) {
+    /// lasting effect; use [`MetadataStore::list_subproblems`] to query children.
+    pub fn add_child(&mut self, child_id: impl Into<String>) {
+        let child_id = child_id.into();
         if !self.child_ids.contains(&child_id) {
             self.child_ids.push(child_id);
             self.updated_at = Utc::now();
@@ -207,7 +209,7 @@ impl Problem {
     ///
     /// **Note:** `child_ids` is not persisted to disk — it is derived at read
     /// time in [`MetadataStore::list_problems`]. Calling this method has no
-    /// lasting effect; use [`MetadataStore::get_subproblems`] to query children.
+    /// lasting effect; use [`MetadataStore::list_subproblems`] to query children.
     pub fn remove_child(&mut self, child_id: &str) -> bool {
         if let Some(pos) = self.child_ids.iter().position(|id| id == child_id) {
             self.child_ids.remove(pos);
@@ -258,9 +260,9 @@ impl Problem {
     }
 
     /// Dissolve the problem with a reason
-    pub fn dissolve(&mut self, reason: String) {
+    pub fn dissolve(&mut self, reason: impl Into<String>) {
         self.status = ProblemStatus::Dissolved;
-        self.dissolved_reason = Some(reason);
+        self.dissolved_reason = Some(reason.into());
         self.updated_at = Utc::now();
     }
 

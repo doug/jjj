@@ -76,7 +76,11 @@ pub trait SyncProvider {
     /// List remote issues not yet linked to local problems.
     /// `existing` contains (problem_id, github_issue_number) pairs.
     /// `label` optionally filters to issues with a specific label.
-    fn list_unlinked_issues(&self, existing: &[(String, u64)], label: Option<&str>) -> Result<Vec<(u64, String)>>;
+    fn list_unlinked_issues(
+        &self,
+        existing: &[(String, u64)],
+        label: Option<&str>,
+    ) -> Result<Vec<(u64, String)>>;
 
     // -- Push (jjj -> remote) --
 
@@ -163,7 +167,11 @@ pub fn review_to_critique(review: &ReviewInfo, solution_id: &str, critique_id: S
 /// `github_review_id` for deduplication.  If the thread has a file path
 /// and line number, those are set on the critique so it shows up as an
 /// inline annotation in editors.
-pub fn thread_to_critique(thread: &ReviewThread, solution_id: &str, critique_id: String) -> Critique {
+pub fn thread_to_critique(
+    thread: &ReviewThread,
+    solution_id: &str,
+    critique_id: String,
+) -> Critique {
     let mut critique = Critique::new(
         critique_id,
         review_title(&thread.author, &thread.body),
@@ -212,7 +220,10 @@ mod tests {
 
         assert_eq!(critique.id, "C-100");
         assert_eq!(critique.solution_id, "S-10");
-        assert_eq!(critique.title, "@alice: The error handling needs improvement.");
+        assert_eq!(
+            critique.title,
+            "@alice: The error handling needs improvement."
+        );
         assert_eq!(critique.author, Some("alice".to_string()));
         assert_eq!(critique.argument, "The error handling needs improvement.");
         assert_eq!(critique.github_review_id, Some(5001));
@@ -283,7 +294,10 @@ mod tests {
     #[test]
     fn test_review_title_uses_first_line() {
         let body = "This line is used as title\nSecond line is ignored";
-        assert_eq!(review_title("alice", body), "@alice: This line is used as title");
+        assert_eq!(
+            review_title("alice", body),
+            "@alice: This line is used as title"
+        );
     }
 
     #[test]

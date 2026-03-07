@@ -28,7 +28,15 @@ pub fn execute(ctx: &CommandContext, action: SolutionAction) -> Result<()> {
             search,
             sort,
             json,
-        } => list_solutions(ctx, problem, status, assignee, search.as_deref(), &sort, json),
+        } => list_solutions(
+            ctx,
+            problem,
+            status,
+            assignee,
+            search.as_deref(),
+            &sort,
+            json,
+        ),
         SolutionAction::Show { solution_id, json } => show_solution(ctx, solution_id, json),
         SolutionAction::Edit {
             solution_id,
@@ -47,15 +55,20 @@ pub fn execute(ctx: &CommandContext, action: SolutionAction) -> Result<()> {
             rationale,
             no_rationale,
         } => withdraw_solution(ctx, solution_id, rationale, no_rationale),
-        SolutionAction::Approve { solution_id, force, rationale, no_rationale } => {
-            approve_solution(ctx, solution_id, force, rationale, no_rationale)
-        }
+        SolutionAction::Approve {
+            solution_id,
+            force,
+            rationale,
+            no_rationale,
+        } => approve_solution(ctx, solution_id, force, rationale, no_rationale),
         SolutionAction::Assign { solution_id, to } => assign_solution(ctx, solution_id, to),
         SolutionAction::Resume { solution_id } => resume_solution(ctx, solution_id),
         SolutionAction::Lgtm { solution_id } => lgtm_solution(ctx, solution_id),
-        SolutionAction::Comment { solution_id, critique, body } => {
-            comment_solution(ctx, solution_id, critique, body)
-        }
+        SolutionAction::Comment {
+            solution_id,
+            critique,
+            body,
+        } => comment_solution(ctx, solution_id, critique, body),
         SolutionAction::Diff { solution_id } => diff_solution(ctx, solution_id),
     }
 }
@@ -69,7 +82,7 @@ fn new_solution(
     force: bool,
 ) -> Result<()> {
     let store = &ctx.store;
-    
+
     let jj_client = ctx.jj();
 
     // Validate title is not empty
@@ -358,7 +371,6 @@ fn list_solutions(
 fn show_solution(ctx: &CommandContext, solution_input: String, json: bool) -> Result<()> {
     let store = &ctx.store;
     let solution_id = ctx.resolve_solution(&solution_input)?;
-    
 
     let solution = store.load_solution(&solution_id)?;
 
@@ -400,7 +412,7 @@ fn show_solution(ctx: &CommandContext, solution_input: String, json: bool) -> Re
     }
 
     // Show critiques
-    let critiques = store.get_critiques_for_solution(&solution_id)?;
+    let critiques = store.list_critiques_for_solution(&solution_id)?;
     if !critiques.is_empty() {
         println!("\n## Critiques ({})", critiques.len());
         for critique in &critiques {
@@ -436,7 +448,6 @@ fn edit_solution(
 ) -> Result<()> {
     let store = &ctx.store;
     let solution_id = ctx.resolve_solution(&solution_input)?;
-    
 
     store.with_metadata(&format!("Edit solution {}", solution_id), || {
         let mut solution = store.load_solution(&solution_id)?;
@@ -449,7 +460,8 @@ fn edit_solution(
             let new_status: SolutionStatus = status_str
                 .parse()
                 .map_err(|e: String| crate::error::JjjError::Validation(e))?;
-            solution.try_set_status(new_status)
+            solution
+                .try_set_status(new_status)
                 .map_err(crate::error::JjjError::Validation)?;
         }
 
@@ -462,7 +474,7 @@ fn edit_solution(
 fn attach_change(ctx: &CommandContext, solution_input: String, force: bool) -> Result<()> {
     let store = &ctx.store;
     let solution_id = ctx.resolve_solution(&solution_input)?;
-    
+
     let jj_client = ctx.jj();
 
     let change_id = jj_client.current_change_id()?;
@@ -508,7 +520,7 @@ fn detach_change(
 ) -> Result<()> {
     let store = &ctx.store;
     let solution_id = ctx.resolve_solution(&solution_input)?;
-    
+
     let jj_client = ctx.jj();
 
     let change_id = match change_id {
@@ -564,32 +576,39 @@ fn detach_change(
 fn submit_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
     let store = &ctx.store;
     let solution_id = ctx.resolve_solution(&solution_input)?;
-    
+
     let user = store.get_current_user().unwrap_or_default();
 
-    store.with_metadata(&format!("Submit solution {} for review", solution_id), || {
-        let mut solution = store.load_solution(&solution_id)?;
-        solution.submit();
-        store.save_solution(&solution)?;
+    store.with_metadata(
+        &format!("Submit solution {} for review", solution_id),
+        || {
+            let mut solution = store.load_solution(&solution_id)?;
+            solution.submit();
+            store.save_solution(&solution)?;
 
-        let event = Event::new(EventType::SolutionSubmitted, solution_id.clone(), user.clone())
+            let event = Event::new(
+                EventType::SolutionSubmitted,
+                solution_id.clone(),
+                user.clone(),
+            )
             .with_extra(EventExtra {
                 problem: Some(solution.problem_id.clone()),
                 ..Default::default()
             });
-        store.set_pending_event(event);
+            store.set_pending_event(event);
 
-        // Update problem status to in_progress if it's still open
-        let mut problem = store.load_problem(&solution.problem_id)?;
-        if problem.status == ProblemStatus::Open {
-            problem.set_status(ProblemStatus::InProgress);
-            store.save_problem(&problem)?;
-            println!("Problem {} moved to in_progress", problem.id);
-        }
+            // Update problem status to in_progress if it's still open
+            let mut problem = store.load_problem(&solution.problem_id)?;
+            if problem.status == ProblemStatus::Open {
+                problem.set_status(ProblemStatus::InProgress);
+                store.save_problem(&problem)?;
+                println!("Problem {} moved to in_progress", problem.id);
+            }
 
-        println!("Solution {} submitted for review", solution_id);
-        Ok(())
-    })?;
+            println!("Solution {} submitted for review", solution_id);
+            Ok(())
+        },
+    )?;
 
     // Automation rules
     let event = Event::new(EventType::SolutionSubmitted, solution_id.clone(), user);
@@ -616,7 +635,10 @@ fn approve_solution(
     } else {
         let change_id = jj_client.current_change_id()?;
         let solutions = store.list_solutions()?;
-        match solutions.into_iter().find(|s| s.change_ids.contains(&change_id)) {
+        match solutions
+            .into_iter()
+            .find(|s| s.change_ids.contains(&change_id))
+        {
             Some(s) => s,
             None => {
                 return Err(crate::error::JjjError::Validation(
@@ -647,7 +669,11 @@ fn approve_solution(
 
     // Automation rules
     let auto_user = store.get_current_user().unwrap_or_default();
-    let approve_event = Event::new(EventType::SolutionApproved, solution.id.clone(), auto_user.clone());
+    let approve_event = Event::new(
+        EventType::SolutionApproved,
+        solution.id.clone(),
+        auto_user.clone(),
+    );
     crate::automation::run(ctx, &approve_event, &solution.id);
 
     // If finalize_solution auto-solved the parent problem, fire problem_solved automation too
@@ -670,7 +696,6 @@ fn approve_solution(
     Ok(())
 }
 
-
 /// Core acceptance logic shared by `submit` and `github merge`.
 /// Checks critiques, validates state, emits events, accepts, and auto-solves.
 /// Does NOT squash code or merge PRs — that is the caller's responsibility.
@@ -681,7 +706,6 @@ pub(crate) fn finalize_solution(
     rationale: Option<&str>,
 ) -> Result<()> {
     let store = &ctx.store;
-
 
     let solution = store.load_solution(solution_id)?;
 
@@ -777,7 +801,6 @@ fn withdraw_solution(
     use crate::models::{Event, EventType};
 
     let solution_id = ctx.resolve_solution(&solution_input)?;
-    
 
     // Get rationale (prompt if not provided and not skipped)
     let rationale = if let Some(r) = rationale {
@@ -810,10 +833,7 @@ fn withdraw_solution(
         let mut solution = store.load_solution(&solution_id)?;
         solution.withdraw();
         store.save_solution(&solution)?;
-        println!(
-            "Solution {} withdrawn",
-            solution_id
-        );
+        println!("Solution {} withdrawn", solution_id);
         Ok(())
     })
 }
@@ -825,7 +845,6 @@ fn assign_solution(
 ) -> Result<()> {
     let store = &ctx.store;
     let solution_id = ctx.resolve_solution(&solution_input)?;
-    
 
     let assignee_name = match assignee {
         Some(name) => name,
@@ -847,7 +866,7 @@ fn assign_solution(
 fn resume_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
     let store = &ctx.store;
     let solution_id = ctx.resolve_solution(&solution_input)?;
-    
+
     let jj_client = ctx.jj();
 
     let solution = store.load_solution(&solution_id)?;
@@ -886,27 +905,27 @@ fn resume_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
 fn lgtm_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
     let store = &ctx.store;
     let solution_id = ctx.resolve_solution(&solution_input)?;
-    
+
     let current_user = store.get_current_user()?;
 
     let solution = store.load_solution(&solution_id)?;
-    let critiques = store.get_critiques_for_solution(&solution_id)?;
+    let critiques = store.list_critiques_for_solution(&solution_id)?;
 
     // Find an open review critique assigned to (or matching) the current user
     let my_review = critiques.iter().find(|c| {
         c.status == CritiqueStatus::Open
-            && c.reviewer.as_ref().is_some_and(|r| {
-                r.contains(&current_user) || current_user.contains(r.as_str())
-            })
+            && c.reviewer
+                .as_ref()
+                .is_some_and(|r| r.contains(&current_user) || current_user.contains(r.as_str()))
     });
 
     let critique = match my_review {
         Some(c) => c,
         None => {
             // Check if there are any open review critiques at all (assigned to others)
-            let any_review = critiques.iter().any(|c| {
-                c.status == CritiqueStatus::Open && c.reviewer.is_some()
-            });
+            let any_review = critiques
+                .iter()
+                .any(|c| c.status == CritiqueStatus::Open && c.reviewer.is_some());
             if any_review {
                 return Err(crate::error::JjjError::Validation(format!(
                     "No open review critique assigned to you on '{}'.\n\
@@ -934,11 +953,9 @@ fn lgtm_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
 
         // Check if this was the last blocking item
         let remaining = store
-            .get_critiques_for_solution(&solution_id)?
+            .list_critiques_for_solution(&solution_id)?
             .into_iter()
-            .filter(|c| {
-                c.status == CritiqueStatus::Open || c.status == CritiqueStatus::Valid
-            })
+            .filter(|c| c.status == CritiqueStatus::Open || c.status == CritiqueStatus::Valid)
             .count();
 
         if remaining == 0 {
@@ -959,7 +976,6 @@ fn comment_solution(
     body: Option<String>,
 ) -> Result<()> {
     let store = &ctx.store;
-    
 
     // Resolve solution — use explicit input or fall back to the change attached to @
     let solution_id = if let Some(ref input) = solution_input {
@@ -1005,7 +1021,7 @@ fn comment_solution(
 
     // Get open critiques for the solution
     let critiques: Vec<_> = store
-        .get_critiques_for_solution(&solution_id)?
+        .list_critiques_for_solution(&solution_id)?
         .into_iter()
         .filter(|c| c.status == CritiqueStatus::Open || c.status == CritiqueStatus::Valid)
         .collect();
@@ -1044,9 +1060,7 @@ fn comment_solution(
         critiques
             .get(idx.saturating_sub(1))
             .filter(|_| idx > 0)
-            .ok_or_else(|| {
-                crate::error::JjjError::Validation("Invalid selection.".to_string())
-            })?
+            .ok_or_else(|| crate::error::JjjError::Validation("Invalid selection.".to_string()))?
             .id
             .clone()
     };
@@ -1074,11 +1088,15 @@ fn comment_solution(
         critique.add_reply(user.clone(), reply_body.clone());
         store.save_critique(&critique)?;
 
-        let event = Event::new(EventType::CritiqueReplied, critique_id.clone(), user.clone())
-            .with_extra(EventExtra {
-                target: Some(solution_id.clone()),
-                ..Default::default()
-            });
+        let event = Event::new(
+            EventType::CritiqueReplied,
+            critique_id.clone(),
+            user.clone(),
+        )
+        .with_extra(EventExtra {
+            target: Some(solution_id.clone()),
+            ..Default::default()
+        });
         store.set_pending_event(event);
 
         println!("Replied to critique '{}'.", critique.title);

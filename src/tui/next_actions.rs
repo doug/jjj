@@ -267,7 +267,10 @@ mod tests {
 
         let actions = build_next_actions(&problems, &solutions, &critiques, "alice");
 
-        let blocked: Vec<_> = actions.iter().filter(|a| a.category == Category::Blocked).collect();
+        let blocked: Vec<_> = actions
+            .iter()
+            .filter(|a| a.category == Category::Blocked)
+            .collect();
         assert_eq!(blocked.len(), 1);
         assert_eq!(blocked[0].entity_id, "S-1");
         assert_eq!(blocked[0].entity_type, EntityType::Solution);
@@ -291,7 +294,10 @@ mod tests {
 
         let actions = build_next_actions(&problems, &solutions, &critiques, "alice");
 
-        let ready: Vec<_> = actions.iter().filter(|a| a.category == Category::Ready).collect();
+        let ready: Vec<_> = actions
+            .iter()
+            .filter(|a| a.category == Category::Ready)
+            .collect();
         assert_eq!(ready.len(), 1);
         assert_eq!(ready[0].entity_id, "S-1");
         assert_eq!(ready[0].entity_type, EntityType::Solution);
@@ -307,7 +313,10 @@ mod tests {
 
         let actions = build_next_actions(&problems, &solutions, &[], "alice");
 
-        let ready: Vec<_> = actions.iter().filter(|a| a.category == Category::Ready).collect();
+        let ready: Vec<_> = actions
+            .iter()
+            .filter(|a| a.category == Category::Ready)
+            .collect();
         assert!(ready.is_empty());
     }
 
@@ -324,7 +333,10 @@ mod tests {
 
         let actions = build_next_actions(&problems, &solutions, &critiques, "alice");
 
-        let review: Vec<_> = actions.iter().filter(|a| a.category == Category::Review).collect();
+        let review: Vec<_> = actions
+            .iter()
+            .filter(|a| a.category == Category::Review)
+            .collect();
         assert_eq!(review.len(), 1);
         assert_eq!(review[0].entity_id, "C-1");
         assert_eq!(review[0].entity_type, EntityType::Critique);
@@ -344,7 +356,10 @@ mod tests {
 
         let actions = build_next_actions(&problems, &solutions, &critiques, "alice");
 
-        let review: Vec<_> = actions.iter().filter(|a| a.category == Category::Review).collect();
+        let review: Vec<_> = actions
+            .iter()
+            .filter(|a| a.category == Category::Review)
+            .collect();
         assert!(review.is_empty());
     }
 
@@ -368,7 +383,10 @@ mod tests {
 
         let actions = build_next_actions(&problems, &solutions, &[], "alice");
 
-        let todo: Vec<_> = actions.iter().filter(|a| a.category == Category::Todo).collect();
+        let todo: Vec<_> = actions
+            .iter()
+            .filter(|a| a.category == Category::Todo)
+            .collect();
         assert!(todo.is_empty());
     }
 
@@ -379,7 +397,10 @@ mod tests {
 
         let actions = build_next_actions(&[p], &[], &[], "alice");
 
-        let todo: Vec<_> = actions.iter().filter(|a| a.category == Category::Todo).collect();
+        let todo: Vec<_> = actions
+            .iter()
+            .filter(|a| a.category == Category::Todo)
+            .collect();
         assert!(todo.is_empty());
     }
 
@@ -393,7 +414,10 @@ mod tests {
 
         let actions = build_next_actions(&problems, &[sol], &critiques, "alice");
 
-        let blocked: Vec<_> = actions.iter().filter(|a| a.category == Category::Blocked).collect();
+        let blocked: Vec<_> = actions
+            .iter()
+            .filter(|a| a.category == Category::Blocked)
+            .collect();
         assert!(blocked.is_empty());
     }
 
@@ -468,7 +492,10 @@ mod tests {
 
         let actions = build_next_actions(&problems, &solutions, &critiques, "alice");
 
-        let blocked = actions.iter().find(|a| a.category == Category::Blocked).unwrap();
+        let blocked = actions
+            .iter()
+            .find(|a| a.category == Category::Blocked)
+            .unwrap();
         assert_eq!(blocked.priority, Priority::Critical);
     }
 
@@ -481,7 +508,10 @@ mod tests {
 
         let actions = build_next_actions(&problems, &solutions, &[crit], "alice");
 
-        let blocked = actions.iter().find(|a| a.category == Category::Blocked).unwrap();
+        let blocked = actions
+            .iter()
+            .find(|a| a.category == Category::Blocked)
+            .unwrap();
         assert_eq!(blocked.details.len(), 1);
         assert_eq!(blocked.details[0].severity, Some("critical".to_string()));
     }

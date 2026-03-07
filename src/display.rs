@@ -7,7 +7,7 @@ const MIN_PREFIX_LEN: usize = 6;
 ///
 /// Returns a Vec of (uuid, prefix) pairs where each prefix is the shortest
 /// unambiguous prefix (minimum 6 chars).
-pub fn truncated_prefixes(uuids: &[&str]) -> Vec<(String, String)> {
+pub(crate) fn truncated_prefixes(uuids: &[&str]) -> Vec<(String, String)> {
     uuids
         .iter()
         .map(|uuid| {
@@ -42,7 +42,7 @@ fn shortest_unambiguous_prefix(uuid: &str, all_uuids: &[&str]) -> String {
 }
 
 /// Format an entity for mixed-type listings with type prefix.
-pub fn format_with_type_prefix(entity_type: &str, prefix: &str) -> String {
+pub(crate) fn format_with_type_prefix(entity_type: &str, prefix: &str) -> String {
     let type_char = match entity_type {
         "problem" => "p",
         "solution" => "s",

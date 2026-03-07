@@ -1,10 +1,14 @@
+use super::super::next_actions::EntityType;
 use super::{App, InputAction, InputMode};
 use crate::error::Result;
 use crate::models::{CritiqueStatus, Event, EventExtra, EventType, ProblemStatus};
-use super::super::next_actions::EntityType;
 
 impl App {
-    pub(super) fn create_problem(&mut self, title: &str, milestone_id: Option<String>) -> Result<()> {
+    pub(super) fn create_problem(
+        &mut self,
+        title: &str,
+        milestone_id: Option<String>,
+    ) -> Result<()> {
         use crate::id::generate_id;
         use crate::models::Problem;
 
@@ -317,11 +321,18 @@ impl App {
         }
 
         let id = solution_id.to_string();
-        let user = self.store.get_current_user().unwrap_or_else(|_| "unknown".to_string());
+        let user = self
+            .store
+            .get_current_user()
+            .unwrap_or_else(|_| "unknown".to_string());
         match self
             .store
             .with_metadata(&format!("Approve solution {}", solution_id), || {
-                let event = Event::new(EventType::SolutionApproved, solution_id.to_string(), user.clone());
+                let event = Event::new(
+                    EventType::SolutionApproved,
+                    solution_id.to_string(),
+                    user.clone(),
+                );
                 self.store.set_pending_event(event.clone());
                 let mut solution = self.store.load_solution(solution_id)?;
                 solution.approve();
@@ -333,7 +344,8 @@ impl App {
                     if problem.status != ProblemStatus::Solved {
                         problem.set_status(ProblemStatus::Solved);
                         self.store.save_problem(&problem)?;
-                        let solve_event = Event::new(EventType::ProblemSolved, problem.id.clone(), user.clone());
+                        let solve_event =
+                            Event::new(EventType::ProblemSolved, problem.id.clone(), user.clone());
                         self.store.set_pending_event(solve_event);
                     }
                 }
@@ -373,18 +385,25 @@ impl App {
 
     fn submit_solution(&mut self, solution_id: &str) -> Result<()> {
         let id = solution_id.to_string();
-        let user = self.store.get_current_user().unwrap_or_else(|_| "unknown".to_string());
-        match self
+        let user = self
             .store
-            .with_metadata(&format!("Submit solution {} for review", solution_id), || {
+            .get_current_user()
+            .unwrap_or_else(|_| "unknown".to_string());
+        match self.store.with_metadata(
+            &format!("Submit solution {} for review", solution_id),
+            || {
                 let mut solution = self.store.load_solution(solution_id)?;
                 solution.submit();
                 self.store.save_solution(&solution)?;
-                let event = Event::new(EventType::SolutionSubmitted, solution_id.to_string(), user.clone())
-                    .with_extra(EventExtra {
-                        problem: Some(solution.problem_id.clone()),
-                        ..Default::default()
-                    });
+                let event = Event::new(
+                    EventType::SolutionSubmitted,
+                    solution_id.to_string(),
+                    user.clone(),
+                )
+                .with_extra(EventExtra {
+                    problem: Some(solution.problem_id.clone()),
+                    ..Default::default()
+                });
                 self.store.set_pending_event(event);
                 // Auto-set problem to InProgress if it's Open
                 let mut problem = self.store.load_problem(&solution.problem_id)?;
@@ -393,7 +412,8 @@ impl App {
                     self.store.save_problem(&problem)?;
                 }
                 Ok(())
-            }) {
+            },
+        ) {
             Ok(_) => {
                 self.show_flash(&format!("{} submitted for review", id));
                 self.refresh_data()?;
@@ -517,7 +537,10 @@ impl App {
     }
 
     pub(super) fn handle_action_shift_a(&mut self) -> Result<()> {
-        let user = self.store.get_current_user().unwrap_or_else(|_| "unknown".to_string());
+        let user = self
+            .store
+            .get_current_user()
+            .unwrap_or_else(|_| "unknown".to_string());
 
         if let Some((id, entity_type)) = self.get_selected_entity() {
             let id_clone = id.clone();

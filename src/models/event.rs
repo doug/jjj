@@ -124,12 +124,12 @@ pub struct EventExtra {
 
 impl Event {
     /// Create a new event with current timestamp
-    pub fn new(event_type: EventType, entity: String, by: String) -> Self {
+    pub fn new(event_type: EventType, entity: impl Into<String>, by: impl Into<String>) -> Self {
         Self {
             when: Utc::now(),
             event_type,
-            entity,
-            by,
+            entity: entity.into(),
+            by: by.into(),
             rationale: None,
             refs: Vec::new(),
             extra: EventExtra::default(),

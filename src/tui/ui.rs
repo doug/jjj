@@ -143,31 +143,55 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                 } => {
                     let priority_sym = priority_prefix(priority);
                     let dim = matches!(priority, Priority::Low);
-                    let assignee_suffix = assignee.as_deref().map(|a| {
-                        // Extract name from "Name <email>" format
-                        let name = a.split('<').next().unwrap_or(a).trim();
-                        let name = if name.len() > 12 { &name[..12] } else { name };
-                        format!(" @{}", name)
-                    }).unwrap_or_default();
+                    let assignee_suffix = assignee
+                        .as_deref()
+                        .map(|a| {
+                            // Extract name from "Name <email>" format
+                            let name = a.split('<').next().unwrap_or(a).trim();
+                            let name = if name.len() > 12 { &name[..12] } else { name };
+                            format!(" @{}", name)
+                        })
+                        .unwrap_or_default();
                     (
                         format!(
                             "{}{}{}{}{}: {}{}",
-                            indent, expand_char, priority_sym, action_sym, &id[..8.min(id.len())], title, assignee_suffix
+                            indent,
+                            expand_char,
+                            priority_sym,
+                            action_sym,
+                            &id[..8.min(id.len())],
+                            title,
+                            assignee_suffix
                         ),
                         status_color_problem(status),
                         dim,
                     )
                 }
                 TreeNode::Solution {
-                    id, title, status, assignee, ..
+                    id,
+                    title,
+                    status,
+                    assignee,
+                    ..
                 } => {
-                    let assignee_suffix = assignee.as_deref().map(|a| {
-                        let name = a.split('<').next().unwrap_or(a).trim();
-                        let name = if name.len() > 12 { &name[..12] } else { name };
-                        format!(" @{}", name)
-                    }).unwrap_or_default();
+                    let assignee_suffix = assignee
+                        .as_deref()
+                        .map(|a| {
+                            let name = a.split('<').next().unwrap_or(a).trim();
+                            let name = if name.len() > 12 { &name[..12] } else { name };
+                            format!(" @{}", name)
+                        })
+                        .unwrap_or_default();
                     (
-                        format!("{}{}{}{}: {}{}", indent, expand_char, action_sym, &id[..8.min(id.len())], title, assignee_suffix),
+                        format!(
+                            "{}{}{}{}: {}{}",
+                            indent,
+                            expand_char,
+                            action_sym,
+                            &id[..8.min(id.len())],
+                            title,
+                            assignee_suffix
+                        ),
                         status_color_solution(status),
                         false,
                     )
@@ -180,7 +204,12 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                 } => (
                     format!(
                         "{}{}{}{}: {} [{}]",
-                        indent, expand_char, action_sym, &id[..8.min(id.len())], title, severity
+                        indent,
+                        expand_char,
+                        action_sym,
+                        &id[..8.min(id.len())],
+                        title,
+                        severity
                     ),
                     status_color_critique(status),
                     false,

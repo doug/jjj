@@ -26,6 +26,7 @@ pub mod resolve;
 pub mod storage;
 pub mod sync;
 pub mod tui;
+#[allow(dead_code)]
 pub mod utils;
 
 // Re-export commonly used types

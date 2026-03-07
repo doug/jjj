@@ -233,10 +233,7 @@ fn test_search_no_results() {
 
     run_jjj_success(&dir, &["problem", "new", "Real Problem"]);
 
-    let stdout = run_jjj_success(
-        &dir,
-        &["search", "zzz_nonexistent_xyzzy_query_42"],
-    );
+    let stdout = run_jjj_success(&dir, &["search", "zzz_nonexistent_xyzzy_query_42"]);
     assert!(
         stdout.contains("No results") || stdout.contains("0 result"),
         "Expected no results message: {}",
@@ -268,11 +265,7 @@ fn test_search_json_output() {
         "Expected type field: {:?}",
         arr[0]
     );
-    assert!(
-        arr[0]["id"].is_string(),
-        "Expected id field: {:?}",
-        arr[0]
-    );
+    assert!(arr[0]["id"].is_string(), "Expected id field: {:?}", arr[0]);
     assert!(
         arr[0]["title"].is_string(),
         "Expected title field: {:?}",
@@ -304,8 +297,7 @@ fn test_search_filter_by_type() {
         &dir,
         &["search", "Filterable Widget", "--type", "problem", "--json"],
     );
-    let json: serde_json::Value =
-        serde_json::from_str(&stdout).expect("Failed to parse JSON");
+    let json: serde_json::Value = serde_json::from_str(&stdout).expect("Failed to parse JSON");
     let arr = json.as_array().unwrap();
     for item in arr {
         assert_eq!(
@@ -326,10 +318,7 @@ fn test_search_text_only_flag() {
     run_jjj_success(&dir, &["problem", "new", "Text Only Search Target"]);
 
     // --text-only should work without any embedding service
-    let stdout = run_jjj_success(
-        &dir,
-        &["search", "Text Only Search", "--text-only"],
-    );
+    let stdout = run_jjj_success(&dir, &["search", "Text Only Search", "--text-only"]);
     assert!(
         stdout.contains("Text Only Search Target"),
         "Expected to find problem with --text-only: {}",

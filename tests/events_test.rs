@@ -1,58 +1,9 @@
-use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
-use tempfile::TempDir;
-
-/// Helper to get the jjj binary path
-fn jjj_binary() -> PathBuf {
-    let debug_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/debug/jjj");
-    if !debug_dir.exists() {
-        panic!(
-            "jjj binary not found at {:?}. Make sure to build first.",
-            debug_dir
-        );
-    }
-    debug_dir
-}
-
-/// Helper to run the jjj binary
-fn run_jjj(dir: &Path, args: &[&str]) -> Output {
-    Command::new(&jjj_binary())
-        .current_dir(dir)
-        .args(args)
-        .output()
-        .expect("Failed to execute jjj")
-}
-
-/// Helper to setup a test repo with jj and jjj initialized
-fn setup_test_repo() -> TempDir {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-
-    // Init jj repo
-    Command::new("jj")
-        .current_dir(&temp_dir)
-        .args(["git", "init", "--colocate"])
-        .status()
-        .expect("Failed to run jj init");
-    Command::new("jj")
-        .current_dir(&temp_dir)
-        .args(["config", "set", "--repo", "user.name", "Test User"])
-        .status()
-        .expect("Failed to set user.name");
-    Command::new("jj")
-        .current_dir(&temp_dir)
-        .args(["config", "set", "--repo", "user.email", "test@example.com"])
-        .status()
-        .expect("Failed to set user.email");
-
-    // Initialize jjj
-    run_jjj(temp_dir.path(), &["init"]);
-
-    temp_dir
-}
+mod test_helpers;
+use test_helpers::{jj_available, run_jjj, setup_test_repo};
 
 #[test]
 fn test_events_validate_clean() {
-    if jjj::jj::find_executable("jj").is_none() {
+    if !jj_available() {
         return;
     }
     let temp_dir = setup_test_repo();
@@ -101,7 +52,7 @@ fn test_events_validate_clean() {
 
 #[test]
 fn test_events_rebuild() {
-    if jjj::jj::find_executable("jj").is_none() {
+    if !jj_available() {
         return;
     }
     let temp_dir = setup_test_repo();
@@ -170,7 +121,7 @@ fn test_events_rebuild() {
 
 #[test]
 fn test_events_list_json() {
-    if jjj::jj::find_executable("jj").is_none() {
+    if !jj_available() {
         return;
     }
     let temp_dir = setup_test_repo();
@@ -215,11 +166,7 @@ fn test_events_list_json() {
         serde_json::from_str(&stdout).expect("Failed to parse events JSON output");
 
     // Must be an array
-    assert!(
-        events.is_array(),
-        "Expected JSON array, got: {}",
-        events
-    );
+    assert!(events.is_array(), "Expected JSON array, got: {}", events);
 
     let arr = events.as_array().unwrap();
     assert!(
@@ -254,7 +201,7 @@ fn test_events_list_json() {
 
 #[test]
 fn test_events_filter_by_type() {
-    if jjj::jj::find_executable("jj").is_none() {
+    if !jj_available() {
         return;
     }
     let temp_dir = setup_test_repo();
@@ -285,7 +232,10 @@ fn test_events_filter_by_type() {
     );
 
     // Filter events to only problem_created
-    let output = run_jjj(dir, &["events", "--event-type", "problem_created", "--json"]);
+    let output = run_jjj(
+        dir,
+        &["events", "--event-type", "problem_created", "--json"],
+    );
     assert!(
         output.status.success(),
         "events --type problem_created failed: {}",
@@ -327,7 +277,7 @@ fn test_events_no_jsonl_file() {
     // Events are embedded in jjj commit descriptions, not written to a file.
     // events.jsonl must never be created — its absence is what makes merges
     // conflict-free.
-    if jjj::jj::find_executable("jj").is_none() {
+    if !jj_available() {
         return;
     }
     let temp_dir = setup_test_repo();
@@ -381,7 +331,7 @@ fn test_events_approve_emits_two_events_in_one_commit() {
     // BOTH solution_approved AND problem_solved. Both are queued via
     // set_pending_event() inside the same with_metadata() closure, so they
     // land in a single commit as two `jjj: <json>` lines.
-    if jjj::jj::find_executable("jj").is_none() {
+    if !jj_available() {
         return;
     }
     let temp_dir = setup_test_repo();

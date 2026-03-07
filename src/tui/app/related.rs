@@ -28,8 +28,7 @@ impl App {
 
         // Clear stale results and schedule debounced background load
         self.ui.related_items.clear();
-        self.ui.related_pending_load =
-            Some((entity_type, entity_id, std::time::Instant::now()));
+        self.ui.related_pending_load = Some((entity_type, entity_id, std::time::Instant::now()));
     }
 
     /// Poll for completed background related-items load, or spawn one when debounce expires.

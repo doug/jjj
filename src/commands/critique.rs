@@ -25,7 +25,16 @@ pub fn execute(ctx: &CommandContext, action: CritiqueAction) -> Result<()> {
             mine,
             search,
             json,
-        } => list_critiques(ctx, solution, status, reviewer, author, mine, search.as_deref(), json),
+        } => list_critiques(
+            ctx,
+            solution,
+            status,
+            reviewer,
+            author,
+            mine,
+            search.as_deref(),
+            json,
+        ),
         CritiqueAction::Show { critique_id, json } => show_critique(ctx, critique_id, json),
         CritiqueAction::Edit {
             critique_id,

@@ -206,7 +206,13 @@ impl GhClient {
     pub fn list_review_threads(&self, pr_number: u64) -> Result<serde_json::Value> {
         let num_str = pr_number.to_string();
         let output = self.execute(&[
-            "pr", "view", &num_str, "--json", "reviewThreads", "--jq", ".reviewThreads",
+            "pr",
+            "view",
+            &num_str,
+            "--json",
+            "reviewThreads",
+            "--jq",
+            ".reviewThreads",
         ])?;
         serde_json::from_str(&output).map_err(|e| JjjError::Validation(e.to_string()))
     }

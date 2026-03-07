@@ -141,8 +141,8 @@ impl EmbeddingClient {
             model: &self.model,
             input: texts.to_vec(),
         };
-        let body = serde_json::to_string(&request)
-            .map_err(|e| EmbeddingError::Parse(e.to_string()))?;
+        let body =
+            serde_json::to_string(&request).map_err(|e| EmbeddingError::Parse(e.to_string()))?;
 
         let response_body = self.http_post(&body)?;
 
@@ -216,7 +216,10 @@ fn parse_base_url(base_url: &str) -> (String, u16, String) {
 
     // Split host:port from path
     let (host_port, path) = if let Some(idx) = without_scheme.find('/') {
-        let path = format!("{}/embeddings", &without_scheme[idx..].trim_end_matches('/'));
+        let path = format!(
+            "{}/embeddings",
+            &without_scheme[idx..].trim_end_matches('/')
+        );
         (&without_scheme[..idx], path)
     } else {
         (without_scheme, DEFAULT_PATH.to_string())
@@ -380,6 +383,9 @@ mod tests {
     fn test_parse_status_code() {
         assert_eq!(parse_status_code("HTTP/1.1 200 OK\r\n"), 200);
         assert_eq!(parse_status_code("HTTP/1.1 404 Not Found\r\n"), 404);
-        assert_eq!(parse_status_code("HTTP/1.1 500 Internal Server Error\r\n"), 500);
+        assert_eq!(
+            parse_status_code("HTTP/1.1 500 Internal Server Error\r\n"),
+            500
+        );
     }
 }

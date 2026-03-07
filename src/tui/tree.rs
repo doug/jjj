@@ -305,8 +305,7 @@ pub fn filter_tree_to_actions(items: &[FlatTreeItem]) -> Vec<FlatTreeItem> {
 mod tests {
     use super::*;
     use crate::models::{
-        Critique, CritiqueStatus, Milestone, Priority, Problem, ProblemStatus,
-        Solution,
+        Critique, CritiqueStatus, Milestone, Priority, Problem, ProblemStatus, Solution,
     };
     use crate::tui::next_actions::{Category, EntityType, NextAction};
     use std::collections::HashSet;
@@ -632,10 +631,7 @@ mod tests {
 
     #[test]
     fn test_annotate_tree_multiple_actions() {
-        let problems = vec![
-            make_problem("P-1", "Bug 1"),
-            make_problem("P-2", "Bug 2"),
-        ];
+        let problems = vec![make_problem("P-1", "Bug 1"), make_problem("P-2", "Bug 2")];
         let expanded = expanded_set(&["backlog"]);
         let mut tree = build_flat_tree(&[], &problems, &[], &[], &expanded);
 
@@ -654,10 +650,7 @@ mod tests {
 
     #[test]
     fn test_annotate_tree_unmatched_nodes_no_symbol() {
-        let problems = vec![
-            make_problem("P-1", "Bug 1"),
-            make_problem("P-2", "Bug 2"),
-        ];
+        let problems = vec![make_problem("P-1", "Bug 1"), make_problem("P-2", "Bug 2")];
         let expanded = expanded_set(&["backlog"]);
         let mut tree = build_flat_tree(&[], &problems, &[], &[], &expanded);
 
@@ -698,7 +691,10 @@ mod tests {
 
         // Should include: M-1 (ancestor), P-1 (ancestor), S-1 (action item)
         let ids: Vec<&str> = filtered.iter().map(|i| i.node.id()).collect();
-        assert!(ids.contains(&"M-1"), "Milestone ancestor should be retained");
+        assert!(
+            ids.contains(&"M-1"),
+            "Milestone ancestor should be retained"
+        );
         assert!(ids.contains(&"P-1"), "Problem ancestor should be retained");
         assert!(ids.contains(&"S-1"), "Action item should be retained");
         // Backlog should NOT be included (no action items under it)
@@ -723,7 +719,10 @@ mod tests {
         let ids: Vec<&str> = filtered.iter().map(|i| i.node.id()).collect();
         assert!(ids.contains(&"P-1"));
         assert!(ids.contains(&"backlog"), "Backlog is ancestor of P-1");
-        assert!(!ids.contains(&"P-2"), "P-2 has no action and should be excluded");
+        assert!(
+            !ids.contains(&"P-2"),
+            "P-2 has no action and should be excluded"
+        );
     }
 
     #[test]

@@ -3,50 +3,15 @@
 //! These tests are gated behind `gh auth status` and `which jj` checks.
 //! They use unique prefixes per run to avoid conflicts and clean up after themselves.
 
+mod test_helpers;
+
 use std::path::PathBuf;
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tempfile::TempDir;
+use test_helpers::run_jjj_success;
 
 const TEST_REPO: &str = "doug/jjjtest";
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/// Get the jjj binary path.
-fn jjj_binary() -> PathBuf {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/debug/jjj");
-    if !path.exists() {
-        panic!(
-            "jjj binary not found at {:?}. Make sure to build first.",
-            path
-        );
-    }
-    path
-}
-
-/// Run jjj in the given directory with the given args.
-fn run_jjj(dir: &std::path::Path, args: &[&str]) -> std::process::Output {
-    Command::new(&jjj_binary())
-        .current_dir(dir)
-        .args(args)
-        .output()
-        .expect("Failed to execute jjj")
-}
-
-/// Run jjj and assert success, returning stdout.
-fn run_jjj_success(dir: &std::path::Path, args: &[&str]) -> String {
-    let output = run_jjj(dir, args);
-    assert!(
-        output.status.success(),
-        "jjj {} failed.\nstdout: {}\nstderr: {}",
-        args.join(" "),
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    String::from_utf8_lossy(&output.stdout).to_string()
-}
 
 /// Run an arbitrary command and return its Output.
 fn run_cmd(dir: &std::path::Path, program: &str, args: &[&str]) -> std::process::Output {
@@ -89,14 +54,7 @@ fn create_gh_issue(dir: &std::path::Path, title: &str, body: &str) -> u64 {
     let url = run_gh(
         dir,
         &[
-            "issue",
-            "create",
-            "--repo",
-            TEST_REPO,
-            "--title",
-            title,
-            "--body",
-            body,
+            "issue", "create", "--repo", TEST_REPO, "--title", title, "--body", body,
         ],
     );
     // Output is a URL like https://github.com/doug/jjjtest/issues/42
@@ -163,11 +121,7 @@ fn setup_github_test_repo() -> TempDir {
 
     // Add git remote pointing to the test repo
     let remote_url = format!("https://github.com/{}.git", TEST_REPO);
-    let output = run_cmd(
-        path,
-        "jj",
-        &["git", "remote", "add", "origin", &remote_url],
-    );
+    let output = run_cmd(path, "jj", &["git", "remote", "add", "origin", &remote_url]);
     assert!(
         output.status.success(),
         "Failed to add remote: {}",
@@ -190,13 +144,7 @@ fn close_issue_on_repo(dir: &std::path::Path, number: u64) {
     let num_str = number.to_string();
     let _ = Command::new("gh")
         .current_dir(dir)
-        .args([
-            "issue",
-            "close",
-            &num_str,
-            "--repo",
-            TEST_REPO,
-        ])
+        .args(["issue", "close", &num_str, "--repo", TEST_REPO])
         .output();
 }
 
@@ -259,10 +207,7 @@ fn test_github_sync_e2e_full_flow() {
     created_issue_numbers.push(issue_number);
     guard.issues.push(issue_number);
 
-    eprintln!(
-        "Created GitHub issue #{} on {}",
-        issue_number, TEST_REPO
-    );
+    eprintln!("Created GitHub issue #{} on {}", issue_number, TEST_REPO);
 
     // Import the issue via jjj github import
     let issue_ref = format!("#{}", issue_number);
@@ -285,17 +230,16 @@ fn test_github_sync_e2e_full_flow() {
     let imported = problems_arr
         .iter()
         .find(|p| {
-            p["title"]
-                .as_str()
-                .map_or(false, |t| t.contains(&gh_issue_title) || t == gh_issue_title)
+            p["title"].as_str().map_or(false, |t| {
+                t.contains(&gh_issue_title) || t == gh_issue_title
+            })
         })
         .expect("Imported problem not found in problem list");
 
     let imported_id = imported["id"].as_str().expect("Expected id string");
     let github_issue_field = imported.get("github_issue");
     assert!(
-        github_issue_field.is_some()
-            && github_issue_field.unwrap().as_u64() == Some(issue_number),
+        github_issue_field.is_some() && github_issue_field.unwrap().as_u64() == Some(issue_number),
         "Expected github_issue={} on imported problem, got {:?}",
         issue_number,
         github_issue_field
@@ -389,8 +333,7 @@ fn test_github_sync_e2e_full_flow() {
         stdout
     );
     assert!(
-        stdout.contains(&format!("#{}", issue_number))
-            || stdout.contains(&gh_issue_title),
+        stdout.contains(&format!("#{}", issue_number)) || stdout.contains(&gh_issue_title),
         "Status should mention the linked issue: {}",
         stdout
     );
@@ -445,8 +388,7 @@ fn test_github_sync_local_problem_no_auto_push() {
 
     // The problem should NOT have a github_issue (auto_push is off)
     let stdout = run_jjj_success(path, &["problem", "list", "--json"]);
-    let problems: serde_json::Value =
-        serde_json::from_str(&stdout).expect("Failed to parse JSON");
+    let problems: serde_json::Value = serde_json::from_str(&stdout).expect("Failed to parse JSON");
     let problems_arr = problems.as_array().unwrap();
 
     let local = problems_arr

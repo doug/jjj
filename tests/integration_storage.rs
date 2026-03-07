@@ -1,16 +1,15 @@
 // Integration tests for storage layer
 // These tests require jj to be installed and will create temporary repositories
 
+mod test_helpers;
+
 use jjj::models::{Problem, ProjectConfig, Solution};
 use std::process::Command;
 use tempfile::TempDir;
-
-/// Helper to check if jj is installed
-fn jj_available() -> bool {
-    Command::new("jj").arg("--version").output().is_ok()
-}
+use test_helpers::jj_available;
 
 /// Helper to create a test jj repository
+#[allow(dead_code)]
 fn create_test_repo() -> Option<TempDir> {
     if !jj_available() {
         return None;

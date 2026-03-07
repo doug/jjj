@@ -31,7 +31,6 @@ pub struct Cli {
 #[derive(Subcommand)]
 pub enum Commands {
     // ── Quick start ────────────────────────────────────────────────────────
-
     /// Open the interactive project browser (recommended starting point)
     #[command(display_order = 0)]
     Ui,
@@ -73,7 +72,6 @@ pub enum Commands {
     },
 
     // ── Core entities ──────────────────────────────────────────────────────
-
     /// Track problems to solve (the questions driving your work)
     #[command(display_order = 10)]
     Problem {
@@ -103,7 +101,6 @@ pub enum Commands {
     },
 
     // ── Discover ───────────────────────────────────────────────────────────
-
     /// Search problems, solutions, and critiques by text or semantic similarity
     #[command(display_order = 30)]
     Search {
@@ -178,7 +175,6 @@ pub enum Commands {
     },
 
     // ── Collaborate ────────────────────────────────────────────────────────
-
     /// Pull jj changes and jjj metadata from a remote
     #[command(display_order = 40)]
     Fetch {
@@ -234,7 +230,6 @@ pub enum Commands {
     },
 
     // ── Setup & utilities ──────────────────────────────────────────────────
-
     /// Initialize jjj metadata in the current jj repository
     #[command(display_order = 50)]
     Init,

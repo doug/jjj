@@ -372,7 +372,9 @@ pub fn merge_with_rrf(
         *scores.entry(key.clone()).or_insert(0.0) += rrf_score;
         titles.insert(key.clone(), result.title.clone());
         if !result.snippet.is_empty() {
-            snippets.entry(key).or_insert_with(|| result.snippet.clone());
+            snippets
+                .entry(key)
+                .or_insert_with(|| result.snippet.clone());
         }
     }
 

@@ -126,4 +126,3 @@ pub fn auto_close_issue(ctx: &CommandContext, problem: &Problem, force: bool) {
         eprintln!("Warning: auto-close GitHub issue failed: {}", e);
     }
 }
-

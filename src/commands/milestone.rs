@@ -26,9 +26,7 @@ pub fn execute(ctx: &CommandContext, action: MilestoneAction) -> Result<()> {
         } => remove_problem(ctx, milestone_id, problem_id),
         MilestoneAction::Roadmap { json } => show_roadmap(ctx, json),
         MilestoneAction::Assign { milestone_id, to } => assign_milestone(ctx, milestone_id, to),
-        MilestoneAction::Status { milestone_id, json } => {
-            milestone_status(ctx, milestone_id, json)
-        }
+        MilestoneAction::Status { milestone_id, json } => milestone_status(ctx, milestone_id, json),
     }
 }
 
@@ -50,7 +48,8 @@ fn create_milestone(ctx: &CommandContext, title: String, date: Option<String>) -
                 Some(dt) => Some(dt.and_utc()),
                 None => {
                     return Err(crate::error::JjjError::Validation(format!(
-                        "Invalid date: {}", date_str
+                        "Invalid date: {}",
+                        date_str
                     )));
                 }
             }
@@ -217,7 +216,7 @@ fn show_milestone(ctx: &CommandContext, milestone_input: String, json: bool) -> 
         for problem_id in &milestone.problem_ids {
             if let Ok(problem) = store.load_problem(problem_id) {
                 let solutions = store
-                    .get_solutions_for_problem(problem_id)
+                    .list_solutions_for_problem(problem_id)
                     .unwrap_or_default();
                 let accepted_solutions = solutions
                     .iter()

@@ -134,7 +134,6 @@ impl App {
                 }
             }
         }
-
     }
 
     pub(super) fn collapse_or_parent(&mut self) {

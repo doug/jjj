@@ -107,12 +107,16 @@ impl std::str::FromStr for SolutionStatus {
 
 impl Solution {
     /// Create a new solution for a problem
-    pub fn new(id: String, title: String, problem_id: String) -> Self {
+    pub fn new(
+        id: impl Into<String>,
+        title: impl Into<String>,
+        problem_id: impl Into<String>,
+    ) -> Self {
         let now = Utc::now();
         Self {
-            id,
-            title,
-            problem_id,
+            id: id.into(),
+            title: title.into(),
+            problem_id: problem_id.into(),
             status: SolutionStatus::Proposed,
             critique_ids: Vec::new(),
             change_ids: Vec::new(),
@@ -129,7 +133,8 @@ impl Solution {
     }
 
     /// Add a critique to this solution
-    pub fn add_critique(&mut self, critique_id: String) {
+    pub fn add_critique(&mut self, critique_id: impl Into<String>) {
+        let critique_id = critique_id.into();
         if !self.critique_ids.contains(&critique_id) {
             self.critique_ids.push(critique_id);
             self.updated_at = Utc::now();
@@ -148,7 +153,8 @@ impl Solution {
     }
 
     /// Attach a jj change to this solution
-    pub fn attach_change(&mut self, change_id: String) {
+    pub fn attach_change(&mut self, change_id: impl Into<String>) {
+        let change_id = change_id.into();
         if !self.change_ids.contains(&change_id) {
             self.change_ids.push(change_id);
             self.updated_at = Utc::now();

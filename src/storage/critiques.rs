@@ -153,7 +153,7 @@ impl MetadataStore {
     }
 
     /// Get critiques for a solution
-    pub fn get_critiques_for_solution(&self, solution_id: &str) -> Result<Vec<Critique>> {
+    pub fn list_critiques_for_solution(&self, solution_id: &str) -> Result<Vec<Critique>> {
         let critiques = self.list_critiques()?;
         Ok(critiques
             .into_iter()
@@ -162,8 +162,8 @@ impl MetadataStore {
     }
 
     /// Get open critiques for a solution
-    pub fn get_open_critiques_for_solution(&self, solution_id: &str) -> Result<Vec<Critique>> {
-        let critiques = self.get_critiques_for_solution(solution_id)?;
+    pub fn list_open_critiques_for_solution(&self, solution_id: &str) -> Result<Vec<Critique>> {
+        let critiques = self.list_critiques_for_solution(solution_id)?;
         Ok(critiques
             .into_iter()
             .filter(|c| c.status == CritiqueStatus::Open)
@@ -172,7 +172,7 @@ impl MetadataStore {
 
     /// Check if a solution has any valid critiques (that would refute it)
     pub fn has_valid_critiques(&self, solution_id: &str) -> Result<bool> {
-        let critiques = self.get_critiques_for_solution(solution_id)?;
+        let critiques = self.list_critiques_for_solution(solution_id)?;
         Ok(critiques.iter().any(|c| c.status == CritiqueStatus::Valid))
     }
 

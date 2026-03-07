@@ -76,10 +76,7 @@ fn test_search_no_results() {
     run_jjj_success(&dir, &["problem", "new", "Some real problem"]);
 
     // Search for something that does not exist
-    let stdout = run_jjj_success(
-        &dir,
-        &["search", "xyzzyzzynonexistent", "--text-only"],
-    );
+    let stdout = run_jjj_success(&dir, &["search", "xyzzyzzynonexistent", "--text-only"]);
     assert!(
         stdout.contains("No results found"),
         "Expected 'No results found' message: {}",

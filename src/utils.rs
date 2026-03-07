@@ -2,7 +2,7 @@ use crate::error::Result;
 use std::io::{self, Write};
 
 /// Prompt the user for input
-pub fn prompt(message: &str) -> Result<String> {
+pub(crate) fn prompt(message: &str) -> Result<String> {
     print!("{}", message);
     io::stdout().flush()?;
 
@@ -13,7 +13,7 @@ pub fn prompt(message: &str) -> Result<String> {
 }
 
 /// Prompt the user for confirmation (y/n)
-pub fn confirm(message: &str) -> Result<bool> {
+pub(crate) fn confirm(message: &str) -> Result<bool> {
     loop {
         let input = prompt(&format!("{} (y/n): ", message))?;
         match input.to_lowercase().as_str() {
@@ -25,7 +25,7 @@ pub fn confirm(message: &str) -> Result<bool> {
 }
 
 /// Format a change ID for display (truncate to 7 chars)
-pub fn format_change_id(change_id: &str) -> String {
+pub(crate) fn format_change_id(change_id: &str) -> String {
     if change_id.len() > 7 {
         format!("{}...", &change_id[..7])
     } else {
@@ -34,12 +34,12 @@ pub fn format_change_id(change_id: &str) -> String {
 }
 
 /// Parse a user mention (e.g., "@alice" -> "alice")
-pub fn parse_mention(mention: &str) -> String {
+pub(crate) fn parse_mention(mention: &str) -> String {
     mention.trim_start_matches('@').to_string()
 }
 
 /// Format a relative time (e.g., "2 hours ago")
-pub fn format_relative_time(timestamp: &chrono::DateTime<chrono::Utc>) -> String {
+pub(crate) fn format_relative_time(timestamp: &chrono::DateTime<chrono::Utc>) -> String {
     let now = chrono::Utc::now();
     let duration = now.signed_duration_since(*timestamp);
 
@@ -108,7 +108,7 @@ mod tests {
 }
 
 /// Truncate a string to a maximum length, appending "..." if truncated.
-pub fn truncate(s: &str, max_len: usize) -> String {
+pub(crate) fn truncate(s: &str, max_len: usize) -> String {
     if s.chars().count() <= max_len {
         s.to_string()
     } else {

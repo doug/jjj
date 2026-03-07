@@ -185,7 +185,9 @@ fn test_solution_list_filter_by_status() {
 
     let stdout = run_jjj_success(&dir, &["solution", "list", "--status", "approved"]);
     assert!(
-        stdout.contains("Accepted Solution") || stdout.contains("Approved Solution") || stdout.contains("Accepted Solution"),
+        stdout.contains("Accepted Solution")
+            || stdout.contains("Approved Solution")
+            || stdout.contains("Accepted Solution"),
         "Expected accepted solution: {}",
         stdout
     );

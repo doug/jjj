@@ -15,7 +15,6 @@ use crate::db::Database;
 use crate::error::Result;
 use crate::storage::MetadataStore;
 
-
 /// Load all metadata from markdown files into SQLite.
 ///
 /// This clears all SQLite tables and reloads from the shadow branch.

@@ -84,11 +84,11 @@ impl std::str::FromStr for MilestoneStatus {
 
 impl Milestone {
     /// Create a new milestone
-    pub fn new(id: String, title: String) -> Self {
+    pub fn new(id: impl Into<String>, title: impl Into<String>) -> Self {
         let now = Utc::now();
         Self {
-            id,
-            title,
+            id: id.into(),
+            title: title.into(),
             target_date: None,
             status: MilestoneStatus::Planning,
             problem_ids: Vec::new(),
@@ -101,7 +101,8 @@ impl Milestone {
     }
 
     /// Add a problem to this milestone
-    pub fn add_problem(&mut self, problem_id: String) {
+    pub fn add_problem(&mut self, problem_id: impl Into<String>) {
+        let problem_id = problem_id.into();
         if !self.problem_ids.contains(&problem_id) {
             self.problem_ids.push(problem_id);
             self.updated_at = Utc::now();

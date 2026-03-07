@@ -519,7 +519,11 @@ fn test_critique_blocks_solution_accept() {
 
     // Now submit should work
     let stdout = run_jjj_success(&dir, &["solution", "approve", "Blocked"]);
-    assert!(stdout.contains("approved") || stdout.contains("Approved"), "Expected approved: {}", stdout);
+    assert!(
+        stdout.contains("approved") || stdout.contains("Approved"),
+        "Expected approved: {}",
+        stdout
+    );
 }
 
 #[test]

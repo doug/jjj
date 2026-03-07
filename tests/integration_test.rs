@@ -1,80 +1,18 @@
-use std::path::PathBuf;
+mod test_helpers;
 use std::process::Command;
-use tempfile::TempDir;
-
-/// Helper to run the jjj binary
-fn run_jjj(dir: &std::path::Path, args: &[&str]) -> std::process::Output {
-    let debug_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/debug/jjj");
-    // Ensure binary exists
-    if !debug_dir.exists() {
-        panic!(
-            "jjj binary not found at {:?}. Make sure to build first.",
-            debug_dir
-        );
-    }
-
-    Command::new(&debug_dir)
-        .current_dir(dir)
-        .args(args)
-        .output()
-        .expect("Failed to execute jjj")
-}
-
-/// Helper to setup a test repo with jj
-fn setup_test_repo() -> TempDir {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-
-    // Check if jj is installed
-    if jjj::jj::find_executable("jj").is_none() {
-        eprintln!("Skipping test: jj not found");
-        return temp_dir;
-    }
-
-    // Init jj repo
-    let status = Command::new("jj")
-        .current_dir(&temp_dir)
-        .arg("git")
-        .arg("init")
-        .status()
-        .expect("Failed to run jj init");
-
-    assert!(status.success(), "jj git init failed");
-
-    // Configure user for jj
-    Command::new("jj")
-        .current_dir(&temp_dir)
-        .args(&["config", "set", "--repo", "user.name", "Test User"])
-        .status()
-        .expect("Failed to set user name");
-
-    Command::new("jj")
-        .current_dir(&temp_dir)
-        .args(&["config", "set", "--repo", "user.email", "test@example.com"])
-        .status()
-        .expect("Failed to set user email");
-
-    temp_dir
-}
+use test_helpers::{jj_available, run_jjj, setup_test_repo};
 
 #[test]
 fn test_init_and_create_problem_solution() {
     // Skip if jj is not installed
-    if jjj::jj::find_executable("jj").is_none() {
+    if !jj_available() {
         return;
     }
 
     let temp_dir = setup_test_repo();
     let dir_path = temp_dir.path();
 
-    // 1. Run jjj init
-    let output = run_jjj(dir_path, &["init"]);
-    assert!(
-        output.status.success(),
-        "jjj init failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    // 2. Create a problem
+    // 1. Create a problem
     let output = run_jjj(dir_path, &["problem", "new", "Integration Problem"]);
     assert!(
         output.status.success(),
@@ -118,18 +56,14 @@ fn test_init_and_create_problem_solution() {
 #[test]
 fn test_critique_workflow() {
     // Skip if jj is not installed
-    if jjj::jj::find_executable("jj").is_none() {
+    if !jj_available() {
         return;
     }
 
     let temp_dir = setup_test_repo();
     let dir_path = temp_dir.path();
 
-    // 1. Initialize
-    let output = run_jjj(dir_path, &["init"]);
-    assert!(output.status.success());
-
-    // 2. Create problem and solution
+    // 1. Create problem and solution
     run_jjj(dir_path, &["problem", "new", "Test Problem"]);
     run_jjj(
         dir_path,
@@ -170,17 +104,14 @@ fn test_critique_workflow() {
 #[test]
 fn test_problem_hierarchy() {
     // Skip if jj is not installed
-    if jjj::jj::find_executable("jj").is_none() {
+    if !jj_available() {
         return;
     }
 
     let temp_dir = setup_test_repo();
     let dir_path = temp_dir.path();
 
-    // 1. Initialize
-    run_jjj(dir_path, &["init"]);
-
-    // 2. Create parent problem
+    // 1. Create parent problem
     let output = run_jjj(dir_path, &["problem", "new", "Parent Problem"]);
     assert!(output.status.success());
 
@@ -214,13 +145,12 @@ fn test_problem_hierarchy() {
 
 #[test]
 fn test_problem_priority() {
-    if jjj::jj::find_executable("jj").is_none() {
+    if !jj_available() {
         return;
     }
 
     let temp_dir = setup_test_repo();
     let dir_path = temp_dir.path();
-    run_jjj(dir_path, &["init"]);
 
     // Create with P0 priority
     let output = run_jjj(
@@ -257,13 +187,12 @@ fn test_problem_priority() {
 
 #[test]
 fn test_problem_dissolve_reason() {
-    if jjj::jj::find_executable("jj").is_none() {
+    if !jj_available() {
         return;
     }
 
     let temp_dir = setup_test_repo();
     let dir_path = temp_dir.path();
-    run_jjj(dir_path, &["init"]);
 
     let output = run_jjj(dir_path, &["problem", "new", "Ghost bug"]);
     assert!(output.status.success());
@@ -300,13 +229,12 @@ fn test_problem_dissolve_reason() {
 
 #[test]
 fn test_solution_supersedes() {
-    if jjj::jj::find_executable("jj").is_none() {
+    if !jj_available() {
         return;
     }
 
     let temp_dir = setup_test_repo();
     let dir_path = temp_dir.path();
-    run_jjj(dir_path, &["init"]);
 
     run_jjj(dir_path, &["problem", "new", "Slow queries"]);
     run_jjj(
@@ -350,13 +278,12 @@ fn test_solution_supersedes() {
 
 #[test]
 fn test_solve_warns_active_solutions() {
-    if jjj::jj::find_executable("jj").is_none() {
+    if !jj_available() {
         return;
     }
 
     let temp_dir = setup_test_repo();
     let dir_path = temp_dir.path();
-    run_jjj(dir_path, &["init"]);
 
     run_jjj(dir_path, &["problem", "new", "Fix auth"]);
     run_jjj(
@@ -385,13 +312,12 @@ fn test_solve_warns_active_solutions() {
 
 #[test]
 fn test_next_priority_sorting() {
-    if jjj::jj::find_executable("jj").is_none() {
+    if !jj_available() {
         return;
     }
 
     let temp_dir = setup_test_repo();
     let dir_path = temp_dir.path();
-    run_jjj(dir_path, &["init"]);
 
     // Create problems with different priorities
     run_jjj(
@@ -458,13 +384,12 @@ fn test_next_priority_sorting() {
 
 #[test]
 fn test_critique_new_with_reviewer() {
-    if jjj::jj::find_executable("jj").is_none() {
+    if !jj_available() {
         return;
     }
     let temp_dir = setup_test_repo();
     let dir = temp_dir.path();
 
-    run_jjj(dir, &["init"]);
     run_jjj(dir, &["problem", "new", "Test problem"]);
     run_jjj(
         dir,
@@ -516,13 +441,12 @@ fn test_critique_new_with_reviewer() {
 
 #[test]
 fn test_critique_list_filter_by_reviewer() {
-    if jjj::jj::find_executable("jj").is_none() {
+    if !jj_available() {
         return;
     }
     let temp_dir = setup_test_repo();
     let dir = temp_dir.path();
 
-    run_jjj(dir, &["init"]);
     run_jjj(dir, &["problem", "new", "Test problem"]);
     run_jjj(
         dir,
@@ -584,13 +508,12 @@ fn test_critique_list_filter_by_reviewer() {
 
 #[test]
 fn test_solution_new_with_reviewer() {
-    if jjj::jj::find_executable("jj").is_none() {
+    if !jj_available() {
         return;
     }
     let temp_dir = setup_test_repo();
     let dir = temp_dir.path();
 
-    run_jjj(dir, &["init"]);
     run_jjj(dir, &["problem", "new", "Test problem"]);
     let output = run_jjj(
         dir,
@@ -633,13 +556,12 @@ fn test_solution_new_with_reviewer() {
 
 #[test]
 fn test_solution_new_with_multiple_reviewers() {
-    if jjj::jj::find_executable("jj").is_none() {
+    if !jj_available() {
         return;
     }
     let temp_dir = setup_test_repo();
     let dir = temp_dir.path();
 
-    run_jjj(dir, &["init"]);
     run_jjj(dir, &["problem", "new", "Test problem"]);
     let output = run_jjj(
         dir,
@@ -700,7 +622,7 @@ fn test_solution_new_with_multiple_reviewers() {
 
 #[test]
 fn test_status_shows_review_needed() {
-    if jjj::jj::find_executable("jj").is_none() {
+    if !jj_available() {
         return;
     }
     let temp_dir = setup_test_repo();
@@ -713,7 +635,6 @@ fn test_status_shows_review_needed() {
         .output()
         .expect("Failed to set git user");
 
-    run_jjj(dir, &["init"]);
     run_jjj(dir, &["problem", "new", "Test problem"]);
     run_jjj(
         dir,

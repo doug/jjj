@@ -88,7 +88,7 @@ fn sync_pull(ctx: &CommandContext, provider: &GitHubProvider, dry_run: bool) -> 
                 // and inline threads since both use github_review_id for dedup).
                 let existing_review_ids: std::collections::HashSet<u64> = ctx
                     .store
-                    .get_critiques_for_solution(&solution.id)?
+                    .list_critiques_for_solution(&solution.id)?
                     .iter()
                     .filter_map(|c| c.github_review_id)
                     .collect();
@@ -210,8 +210,7 @@ fn sync_pull(ctx: &CommandContext, provider: &GitHubProvider, dry_run: bool) -> 
                 // Save all new critiques in a single metadata commit.
                 if !new_critiques.is_empty() {
                     let n = new_critiques.len();
-                    let commit_msg =
-                        format!("GitHub sync: {} review(s) for PR #{}", n, pr_number);
+                    let commit_msg = format!("GitHub sync: {} review(s) for PR #{}", n, pr_number);
                     ctx.store.with_metadata(&commit_msg, || {
                         for (critique, event, _) in &new_critiques {
                             ctx.store.set_pending_event(event.clone());
@@ -446,8 +445,14 @@ fn sync_pr(
     // Set the bookmark on the solution's change.
     // --ignore-working-copy: main workspace may be stale from a prior
     // commit_changes(); bookmark set doesn't touch the working copy.
-    ctx.jj()
-        .execute(&["--ignore-working-copy", "bookmark", "set", &branch, "-r", change_id])?;
+    ctx.jj().execute(&[
+        "--ignore-working-copy",
+        "bookmark",
+        "set",
+        &branch,
+        "-r",
+        change_id,
+    ])?;
 
     // Push the branch
     ctx.jj().execute(&["git", "push", "--bookmark", &branch])?;
@@ -691,7 +696,7 @@ fn sync_reopen(
 
 /// Push local state to GitHub: refresh PR bodies and reconcile issue open/closed state.
 fn sync_push(ctx: &CommandContext, provider: &GitHubProvider, dry_run: bool) -> Result<()> {
-    use crate::models::{ProblemStatus};
+    use crate::models::ProblemStatus;
     let solutions = ctx.store.list_solutions()?;
     let problems = ctx.store.list_problems()?;
 
@@ -709,7 +714,7 @@ fn sync_push(ctx: &CommandContext, provider: &GitHubProvider, dry_run: bool) -> 
             None => continue,
         };
 
-        let critiques = ctx.store.get_critiques_for_solution(&solution.id)?;
+        let critiques = ctx.store.list_critiques_for_solution(&solution.id)?;
         let new_body = crate::sync::github::mapping::format_pr_body(solution, problem, &critiques);
 
         if dry_run {
@@ -741,10 +746,7 @@ fn sync_push(ctx: &CommandContext, provider: &GitHubProvider, dry_run: bool) -> 
         let live_status = match provider.issue_status(issue_number) {
             Ok(s) => s,
             Err(e) => {
-                eprintln!(
-                    "  Warning: could not check issue #{}: {}",
-                    issue_number, e
-                );
+                eprintln!("  Warning: could not check issue #{}: {}", issue_number, e);
                 continue;
             }
         };

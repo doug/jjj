@@ -27,7 +27,16 @@ pub fn execute(ctx: &CommandContext, action: ProblemAction) -> Result<()> {
             assignee,
             sort,
             json,
-        } => list_problems(ctx, status, tree, milestone, search.as_deref(), assignee, &sort, json),
+        } => list_problems(
+            ctx,
+            status,
+            tree,
+            milestone,
+            search.as_deref(),
+            assignee,
+            &sort,
+            json,
+        ),
         ProblemAction::Show { problem_id, json } => show_problem(ctx, problem_id, json),
         ProblemAction::Edit {
             problem_id,
@@ -37,8 +46,15 @@ pub fn execute(ctx: &CommandContext, action: ProblemAction) -> Result<()> {
             parent,
         } => edit_problem(ctx, problem_id, title, status, priority, parent),
         ProblemAction::Tree { problem_id } => show_tree(ctx, problem_id),
-        ProblemAction::Solve { problem_id, github_close } => solve_problem(ctx, problem_id, github_close),
-        ProblemAction::Dissolve { problem_id, reason, github_close } => dissolve_problem(ctx, problem_id, reason, github_close),
+        ProblemAction::Solve {
+            problem_id,
+            github_close,
+        } => solve_problem(ctx, problem_id, github_close),
+        ProblemAction::Dissolve {
+            problem_id,
+            reason,
+            github_close,
+        } => dissolve_problem(ctx, problem_id, reason, github_close),
         ProblemAction::Assign { problem_id, to } => assign_problem(ctx, problem_id, to),
         ProblemAction::Reopen { problem_id } => reopen_problem(ctx, problem_id),
         ProblemAction::Duplicate { problem_id, of } => duplicate_problem(ctx, problem_id, of),
@@ -177,8 +193,13 @@ fn new_problem(
     let pid = created_id.into_inner();
     if !pid.is_empty() {
         if let Ok(mut problem) = ctx.store.load_problem(&pid) {
-            let has_rules = ctx.store.load_config().ok()
-                .map(|c| crate::automation::has_explicit_rule(&c.automation, "problem_created"))
+            let has_rules = ctx
+                .store
+                .load_config()
+                .ok()
+                .map(|c| {
+                    crate::automation::has_explicit_rule(&c.automation, &EventType::ProblemCreated)
+                })
                 .unwrap_or(false);
             if !has_rules {
                 crate::sync::hooks::auto_create_issue(ctx, &mut problem);
@@ -308,7 +329,7 @@ fn print_problem_tree(store: &MetadataStore, problem: &Problem, depth: usize) ->
     };
 
     // Get solution count
-    let solutions = store.get_solutions_for_problem(&problem.id)?;
+    let solutions = store.list_solutions_for_problem(&problem.id)?;
     let solution_info = if solutions.is_empty() {
         String::new()
     } else {
@@ -325,7 +346,7 @@ fn print_problem_tree(store: &MetadataStore, problem: &Problem, depth: usize) ->
     );
 
     // Recursively print children
-    let children = store.get_subproblems(&problem.id)?;
+    let children = store.list_subproblems(&problem.id)?;
     for child in &children {
         print_problem_tree(store, child, depth + 1)?;
     }
@@ -376,7 +397,7 @@ fn show_problem(ctx: &CommandContext, problem_input: String, json: bool) -> Resu
     }
 
     // Show solutions
-    let solutions = store.get_solutions_for_problem(&problem_id)?;
+    let solutions = store.list_solutions_for_problem(&problem_id)?;
     if !solutions.is_empty() {
         println!("\n## Solutions ({})", solutions.len());
         for solution in &solutions {
@@ -394,7 +415,7 @@ fn show_problem(ctx: &CommandContext, problem_input: String, json: bool) -> Resu
     }
 
     // Show subproblems
-    let subproblems = store.get_subproblems(&problem_id)?;
+    let subproblems = store.list_subproblems(&problem_id)?;
     if !subproblems.is_empty() {
         println!("\n## Sub-problems ({})", subproblems.len());
         for sub in &subproblems {
@@ -447,7 +468,7 @@ fn edit_problem(
 
             // Guard: solved requires at least one accepted solution
             if new_status == ProblemStatus::Solved {
-                let solutions = store.get_solutions_for_problem(&problem_id)?;
+                let solutions = store.list_solutions_for_problem(&problem_id)?;
                 let has_accepted = solutions.iter().any(|s| {
                     s.status == crate::models::SolutionStatus::Approved
                 });
@@ -495,7 +516,7 @@ fn show_tree(ctx: &CommandContext, problem_input: Option<String>) -> Result<()> 
         let problem = store.load_problem(&problem_id)?;
         print_problem_tree(store, &problem, 0)?;
     } else {
-        let root_problems = store.get_root_problems()?;
+        let root_problems = store.list_root_problems()?;
         if root_problems.is_empty() {
             println!("No problems found.");
             return Ok(());
@@ -564,8 +585,11 @@ fn solve_problem(ctx: &CommandContext, problem_input: String, github_close: bool
 
     // Auto-close GitHub issue if explicitly requested or configured
     if let Ok(problem) = ctx.store.load_problem(&problem_id) {
-        let has_rules = ctx.store.load_config().ok()
-            .map(|c| crate::automation::has_explicit_rule(&c.automation, "problem_solved"))
+        let has_rules = ctx
+            .store
+            .load_config()
+            .ok()
+            .map(|c| crate::automation::has_explicit_rule(&c.automation, &EventType::ProblemSolved))
             .unwrap_or(false);
         if !has_rules {
             crate::sync::hooks::auto_close_issue(ctx, &problem, github_close);
@@ -590,7 +614,11 @@ fn dissolve_problem(
 
     // Create event for decision log
     let user = store.get_current_user()?;
-    let mut event = Event::new(EventType::ProblemDissolved, problem_id.clone(), user.clone());
+    let mut event = Event::new(
+        EventType::ProblemDissolved,
+        problem_id.clone(),
+        user.clone(),
+    );
     if let Some(ref r) = reason {
         event = event.with_rationale(r);
     }
@@ -613,14 +641,23 @@ fn dissolve_problem(
 
     // Auto-close GitHub issue if explicitly requested or configured
     if let Ok(problem) = ctx.store.load_problem(&problem_id) {
-        let has_rules = ctx.store.load_config().ok()
-            .map(|c| crate::automation::has_explicit_rule(&c.automation, "problem_dissolved"))
+        let has_rules = ctx
+            .store
+            .load_config()
+            .ok()
+            .map(|c| {
+                crate::automation::has_explicit_rule(&c.automation, &EventType::ProblemDissolved)
+            })
             .unwrap_or(false);
         if !has_rules {
             crate::sync::hooks::auto_close_issue(ctx, &problem, github_close);
         }
 
-        let event = Event::new(EventType::ProblemDissolved, problem_id.clone(), user.clone());
+        let event = Event::new(
+            EventType::ProblemDissolved,
+            problem_id.clone(),
+            user.clone(),
+        );
         crate::automation::run(ctx, &event, &problem_id);
     }
 
@@ -658,7 +695,10 @@ fn reopen_problem(ctx: &CommandContext, problem_input: String) -> Result<()> {
     let problem_id = ctx.resolve_problem(&problem_input)?;
 
     let problem = store.load_problem(&problem_id)?;
-    if !matches!(problem.status, ProblemStatus::Solved | ProblemStatus::Dissolved) {
+    if !matches!(
+        problem.status,
+        ProblemStatus::Solved | ProblemStatus::Dissolved
+    ) {
         return Err(crate::error::JjjError::Validation(format!(
             "Problem '{}' is {} — only solved or dissolved problems can be reopened.",
             problem.title, problem.status
@@ -782,9 +822,8 @@ fn graph_problems(
 
     // Filter by status unless --all
     if !show_all {
-        problems.retain(|p| {
-            p.status == ProblemStatus::Open || p.status == ProblemStatus::InProgress
-        });
+        problems
+            .retain(|p| p.status == ProblemStatus::Open || p.status == ProblemStatus::InProgress);
     }
 
     // Filter by milestone
@@ -798,8 +837,7 @@ fn graph_problems(
     }
 
     // Build set of IDs in filtered set
-    let id_set: std::collections::HashSet<&str> =
-        problems.iter().map(|p| p.id.as_str()).collect();
+    let id_set: std::collections::HashSet<&str> = problems.iter().map(|p| p.id.as_str()).collect();
 
     // Find roots: problems whose parent is None or not in the filtered set
     let roots: Vec<&Problem> = problems
@@ -818,10 +856,7 @@ fn graph_problems(
     for p in &problems {
         if let Some(ref parent_id) = p.parent_id {
             if id_set.contains(parent_id.as_str()) {
-                children_map
-                    .entry(parent_id.as_str())
-                    .or_default()
-                    .push(p);
+                children_map.entry(parent_id.as_str()).or_default().push(p);
             }
         }
     }
@@ -859,12 +894,21 @@ fn print_graph_node(
         // Root node — no connector
         println!("{} {} [{}]", icon, problem.title, problem.status);
     } else if is_last {
-        println!("{}└─ {} {} [{}]", prefix, icon, problem.title, problem.status);
+        println!(
+            "{}└─ {} {} [{}]",
+            prefix, icon, problem.title, problem.status
+        );
     } else {
-        println!("{}├─ {} {} [{}]", prefix, icon, problem.title, problem.status);
+        println!(
+            "{}├─ {} {} [{}]",
+            prefix, icon, problem.title, problem.status
+        );
     }
 
-    let children = children_map.get(problem.id.as_str()).map(|v| v.as_slice()).unwrap_or(&[]);
+    let children = children_map
+        .get(problem.id.as_str())
+        .map(|v| v.as_slice())
+        .unwrap_or(&[]);
     let mut new_stack = prefix_stack.to_vec();
     new_stack.push(is_last);
     for (i, child) in children.iter().enumerate() {

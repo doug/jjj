@@ -740,7 +740,10 @@ mod tests {
         ]);
 
         let parsed = parse_review_threads(&threads);
-        assert!(parsed.is_empty(), "Threads without databaseId should be skipped");
+        assert!(
+            parsed.is_empty(),
+            "Threads without databaseId should be skipped"
+        );
     }
 
     #[test]

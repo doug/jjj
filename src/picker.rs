@@ -40,9 +40,7 @@ fn pick_interactive(matches: &[ResolveMatch], entity_type: &str) -> Result<Strin
     io::stderr().flush().map_err(JjjError::Io)?;
 
     let mut input = String::new();
-    io::stdin()
-        .read_line(&mut input)
-        .map_err(JjjError::Io)?;
+    io::stdin().read_line(&mut input).map_err(JjjError::Io)?;
 
     let trimmed = input.trim();
     if trimmed.is_empty() {

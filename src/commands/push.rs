@@ -144,7 +144,7 @@ fn check_and_prompt_accept_solve(store: &MetadataStore) -> Result<()> {
         .filter(|s| s.is_active() && s.assignee.as_deref() == Some(&user))
     {
         // Check if all critiques are resolved
-        let critiques = store.get_critiques_for_solution(&solution.id)?;
+        let critiques = store.list_critiques_for_solution(&solution.id)?;
         let open_critiques: Vec<_> = critiques
             .iter()
             .filter(|c| c.status == CritiqueStatus::Open)

@@ -184,12 +184,16 @@ impl std::str::FromStr for CritiqueSeverity {
 
 impl Critique {
     /// Create a new critique of a solution
-    pub fn new(id: String, title: String, solution_id: String) -> Self {
+    pub fn new(
+        id: impl Into<String>,
+        title: impl Into<String>,
+        solution_id: impl Into<String>,
+    ) -> Self {
         let now = Utc::now();
         Self {
-            id,
-            title,
-            solution_id,
+            id: id.into(),
+            title: title.into(),
+            solution_id: solution_id.into(),
             status: CritiqueStatus::Open,
             severity: CritiqueSeverity::Medium,
             author: None,
@@ -268,12 +272,12 @@ impl Critique {
     }
 
     /// Add a reply to the discussion
-    pub fn add_reply(&mut self, author: String, body: String) {
+    pub fn add_reply(&mut self, author: impl Into<String>, body: impl Into<String>) {
         let reply_num = self.replies.len() + 1;
         let reply = Reply {
             id: format!("{}-r{}", self.id, reply_num),
-            author,
-            body,
+            author: author.into(),
+            body: body.into(),
             created_at: Utc::now(),
         };
         self.replies.push(reply);
@@ -283,14 +287,14 @@ impl Critique {
     /// Set code location for this critique
     pub fn set_location(
         &mut self,
-        file_path: String,
+        file_path: impl Into<String>,
         line_start: usize,
         line_end: Option<usize>,
         code_context: Vec<String>,
         context_before: Vec<String>,
         context_after: Vec<String>,
     ) {
-        self.file_path = Some(file_path);
+        self.file_path = Some(file_path.into());
         self.line_start = Some(line_start);
         self.line_end = line_end.or(Some(line_start));
         self.code_context = code_context;

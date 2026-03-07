@@ -15,12 +15,12 @@ pub fn execute(ctx: &CommandContext, problem_input: String, json: bool) -> Resul
     let all_events = store.list_events()?;
 
     // Find related entity IDs (solutions and critiques for this problem)
-    let solutions = store.get_solutions_for_problem(&problem_id)?;
+    let solutions = store.list_solutions_for_problem(&problem_id)?;
     let solution_ids: Vec<String> = solutions.iter().map(|s| s.id.clone()).collect();
 
     let mut critique_ids: Vec<String> = Vec::new();
     for s in &solutions {
-        let critiques = store.get_critiques_for_solution(&s.id)?;
+        let critiques = store.list_critiques_for_solution(&s.id)?;
         for c in critiques {
             critique_ids.push(c.id.clone());
         }
@@ -159,4 +159,3 @@ fn format_event_description(event: &Event) -> String {
         }
     }
 }
-

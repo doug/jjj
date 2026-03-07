@@ -2,32 +2,14 @@
 //!
 //! These tests create a bare git repo as a "remote" to test actual push/fetch functionality.
 
-use std::path::PathBuf;
+mod test_helpers;
+
 use std::process::Command;
 use tempfile::TempDir;
-
-/// Helper to get the jjj binary path
-fn jjj_binary() -> PathBuf {
-    let debug_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/debug/jjj");
-    if !debug_dir.exists() {
-        panic!(
-            "jjj binary not found at {:?}. Make sure to build first.",
-            debug_dir
-        );
-    }
-    debug_dir
-}
-
-/// Helper to run the jjj binary
-fn run_jjj(dir: &std::path::Path, args: &[&str]) -> std::process::Output {
-    Command::new(&jjj_binary())
-        .current_dir(dir)
-        .args(args)
-        .output()
-        .expect("Failed to execute jjj")
-}
+use test_helpers::run_jjj;
 
 /// Helper to run jj command
+#[allow(dead_code)]
 fn run_jj(dir: &std::path::Path, args: &[&str]) -> std::process::Output {
     Command::new("jj")
         .current_dir(dir)

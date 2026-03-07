@@ -22,7 +22,12 @@ pub struct GitHubProvider {
 
 impl GitHubProvider {
     /// Create a new GitHubProvider.
-    pub fn new(client: GhClient, repo_override: Option<String>, problem_label: String, label_priority: std::collections::HashMap<String, String>) -> Self {
+    pub fn new(
+        client: GhClient,
+        repo_override: Option<String>,
+        problem_label: String,
+        label_priority: std::collections::HashMap<String, String>,
+    ) -> Self {
         Self {
             client,
             repo_override,
@@ -90,7 +95,11 @@ impl SyncProvider for GitHubProvider {
         Ok(problem)
     }
 
-    fn list_unlinked_issues(&self, existing: &[(String, u64)], label: Option<&str>) -> Result<Vec<(u64, String)>> {
+    fn list_unlinked_issues(
+        &self,
+        existing: &[(String, u64)],
+        label: Option<&str>,
+    ) -> Result<Vec<(u64, String)>> {
         let issues = self.client.list_issues(label, "open")?;
         let linked_numbers: std::collections::HashSet<u64> =
             existing.iter().map(|(_, n)| *n).collect();

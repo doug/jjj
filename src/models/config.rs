@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+use super::event::EventType;
+
 fn default_true() -> bool {
     true
 }
@@ -61,16 +63,28 @@ impl Default for GitHubConfig {
     }
 }
 
+/// Built-in automation actions and the generic "shell" escape hatch.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AutomationAction {
+    Shell,
+    GithubPr,
+    GithubMerge,
+    GithubClose,
+    GithubIssue,
+    GithubSync,
+}
+
 /// A single automation rule: when event `on` fires, execute `action`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AutomationRule {
-    /// Event type to match (snake_case, e.g., "solution_submitted")
-    pub on: String,
+    /// Event type to match (e.g., `EventType::SolutionSubmitted`)
+    pub on: EventType,
 
-    /// Action to perform: built-in name ("github_pr", "github_close", etc.) or "shell"
-    pub action: String,
+    /// Action to perform: built-in name or `Shell`
+    pub action: AutomationAction,
 
-    /// Shell command template (required when action = "shell")
+    /// Shell command template (required when action = Shell)
     #[serde(default)]
     pub command: Option<String>,
 

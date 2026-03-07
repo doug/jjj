@@ -10,12 +10,14 @@ pub struct CommandContext {
 }
 
 impl CommandContext {
+    /// Create a new command context.
     pub fn new() -> Result<Self> {
         let jj_client = JjClient::new()?;
         let store = MetadataStore::new(jj_client)?;
         Ok(Self { store })
     }
 
+    /// Get a reference to the JJ client.
     pub fn jj(&self) -> &JjClient {
         &self.store.jj_client
     }

@@ -1,60 +1,18 @@
-use std::path::PathBuf;
+mod test_helpers;
 use std::process::Command;
-use tempfile::TempDir;
+use test_helpers::{jj_available, jjj_binary, run_jjj};
 
-/// Helper to get the jjj binary path
-fn jjj_binary() -> PathBuf {
-    let debug_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/debug/jjj");
-    if !debug_dir.exists() {
-        panic!(
-            "jjj binary not found at {:?}. Make sure to build first.",
-            debug_dir
-        );
-    }
-    debug_dir
-}
-
-/// Helper to run the jjj binary
-fn run_jjj(dir: &std::path::Path, args: &[&str]) -> std::process::Output {
-    Command::new(&jjj_binary())
-        .current_dir(dir)
-        .args(args)
-        .output()
-        .expect("Failed to execute jjj")
-}
-
-/// Helper to setup a test repo with jj
-fn setup_test_repo() -> TempDir {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    // Init jj repo
-    Command::new("jj")
-        .current_dir(&temp_dir)
-        .args(&["git", "init", "--colocate"])
-        .status()
-        .expect("Failed to run jj init");
-    Command::new("jj")
-        .current_dir(&temp_dir)
-        .args(&["config", "set", "--repo", "user.name", "Test User"])
-        .status()
-        .expect("Failed user");
-    Command::new("jj")
-        .current_dir(&temp_dir)
-        .args(&["config", "set", "--repo", "user.email", "test@example.com"])
-        .status()
-        .expect("Failed email");
-
-    // Initialize jjj
-    run_jjj(temp_dir.path(), &["init"]);
-
+/// Helper to setup a test repo with jj, jjj initialized, and a default problem
+fn setup_test_repo() -> tempfile::TempDir {
+    let temp_dir = test_helpers::setup_test_repo();
     // Create a problem to work with
     run_jjj(temp_dir.path(), &["problem", "new", "Workflow Problem"]);
-
     temp_dir
 }
 
 #[test]
 fn test_workflow_start_new_solution() {
-    if jjj::jj::find_executable("jj").is_none() {
+    if !jj_available() {
         return;
     }
     let temp_dir = setup_test_repo();
@@ -105,7 +63,7 @@ fn test_workflow_start_new_solution() {
 
 #[test]
 fn test_workflow_start_resume_solution() {
-    if jjj::jj::find_executable("jj").is_none() {
+    if !jj_available() {
         return;
     }
     let temp_dir = setup_test_repo();
@@ -148,7 +106,7 @@ fn test_workflow_start_resume_solution() {
 
 #[test]
 fn test_workflow_submit_force() {
-    if jjj::jj::find_executable("jj").is_none() {
+    if !jj_available() {
         return;
     }
     let temp_dir = setup_test_repo();
@@ -246,7 +204,7 @@ fn test_workflow_submit_force() {
 
 #[test]
 fn test_solution_status_workflow() {
-    if jjj::jj::find_executable("jj").is_none() {
+    if !jj_available() {
         return;
     }
     let temp_dir = setup_test_repo();
@@ -285,7 +243,7 @@ fn test_solution_status_workflow() {
 
 #[test]
 fn test_critique_blocks_acceptance() {
-    if jjj::jj::find_executable("jj").is_none() {
+    if !jj_available() {
         return;
     }
     let temp_dir = setup_test_repo();
@@ -332,7 +290,7 @@ fn test_critique_blocks_acceptance() {
 
 #[test]
 fn test_submit_blocked_by_critiques() {
-    if jjj::jj::find_executable("jj").is_none() {
+    if !jj_available() {
         return;
     }
     let temp_dir = setup_test_repo();
@@ -413,7 +371,7 @@ fn test_submit_blocked_by_critiques() {
 /// verifies that `jj status` in the main workspace succeeds after each one.
 #[test]
 fn test_no_stale_working_copy_after_metadata_writes() {
-    if jjj::jj::find_executable("jj").is_none() {
+    if !jj_available() {
         return;
     }
     let temp_dir = setup_test_repo();
@@ -474,14 +432,19 @@ fn test_no_stale_working_copy_after_metadata_writes() {
 
     run_jjj(
         dir,
-        &["solution", "approve", "Stale Regression Solution", "--force"],
+        &[
+            "solution",
+            "approve",
+            "Stale Regression Solution",
+            "--force",
+        ],
     );
     assert_not_stale("after submit");
 }
 
 #[test]
 fn test_submit_blocked_by_awaiting_review() {
-    if jjj::jj::find_executable("jj").is_none() {
+    if !jj_available() {
         return;
     }
     let temp_dir = setup_test_repo();
@@ -523,7 +486,7 @@ fn test_submit_blocked_by_awaiting_review() {
 
 #[test]
 fn test_events_logged_on_status_changes() {
-    if jjj::jj::find_executable("jj").is_none() {
+    if !jj_available() {
         return;
     }
     let temp_dir = setup_test_repo();

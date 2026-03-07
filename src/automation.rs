@@ -1,15 +1,14 @@
 //! Config-driven automation: fires actions in response to jjj events.
 //!
 //! Rules are defined in `config.toml` under `[[automation]]`.
-//! Each rule matches an `EventType` string and dispatches to a built-in
+//! Each rule matches an `EventType` and dispatches to a built-in
 //! action handler or shell command. Failures print warnings but never
 //! block the primary operation.
 
 use std::collections::HashMap;
 
 use crate::context::CommandContext;
-use crate::models::AutomationRule;
-use crate::models::Event;
+use crate::models::{AutomationAction, AutomationRule, Event, EventType};
 
 /// Result of executing a single automation rule.
 #[derive(Debug)]
@@ -23,6 +22,7 @@ pub enum AutomationResult {
 }
 
 /// Context carrying template variables for automation execution.
+#[derive(Debug, Clone)]
 pub struct AutomationContext {
     vars: HashMap<String, String>,
 }
@@ -40,15 +40,15 @@ impl AutomationContext {
     }
 }
 
-/// Filter rules that match a given event type string.
+/// Filter rules that match a given event type.
 fn matching_rules<'a>(
     rules: &'a [AutomationRule],
-    event_type: &str,
-) -> impl Iterator<Item = &'a AutomationRule> {
-    let event_type = event_type.to_string();
+    event_type: &EventType,
+) -> Vec<&'a AutomationRule> {
     rules
         .iter()
-        .filter(move |r| r.enabled && r.on == event_type)
+        .filter(|r| r.enabled && r.on == *event_type)
+        .collect()
 }
 
 /// Replace `{{var}}` placeholders in a template string.
@@ -65,8 +65,8 @@ fn expand_template(template: &str, vars: &HashMap<String, String>) -> String {
 /// Check whether any enabled automation rule exists for the given event type.
 ///
 /// Used by legacy `auto_*` hooks to skip when explicit rules handle the event.
-pub fn has_explicit_rule(rules: &[AutomationRule], event_type: &str) -> bool {
-    rules.iter().any(|r| r.enabled && r.on == event_type)
+pub fn has_explicit_rule(rules: &[AutomationRule], event_type: &EventType) -> bool {
+    rules.iter().any(|r| r.enabled && r.on == *event_type)
 }
 
 /// Execute a shell action with template expansion.
@@ -74,9 +74,7 @@ fn execute_shell(rule: &AutomationRule, auto_ctx: &AutomationContext) -> Automat
     let template = match &rule.command {
         Some(cmd) => cmd,
         None => {
-            return AutomationResult::Failure(
-                "Shell action requires a 'command' field".to_string(),
-            )
+            return AutomationResult::Failure("Shell action requires a 'command' field".to_string())
         }
     };
 
@@ -87,9 +85,7 @@ fn execute_shell(rule: &AutomationRule, auto_ctx: &AutomationContext) -> Automat
         .arg(&expanded)
         .status()
     {
-        Ok(status) if status.success() => {
-            AutomationResult::Success(format!("shell: {}", expanded))
-        }
+        Ok(status) if status.success() => AutomationResult::Success(format!("shell: {}", expanded)),
         Ok(status) => AutomationResult::Failure(format!(
             "shell exited {}: {}",
             status.code().unwrap_or(-1),
@@ -124,19 +120,18 @@ pub fn run(ctx: &CommandContext, event: &Event, entity_id: &str) {
     }
 
     // Try to populate entity-specific vars by loading from store
-    populate_entity_vars(ctx, &event_str, entity_id, &mut auto_ctx);
+    populate_entity_vars(ctx, &event.event_type, entity_id, &mut auto_ctx);
 
-    for rule in matching_rules(&config.automation, &event_str) {
-        let result = if rule.action == "shell" {
-            execute_shell(rule, &auto_ctx)
-        } else {
-            execute_builtin(ctx, rule, entity_id)
+    for rule in matching_rules(&config.automation, &event.event_type) {
+        let result = match rule.action {
+            AutomationAction::Shell => execute_shell(rule, &auto_ctx),
+            _ => execute_builtin(ctx, rule, entity_id),
         };
 
         match result {
             AutomationResult::Success(msg) => println!("  (auto: {})", msg),
             AutomationResult::Failure(msg) => {
-                eprintln!("  Warning: automation '{}' failed: {}", rule.action, msg)
+                eprintln!("  Warning: automation '{:?}' failed: {}", rule.action, msg)
             }
             AutomationResult::Skipped(_) => {}
         }
@@ -146,10 +141,11 @@ pub fn run(ctx: &CommandContext, event: &Event, entity_id: &str) {
 /// Populate template variables from the entity that triggered the event.
 fn populate_entity_vars(
     ctx: &CommandContext,
-    event_str: &str,
+    event_type: &EventType,
     entity_id: &str,
     auto_ctx: &mut AutomationContext,
 ) {
+    let event_str = event_type.to_string();
     if event_str.starts_with("problem_") {
         if let Ok(problem) = ctx.store.load_problem(entity_id) {
             auto_ctx.set("title", &problem.title);
@@ -197,8 +193,8 @@ fn execute_builtin(
 ) -> AutomationResult {
     use crate::sync::hooks;
 
-    match rule.action.as_str() {
-        "github_issue" => {
+    match rule.action {
+        AutomationAction::GithubIssue => {
             let mut problem = match ctx.store.load_problem(entity_id) {
                 Ok(p) => p,
                 Err(e) => return AutomationResult::Failure(e.to_string()),
@@ -208,7 +204,7 @@ fn execute_builtin(
                 Err(e) => AutomationResult::Failure(e.to_string()),
             }
         }
-        "github_close" => {
+        AutomationAction::GithubClose => {
             let problem = match ctx.store.load_problem(entity_id) {
                 Ok(p) => p,
                 Err(e) => return AutomationResult::Failure(e.to_string()),
@@ -218,7 +214,7 @@ fn execute_builtin(
                 Err(e) => AutomationResult::Failure(e.to_string()),
             }
         }
-        "github_pr" => {
+        AutomationAction::GithubPr => {
             let mut solution = match ctx.store.load_solution(entity_id) {
                 Ok(s) => s,
                 Err(e) => return AutomationResult::Failure(e.to_string()),
@@ -228,7 +224,7 @@ fn execute_builtin(
                 Err(e) => AutomationResult::Failure(e.to_string()),
             }
         }
-        "github_merge" => {
+        AutomationAction::GithubMerge => {
             let solution = match ctx.store.load_solution(entity_id) {
                 Ok(s) => s,
                 Err(e) => return AutomationResult::Failure(e.to_string()),
@@ -238,43 +234,38 @@ fn execute_builtin(
                 Err(e) => AutomationResult::Failure(e.to_string()),
             }
         }
-        "github_sync" => {
+        AutomationAction::GithubSync => {
             AutomationResult::Skipped("github_sync not yet implemented as automation".to_string())
         }
-        _ => AutomationResult::Failure(format!("Unknown action: {}", rule.action)),
+        AutomationAction::Shell => {
+            // Handled before dispatch; should never reach here
+            execute_shell(rule, &AutomationContext::new(""))
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::AutomationRule;
-
-    const BUILTIN_ACTIONS: &[&str] = &[
-        "github_pr",
-        "github_merge",
-        "github_close",
-        "github_issue",
-        "github_sync",
-    ];
+    use crate::models::{AutomationAction, AutomationRule, EventType};
 
     fn execute_rule(rule: &AutomationRule, auto_ctx: &AutomationContext) -> AutomationResult {
-        if rule.action == "shell" {
+        if rule.action == AutomationAction::Shell {
             return execute_shell(rule, auto_ctx);
         }
-        if BUILTIN_ACTIONS.contains(&rule.action.as_str()) {
+        if rule.action != AutomationAction::Shell {
             return AutomationResult::Skipped(format!(
-                "{} requires CommandContext (use run() instead)",
+                "{:?} requires CommandContext (use run() instead)",
                 rule.action
             ));
         }
-        AutomationResult::Failure(format!("Unknown action: {}", rule.action))
+        unreachable!()
     }
 
-    fn rule(on: &str, action: &str) -> AutomationRule {
+    fn rule(on: EventType, action: AutomationAction) -> AutomationRule {
         AutomationRule {
-            on: on.to_string(),
-            action: action.to_string(),
+            on,
+            action,
             command: None,
             enabled: true,
         }
@@ -285,29 +276,32 @@ mod tests {
     #[test]
     fn test_matching_rules_filters_by_event() {
         let rules = vec![
-            rule("solution_submitted", "github_pr"),
-            rule("problem_solved", "github_close"),
-            rule("solution_submitted", "shell"),
+            rule(EventType::SolutionSubmitted, AutomationAction::GithubPr),
+            rule(EventType::ProblemSolved, AutomationAction::GithubClose),
+            rule(EventType::SolutionSubmitted, AutomationAction::Shell),
         ];
-        let matched: Vec<_> = matching_rules(&rules, "solution_submitted").collect();
+        let matched = matching_rules(&rules, &EventType::SolutionSubmitted);
         assert_eq!(matched.len(), 2);
-        assert_eq!(matched[0].action, "github_pr");
-        assert_eq!(matched[1].action, "shell");
+        assert_eq!(matched[0].action, AutomationAction::GithubPr);
+        assert_eq!(matched[1].action, AutomationAction::Shell);
     }
 
     #[test]
     fn test_matching_rules_skips_disabled() {
-        let mut r = rule("solution_submitted", "github_pr");
+        let mut r = rule(EventType::SolutionSubmitted, AutomationAction::GithubPr);
         r.enabled = false;
         let rules = vec![r];
-        let matched: Vec<_> = matching_rules(&rules, "solution_submitted").collect();
+        let matched = matching_rules(&rules, &EventType::SolutionSubmitted);
         assert!(matched.is_empty());
     }
 
     #[test]
     fn test_matching_rules_no_match() {
-        let rules = vec![rule("problem_solved", "github_close")];
-        let matched: Vec<_> = matching_rules(&rules, "solution_submitted").collect();
+        let rules = vec![rule(
+            EventType::ProblemSolved,
+            AutomationAction::GithubClose,
+        )];
+        let matched = matching_rules(&rules, &EventType::SolutionSubmitted);
         assert!(matched.is_empty());
     }
 
@@ -347,23 +341,10 @@ mod tests {
     // ── execute_rule ──
 
     #[test]
-    fn test_execute_rule_unknown_action_returns_failure() {
-        let r = AutomationRule {
-            on: "problem_created".to_string(),
-            action: "nonexistent_action".to_string(),
-            command: None,
-            enabled: true,
-        };
-        let auto_ctx = AutomationContext::new("problem_created");
-        let result = execute_rule(&r, &auto_ctx);
-        assert!(matches!(result, AutomationResult::Failure(_)));
-    }
-
-    #[test]
     fn test_execute_rule_shell_missing_command_returns_failure() {
         let r = AutomationRule {
-            on: "problem_created".to_string(),
-            action: "shell".to_string(),
+            on: EventType::ProblemCreated,
+            action: AutomationAction::Shell,
             command: None,
             enabled: true,
         };
@@ -375,8 +356,8 @@ mod tests {
     #[test]
     fn test_execute_rule_shell_runs_command() {
         let r = AutomationRule {
-            on: "problem_created".to_string(),
-            action: "shell".to_string(),
+            on: EventType::ProblemCreated,
+            action: AutomationAction::Shell,
             command: Some("true".to_string()),
             enabled: true,
         };
@@ -388,8 +369,8 @@ mod tests {
     #[test]
     fn test_execute_rule_shell_expands_vars() {
         let r = AutomationRule {
-            on: "problem_created".to_string(),
-            action: "shell".to_string(),
+            on: EventType::ProblemCreated,
+            action: AutomationAction::Shell,
             command: Some("echo '{{title}}'".to_string()),
             enabled: true,
         };
@@ -401,7 +382,7 @@ mod tests {
 
     #[test]
     fn test_execute_rule_builtin_without_ctx_returns_skipped() {
-        let r = rule("problem_created", "github_issue");
+        let r = rule(EventType::ProblemCreated, AutomationAction::GithubIssue);
         let auto_ctx = AutomationContext::new("problem_created");
         let result = execute_rule(&r, &auto_ctx);
         assert!(matches!(result, AutomationResult::Skipped(_)));
@@ -412,11 +393,11 @@ mod tests {
     #[test]
     fn test_has_explicit_rule_for_event() {
         let rules = vec![
-            rule("solution_submitted", "github_pr"),
-            rule("problem_solved", "github_close"),
+            rule(EventType::SolutionSubmitted, AutomationAction::GithubPr),
+            rule(EventType::ProblemSolved, AutomationAction::GithubClose),
         ];
-        assert!(has_explicit_rule(&rules, "solution_submitted"));
-        assert!(has_explicit_rule(&rules, "problem_solved"));
-        assert!(!has_explicit_rule(&rules, "problem_created"));
+        assert!(has_explicit_rule(&rules, &EventType::SolutionSubmitted));
+        assert!(has_explicit_rule(&rules, &EventType::ProblemSolved));
+        assert!(!has_explicit_rule(&rules, &EventType::ProblemCreated));
     }
 }

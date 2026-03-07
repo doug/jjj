@@ -81,14 +81,14 @@ impl JjClient {
             })?;
 
         if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
             return Err(crate::error::JjjError::JjCommandFailed {
                 args: args.join(" "),
-                stderr: stderr.to_string(),
+                stderr,
             });
         }
 
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+        Ok(String::from_utf8_lossy(&output.stdout).into_owned())
     }
 
     /// Get the current change ID

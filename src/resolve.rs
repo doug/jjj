@@ -8,7 +8,7 @@
 use crate::id::{is_hex_prefix, is_uuid};
 
 /// Result of resolving user input to entities.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ResolveResult {
     /// Exactly one entity matched
     Single(String),
@@ -19,7 +19,7 @@ pub enum ResolveResult {
 }
 
 /// A matched entity with its ID and title.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResolveMatch {
     pub id: String,
     pub title: String,

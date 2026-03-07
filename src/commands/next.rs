@@ -15,13 +15,8 @@ pub fn execute(ctx: &CommandContext, top: Option<usize>, mine: bool, json: bool)
 
     let user = store.jj_client.user_identity().unwrap_or_default();
 
-    let items = crate::commands::status::build_next_actions(
-        &problems,
-        &solutions,
-        &critiques,
-        &user,
-        mine,
-    );
+    let items =
+        crate::commands::status::build_next_actions(&problems, &solutions, &critiques, &user, mine);
 
     if items.is_empty() {
         if json {

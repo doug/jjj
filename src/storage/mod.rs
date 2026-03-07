@@ -1,17 +1,15 @@
 use crate::error::{JjjError, Result};
 use crate::jj::JjClient;
-use crate::models::{
-    Event, ProblemStatus, ProjectConfig, SolutionStatus,
-};
+use crate::models::{Event, ProblemStatus, ProjectConfig, SolutionStatus};
 use std::cell::RefCell;
 use std::fs;
 use std::path::PathBuf;
 
+mod critiques;
+mod events;
+mod milestones;
 mod problems;
 mod solutions;
-mod critiques;
-mod milestones;
-mod events;
 
 /// Write `content` to `path` atomically by writing to a uniquely-named `.tmp`
 /// sibling first, then renaming. The temp name includes the process ID and
@@ -57,9 +55,7 @@ pub struct MetadataStore {
 
     /// Events to embed in the next commit description
     pending_events: RefCell<Vec<Event>>,
-
 }
-
 
 // =============================================================================
 // Markdown Frontmatter Parsing
@@ -91,12 +87,11 @@ fn parse_frontmatter<T: serde::de::DeserializeOwned>(content: &str) -> Result<(T
     let yaml_str = &rest[..end_pos].trim();
     let body = rest[end_pos + 4..].trim().to_string();
 
-    let frontmatter: T =
-        serde_yml::from_str(yaml_str).map_err(|e| JjjError::FrontmatterParse {
-            entity_type: String::new(),
-            entity_id: String::new(),
-            message: e.to_string(),
-        })?;
+    let frontmatter: T = serde_yml::from_str(yaml_str).map_err(|e| JjjError::FrontmatterParse {
+        entity_type: String::new(),
+        entity_id: String::new(),
+        message: e.to_string(),
+    })?;
 
     Ok((frontmatter, body))
 }
@@ -185,7 +180,6 @@ fn build_body(sections: &[(&str, &str)]) -> String {
         .join("\n\n")
 }
 
-
 impl MetadataStore {
     /// Create a new metadata store
     pub fn new(jj_client: JjClient) -> Result<Self> {
@@ -251,9 +245,7 @@ impl MetadataStore {
         if !self.meta_path.exists() {
             // Auto-initialize if the jjj bookmark has never been created.
             if !self.jj_client.bookmark_exists(META_BOOKMARK)? {
-                let change_id = self
-                    .jj_client
-                    .new_empty_change("Initialize jjj metadata")?;
+                let change_id = self.jj_client.new_empty_change("Initialize jjj metadata")?;
                 self.jj_client.create_bookmark(META_BOOKMARK, &change_id)?;
             }
             let meta_path_str = self
@@ -270,7 +262,6 @@ impl MetadataStore {
         }
         Ok(())
     }
-
 
     // =========================================================================
     // Config Operations
@@ -301,7 +292,6 @@ impl MetadataStore {
         Ok(())
     }
 
-
     // =========================================================================
     // High-Level Operations
     // =========================================================================
@@ -325,7 +315,7 @@ impl MetadataStore {
         }
 
         // Check for accepted solutions
-        let solutions = self.get_solutions_for_problem(problem_id)?;
+        let solutions = self.list_solutions_for_problem(problem_id)?;
         let has_accepted = solutions
             .iter()
             .any(|s| s.status == SolutionStatus::Approved);
@@ -335,7 +325,7 @@ impl MetadataStore {
         }
 
         // Check if all subproblems are solved
-        let subproblems = self.get_subproblems(problem_id)?;
+        let subproblems = self.list_subproblems(problem_id)?;
         if !subproblems.is_empty() {
             let all_solved = subproblems
                 .iter()
@@ -378,7 +368,7 @@ impl MetadataStore {
         }
 
         // Check for open critiques (warning but not blocking)
-        let open_critiques = self.get_open_critiques_for_solution(solution_id)?;
+        let open_critiques = self.list_open_critiques_for_solution(solution_id)?;
         if !open_critiques.is_empty() {
             return Ok((
                 true,
@@ -472,7 +462,7 @@ impl MetadataStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{ProblemFrontmatter, Priority};
+    use crate::models::{Priority, ProblemFrontmatter};
     use chrono::Utc;
 
     #[test]

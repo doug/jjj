@@ -14,10 +14,7 @@ fn extract_problem_id(output: &str) -> String {
             }
         }
     }
-    panic!(
-        "Could not extract problem ID from output: {}",
-        output
-    );
+    panic!("Could not extract problem ID from output: {}", output);
 }
 
 /// Extract the solution UUID from `jjj solution new` output.
@@ -30,10 +27,7 @@ fn extract_solution_id(output: &str) -> String {
             }
         }
     }
-    panic!(
-        "Could not extract solution ID from output: {}",
-        output
-    );
+    panic!("Could not extract solution ID from output: {}", output);
 }
 
 #[test]
@@ -66,8 +60,7 @@ fn test_timeline_with_solutions() {
     }
     let dir = setup_test_repo();
 
-    let create_output =
-        run_jjj_success(&dir, &["problem", "new", "Problem With Solutions"]);
+    let create_output = run_jjj_success(&dir, &["problem", "new", "Problem With Solutions"]);
     let problem_id = extract_problem_id(&create_output);
 
     // Create a solution attached to the problem

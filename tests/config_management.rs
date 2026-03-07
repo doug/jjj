@@ -1,4 +1,4 @@
-use jjj::models::ProjectConfig;
+use jjj::models::{AutomationAction, EventType, ProjectConfig};
 
 /// Behavior: Creating default configuration
 #[test]
@@ -152,12 +152,15 @@ enabled = false
 "#;
     let config: ProjectConfig = toml::from_str(toml_str).expect("Failed to parse");
     assert_eq!(config.automation.len(), 3);
-    assert_eq!(config.automation[0].on, "solution_submitted");
-    assert_eq!(config.automation[0].action, "github_pr");
+    assert_eq!(config.automation[0].on, EventType::SolutionSubmitted);
+    assert_eq!(config.automation[0].action, AutomationAction::GithubPr);
     assert!(config.automation[0].enabled);
     assert!(config.automation[0].command.is_none());
-    assert_eq!(config.automation[1].action, "shell");
-    assert_eq!(config.automation[1].command.as_deref(), Some("echo '{{title}}'"));
+    assert_eq!(config.automation[1].action, AutomationAction::Shell);
+    assert_eq!(
+        config.automation[1].command.as_deref(),
+        Some("echo '{{title}}'")
+    );
     assert!(!config.automation[2].enabled);
 }
 
@@ -180,6 +183,9 @@ action = "github_close"
     let serialized = toml::to_string(&config).expect("serialize");
     let roundtrip: ProjectConfig = toml::from_str(&serialized).expect("re-parse");
     assert_eq!(roundtrip.automation.len(), 1);
-    assert_eq!(roundtrip.automation[0].on, "problem_solved");
-    assert_eq!(roundtrip.automation[0].action, "github_close");
+    assert_eq!(roundtrip.automation[0].on, EventType::ProblemSolved);
+    assert_eq!(
+        roundtrip.automation[0].action,
+        AutomationAction::GithubClose
+    );
 }

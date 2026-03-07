@@ -127,7 +127,11 @@ pub struct UiState {
     pub related_cache: HashMap<(String, String), Vec<SimilarityResult>>,
     /// In-flight background load: `(entity_type, entity_id, receiver)`.
     /// Dropped (cancelling the load) when the selection changes.
-    pub related_rx: Option<(String, String, std::sync::mpsc::Receiver<Vec<SimilarityResult>>)>,
+    pub related_rx: Option<(
+        String,
+        String,
+        std::sync::mpsc::Receiver<Vec<SimilarityResult>>,
+    )>,
 }
 
 impl Default for UiState {
@@ -195,12 +199,8 @@ impl App {
         }
 
         let user = store.jj_client.user_identity().unwrap_or_default();
-        let next_actions = super::build_next_actions(
-            &data.problems,
-            &data.solutions,
-            &data.critiques,
-            &user,
-        );
+        let next_actions =
+            super::build_next_actions(&data.problems, &data.solutions, &data.critiques, &user);
         let tree_items = super::build_flat_tree(
             &data.milestones,
             &data.problems,
@@ -218,7 +218,11 @@ impl App {
 
         // Store the db path for background queries (no connection held open)
         let db_path = store.jj_client.repo_root().join(".jj").join("jjj.db");
-        let db_path = if db_path.exists() { Some(db_path) } else { None };
+        let db_path = if db_path.exists() {
+            Some(db_path)
+        } else {
+            None
+        };
 
         let mut app = Self {
             should_quit: false,

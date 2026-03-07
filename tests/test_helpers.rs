@@ -1,5 +1,13 @@
+#![allow(dead_code)]
+
+use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use tempfile::TempDir;
+
+/// Get the path to the jjj binary built by cargo.
+pub fn jjj_binary() -> PathBuf {
+    PathBuf::from(env!("CARGO_BIN_EXE_jjj"))
+}
 
 /// Creates an isolated jj repo with jjj initialized for testing
 pub fn setup_test_repo() -> TempDir {
@@ -25,7 +33,7 @@ pub fn setup_test_repo() -> TempDir {
         .status()
         .expect("Failed to set user email");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_jjj"))
+    let output = Command::new(jjj_binary())
         .arg("init")
         .current_dir(dir.path())
         .output()
@@ -35,16 +43,16 @@ pub fn setup_test_repo() -> TempDir {
     dir
 }
 
-pub fn run_jjj(dir: &TempDir, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_jjj"))
+pub fn run_jjj(dir: impl AsRef<Path>, args: &[&str]) -> Output {
+    Command::new(jjj_binary())
         .args(args)
-        .current_dir(dir.path())
+        .current_dir(dir.as_ref())
         .output()
         .expect("Failed to run jjj command")
 }
 
-pub fn run_jjj_success(dir: &TempDir, args: &[&str]) -> String {
-    let output = run_jjj(dir, args);
+pub fn run_jjj_success(dir: impl AsRef<Path>, args: &[&str]) -> String {
+    let output = run_jjj(dir.as_ref(), args);
     assert!(
         output.status.success(),
         "Command failed: jjj {}\nstdout: {}\nstderr: {}",
@@ -52,7 +60,7 @@ pub fn run_jjj_success(dir: &TempDir, args: &[&str]) -> String {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
-    String::from_utf8_lossy(&output.stdout).to_string()
+    String::from_utf8_lossy(&output.stdout).into_owned()
 }
 
 /// Check if jj is available; tests should skip if not
