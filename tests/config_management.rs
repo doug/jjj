@@ -131,3 +131,55 @@ fn test_extensive_project_settings() {
         Some(&"team@example.com".to_string())
     );
 }
+
+/// Behavior: Automation rules deserialize from TOML
+#[test]
+fn test_automation_rules_deserialized() {
+    let toml_str = r#"
+[[automation]]
+on = "solution_submitted"
+action = "github_pr"
+
+[[automation]]
+on = "critique_raised"
+action = "shell"
+command = "echo '{{title}}'"
+
+[[automation]]
+on = "problem_created"
+action = "github_issue"
+enabled = false
+"#;
+    let config: ProjectConfig = toml::from_str(toml_str).expect("Failed to parse");
+    assert_eq!(config.automation.len(), 3);
+    assert_eq!(config.automation[0].on, "solution_submitted");
+    assert_eq!(config.automation[0].action, "github_pr");
+    assert!(config.automation[0].enabled);
+    assert!(config.automation[0].command.is_none());
+    assert_eq!(config.automation[1].action, "shell");
+    assert_eq!(config.automation[1].command.as_deref(), Some("echo '{{title}}'"));
+    assert!(!config.automation[2].enabled);
+}
+
+/// Behavior: Empty automation rules by default
+#[test]
+fn test_automation_rules_default_empty() {
+    let config = ProjectConfig::default();
+    assert!(config.automation.is_empty());
+}
+
+/// Behavior: Config with automation roundtrips through TOML
+#[test]
+fn test_automation_roundtrip_toml() {
+    let toml_str = r#"
+[[automation]]
+on = "problem_solved"
+action = "github_close"
+"#;
+    let config: ProjectConfig = toml::from_str(toml_str).expect("parse");
+    let serialized = toml::to_string(&config).expect("serialize");
+    let roundtrip: ProjectConfig = toml::from_str(&serialized).expect("re-parse");
+    assert_eq!(roundtrip.automation.len(), 1);
+    assert_eq!(roundtrip.automation[0].on, "problem_solved");
+    assert_eq!(roundtrip.automation[0].action, "github_close");
+}

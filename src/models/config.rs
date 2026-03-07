@@ -61,6 +61,24 @@ impl Default for GitHubConfig {
     }
 }
 
+/// A single automation rule: when event `on` fires, execute `action`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AutomationRule {
+    /// Event type to match (snake_case, e.g., "solution_submitted")
+    pub on: String,
+
+    /// Action to perform: built-in name ("github_pr", "github_close", etc.) or "shell"
+    pub action: String,
+
+    /// Shell command template (required when action = "shell")
+    #[serde(default)]
+    pub command: Option<String>,
+
+    /// Enable/disable without removing the rule (default: true)
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
+
 /// Project-wide configuration stored in config.toml
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ProjectConfig {
@@ -79,4 +97,8 @@ pub struct ProjectConfig {
     /// GitHub integration settings
     #[serde(default)]
     pub github: GitHubConfig,
+
+    /// Automation rules — fire actions on jjj events
+    #[serde(default)]
+    pub automation: Vec<AutomationRule>,
 }
