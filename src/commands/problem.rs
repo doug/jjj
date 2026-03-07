@@ -173,11 +173,19 @@ fn new_problem(
         Ok(())
     })?;
 
-    // Auto-push to GitHub if enabled (outside transaction, non-blocking)
+    // Automation: fire rules for problem_created, with legacy auto_push fallback
     let pid = created_id.into_inner();
     if !pid.is_empty() {
         if let Ok(mut problem) = ctx.store.load_problem(&pid) {
-            crate::sync::hooks::auto_create_issue(ctx, &mut problem);
+            let has_rules = ctx.store.load_config().ok()
+                .map(|c| crate::automation::has_explicit_rule(&c.automation, "problem_created"))
+                .unwrap_or(false);
+            if !has_rules {
+                crate::sync::hooks::auto_create_issue(ctx, &mut problem);
+            }
+
+            let event = Event::new(EventType::ProblemCreated, pid.clone(), user.clone());
+            crate::automation::run(ctx, &event, &pid);
         }
     }
 
@@ -543,7 +551,7 @@ fn solve_problem(ctx: &CommandContext, problem_input: String, github_close: bool
 
     // Create event for decision log
     let user = store.get_current_user()?;
-    let event = Event::new(EventType::ProblemSolved, problem_id.clone(), user);
+    let event = Event::new(EventType::ProblemSolved, problem_id.clone(), user.clone());
 
     store.with_metadata(&format!("Solve problem {}", problem_id), || {
         store.set_pending_event(event.clone());
@@ -556,7 +564,15 @@ fn solve_problem(ctx: &CommandContext, problem_input: String, github_close: bool
 
     // Auto-close GitHub issue if explicitly requested or configured
     if let Ok(problem) = ctx.store.load_problem(&problem_id) {
-        crate::sync::hooks::auto_close_issue(ctx, &problem, github_close);
+        let has_rules = ctx.store.load_config().ok()
+            .map(|c| crate::automation::has_explicit_rule(&c.automation, "problem_solved"))
+            .unwrap_or(false);
+        if !has_rules {
+            crate::sync::hooks::auto_close_issue(ctx, &problem, github_close);
+        }
+
+        let event = Event::new(EventType::ProblemSolved, problem_id.clone(), user);
+        crate::automation::run(ctx, &event, &problem_id);
     }
 
     Ok(())
@@ -574,7 +590,7 @@ fn dissolve_problem(
 
     // Create event for decision log
     let user = store.get_current_user()?;
-    let mut event = Event::new(EventType::ProblemDissolved, problem_id.clone(), user);
+    let mut event = Event::new(EventType::ProblemDissolved, problem_id.clone(), user.clone());
     if let Some(ref r) = reason {
         event = event.with_rationale(r);
     }
@@ -597,7 +613,15 @@ fn dissolve_problem(
 
     // Auto-close GitHub issue if explicitly requested or configured
     if let Ok(problem) = ctx.store.load_problem(&problem_id) {
-        crate::sync::hooks::auto_close_issue(ctx, &problem, github_close);
+        let has_rules = ctx.store.load_config().ok()
+            .map(|c| crate::automation::has_explicit_rule(&c.automation, "problem_dissolved"))
+            .unwrap_or(false);
+        if !has_rules {
+            crate::sync::hooks::auto_close_issue(ctx, &problem, github_close);
+        }
+
+        let event = Event::new(EventType::ProblemDissolved, problem_id.clone(), user.clone());
+        crate::automation::run(ctx, &event, &problem_id);
     }
 
     Ok(())

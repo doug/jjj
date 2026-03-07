@@ -589,7 +589,13 @@ fn submit_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
 
         println!("Solution {} submitted for review", solution_id);
         Ok(())
-    })
+    })?;
+
+    // Automation rules
+    let event = Event::new(EventType::SolutionSubmitted, solution_id.clone(), user);
+    crate::automation::run(ctx, &event, &solution_id);
+
+    Ok(())
 }
 
 fn approve_solution(
@@ -638,6 +644,10 @@ fn approve_solution(
     let rationale_str = rationale.as_deref().filter(|_| !no_rationale);
     finalize_solution(ctx, &solution.id, force, rationale_str)?;
     println!("Solution '{}' approved.", solution.title);
+
+    // Automation rules
+    let approve_event = Event::new(EventType::SolutionApproved, solution.id.clone(), store.get_current_user().unwrap_or_default());
+    crate::automation::run(ctx, &approve_event, &solution.id);
 
     // Merge PR if one is linked.
     if let Some(pr_number) = solution.github_pr {

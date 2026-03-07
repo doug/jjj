@@ -71,6 +71,7 @@ fn new_critique(
     // Get user for event
     let user = store.get_current_user()?;
 
+    let critique_id_cell = std::cell::RefCell::new(String::new());
     store.with_metadata(
         &format!("Create critique on {}: {}", solution_id, title),
         || {
@@ -155,9 +156,19 @@ fn new_critique(
                 println!("  Location: {}:{}", fp, line.unwrap_or(0));
             }
 
+            *critique_id_cell.borrow_mut() = critique_id.clone();
             Ok(())
         },
-    )
+    )?;
+
+    // Automation rules
+    let cid = critique_id_cell.into_inner();
+    if !cid.is_empty() {
+        let event = Event::new(EventType::CritiqueRaised, cid.clone(), user.clone());
+        crate::automation::run(ctx, &event, &cid);
+    }
+
+    Ok(())
 }
 
 fn list_critiques(
