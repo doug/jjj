@@ -7,7 +7,9 @@
 
 use std::collections::HashMap;
 
+use crate::context::CommandContext;
 use crate::models::AutomationRule;
+use crate::models::Event;
 
 /// Result of executing a single automation rule.
 #[derive(Debug)]
@@ -125,6 +127,152 @@ fn execute_shell(rule: &AutomationRule, auto_ctx: &AutomationContext) -> Automat
             expanded
         )),
         Err(e) => AutomationResult::Failure(format!("shell failed: {}", e)),
+    }
+}
+
+/// Execute all matching automation rules for an event.
+///
+/// Called from command handlers after recording the event.
+/// Failures print warnings but never block the primary operation.
+pub fn run(ctx: &CommandContext, event: &Event, entity_id: &str) {
+    let config = match ctx.store.load_config() {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+
+    if config.automation.is_empty() {
+        return;
+    }
+
+    let event_str = event.event_type.to_string();
+
+    // Build template variables
+    let mut auto_ctx = AutomationContext::new(&event_str);
+    auto_ctx.set("id", &event.entity);
+    auto_ctx.set("user", &event.by);
+    if let Some(ref r) = event.rationale {
+        auto_ctx.set("rationale", r);
+    }
+
+    // Try to populate entity-specific vars by loading from store
+    populate_entity_vars(ctx, &event_str, entity_id, &mut auto_ctx);
+
+    for rule in matching_rules(&config.automation, &event_str) {
+        let result = if rule.action == "shell" {
+            execute_shell(rule, &auto_ctx)
+        } else {
+            execute_builtin(ctx, rule, entity_id)
+        };
+
+        match result {
+            AutomationResult::Success(msg) => println!("  (auto: {})", msg),
+            AutomationResult::Failure(msg) => {
+                eprintln!("  Warning: automation '{}' failed: {}", rule.action, msg)
+            }
+            AutomationResult::Skipped(_) => {}
+        }
+    }
+}
+
+/// Populate template variables from the entity that triggered the event.
+fn populate_entity_vars(
+    ctx: &CommandContext,
+    event_str: &str,
+    entity_id: &str,
+    auto_ctx: &mut AutomationContext,
+) {
+    if event_str.starts_with("problem_") {
+        if let Ok(problem) = ctx.store.load_problem(entity_id) {
+            auto_ctx.set("title", &problem.title);
+            auto_ctx.set("type", "problem");
+            if let Some(n) = problem.github_issue {
+                auto_ctx.set("issue_number", &n.to_string());
+            }
+        }
+    } else if event_str.starts_with("solution_") {
+        if let Ok(solution) = ctx.store.load_solution(entity_id) {
+            auto_ctx.set("title", &solution.title);
+            auto_ctx.set("type", "solution");
+            if let Some(n) = solution.github_pr {
+                auto_ctx.set("pr_number", &n.to_string());
+            }
+            if let Ok(problem) = ctx.store.load_problem(&solution.problem_id) {
+                auto_ctx.set("problem.title", &problem.title);
+                if let Some(n) = problem.github_issue {
+                    auto_ctx.set("issue_number", &n.to_string());
+                }
+            }
+        }
+    } else if event_str.starts_with("critique_") {
+        if let Ok(critique) = ctx.store.load_critique(entity_id) {
+            auto_ctx.set("title", &critique.title);
+            auto_ctx.set("type", "critique");
+            if let Ok(solution) = ctx.store.load_solution(&critique.solution_id) {
+                auto_ctx.set("solution.title", &solution.title);
+                if let Some(n) = solution.github_pr {
+                    auto_ctx.set("pr_number", &n.to_string());
+                }
+                if let Ok(problem) = ctx.store.load_problem(&solution.problem_id) {
+                    auto_ctx.set("problem.title", &problem.title);
+                }
+            }
+        }
+    }
+}
+
+/// Execute a built-in GitHub action.
+fn execute_builtin(
+    ctx: &CommandContext,
+    rule: &AutomationRule,
+    entity_id: &str,
+) -> AutomationResult {
+    use crate::sync::hooks;
+
+    match rule.action.as_str() {
+        "github_issue" => {
+            let mut problem = match ctx.store.load_problem(entity_id) {
+                Ok(p) => p,
+                Err(e) => return AutomationResult::Failure(e.to_string()),
+            };
+            match hooks::do_create_issue(ctx, &mut problem) {
+                Ok(()) => AutomationResult::Success("created GitHub issue".to_string()),
+                Err(e) => AutomationResult::Failure(e.to_string()),
+            }
+        }
+        "github_close" => {
+            let problem = match ctx.store.load_problem(entity_id) {
+                Ok(p) => p,
+                Err(e) => return AutomationResult::Failure(e.to_string()),
+            };
+            match hooks::do_close_issue(ctx, &problem) {
+                Ok(()) => AutomationResult::Success("closed GitHub issue".to_string()),
+                Err(e) => AutomationResult::Failure(e.to_string()),
+            }
+        }
+        "github_pr" => {
+            let mut solution = match ctx.store.load_solution(entity_id) {
+                Ok(s) => s,
+                Err(e) => return AutomationResult::Failure(e.to_string()),
+            };
+            match hooks::do_create_or_update_pr(ctx, &mut solution) {
+                Ok(()) => AutomationResult::Success("created/updated GitHub PR".to_string()),
+                Err(e) => AutomationResult::Failure(e.to_string()),
+            }
+        }
+        "github_merge" => {
+            let solution = match ctx.store.load_solution(entity_id) {
+                Ok(s) => s,
+                Err(e) => return AutomationResult::Failure(e.to_string()),
+            };
+            match hooks::do_merge_pr(ctx, &solution) {
+                Ok(()) => AutomationResult::Success("merged GitHub PR".to_string()),
+                Err(e) => AutomationResult::Failure(e.to_string()),
+            }
+        }
+        "github_sync" => {
+            AutomationResult::Skipped("github_sync not yet implemented as automation".to_string())
+        }
+        _ => AutomationResult::Failure(format!("Unknown action: {}", rule.action)),
     }
 }
 

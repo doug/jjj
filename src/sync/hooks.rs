@@ -1,6 +1,9 @@
 //! Auto-push hooks for GitHub sync.
 //!
-//! These functions are called from existing commands when `auto_push` is enabled.
+//! Functions prefixed `do_` are the bare action implementations used by
+//! both the legacy `auto_*` wrappers (driven by `auto_push` config)
+//! and the new automation rule dispatcher.
+//!
 //! Network failures print warnings but never block local operations.
 
 use crate::context::CommandContext;
@@ -8,19 +11,11 @@ use crate::models::{Problem, Solution};
 use crate::sync::github::GitHubProvider;
 use crate::sync::SyncProvider;
 
-/// Auto-create a GitHub issue after a new problem is created.
-pub fn auto_create_issue(ctx: &CommandContext, problem: &mut Problem) {
-    if let Err(e) = try_auto_create_issue(ctx, problem) {
-        eprintln!("Warning: auto-push to GitHub failed: {}", e);
-    }
-}
+// ── Bare implementations (no config guard) ─────────────────────────
 
-fn try_auto_create_issue(ctx: &CommandContext, problem: &mut Problem) -> crate::error::Result<()> {
+/// Create a GitHub issue for a problem. Mutates problem to set github_issue.
+pub fn do_create_issue(ctx: &CommandContext, problem: &mut Problem) -> crate::error::Result<()> {
     let config = ctx.store.load_config()?;
-    if !config.github.auto_push {
-        return Ok(());
-    }
-
     let repo_root = ctx.jj().repo_root();
     let provider = GitHubProvider::from_config(repo_root, &config.github)?;
     let number = provider.create_issue(problem)?;
@@ -32,29 +27,14 @@ fn try_auto_create_issue(ctx: &CommandContext, problem: &mut Problem) -> crate::
     Ok(())
 }
 
-/// Auto-close a GitHub issue after a problem is solved.
-///
-/// Triggers when any of these are true:
-/// - `force` is set (caller passed `--github-close`)
-/// - `github.auto_close_on_solve = true` in config
-/// - `github.auto_push = true` in config (coarse-grained catch-all)
-pub fn auto_close_issue(ctx: &CommandContext, problem: &Problem, force: bool) {
-    if let Err(e) = try_auto_close_issue(ctx, problem, force) {
-        eprintln!("Warning: auto-close GitHub issue failed: {}", e);
-    }
-}
-
-fn try_auto_close_issue(ctx: &CommandContext, problem: &Problem, force: bool) -> crate::error::Result<()> {
-    let config = ctx.store.load_config()?;
-    if !force && !config.github.auto_push && !config.github.auto_close_on_solve {
-        return Ok(());
-    }
-
+/// Close a GitHub issue linked to a problem.
+pub fn do_close_issue(ctx: &CommandContext, problem: &Problem) -> crate::error::Result<()> {
     let issue_number = match problem.github_issue {
         Some(n) => n,
         None => return Ok(()),
     };
 
+    let config = ctx.store.load_config()?;
     let repo_root = ctx.jj().repo_root();
     let provider = GitHubProvider::from_config(repo_root, &config.github)?;
     provider.close_issue(issue_number)?;
@@ -63,28 +43,17 @@ fn try_auto_close_issue(ctx: &CommandContext, problem: &Problem, force: bool) ->
     Ok(())
 }
 
-/// Auto-create or update a GitHub PR after submit.
-pub fn auto_create_or_update_pr(ctx: &CommandContext, solution: &mut Solution) {
-    if let Err(e) = try_auto_create_or_update_pr(ctx, solution) {
-        eprintln!("Warning: auto-push PR to GitHub failed: {}", e);
-    }
-}
-
-fn try_auto_create_or_update_pr(
+/// Create or update a GitHub PR for a solution.
+pub fn do_create_or_update_pr(
     ctx: &CommandContext,
     solution: &mut Solution,
 ) -> crate::error::Result<()> {
     let config = ctx.store.load_config()?;
-    if !config.github.auto_push {
-        return Ok(());
-    }
-
     let repo_root = ctx.jj().repo_root();
     let provider = GitHubProvider::from_config(repo_root, &config.github)?;
     let problem = ctx.store.load_problem(&solution.problem_id)?;
 
     if solution.github_pr.is_some() {
-        // PR exists, just push the branch (done by submit already)
         println!(
             "  (GitHub PR #{} will be updated on push)",
             solution.github_pr.unwrap()
@@ -92,7 +61,6 @@ fn try_auto_create_or_update_pr(
         return Ok(());
     }
 
-    // Create new PR
     if solution.change_ids.is_empty() {
         return Ok(());
     }
@@ -111,28 +79,81 @@ fn try_auto_create_or_update_pr(
     Ok(())
 }
 
-/// Auto-merge a GitHub PR after a solution is accepted.
-pub fn auto_merge_pr(ctx: &CommandContext, solution: &Solution) {
-    if let Err(e) = try_auto_merge_pr(ctx, solution) {
-        eprintln!("Warning: auto-merge GitHub PR failed: {}", e);
-    }
-}
-
-fn try_auto_merge_pr(ctx: &CommandContext, solution: &Solution) -> crate::error::Result<()> {
-    let config = ctx.store.load_config()?;
-    if !config.github.auto_push {
-        return Ok(());
-    }
-
+/// Merge a GitHub PR for a solution.
+pub fn do_merge_pr(ctx: &CommandContext, solution: &Solution) -> crate::error::Result<()> {
     let pr_number = match solution.github_pr {
         Some(n) => n,
         None => return Ok(()),
     };
 
+    let config = ctx.store.load_config()?;
     let repo_root = ctx.jj().repo_root();
     let provider = GitHubProvider::from_config(repo_root, &config.github)?;
     provider.merge_pr(pr_number)?;
 
     println!("  (auto-merged GitHub PR #{})", pr_number);
     Ok(())
+}
+
+// ── Legacy wrappers (check auto_push, used by existing command handlers) ──
+
+/// Auto-create a GitHub issue after a new problem is created.
+pub fn auto_create_issue(ctx: &CommandContext, problem: &mut Problem) {
+    let config = match ctx.store.load_config() {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+    if !config.github.auto_push {
+        return;
+    }
+    if let Err(e) = do_create_issue(ctx, problem) {
+        eprintln!("Warning: auto-push to GitHub failed: {}", e);
+    }
+}
+
+/// Auto-close a GitHub issue after a problem is solved.
+///
+/// Triggers when any of these are true:
+/// - `force` is set (caller passed `--github-close`)
+/// - `github.auto_close_on_solve = true` in config
+/// - `github.auto_push = true` in config (coarse-grained catch-all)
+pub fn auto_close_issue(ctx: &CommandContext, problem: &Problem, force: bool) {
+    let config = match ctx.store.load_config() {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+    if !force && !config.github.auto_push && !config.github.auto_close_on_solve {
+        return;
+    }
+    if let Err(e) = do_close_issue(ctx, problem) {
+        eprintln!("Warning: auto-close GitHub issue failed: {}", e);
+    }
+}
+
+/// Auto-create or update a GitHub PR after submit.
+pub fn auto_create_or_update_pr(ctx: &CommandContext, solution: &mut Solution) {
+    let config = match ctx.store.load_config() {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+    if !config.github.auto_push {
+        return;
+    }
+    if let Err(e) = do_create_or_update_pr(ctx, solution) {
+        eprintln!("Warning: auto-push PR to GitHub failed: {}", e);
+    }
+}
+
+/// Auto-merge a GitHub PR after a solution is accepted.
+pub fn auto_merge_pr(ctx: &CommandContext, solution: &Solution) {
+    let config = match ctx.store.load_config() {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+    if !config.github.auto_push {
+        return;
+    }
+    if let Err(e) = do_merge_pr(ctx, solution) {
+        eprintln!("Warning: auto-merge GitHub PR failed: {}", e);
+    }
 }
