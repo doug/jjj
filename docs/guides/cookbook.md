@@ -57,9 +57,9 @@ If you're trying two different approaches for the same problem:
     # ... work on GraphQL approach ...
     jjj solution resume "REST"     # Switches your jj workspace to this solution's change
     ```
-3.  **Refute the loser**: Once one approach is proven better, refute the other with a rationale.
+3.  **Withdraw the loser**: Once one approach is proven better, withdraw the other with a rationale.
     ```bash
-    jjj solution refute "GraphQL" --rationale "GraphQL introduced too much complexity for this use case."
+    jjj solution withdraw "GraphQL" --rationale "GraphQL introduced too much complexity for this use case."
     ```
 
 ## 5. Preparing for Code Review
@@ -68,17 +68,17 @@ Before requesting a review, use jjj to document your thinking so reviewers have 
 
 1.  **Submit for review** to signal it's ready for criticism:
     ```bash
-    jjj solution review "Add search index"
+    jjj solution submit "Add search index"
     ```
 2.  **Add self-critiques** for known concerns you haven't fully resolved:
     ```bash
     jjj critique new "Add search index" "Index rebuild time on large datasets unknown" --severity medium
     ```
-3.  **Assign a reviewer**:
+3.  **Assign a reviewer** via a review critique:
     ```bash
-    jjj solution assign "Add search index" --reviewer @alice
+    jjj critique new "Add search index" "Review requested" --reviewer @alice
     ```
-4.  **Ask Alice to review**: she runs `jjj status` and sees your solution in the REVIEW queue. When she raises a critique, you'll see it in BLOCKED. When all critiques are resolved and she signs off, you can `jjj submit`.
+4.  **Ask Alice to review**: she runs `jjj status` and sees your solution in the REVIEW queue. When she raises a critique, you'll see it in BLOCKED. When all critiques are resolved, she signs off with `jjj solution lgtm "Add search index"`, and you can approve.
 
 ## 6. Tracking a Milestone
 
@@ -109,12 +109,12 @@ If a team member leaves or a solution goes stale, you can cleanly hand it off or
     ```
 2.  **Reassign to yourself** to pick it up:
     ```bash
-    jjj solution assign "Old approach" --me
+    jjj solution assign "Old approach"
     jjj solution resume "Old approach"  # Switch your workspace to this change
     ```
-3.  **Or refute it** with a rationale if the approach is no longer viable:
+3.  **Or withdraw it** with a rationale if the approach is no longer viable:
     ```bash
-    jjj solution refute "Old approach" --rationale "Superseded by the new caching architecture."
+    jjj solution withdraw "Old approach" --rationale "Superseded by the new caching architecture."
     ```
 
 ## 8. Using Search to Find Context

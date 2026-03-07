@@ -115,7 +115,7 @@ jjj problem tree "App crashes"
 
 ## `jjj problem solve`
 
-Mark a problem as solved. Requires an accepted solution.
+Mark a problem as solved. Requires an approved solution.
 
 ```
 jjj problem solve <problem>

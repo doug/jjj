@@ -42,7 +42,7 @@ This stability makes it perfect for attaching review metadata.
 
 In jjj, code review is attached to **solutions**, not directly to changes. A solution may have one or more jj changes associated with it. Review requests and critiques are unified into a single model: **critiques with a reviewer field**.
 
-When you assign reviewers at solution creation (using `--reviewer`), jjj automatically creates review-type critiques for each reviewer. These critiques must be resolved (typically by addressing them with an LGTM comment) before the solution can be accepted.
+When you assign reviewers at solution creation (using `--reviewer`), jjj automatically creates review-type critiques for each reviewer. These critiques must be resolved (typically via `jjj solution lgtm`) before the solution can be approved.
 
 ### Comment Relocation
 
@@ -135,18 +135,13 @@ See the [Critique Guidelines](critique-guidelines.md) for severity levels and ho
 
 #### If the implementation looks correct: sign off (LGTM)
 
-When a reviewer approves the solution, they address their review critique:
+When a reviewer approves the solution, they sign off with a single command:
 
 ```bash
-# Find your review critique
-jjj critique list --solution "JWT" --reviewer @alice
-
-# Address it with an LGTM comment
-jjj critique reply "review requested" "LGTM - clean implementation"
-jjj critique address "review requested"
+jjj solution lgtm "JWT tokens"
 ```
 
-Addressing a review critique is the sign-off. The critique's resolution records the reviewer's approval with a timestamp.
+This addresses the reviewer's open review critique and records the sign-off with a timestamp.
 
 ### 4. Author: Respond to Critiques
 
@@ -173,20 +168,23 @@ After addressing critiques, request re-review if needed by creating a new review
 jjj critique new "JWT" "Re-review requested after fixes" --reviewer @alice
 ```
 
-### 5. Submit
+### 5. Submit and Approve
 
-Once all critiques are resolved and reviews are in, submit the solution:
+Once your solution is ready for review, submit it:
 
 ```bash
-jjj submit
+jjj solution submit "JWT tokens"
 ```
 
-`jjj submit` checks:
-1. All critiques on the solution are resolved (addressed, dismissed, or validated)
-2. All assigned reviewers have signed off (if reviewers are assigned)
-3. The problem has no open sub-problems (if accepting would solve the parent problem)
+This changes the solution status to `submitted`, signaling it is ready for critique.
 
-If any check fails, submit will explain what is still needed. Use `--force` to bypass the gates in emergencies (this sets the `force_accepted` flag on the solution).
+Once all critiques are resolved and reviews are in, approve the solution:
+
+```bash
+jjj solution approve "JWT tokens"
+```
+
+`jjj solution approve` checks that all critiques are resolved (addressed, dismissed, or validated), including review critiques from assigned reviewers. If any check fails, it explains what is still needed. Use `--force` to bypass the gates in emergencies (this sets the `force_approved` flag on the solution).
 
 ## Unified Gate to Acceptance
 
@@ -197,10 +195,10 @@ jjj uses a unified critique model where all feedback -- including review request
 | **Regular critique** | A flaw or issue in the approach | Address, dismiss, or validate |
 | **Review critique** (has `--reviewer`) | A review request from a specific person | Reviewer addresses it (LGTM) or raises issues |
 
-All critiques must be resolved before a solution can be accepted. Review critiques are resolved when the assigned reviewer addresses them, which serves as the sign-off.
+All critiques must be resolved before a solution can be approved. Review critiques are resolved when the assigned reviewer signs off (via `jjj solution lgtm`).
 
 This unified model means:
-- A solution with any open critique (regular or review) cannot be accepted
+- A solution with any open critique (regular or review) cannot be approved
 - Review requests and issue critiques follow the same lifecycle
 - The `--reviewer` field distinguishes review requests from issue critiques
 
@@ -246,8 +244,8 @@ In the hybrid flow, review and critique happen in jjj. The GitHub PR is used for
 ### Viewing Review Requests
 
 ```bash
-# All solutions with pending reviews
-jjj solution list --status review
+# All solutions submitted for review
+jjj solution list --status submitted
 
 # Review critiques assigned to you
 jjj critique list --reviewer @alice --status open
@@ -331,7 +329,7 @@ The original code context is gone. jjj detects the content change and marks the 
 > Every critique must be resolved before acceptance. Either:
 > - Fix the issue and mark as addressed
 > - Reply with your reasoning and dismiss
-> - Acknowledge the flaw and validate (then refute the solution)
+> - Acknowledge the flaw and validate (then withdraw the solution)
 
 > **Write Clear Descriptions**
 >
@@ -354,9 +352,9 @@ If critique locations do not update after rebase:
 2. **View orphaned critiques**: `jjj critique list --solution "JWT"`
 3. **Re-create if needed**: Raise a new critique at the correct location
 
-### Submit Fails
+### Approve Fails
 
-If `jjj submit` reports unresolved critiques or missing sign-offs:
+If `jjj solution approve` reports unresolved critiques or missing sign-offs:
 
 ```bash
 # Check what is blocking

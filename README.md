@@ -54,9 +54,11 @@ jjj problem solve "Search is slow"
 ```bash
 jjj init                    # Initialize jjj bookmark
 jjj status                  # Show next actions (what to work on)
+jjj next                    # Top next actions (--top N, --mine, --json)
 jjj ui                      # Launch interactive TUI
 jjj fetch                   # Fetch code and metadata from remote
 jjj push                    # Push code and metadata to remote
+jjj github push             # Refresh PR bodies and sync issue state
 ```
 
 ### Problems
@@ -66,8 +68,10 @@ jjj problem list                       # List all problems
 jjj problem show "Search is slow"      # Show details (by title)
 jjj problem show 01957d                # Show details (by UUID prefix)
 jjj problem tree                       # Hierarchical view
-jjj problem solve "Search is slow"     # Mark solved (requires accepted solution)
+jjj problem solve "Search is slow"     # Mark solved (requires approved solution)
 jjj problem dissolve "Search"          # Mark dissolved (false premises)
+jjj problem reopen "Search"           # Reopen a solved/dissolved problem
+jjj problem duplicate "Search" "Other" # Mark problem as duplicate
 ```
 
 ### Solutions
@@ -78,6 +82,8 @@ jjj solution resume "search index"                 # Resume working on solution
 jjj solution submit "search index"                 # Submit for review
 jjj solution approve "search index"                # Approve (no open critiques)
 jjj solution withdraw "search index"               # Withdraw (criticism showed it won't work)
+jjj solution lgtm "search index"                   # Sign off as reviewer (LGTM)
+jjj solution comment "search index" --critique ID "reply"  # Reply to a critique
 ```
 
 ### Critiques
@@ -86,12 +92,12 @@ jjj critique new "search index" "Issue" --severity high  # Add critique
 jjj critique list --solution "search index"              # List critiques
 jjj critique address "Missing error"                     # Mark addressed
 jjj critique dismiss "Missing error"                     # Dismiss (incorrect/irrelevant)
-jjj critique validate "Missing error"                    # Validate (solution should be refuted)
+jjj critique validate "Missing error"                    # Validate (solution should be withdrawn)
 ```
 
 ### Milestones
 ```bash
-jjj milestone new "Q1 Release" --date 2024-03-31
+jjj milestone new "Q1 Release" --date 2025-03-31
 jjj milestone add-problem "Q1 Release" "Search is slow"
 jjj milestone roadmap
 ```
@@ -103,16 +109,16 @@ jjj milestone roadmap
 All metadata lives in an orphaned `jjj` bookmark, separate from your project history:
 
 ```
-.jjj/
-├── config.toml
-├── problems/
-│   └── 01957d3e-a8b2-7def-8c3a-9f4e5d6c7b8a.md
-├── solutions/
-│   └── 01958a1b-c3d4-7e5f-9a0b-1c2d3e4f5a6b.md
-├── critiques/
-│   └── 01959b2c-d4e5-7f6a-0b1c-2d3e4f5a6b7c.md
-└── milestones/
-    └── 01960c3d-e5f6-7a0b-1c2d-3e4f5a6b7c8d.md
+config.toml
+problems/
+  01957d3e-a8b2-7def-8c3a-9f4e5d6c7b8a.md
+solutions/
+  01958a1b-c3d4-7e5f-9a0b-1c2d3e4f5a6b.md
+critiques/
+  01959b2c-d4e5-7f6a-0b1c-2d3e4f5a6b7c.md
+milestones/
+  01960c3d-e5f6-7a0b-1c2d-3e4f5a6b7c8d.md
+events.jsonl
 ```
 
 This means:
@@ -162,7 +168,7 @@ npm run install-ext
 
 ## Documentation
 
-Full documentation available at [doug.github.io/jjj](https://doug.github.io/jjj/), or serve locally:
+Full documentation available at [jjj.recursivewhy.com](https://jjj.recursivewhy.com), or serve locally:
 
 ```bash
 cd docs-site

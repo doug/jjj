@@ -79,7 +79,7 @@ jjj critique address "Missing error"
 Other resolution options:
 
 - `jjj critique validate "Missing error"` -- the critique is correct and the solution
-  should be refuted
+  should be withdrawn
 - `jjj critique dismiss "Missing error"` -- the critique is incorrect or irrelevant
 
 ## Submit and Approve
@@ -171,6 +171,7 @@ problems surface first.
 |---------|-------------|
 | `jjj init` | Initialize jjj in current repository |
 | `jjj status` | Show status and prioritized next actions |
+| `jjj next` | Top next actions (`--top N`, `--mine`, `--json`) |
 | `jjj ui` | Launch interactive TUI |
 | `jjj problem new "title" --priority high` | Create a problem |
 | `jjj problem list` | List all problems |

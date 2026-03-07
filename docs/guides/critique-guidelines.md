@@ -13,7 +13,7 @@ This guide covers how to write effective critiques, when to use each severity le
 
 jjj's critique system is grounded in a Popperian approach to knowledge: all knowledge begins with problems, solutions are conjectures, and progress comes through criticism and error elimination.
 
-A solution cannot be accepted until all critiques against it are resolved. This is not bureaucracy -- it is an epistemological requirement. If a criticism stands unaddressed, the solution has a known flaw. Accepting a flawed solution when the flaw has been identified would be irrational.
+A solution cannot be approved until all critiques against it are resolved. This is not bureaucracy -- it is an epistemological requirement. If a criticism stands unaddressed, the solution has a known flaw. Approving a flawed solution when the flaw has been identified would be irrational.
 
 This means:
 
@@ -27,7 +27,7 @@ When raising a critique, assign a severity that reflects the impact of the issue
 
 ### Critical
 
-The critique identifies a flaw that definitively invalidates the solution. If this critique stands, the solution must be refuted.
+The critique identifies a flaw that definitively invalidates the solution. If this critique stands, the solution should be withdrawn.
 
 ```bash
 jjj critique new "parameterized queries" "SQL injection in user input handling" --severity critical

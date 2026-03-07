@@ -27,7 +27,7 @@ Like git short hashes, you can use the first N characters of the UUID (minimum 6
 
 ```bash
 jjj problem show 01957d
-jjj solution accept 01958a
+jjj solution approve 01958a
 ```
 
 In listings, jjj automatically calculates the shortest unique prefix for each entity:
@@ -95,7 +95,7 @@ Commands know what entity type they expect, so you don't need type prefixes:
 ```bash
 # These work because the command implies the type
 jjj problem show "auth bug"       # Searches problems only
-jjj solution accept "pooling"     # Searches solutions only
+jjj solution approve "pooling"     # Searches solutions only
 jjj critique address "error"      # Searches critiques only
 ```
 
@@ -141,7 +141,7 @@ jjj critique new "search index" "Missing pagination" --severity medium
 jjj critique address "pagination"
 
 # Accept the solution
-jjj solution accept "search index"
+jjj solution approve "search index"
 
 # Solve the problem
 jjj problem solve "Search"
@@ -159,7 +159,7 @@ jjj critique list --solution "pooling"
 
 ## Best Practices
 
-1. **Use titles for readability**: `jjj solution accept "pooling"` is clearer than `jjj solution accept 01958a`
+1. **Use titles for readability**: `jjj solution approve "pooling"` is clearer than `jjj solution approve 01958a`
 
 2. **Use prefixes in scripts**: For automation, use the prefix from `--json` output to avoid ambiguity
 

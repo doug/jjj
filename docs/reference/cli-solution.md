@@ -1,6 +1,6 @@
 ---
 title: Solution Commands
-description: CLI reference for creating, listing, attaching, accepting, and refuting solutions
+description: CLI reference for creating, listing, attaching, approving, and withdrawing solutions
 ---
 
 # Solution Commands
@@ -217,5 +217,33 @@ Prints `=== Change: <id> ===` before each diff. If a change is not present in th
 
 ```bash
 jjj solution diff "Add connection"
+```
+
+## `jjj solution lgtm`
+
+Sign off on a solution as a reviewer. This addresses your open review critique for the solution, recording your approval.
+
+```
+jjj solution lgtm <solution_id>
+```
+
+```bash
+jjj solution lgtm "Add connection"
+```
+
+## `jjj solution comment`
+
+Leave a reply on a critique attached to a solution.
+
+```
+jjj solution comment <solution_id> --critique <critique_id> <body>
+```
+
+| Flag | Type | Required | Description |
+|------|------|----------|-------------|
+| `--critique` | string | yes | The critique to reply to (title or UUID prefix) |
+
+```bash
+jjj solution comment "Add connection" --critique "Missing error" "Fixed in latest change"
 ```
 

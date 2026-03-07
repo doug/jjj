@@ -75,6 +75,75 @@ Standard priority labels (`p0`, `critical`, `high`, `p1`, `medium`, `p2`, `low`,
 
 When jjj imports an issue with one of these labels, it maps the label to the corresponding jjj priority.
 
+## Automation Rules
+
+Automation rules let you trigger actions when jjj events occur. Rules are defined in `config.toml` using the `[[automation]]` array-of-tables syntax.
+
+```toml
+[[automation]]
+on = "solution_submitted"
+action = "github_pr"
+
+[[automation]]
+on = "problem_created"
+action = "github_issue"
+
+[[automation]]
+on = "solution_approved"
+action = "shell"
+command = "echo 'Solution {{title}} approved by {{user}}'"
+
+[[automation]]
+on = "solution_withdrawn"
+action = "shell"
+command = "notify-team --msg '{{title}} was withdrawn'"
+enabled = false
+```
+
+### Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `on` | string | yes | Event type that triggers this rule |
+| `action` | string | yes | Action to execute (`shell` or a built-in action) |
+| `command` | string | for `shell` | Shell command to run (supports template variables) |
+| `enabled` | bool | no | Whether the rule is active (default: `true`) |
+
+### Event Types
+
+| Event | Fires when |
+|-------|-----------|
+| `problem_created` | A new problem is created |
+| `problem_solved` | A problem is marked solved |
+| `problem_dissolved` | A problem is dissolved |
+| `solution_submitted` | A solution is submitted for review |
+| `solution_approved` | A solution is approved |
+| `solution_withdrawn` | A solution is withdrawn |
+| `critique_created` | A new critique is raised |
+
+### Built-in Actions
+
+| Action | Description |
+|--------|-------------|
+| `github_issue` | Create a GitHub issue for the problem |
+| `github_pr` | Create or update a GitHub PR for the solution |
+| `github_merge` | Squash-merge the linked GitHub PR |
+| `github_close` | Close the linked GitHub issue |
+| `github_sync` | Sync state with GitHub |
+| `shell` | Run a custom shell command |
+
+### Template Variables
+
+Shell commands support `{{var}}` template expansion:
+
+| Variable | Description |
+|----------|-------------|
+| `{{id}}` | Entity UUID |
+| `{{title}}` | Entity title |
+| `{{user}}` | Current user |
+| `{{problem.title}}` | Title of the linked problem |
+| `{{pr_number}}` | GitHub PR number (if linked) |
+
 ## VS Code Extension
 
 The VS Code extension uses the `jjj.path` setting to locate the jjj binary:

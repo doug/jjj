@@ -18,9 +18,9 @@ syncs with your normal 'jj git push'.
   jjj problem new 'Bug: ...'  Define what needs solving
   jjj solution new 'Fix: ...' Propose your approach (creates a solution record)
   jjj solution attach <id>    Link your current jj change to the solution
-  jjj submit                  Squash changes, mark solution ready for review
+  jjj solution submit <id>    Submit the solution for review
   jjj critique new <id> '...' Raise a critique against a solution
-  jjj solution accept <id>    Accept the solution once critiques are resolved
+  jjj solution approve <id>   Approve the solution once critiques are resolved
 
 Run 'jjj <command> --help' for detailed options.")]
 pub struct Cli {
@@ -79,7 +79,7 @@ pub enum Commands {
         action: ProblemAction,
     },
 
-    /// Propose and accept solutions — conjectures attached to jj change IDs
+    /// Propose and approve solutions — conjectures attached to jj change IDs
     #[command(display_order = 11)]
     Solution {
         #[command(subcommand)]
@@ -390,7 +390,7 @@ pub enum ProblemAction {
         problem_id: Option<String>,
     },
 
-    /// Mark a problem solved (requires an accepted solution or all sub-problems solved)
+    /// Mark a problem solved (requires an approved solution or all sub-problems solved)
     #[command(display_order = 5)]
     Solve {
         /// Problem ID, short prefix, or fuzzy title
@@ -758,7 +758,7 @@ pub enum CritiqueAction {
         critique_id: String,
     },
 
-    /// Validate a critique — confirm it is correct and the solution must be refuted
+    /// Validate a critique — confirm it is correct and the solution should be withdrawn
     #[command(display_order = 5)]
     Validate {
         /// Critique ID, short prefix, or fuzzy title

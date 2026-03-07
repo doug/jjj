@@ -106,7 +106,7 @@ jjj critique address "Missing error"
 
 ## `jjj critique validate`
 
-Validate a critique (confirm it is correct; the solution should be refuted).
+Validate a critique (confirm it is correct; the solution should be withdrawn).
 
 ```
 jjj critique validate <critique_id>

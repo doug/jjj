@@ -189,7 +189,7 @@ All critiques are resolved:
 - 01958b (review request): dismissed by Bob (LGTM)
 - 01958c (token expiration): addressed by Alice
 
-Alice accepts the solution:
+Alice approves the solution:
 
 ```bash
 $ jjj solution approve "JWT"

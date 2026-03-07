@@ -1,6 +1,6 @@
 ---
 title: Workflow Commands
-description: CLI reference for init, submit, status, fetch, push, sync, github, and other high-level jjj commands
+description: CLI reference for init, status, next, fetch, push, sync, github, and other high-level jjj commands
 ---
 
 # Workflow Commands
@@ -9,7 +9,7 @@ Workflow commands provide high-level operations that combine multiple steps. The
 
 ## `jjj init`
 
-Initialize jjj in the current repository. Creates the `.jjj/` metadata directory.
+Initialize jjj in the current repository. Creates the `jjj` bookmark to store metadata.
 
 ```
 jjj init
@@ -17,33 +17,6 @@ jjj init
 
 ```bash,test
 jjj init
-```
-
-## `jjj submit`
-
-Submit current changes by rebasing onto main and squashing. Automatically accepts the solution and solves the problem when conditions are met.
-
-```
-jjj submit [OPTIONS]
-```
-
-| Flag | Type | Description |
-|------|------|-------------|
-| `--force` | bool | Bypass critique and sign-off checks (sets `force_accepted` flag) |
-
-Submit performs these steps:
-
-1. Checks for open critiques (unless `--force`).
-2. Checks that all assigned reviewers have signed off (unless `--force`).
-3. Rebases the current change onto main and squashes.
-4. Auto-accepts the solution if it was in review or proposed status.
-5. Auto-solves the problem if the accepted solution is the only active one and there are no open sub-problems.
-
-Using `--force` bypasses the critique and sign-off gates and sets the `force_accepted` flag on the solution.
-
-```bash
-jjj submit
-jjj submit --force
 ```
 
 ## `jjj status`
@@ -68,6 +41,27 @@ jjj status
 jjj status --all
 jjj status --mine --limit 10
 jjj status --json
+```
+
+## `jjj next`
+
+Show the top next actions — a quick summary of what to work on.
+
+```
+jjj next [OPTIONS]
+```
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `--top` | integer | Number of items to show (default: 3) |
+| `--mine` | bool | Only show items assigned to you |
+| `--json` | bool | Output as JSON |
+
+```bash
+jjj next
+jjj next --top 5
+jjj next --mine
+jjj next --json
 ```
 
 ## `jjj fetch`
@@ -149,6 +143,7 @@ jjj github [COMMAND] [OPTIONS]
 | `merge <solution>` | Squash-merge the linked GitHub PR for a solution |
 | `close <problem>` | Close the linked GitHub issue for a problem |
 | `reopen <problem>` | Reopen the linked GitHub issue for a problem |
+| `push` | Refresh PR bodies and sync GitHub issue open/closed state |
 
 ```bash
 jjj github                          # pull review states from GitHub
@@ -211,7 +206,7 @@ jjj events [OPTIONS]
 jjj events
 jjj events --from 2024-01 --to 2024-06
 jjj events --problem "auth"
-jjj events --type solution_accepted
+jjj events --type solution_approved
 jjj events --search "cache"
 ```
 

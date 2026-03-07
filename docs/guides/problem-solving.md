@@ -165,18 +165,18 @@ Problems end in one of two ways: they are **solved** or they are **dissolved**.
 
 ### Solving a problem
 
-A problem is solved when an accepted solution addresses it and there are no remaining open sub-problems. The typical flow:
+A problem is solved when an approved solution addresses it and there are no remaining open sub-problems. The typical flow:
 
 1. Create one or more solutions for the problem
 2. Solutions face critique and testing
-3. A solution is accepted (all critiques resolved, reviews passed)
+3. A solution is approved (all critiques resolved, reviews passed)
 4. Mark the problem as solved
 
 ```bash
 jjj problem solve "Authentication"
 ```
 
-If the problem has open sub-problems or no accepted solution, jjj will warn you. You can still proceed, but the warning exists to prevent premature closure.
+If the problem has open sub-problems or no approved solution, jjj will warn you. You can still proceed, but the warning exists to prevent premature closure.
 
 ### Dissolving a problem
 
