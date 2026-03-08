@@ -5,7 +5,7 @@ edition = "2021"
 rust-version = "1.82"
 authors = ["jjj contributors"]
 description = "Distributed project management and code review for Jujutsu"
-license = "MIT OR Apache-2.0"
+license = "Apache-2.0"
 repository = "https://github.com/doug/jjj"
 
 [dependencies]

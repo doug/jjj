@@ -23,7 +23,7 @@ Unlike GitHub, where metadata is central and code is distributed, `jjj` distribu
 
 ### 2. Causality and Timestamps
 Events are ordered by their timestamps and parent relationships.
-- If an event "Accepts" a solution, but a concurrent event "Critiques" it, the critique "wins" in the sense that it must be addressed before the solution can be successfully accepted in a final state.
+- If an event "Approves" a solution, but a concurrent event "Critiques" it, the critique "wins" in the sense that it must be addressed before the solution can be successfully approved in a final state.
 - The SQLite runtime cache (`.jj/jjj.db`) is rebuilt from the combined event log and markdown files to produce a consistent view. This cache can be regenerated at any time via `jjj db rebuild`.
 
 ### 3. Change ID Mapping
@@ -33,7 +33,7 @@ Events are ordered by their timestamps and parent relationships.
 - This allows a Solution to remain attached to "logical work" even as the physical commits are manipulated by Jujutsu's advanced version control features.
 
 ### 4. Verified Transitions
-Every state change (proposed $\rightarrow$ testing $\rightarrow$ accepted) is verified at the moment of the request.
+Every state change (proposed → submitted → approved) is verified at the moment of the request.
 - `jjj solution approve` doesn't just check the SQLite cache.
 - It scans the shadow graph for any critiques that might have been fetched recently and have not yet been addressed.
 - The "approved" state is a logical conclusion of the surviving events, not just a cached row in the SQLite index.

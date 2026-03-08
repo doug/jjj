@@ -207,7 +207,7 @@ jjj solution approve "Redis caching"
 
 ## Critiques and Sign-offs: Two Gates to Acceptance
 
-jjj has two mechanisms that gate solution approveance, both unified under the solution model:
+jjj has two mechanisms that gate solution approval, both unified under the solution model:
 
 1. **Critiques** -- Evaluate the solution's approach, design, and correctness. Anyone can raise a critique at any time. All critiques must be resolved (addressed, dismissed, or validated).
 

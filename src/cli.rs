@@ -573,7 +573,7 @@ pub enum SolutionAction {
         solution_id: String,
     },
 
-    /// Approve a solution — accept critique, integrate code, solve the problem
+    /// Approve a solution — resolve critiques, integrate code, solve the problem
     ///
     /// The solution must be submitted (`jjj solution submit`) with no open
     /// critiques. Use --force to override open critiques.

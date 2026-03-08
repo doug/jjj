@@ -99,16 +99,16 @@ TUI (src/tui/)               # Ratatui-based interactive UI
 
 ### State Machines
 - **Problems**: Open → InProgress → Solved/Dissolved
-- **Solutions**: Proposed → Testing → Accepted/Refuted
+- **Solutions**: Proposed → Submitted → Approved/Withdrawn
 - **Critiques**: Open → Addressed/Valid/Dismissed
 
 ## Key Files
 
 - `src/cli.rs` - CLI structure (all commands defined here)
-- `src/storage.rs` - Critical storage layer with YAML frontmatter parsing
+- `src/storage/mod.rs` - Critical storage layer with YAML frontmatter parsing
 - `src/commands/*.rs` - Individual command implementations
 - `src/models/*.rs` - Data structures with serde derives
-- `src/tui/app.rs` - TUI state machine and key handlers
+- `src/tui/app/mod.rs` - TUI state machine and key handlers
 - `src/jj.rs` - Jujutsu subprocess integration
 
 ## Adding a New Command
@@ -124,7 +124,7 @@ TUI (src/tui/)               # Ratatui-based interactive UI
 - Arrow keys: Navigate within pane
 - `j/k`: Scroll detail pane
 - `Left/Right`: Collapse/expand tree nodes
-- `a/r/d`: Accept/Refute/Address actions
+- `a/r/d`: Approve/Withdraw/Dismiss actions
 
 ### Events and Timeline
 ```bash

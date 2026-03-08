@@ -53,7 +53,7 @@ jjj implements Popperian epistemology for software development:
 │                                                                              │
 │  open ────┬──► addressed (solution modified)                                │
 │           │                                                                  │
-│           ├──► valid (critique correct → refute solution)                   │
+│           ├──► valid (critique correct → withdraw solution)                 │
 │           │                                                                  │
 │           └──► dismissed (critique incorrect)                               │
 │                                                                              │
@@ -105,17 +105,15 @@ jjj critique dismiss "vulnerable to XSS"
 
 # Option C: Validate critique (solution is flawed)
 jjj critique validate "vulnerable to XSS"
-jjj solution refute "JWT with explicit"
+jjj solution withdraw "JWT with explicit"
 # → Need a new solution approach
 
-# 9. Request code review
-jjj review request @alice @bob
-# → Review created for current change
+# 9. Submit for review (with reviewers assigned at creation or via critique)
+jjj solution submit "JWT with explicit"
 
-# 10. Get approved and submit
-jjj review approve
-jjj submit
-# → Solution accepted, prompts to solve problem
+# 10. Get approved
+jjj solution approve "JWT with explicit"
+# → Solution approved, prompts to solve problem
 
 # 11. Mark problem solved
 jjj problem solve "Token refresh"
@@ -147,11 +145,10 @@ Solution "JWT with explicit refresh"
 - The philosophical model says criticism should kill solutions, but code review comments don't
 
 **More Elegant:**
-Reviews should auto-create Critiques when "changes requested":
+Reviews now auto-create Critiques when "changes requested" via GitHub sync:
 ```bash
-jjj review request-changes --message "This approach won't scale"
-# → Automatically creates critique linked to solution
-# → Solution can't be accepted until critique addressed
+# GitHub "Request Changes" review → imported as critique
+# → Solution can't be approved until critique addressed
 ```
 
 ### 2. The Solution ↔ Change Relationship is Weak
@@ -159,14 +156,14 @@ jjj review request-changes --message "This approach won't scale"
 **The Problem:**
 - A Solution can have multiple `change_ids[]`
 - But there's no enforcement that changes match solutions
-- You can `jjj submit` a change that isn't attached to any solution
+- You can work on a change that isn't attached to any solution
 
 **Current State:**
 ```bash
 # This works but makes no sense:
 jjj solution new "Fix auth" --problem "authentication"
-# ... edit code without jjj start ...
-jjj submit --force  # What solution did this implement?
+# ... edit code without jjj solution resume ...
+jjj solution submit "Fix auth"  # What change implements this?
 ```
 
 **More Elegant:**
@@ -177,7 +174,7 @@ Use JWT with explicit refresh handling
 [Addresses: User authentication is unreliable]
 ```
 
-Then `submit` could auto-detect which solution this implements.
+Then `solution submit` could auto-detect which solution this implements.
 
 ### 3. Status Transitions Require Too Many Commands
 
@@ -185,41 +182,41 @@ Then `submit` could auto-detect which solution this implements.
 The user must explicitly transition states that could be inferred:
 
 ```bash
-jjj solution review "JWT refresh"  # Why? I'm ready for review
-jjj solution accept "JWT refresh"  # Why? My PR was approved = accepted
-jjj problem solve "Token refresh"  # Why? All solutions accepted = solved
+jjj solution submit "JWT refresh"  # Why? I'm ready for review
+jjj solution approve "JWT refresh"  # Why? My PR was approved
+jjj problem solve "Token refresh"  # Why? All solutions approved = solved
 ```
 
 **More Elegant:**
 Infer status from actions:
-- `jjj solution resume "JWT refresh"` → stays `proposed`; run `solution review` when ready
-- `jjj submit` + review approved → auto `accept`
+- `jjj solution resume "JWT refresh"` → stays `proposed`; run `solution submit` when ready
+- All critiques resolved + review approved → `solution approve`
 - All sub-problems solved → auto-prompt to solve parent
 
 ### 4. Critiques Don't Block Actions Strongly Enough
 
 **The Problem:**
-Open critiques warn but don't prevent acceptance:
+Open critiques warn but don't prevent approval:
 ```bash
-jjj solution accept "JWT refresh"
+jjj solution approve "JWT refresh"
 # Warning: Solution has 2 open critiques
 # (but proceeds anyway)
 ```
 
 **Philosophically:**
-A solution with unaddressed criticism shouldn't be accepted. Period.
+A solution with unaddressed criticism shouldn't be approved. Period.
 That's the whole point of critical rationalism.
 
 **More Elegant:**
 ```bash
-jjj solution accept "JWT refresh"
-# Error: Cannot accept - 2 open critiques
+jjj solution approve "JWT refresh"
+# Error: Cannot approve - 2 open critiques
 # "XSS vulnerability": JWT tokens vulnerable to XSS [high]
 # "No rate limiting": Missing rate limiting [medium]
 #
 # Address with: jjj critique address "XSS vulnerability"
 # Dismiss with:  jjj critique dismiss "XSS vulnerability"
-# Or force:      jjj solution accept "JWT refresh" --force
+# Or force:      jjj solution approve "JWT refresh" --force
 ```
 
 ### 5. No Clear "What Should I Work On?" Flow
@@ -250,7 +247,7 @@ Next Actions:
 1. [BLOCKED] "Add caching" has 3 unaddressed critiques
    → jjj critique show "XSS vulnerability"  (high severity)
 
-2. [READY] "Auth issues" has accepted solution, ready to mark solved
+2. [READY] "Auth issues" has approved solution, ready to mark solved
    → jjj problem solve "Auth issues"
 
 3. [WAITING] Review pending for change abc123
@@ -324,7 +321,7 @@ enum Criticism {
 }
 ```
 
-Both block solution acceptance until resolved.
+Both block solution approval until resolved.
 
 ### 2. Semantic Change Descriptions
 
@@ -351,10 +348,10 @@ fn start(solution_id) {
     problem.status = InProgress;
 }
 
-// Automatically accept when review passes + no critiques
-fn submit() {
+// Automatically approve when review passes + no critiques
+fn approve() {
     if review.approved && critiques.all_resolved() {
-        solution.accept();
+        solution.approve();
         if problem.can_solve() {
             prompt_solve_problem();
         }
@@ -385,9 +382,9 @@ sync_prs = true
 
 Then:
 - `jjj problem new` → GitHub Issue
-- `jjj submit` → GitHub PR
+- `jjj solution submit` → GitHub PR (via automation rules)
 - GitHub PR comments → jjj Critiques
-- GitHub PR merge → jjj solution accept
+- GitHub PR merge → jjj solution approve
 
 ---
 
@@ -397,18 +394,18 @@ The philosophical model is sound and well-implemented. The friction points are:
 
 | Issue | Impact | Fix Complexity |
 |-------|--------|----------------|
-| Reviews ≠ Critiques | High | Medium |
+| Reviews ≠ Critiques | High | Done (unified) |
 | Weak Solution↔Change link | Medium | Low |
-| Too many manual transitions | Medium | Low |
-| Critiques don't block | High | Low |
-| No guided workflow | High | Medium |
-| No GitHub integration | High | High |
+| Too many manual transitions | Medium | Done (auto-solve) |
+| Critiques don't block | High | Done (enforced) |
+| No guided workflow | High | Done (`jjj next`) |
+| No GitHub integration | High | Done (`jjj github`) |
 | Dissolved underutilized | Low | Low |
 
-The most impactful improvements would be:
-1. **Unify Review/Critique** - One criticism system
-2. **Add `jjj next`** - Guided workflow
-3. **Enforce critique resolution** - Philosophy demands it
-4. **GitHub integration** - Meet teams where they are
+The most impactful improvements were:
+1. **Unify Review/Critique** - Done: review requests are now critiques with `--reviewer`
+2. **Add `jjj next`** - Done: guided workflow with prioritized actions
+3. **Enforce critique resolution** - Done: `solution approve` blocks on open critiques
+4. **GitHub integration** - Done: `jjj github` with bidirectional sync
 
-The elegance lies not in adding features, but in making the philosophy *inescapable* through the tooling. Right now, you can ignore critiques. That shouldn't be possible without explicit `--force` overrides.
+The elegance lies not in adding features, but in making the philosophy *inescapable* through the tooling. Open critiques now block approval — you must explicitly `--force` to override.

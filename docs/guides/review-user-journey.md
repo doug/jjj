@@ -225,7 +225,7 @@ Alice                              Bob
 
 When you use `--reviewer bob`, jjj creates an "Awaiting review from @bob" critique. This critique:
 - Has `reviewer: bob` set
-- Blocks solution approveance until resolved
+- Blocks solution approval until resolved
 - Is resolved when Bob dismisses it (LGTM) or addresses it
 
 ### Multiple Reviewers

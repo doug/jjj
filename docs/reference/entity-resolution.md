@@ -140,7 +140,7 @@ jjj critique new "search index" "Missing pagination" --severity medium
 # Address a critique by partial title
 jjj critique address "pagination"
 
-# Accept the solution
+# Approve the solution
 jjj solution approve "search index"
 
 # Solve the problem

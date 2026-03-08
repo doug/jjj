@@ -245,7 +245,7 @@ jjj solution new "Invalidate search cache entry on soft delete" --problem "cache
 # 4. Work on solutions (attach changes, face critique, iterate)
 jjj solution resume "deleted_at filter"
 # ... implement fix, attach change ...
-jjj submit
+jjj solution submit "deleted_at filter"
 
 # 5. Once sub-problems are solved, solve the parent
 jjj problem solve "soft-deleted"
