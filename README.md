@@ -6,6 +6,8 @@ No server. No database. No browser. Sync via standard `jj git push/pull`.
 
 **[Documentation → jjj.recursivewhy.com](https://jjj.recursivewhy.com)**
 
+![jjj workflow demo](demo/workflow.gif)
+
 ## Why Jujutsu?
 
 Previous attempts at distributed review (like git-appraise) suffered a fatal flaw: **the fragility of the commit hash**. In Git, rebasing changes every commit hash, orphaning any attached metadata.
@@ -47,6 +49,12 @@ jjj solution submit "search index"
 jjj solution approve "search index"
 jjj problem solve "Search is slow"
 ```
+
+## Interactive TUI
+
+Launch `jjj ui` for a full terminal interface with project tree, detail pane, and keyboard-driven actions.
+
+![jjj TUI demo](demo/tui.gif)
 
 ## Commands
 
