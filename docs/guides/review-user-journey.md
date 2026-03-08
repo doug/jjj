@@ -9,7 +9,7 @@ This guide walks through a complete code review scenario with two developers: Al
 
 ## The Scenario
 
-Alice is implementing a feature to add user authentication. She wants Bob to review her work before it's accepted.
+Alice is implementing a feature to add user authentication. She wants Bob to review her work before it's approved.
 
 ## Prerequisites
 
@@ -162,15 +162,15 @@ $ jjj critique show "expiration"
 
 ## Step 7: Bob Completes His Review (LGTM)
 
-Bob is now satisfied with the solution. He dismisses his review critique to sign off:
+Bob is now satisfied with the solution. He signs off with LGTM:
 
 ```bash
 # Bob's terminal
-$ jjj critique dismiss "review"
-Critique 01958b dismissed (shown to be incorrect or irrelevant)
+$ jjj solution lgtm "JWT"
+Review sign-off recorded for @bob
 ```
 
-Dismissing the "Awaiting review" critique is Bob's sign-off. It means "I've looked at this and have no concerns."
+The `lgtm` command addresses Bob's review critique, recording his approval.
 
 ## Step 8: Alice Approves the Solution
 
@@ -186,7 +186,7 @@ Next actions:
 ```
 
 All critiques are resolved:
-- 01958b (review request): dismissed by Bob (LGTM)
+- 01958b (review request): addressed by Bob (LGTM)
 - 01958c (token expiration): addressed by Alice
 
 Alice approves the solution:
@@ -194,7 +194,7 @@ Alice approves the solution:
 ```bash
 $ jjj solution approve "JWT"
 Solution 01958a approved
-Solution accepted. Mark problem 01957d as solved? [y/N] y
+Solution approved. Mark problem 01957d as solved? [y/N] y
 Problem 01957d marked as solved
 ```
 
@@ -214,7 +214,7 @@ Alice                              Bob
 7. critique address "Issue"
                                    8. status → verify fix
                                    9. (checks fix is good)
-                                   10. critique dismiss "review" (LGTM)
+                                   10. solution lgtm "JWT" (sign-off)
 11. status → ready
 12. solution approve "JWT"
 ```

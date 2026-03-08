@@ -294,7 +294,7 @@ vscode/
 
 ## Resources
 
-- **Main Documentation**: [jjj Docs](https://doug.github.io/jjj/)
+- **Main Documentation**: [jjj Docs](https://jjj.recursivewhy.com)
 - **CLI Reference**: [CLI Commands](../reference/cli-workflow.md)
 - **GitHub Repository**: [github.com/doug/jjj](https://github.com/doug/jjj)
 - **Report Issues**: [GitHub Issues](https://github.com/doug/jjj/issues)

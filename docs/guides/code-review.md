@@ -186,7 +186,7 @@ jjj solution approve "JWT tokens"
 
 `jjj solution approve` checks that all critiques are resolved (addressed, dismissed, or validated), including review critiques from assigned reviewers. If any check fails, it explains what is still needed. Use `--force` to bypass the gates in emergencies (this sets the `force_approved` flag on the solution).
 
-## Unified Gate to Acceptance
+## Unified Gate to Approval
 
 jjj uses a unified critique model where all feedback -- including review requests -- are critiques:
 

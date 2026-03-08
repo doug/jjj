@@ -473,10 +473,10 @@ fn test_submit_blocked_by_awaiting_review() {
         .args(["solution", "approve"])
         .current_dir(dir)
         .output()
-        .expect("Failed to execute jjj submit");
+        .expect("Failed to execute jjj solution approve");
 
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(!output.status.success(), "Submit should have failed");
+    assert!(!output.status.success(), "Approve should have failed");
     assert!(
         stderr.contains("open critique") || stderr.contains("Awaiting review"),
         "Expected open critique error, got: {}",

@@ -1,10 +1,6 @@
 # Rust build artifacts
 /target/
 
-# mdBook build artifacts
-/book/
-mdbook-admonish.css
-
 # VSCode extension
 node_modules/
 out/

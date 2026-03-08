@@ -41,7 +41,7 @@ Examples:
 
 ### High
 
-A significant problem that may invalidate the solution. The solution cannot be accepted without addressing this.
+A significant problem that may invalidate the solution. The solution cannot be approved without addressing this.
 
 ```bash
 jjj critique new "concurrent writes" "Race condition in concurrent write path" --severity high
@@ -201,11 +201,11 @@ jjj critique new "Redis" "Redis client library is unmaintained" --severity low
 jjj critique reply "unmaintained" "The library had a release last month and has active maintainers. The GitHub issue that flagged it as unmaintained was from 2023 and has since been closed."
 jjj critique dismiss "unmaintained"
 
-# All critiques resolved -- solution can now be accepted
+# All critiques resolved -- solution can now be approved
 jjj solution approve "Redis caching"
 ```
 
-## Critiques and Sign-offs: Two Gates to Acceptance
+## Critiques and Sign-offs: Two Gates to Approval
 
 jjj has two mechanisms that gate solution approval, both unified under the solution model:
 

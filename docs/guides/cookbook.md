@@ -125,8 +125,8 @@ Use full-text or semantic search to find related work before starting something 
 # Full-text search across all entities
 jjj search "authentication"
 
-# Semantic search (finds conceptually related even without exact match)
-jjj search "login security" --semantic
+# Search finds related entities even without exact match
+jjj search "login security"
 
 # Filter by type
 jjj search "token" --type solution

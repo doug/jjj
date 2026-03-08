@@ -129,7 +129,7 @@ fn test_solution_refute() {
     );
     solution.submit();
 
-    // When: I refute it
+    // When: I withdraw it
     solution.withdraw();
 
     // Then: It should be withdrawn

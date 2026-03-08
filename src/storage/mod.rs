@@ -363,7 +363,7 @@ impl MetadataStore {
         if self.has_valid_critiques(solution_id)? {
             return Ok((
                 false,
-                "Solution has valid critiques that refute it".to_string(),
+                "Solution has valid critiques that block approval".to_string(),
             ));
         }
 

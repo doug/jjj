@@ -170,7 +170,7 @@ impl MetadataStore {
             .collect())
     }
 
-    /// Check if a solution has any valid critiques (that would refute it)
+    /// Check if a solution has any valid critiques (that block approval)
     pub fn has_valid_critiques(&self, solution_id: &str) -> Result<bool> {
         let critiques = self.list_critiques_for_solution(solution_id)?;
         Ok(critiques.iter().any(|c| c.status == CritiqueStatus::Valid))
