@@ -91,9 +91,9 @@ section "Invalid Status Transitions"
 run_jjj problem new "Transition test" --priority medium
 assert_success "create test problem"
 
-# Can't go from open to solved without accepted solution
+# Can't go from open to solved without approved solution
 run_jjj problem edit "Transition" --status solved
-assert_failure "solved requires accepted solution"
+assert_failure "solved requires approved solution"
 
 # After the above edit, try to dissolve (may fail if solved is terminal)
 run_jjj problem edit "Transition" --status dissolved
@@ -140,21 +140,21 @@ assert_failure "critique for nonexistent solution fails"
 observe "Ghost critique error: $OUTPUT"
 
 # ============================================================================
-section "Accept Solution With Open Critiques"
+section "Approve Solution With Open Critiques"
 # ============================================================================
 
-$JJJ problem new "Blocked accept test" --priority low 2>/dev/null
-$JJJ solution new "Blocked solution" --problem "Blocked accept" 2>/dev/null
+$JJJ problem new "Blocked approve test" --priority low 2>/dev/null
+$JJJ solution new "Blocked solution" --problem "Blocked approve" 2>/dev/null
 $JJJ solution submit "Blocked solution" 2>/dev/null
 $JJJ critique new "Blocked solution" "Blocking critique" --severity high 2>/dev/null
 
 run_jjj solution approve "Blocked solution" --no-rationale
-assert_failure "accept blocked by open critique"
+assert_failure "approve blocked by open critique"
 assert_contains "critique" "error mentions the blocking critique"
 
-# Force accept should work
+# Force approve should work
 run_jjj solution approve "Blocked solution" --force --no-rationale
-assert_success "force accept bypasses critique check"
+assert_success "force approve bypasses critique check"
 
 # ============================================================================
 section "Double Operations (Idempotency)"

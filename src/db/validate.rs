@@ -234,7 +234,7 @@ mod tests {
     ) {
         let now = Utc::now().to_rfc3339();
         conn.execute(
-            "INSERT INTO solutions (id, title, status, problem_id, supersedes, force_accepted, created_at, updated_at)
+            "INSERT INTO solutions (id, title, status, problem_id, supersedes, force_approved, created_at, updated_at)
              VALUES (?1, ?2, 'proposed', ?3, ?4, 0, ?5, ?6)",
             params![id, title, problem_id, supersedes, now, now],
         )

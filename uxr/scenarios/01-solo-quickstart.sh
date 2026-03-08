@@ -99,19 +99,19 @@ assert_success "status after addressing"
 assert_not_contains "BLOCKED" "no more blocked items"
 
 # ============================================================================
-section "Step 8: Accept the Solution"
+section "Step 8: Approve the Solution"
 # ============================================================================
 
 # Submit for review, then approve (no open critiques)
 run_jjj solution submit "search index"
 assert_success "submit solution for review"
 run_jjj solution approve "search index" --no-rationale
-assert_success "accept solution with all critiques resolved"
+assert_success "approve solution with all critiques resolved"
 
 # Problem should auto-transition to solved (only solution)
 run_jjj problem show "Search is slow"
-assert_success "show problem after accept"
-assert_contains "solved" "problem auto-solved after accept"
+assert_success "show problem after approve"
+assert_contains "solved" "problem auto-solved after approve"
 
 # ============================================================================
 section "Step 9: Entity Resolution Methods"
@@ -147,9 +147,9 @@ run_jjj problem new "test" --priority invalid
 assert_failure "invalid priority rejected"
 assert_contains "Use" "error shows valid values"
 
-# Invalid status transition: solved requires accepted solution
+# Invalid status transition: solved requires approved solution
 run_jjj problem edit "auth" --status solved
-assert_failure "solved requires accepted solution"
+assert_failure "solved requires approved solution"
 
 # ============================================================================
 section "Step 11: Help Discoverability"

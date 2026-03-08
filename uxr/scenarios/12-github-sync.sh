@@ -197,7 +197,7 @@ run_jjj solution submit "Add session keepalive"
 assert_success "move solution to review"
 
 run_jjj solution approve "Add session keepalive" --force
-assert_success "force-accept solution"
+assert_success "force-approve solution"
 
 run_jjj problem solve "Login is slow" --github-close
 assert_success "solve closes problem and GitHub issue"

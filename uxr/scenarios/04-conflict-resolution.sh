@@ -126,13 +126,13 @@ assert_success "submit database for review"
 run_jjj critique new "caching" "Cache invalidation is hard" --severity high
 assert_success "critique on caching solution"
 
-# Alice tries to accept her solution (should be blocked)
+# Alice tries to approve her solution (should be blocked)
 run_jjj solution approve "caching" --no-rationale
-assert_failure "cannot accept with open critique"
+assert_failure "cannot approve with open critique"
 
-# Bob's solution has no critiques, can be accepted
+# Bob's solution has no critiques, can be approved
 run_jjj solution approve "database" --no-rationale
-assert_success "accept bob's uncontested solution"
+assert_success "approve bob's uncontested solution"
 
 # ============================================================================
 section "Test 5: Concurrent Entity Creation"
@@ -219,19 +219,19 @@ assert_success "add critique"
 run_jjj critique address "Issue found"
 assert_success "address critique"
 
-# Submit then accept solution
+# Submit then approve solution
 run_jjj solution submit "SM solution"
 assert_success "submit SM solution for review"
 run_jjj solution approve "SM solution" --no-rationale
-assert_success "accept solution"
+assert_success "approve solution"
 
-# Double-accept should be rejected
+# Double-approve should be rejected
 run_jjj solution approve "SM solution" --no-rationale
-assert_failure "double-accept is rejected"
+assert_failure "double-approve is rejected"
 
 # Try invalid transitions
 run_jjj solution edit "SM solution" --status proposed
-assert_failure "can't go from accepted back to proposed"
+assert_failure "can't go from approved back to proposed"
 
 # ============================================================================
 section "Test 9: Cascade Effects"

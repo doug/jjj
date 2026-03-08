@@ -106,7 +106,7 @@ assert_contains "Detached" "detach confirms removal"
 observe "Detach from Submitted requires --force — prevents accidental loss of work in progress"
 
 # ============================================================================
-section "Step 4: Validate critique then refute with rationale"
+section "Step 4: Validate critique then withdraw with rationale"
 # ============================================================================
 
 run_jjj critique new "JWT" "JWT expiry too short for mobile clients" --severity high
@@ -118,21 +118,21 @@ assert_contains "validated" "critique is now valid"
 
 observe "Validated critiques mean the solution has a confirmed flaw"
 
-# Validated critiques hard-block acceptance (same as Open critiques).
-# Must address or dismiss the blocking critique before accepting.
+# Validated critiques hard-block approval (same as Open critiques).
+# Must address or dismiss the blocking critique before approving.
 run_jjj solution approve "JWT" --no-rationale
-assert_failure "accept is blocked by validated critique"
-observe "Validated critiques hard-block acceptance — resolve them before accepting"
+assert_failure "approve is blocked by validated critique"
+observe "Validated critiques hard-block approval — resolve them before approving"
 
-# Dismiss the validated critique to unblock acceptance
+# Dismiss the validated critique to unblock approval
 run_jjj critique dismiss "JWT expiry"
 assert_success "dismiss the validated critique"
 
 run_jjj solution approve "JWT" --no-rationale
-assert_success "accept succeeds once critique is dismissed"
-assert_contains "approved" "solution accepted after resolving blocking critique"
+assert_success "approve succeeds once critique is dismissed"
+assert_contains "approved" "solution approved after resolving blocking critique"
 
-# Reset: re-open by... actually we just accepted it, so let's demonstrate refute
+# Reset: re-open by... actually we just approved it, so let's demonstrate withdraw
 # on a freshly created solution instead
 jj new -m "feat: jwt retry approach"
 run_jjj solution new "JWT with sliding expiry" --problem "Login takes too long"
@@ -143,14 +143,14 @@ assert_success "add critique to JWT variant"
 
 run_jjj solution withdraw "JWT with sliding" \
     --rationale "JWT statelessness is fundamentally incompatible with immediate revocation requirements"
-assert_success "refute solution with explicit rationale"
-assert_contains "withdrawn" "solution is now refuted"
+assert_success "withdraw solution with explicit rationale"
+assert_contains "withdrawn" "solution is now withdrawn"
 
 run_jjj solution show "JWT with sliding"
-assert_success "show refuted solution"
-assert_contains "withdrawn" "refuted state visible in details"
+assert_success "show withdrawn solution"
+assert_contains "withdrawn" "withdrawn state visible in details"
 
-observe "Refuting with a rationale creates a clear audit trail of why the approach failed"
+observe "Withdrawing with a rationale creates a clear audit trail of why the approach failed"
 
 # ============================================================================
 section "Step 5: Superseding solution (iteration)"
@@ -168,19 +168,19 @@ assert_contains "Sliding window" "superseding solution created"
 observe "supersedes links the new solution to the one it replaces — maintains decision history"
 
 # ============================================================================
-section "Step 6: Accept with rationale"
+section "Step 6: Approve with rationale"
 # ============================================================================
 
 run_jjj solution approve "Cache session" \
     --rationale "Session token cache gives 10x speedup with acceptable security tradeoffs"
-assert_success "accept solution with explicit rationale"
-assert_contains "approved" "solution accepted"
+assert_success "approve solution with explicit rationale"
+assert_contains "approved" "solution approved"
 
 run_jjj solution show "Cache session" --json
 assert_success "show approved solution as JSON"
 assert_contains "\"approved\"" "JSON shows approved status"
 
-observe "Rationale on accept records the 'why' alongside the decision"
+observe "Rationale on approve records the 'why' alongside the decision"
 
 # ============================================================================
 section "Step 7: solution assign"

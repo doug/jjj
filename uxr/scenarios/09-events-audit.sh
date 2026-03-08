@@ -52,17 +52,17 @@ assert_success "add critical critique"
 run_jjj critique address "not properly cleaned"
 assert_success "address the critique"
 
-# Submit then accept with a rationale that we can search for later
+# Submit then approve with a rationale that we can search for later
 run_jjj solution submit "Fix worker"
 assert_success "submit solution for review"
 run_jjj solution approve "Fix worker" \
     --rationale "RAII-based cleanup eliminates the leak class entirely"
-assert_success "accept solution with searchable rationale"
+assert_success "approve solution with searchable rationale"
 
-# Refute the second solution
+# Withdraw the second solution
 run_jjj solution withdraw "Lazy-load" \
     --rationale "Lazy loading increases first-request latency, not acceptable"
-assert_success "refute second solution"
+assert_success "withdraw second solution"
 
 # Dissolve the second problem
 run_jjj problem dissolve "Slow startup" \
@@ -102,7 +102,7 @@ assert_not_contains "solution_created" "no solution events in problem_created fi
 
 run_jjj events --event-type solution_approved
 assert_success "filter by solution_approved"
-assert_contains "solution_approved" "accepted event present"
+assert_contains "solution_approved" "approved event present"
 assert_not_contains "problem_created" "no problem events in solution filter"
 
 run_jjj events --event-type critique_raised
@@ -121,7 +121,7 @@ observe "Problem-scoped event view shows the complete history of one problem"
 run_jjj events --solution "Fix worker"
 assert_success "events filtered by solution title"
 assert_contains "solution_created" "solution creation event in filter"
-assert_contains "solution_approved" "solution acceptance in filter"
+assert_contains "solution_approved" "solution approval in filter"
 
 # ============================================================================
 section "Step 5: events --search (rationale full-text)"
@@ -129,7 +129,7 @@ section "Step 5: events --search (rationale full-text)"
 
 run_jjj events --search "RAII"
 assert_success "search events by rationale keyword"
-assert_contains "solution_approved" "rationale search finds the acceptance event"
+assert_contains "solution_approved" "rationale search finds the approval event"
 
 run_jjj events --search "latency"
 assert_success "search events for refutation rationale"

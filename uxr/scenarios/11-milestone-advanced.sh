@@ -165,14 +165,14 @@ assert_success "address the critique"
 run_jjj solution submit "Add nil check"
 assert_success "submit nil check for review"
 run_jjj solution approve "Add nil check" --no-rationale
-assert_success "accept login crash solution"
+assert_success "approve login crash solution"
 
 run_jjj solution new "Fix flexbox order in settings" --problem "Settings page"
 assert_success "create solution for layout bug"
 run_jjj solution submit "Fix flexbox"
 assert_success "submit flexbox for review"
 run_jjj solution approve "Fix flexbox" --no-rationale
-assert_success "accept settings layout solution"
+assert_success "approve settings layout solution"
 
 # Both v1.0 problems are now solved — check roadmap reflects this
 run_jjj milestone roadmap

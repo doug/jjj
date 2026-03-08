@@ -3,7 +3,7 @@
 #
 # Tests all critique lifecycle paths not covered by the basic scenarios:
 #
-#   critique validate     (Valid state — hard-blocks accept, same as Open)
+#   critique validate     (Valid state — hard-blocks approve, same as Open)
 #   critique dismiss      (shown to be incorrect)
 #   critique reply        (comment threading)
 #   critique edit         (change title/severity/status)
@@ -166,7 +166,7 @@ run_jjj critique list --status dismissed
 assert_success "list dismissed critiques"
 assert_contains "unknown fields" "dismissed critique in filtered list"
 
-# Dismissed critiques should not block acceptance
+# Dismissed critiques should not block approval
 run_jjj critique list --status open
 assert_success "list open critiques after dismiss"
 assert_not_contains "unknown fields" "dismissed critique not in open list"
@@ -174,7 +174,7 @@ assert_not_contains "unknown fields" "dismissed critique not in open list"
 observe "Dismissed critiques are archived, not deleted — the reasoning remains visible"
 
 # ============================================================================
-section "Step 7: critique validate hard-blocks accept; correct flow: address then accept"
+section "Step 7: critique validate hard-blocks approve; correct flow: address then approve"
 # ============================================================================
 
 # The DoS risk critique is still open — validate it
@@ -192,23 +192,23 @@ observe "Validate means: this critique is confirmed correct — the solution has
 run_jjj solution submit "JSON schema"
 assert_success "submit JSON schema for review"
 
-# Valid critiques hard-block acceptance (same as Open critiques)
+# Valid critiques hard-block approval (same as Open critiques)
 run_jjj solution approve "JSON schema" --no-rationale
-assert_failure "accept is blocked by validated critique"
-observe "Validated critiques hard-block acceptance — must resolve them first"
+assert_failure "approve is blocked by validated critique"
+observe "Validated critiques hard-block approval — must resolve them first"
 
-# Correct flow: address (or dismiss) the blocking critique, then accept
+# Correct flow: address (or dismiss) the blocking critique, then approve
 run_jjj critique address "DoS risk"
 assert_success "address the validated critique"
 
 run_jjj solution approve "JSON schema" --no-rationale
-assert_success "accept succeeds after addressing the blocking critique"
-assert_contains "approved" "solution accepted"
+assert_success "approve succeeds after addressing the blocking critique"
+assert_contains "approved" "solution approved"
 
-observe "Address or dismiss a validated critique to unblock acceptance"
-observe "Convention: if a critique is validated, fix the flaw, address the critique, then accept"
+observe "Address or dismiss a validated critique to unblock approval"
+observe "Convention: if a critique is validated, fix the flaw, address the critique, then approve"
 
-# Demonstrate the proper refute flow with a new solution
+# Demonstrate the proper withdraw flow with a new solution
 run_jjj solution new "Rewrite validation layer with type-safe parser" \
     --problem "API lacks input validation"
 assert_success "create replacement solution"
@@ -223,10 +223,10 @@ assert_success "validate the size critique"
 
 run_jjj solution withdraw "Rewrite validation" \
     --rationale "2MB binary increase violates our 1MB size budget for this service"
-assert_success "refute solution because validated critique confirms it violates constraints"
-assert_contains "withdrawn" "solution is now refuted"
+assert_success "withdraw solution because validated critique confirms it violates constraints"
+assert_contains "withdrawn" "solution is now withdrawn"
 
-observe "Validated critique → explicit refute → clear audit trail of why the approach failed"
+observe "Validated critique → explicit withdraw → clear audit trail of why the approach failed"
 
 # Final solution that actually works
 run_jjj solution new "Inline schema validation with zero dependencies" \
@@ -245,10 +245,10 @@ run_jjj solution submit "Inline schema"
 assert_success "submit Inline schema for review"
 run_jjj solution approve "Inline schema" \
     --rationale "Zero-dependency validation eliminates size concern; test coverage added"
-assert_success "accept final solution with all critiques resolved"
-assert_contains "approved" "solution accepted"
+assert_success "approve final solution with all critiques resolved"
+assert_contains "approved" "solution approved"
 
-observe "Full validate→refute→new solution→accept cycle completes cleanly"
+observe "Full validate→withdraw→new solution→approve cycle completes cleanly"
 
 # ============================================================================
 section "Step 8: critique show --json"

@@ -3,7 +3,7 @@
 #
 # Simulates a realistic onboarding experience: a developer joins a project
 # with existing code history, initializes jjj, and works through the full
-# Problem → Solution → Critique → Accept lifecycle.
+# Problem → Solution → Critique → Approve lifecycle.
 #
 # This scenario was converted from demo/ and serves as both a regression
 # test and a living example of the core jjj workflow.
@@ -141,18 +141,18 @@ run_jjj status
 assert_success "status with open critique"
 assert_contains "BLOCKED" "open critique blocks solution"
 
-observe "BLOCKED state is immediately visible — no way to accidentally accept a critiqued solution"
+observe "BLOCKED state is immediately visible — no way to accidentally approve a critiqued solution"
 
 # Submit for review (makes critique-blocking visible on approve attempts)
 run_jjj solution submit "token bucket"
 assert_success "submit solution for review"
 
-# Trying to accept now should warn about open critiques
+# Trying to approve now should warn about open critiques
 run_jjj solution approve "token bucket"
-assert_failure "accept blocked by open critique"
+assert_failure "approve blocked by open critique"
 assert_contains "critique" "error mentions the blocking critique"
 
-observe "Acceptance gate enforced — critique must be resolved first"
+observe "Approval gate enforced — critique must be resolved first"
 
 # ============================================================================
 section "Step 6: Address the critique"
@@ -166,10 +166,10 @@ run_jjj status
 assert_success "status after addressing critique"
 assert_not_contains "BLOCKED" "no longer blocked after critique addressed"
 
-observe "Once addressed, the path to acceptance is clear"
+observe "Once addressed, the path to approval is clear"
 
 # ============================================================================
-section "Step 7: Accept the solution"
+section "Step 7: Approve the solution"
 # ============================================================================
 
 run_jjj solution approve "token bucket" --force
@@ -178,8 +178,8 @@ assert_contains "approved" "solution is now approved"
 
 # Only solution for that problem → problem auto-closes
 run_jjj problem show "rate limiting"
-assert_success "show problem after accept"
-assert_contains "solved" "problem auto-solved when only solution is accepted"
+assert_success "show problem after approve"
+assert_contains "solved" "problem auto-solved when only solution is approved"
 
 observe "Problem lifecycle closes automatically — no manual bookkeeping"
 

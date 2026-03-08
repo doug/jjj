@@ -158,7 +158,7 @@ pub fn upsert_solution(conn: &Connection, solution: &Solution) -> SqliteResult<(
     conn.execute(
         "INSERT OR REPLACE INTO solutions (
             id, title, status, problem_id, change_ids, supersedes, assignee,
-            force_accepted, created_at, updated_at, approach, tradeoffs,
+            force_approved, created_at, updated_at, approach, tradeoffs,
             github_pr, github_branch
         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
         params![
@@ -185,7 +185,7 @@ pub fn upsert_solution(conn: &Connection, solution: &Solution) -> SqliteResult<(
 pub fn load_solution(conn: &Connection, id: &str) -> SqliteResult<Option<Solution>> {
     let mut stmt = conn.prepare(
         "SELECT id, title, status, problem_id, change_ids, supersedes, assignee,
-                force_accepted, created_at, updated_at, approach, tradeoffs,
+                force_approved, created_at, updated_at, approach, tradeoffs,
                 github_pr, github_branch
          FROM solutions WHERE id = ?1",
     )?;
@@ -203,7 +203,7 @@ pub fn load_solution(conn: &Connection, id: &str) -> SqliteResult<Option<Solutio
 pub fn list_solutions(conn: &Connection) -> SqliteResult<Vec<Solution>> {
     let mut stmt = conn.prepare(
         "SELECT id, title, status, problem_id, change_ids, supersedes, assignee,
-                force_accepted, created_at, updated_at, approach, tradeoffs,
+                force_approved, created_at, updated_at, approach, tradeoffs,
                 github_pr, github_branch
          FROM solutions ORDER BY created_at DESC",
     )?;
@@ -220,7 +220,7 @@ pub fn list_solutions_for_problem(
 ) -> SqliteResult<Vec<Solution>> {
     let mut stmt = conn.prepare(
         "SELECT id, title, status, problem_id, change_ids, supersedes, assignee,
-                force_accepted, created_at, updated_at, approach, tradeoffs,
+                force_approved, created_at, updated_at, approach, tradeoffs,
                 github_pr, github_branch
          FROM solutions WHERE problem_id = ?1 ORDER BY created_at DESC",
     )?;

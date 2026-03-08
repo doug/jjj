@@ -68,7 +68,7 @@ assert_success "create solution for crash fix"
 run_jjj solution submit "Add nil guard"
 assert_success "review solution"
 run_jjj solution approve "Add nil guard" --no-rationale
-assert_success "accept solution"
+assert_success "approve solution"
 run_jjj problem solve "Fix login crash"
 assert_success "solve first problem"
 

@@ -5,7 +5,7 @@
 # Bob creates milestones/problems, Alice proposes solutions, Charlie
 # reviews and raises critiques. Tests the full team lifecycle.
 #
-# Tests: milestones, assign, reviewers, competing solutions, refute,
+# Tests: milestones, assign, reviewers, competing solutions, withdraw,
 #        critique blocking, roadmap, events
 
 source "$(dirname "$0")/../lib.sh"
@@ -103,7 +103,7 @@ run_jjj critique new "elasticsearch" "Elasticsearch requires Java runtime" --sev
 assert_success "charlie critiques elasticsearch solution"
 
 # ============================================================================
-section "Check: Acceptance Should Be Blocked"
+section "Check: Approval Should Be Blocked"
 # ============================================================================
 
 # Submit so approval attempts hit critique check (not state check)
@@ -111,7 +111,7 @@ run_jjj solution submit "OAuth token"
 assert_success "submit OAuth solution for review"
 
 run_jjj solution approve "OAuth token" --no-rationale
-assert_failure "cannot accept with open critiques"
+assert_failure "cannot approve with open critiques"
 assert_contains "critique" "error mentions critiques"
 
 # ============================================================================
@@ -130,41 +130,41 @@ assert_success "list critiques for OAuth solution"
 observe "Remaining critiques: $OUTPUT"
 
 # ============================================================================
-section "Bob: Refute Elasticsearch, Accept OAuth"
+section "Bob: Withdraw Elasticsearch, Approve OAuth"
 # ============================================================================
 
-# Refute the heavier solution
+# Withdraw the heavier solution
 run_jjj solution withdraw "elasticsearch" --rationale "Too heavyweight for our needs" --no-rationale
-assert_success "refute elasticsearch solution"
+assert_success "withdraw elasticsearch solution"
 
-# Check it's refuted
+# Check it's withdrawn
 run_jjj solution show "elasticsearch"
-assert_success "show refuted solution"
-assert_contains "withdrawn" "solution is refuted"
+assert_success "show withdrawn solution"
+assert_contains "withdrawn" "solution is withdrawn"
 
 # Address the review critique (bob's sign-off)
 run_jjj critique list --solution "OAuth" --status open
-observe "Open critiques before accept: $OUTPUT"
+observe "Open critiques before approve: $OUTPUT"
 
-# Try to accept OAuth (may need to address review critique first)
+# Try to approve OAuth (may need to address review critique first)
 run_jjj solution approve "OAuth token" --no-rationale
 if [[ $EXIT_CODE -ne 0 ]]; then
-    observe "Accept failed, likely review critique still open"
-    # Force accept as the reviewer
+    observe "Approve failed, likely review critique still open"
+    # Force approve as the reviewer
     run_jjj solution approve "OAuth token" --force --no-rationale
-    assert_success "force accept with review critique"
+    assert_success "force approve with review critique"
 else
-    assert_success "accept OAuth solution"
+    assert_success "approve OAuth solution"
 fi
 
 # ============================================================================
 section "Verify Auto-Solve and Check Milestone"
 # ============================================================================
 
-# Problem should have been auto-solved when solution was accepted
+# Problem should have been auto-solved when solution was approved
 run_jjj problem show "login"
 assert_success "show login problem"
-assert_contains "solved" "login problem auto-solved after accept"
+assert_contains "solved" "login problem auto-solved after approve"
 
 run_jjj milestone roadmap
 assert_success "milestone roadmap"

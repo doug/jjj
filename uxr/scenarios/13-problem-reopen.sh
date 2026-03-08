@@ -32,7 +32,7 @@ run_jjj problem new "Login times out after idle" --priority high --force
 assert_success "create problem"
 assert_contains "Login times out" "problem title in output"
 
-# Solve the problem: need a reviewed+accepted solution first
+# Solve the problem: need a reviewed+approved solution first
 run_jjj solution new "Add session keepalive" --problem "Login times out" --force
 assert_success "create solution"
 
@@ -40,7 +40,7 @@ run_jjj solution submit "Add session keepalive"
 assert_success "review solution"
 
 run_jjj solution approve "Add session keepalive" --no-rationale
-assert_success "accept solution"
+assert_success "approve solution"
 
 run_jjj problem solve "Login times out"
 assert_success "solve problem"

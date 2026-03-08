@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS solutions (
     change_ids TEXT DEFAULT '[]',  -- JSON array
     supersedes TEXT,
     assignee TEXT,
-    force_accepted INTEGER NOT NULL DEFAULT 0,
+    force_approved INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     approach TEXT DEFAULT '',
