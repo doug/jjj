@@ -446,3 +446,24 @@ fn test_problem_list_filter_by_tag() {
         stdout
     );
 }
+
+#[test]
+fn test_problem_edit_set_tags() {
+    if !jj_available() {
+        return;
+    }
+    let dir = setup_test_repo();
+
+    run_jjj_success(&dir, &["problem", "new", "Set Tags Test", "--tags", "old"]);
+
+    // Replace all tags atomically
+    run_jjj_success(&dir, &["problem", "edit", "Set Tags Test", "--set-tags", "alpha,beta"]);
+    let stdout = run_jjj_success(&dir, &["problem", "show", "Set Tags Test"]);
+    assert!(stdout.contains("alpha") && stdout.contains("beta"), "Expected new tags: {}", stdout);
+    assert!(!stdout.contains("old"), "Expected old tag removed: {}", stdout);
+
+    // Clear all tags with empty --set-tags
+    run_jjj_success(&dir, &["problem", "edit", "Set Tags Test", "--set-tags", ""]);
+    let stdout = run_jjj_success(&dir, &["problem", "show", "Set Tags Test"]);
+    assert!(!stdout.contains("Tags:"), "Expected no tags after clear: {}", stdout);
+}

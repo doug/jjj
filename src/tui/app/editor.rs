@@ -81,11 +81,17 @@ impl App {
         match entity_type {
             EntityType::Problem => {
                 let problem = self.store.load_problem(entity_id)?;
+                let tags_line = if problem.tags.is_empty() {
+                    "tags: \n".to_string()
+                } else {
+                    format!("tags: {}\n", problem.tags.join(", "))
+                };
                 Ok(format!(
-                    "---\ntitle: {}\nstatus: {}\npriority: {}\n---\n\n## Description\n\n{}\n",
+                    "---\ntitle: {}\nstatus: {}\npriority: {}\n{}---\n\n## Description\n\n{}\n",
                     problem.title,
                     problem.status,
                     problem.priority,
+                    tags_line,
                     if problem.description.is_empty() {
                         ""
                     } else {
@@ -95,10 +101,16 @@ impl App {
             }
             EntityType::Solution => {
                 let solution = self.store.load_solution(entity_id)?;
+                let tags_line = if solution.tags.is_empty() {
+                    "tags: \n".to_string()
+                } else {
+                    format!("tags: {}\n", solution.tags.join(", "))
+                };
                 Ok(format!(
-                    "---\ntitle: {}\nstatus: {}\n---\n\n## Description\n\n{}\n",
+                    "---\ntitle: {}\nstatus: {}\n{}---\n\n## Description\n\n{}\n",
                     solution.title,
                     solution.status,
+                    tags_line,
                     if solution.approach.is_empty() {
                         ""
                     } else {
@@ -213,6 +225,19 @@ impl App {
             .map(|l| l.trim_start_matches("title:").trim().to_string())
             .unwrap_or_default();
 
+        // Extract tags from frontmatter
+        let tags: Vec<String> = frontmatter
+            .lines()
+            .find(|l| l.starts_with("tags:"))
+            .map(|l| {
+                l.trim_start_matches("tags:")
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect()
+            })
+            .unwrap_or_default();
+
         // Extract description from body (after ## Description header)
         let description = body
             .strip_prefix("## Description")
@@ -226,6 +251,7 @@ impl App {
                         let mut problem = self.store.load_problem(entity_id)?;
                         problem.title = title.clone();
                         problem.description = description.clone();
+                        problem.tags = tags.clone();
                         self.store.save_problem(&problem)
                     })?;
             }
@@ -235,6 +261,7 @@ impl App {
                         let mut solution = self.store.load_solution(entity_id)?;
                         solution.title = title.clone();
                         solution.approach = description.clone();
+                        solution.tags = tags.clone();
                         self.store.save_solution(&solution)
                     })?;
             }
