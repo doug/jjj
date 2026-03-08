@@ -191,6 +191,94 @@ impl App {
         Ok(())
     }
 
+    pub(super) fn start_edit_tags(&mut self) -> Result<()> {
+        use super::super::tree::TreeNode;
+
+        let (prompt, action, current_tags) =
+            if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
+                match &item.node {
+                    TreeNode::Problem { id, .. } => {
+                        let problem = self.store.load_problem(id)?;
+                        (
+                            "Tags (comma-separated): ".to_string(),
+                            InputAction::EditTags {
+                                entity_type: EntityType::Problem,
+                                entity_id: id.clone(),
+                            },
+                            problem.tags.join(", "),
+                        )
+                    }
+                    TreeNode::Solution { id, .. } => {
+                        let solution = self.store.load_solution(id)?;
+                        (
+                            "Tags (comma-separated): ".to_string(),
+                            InputAction::EditTags {
+                                entity_type: EntityType::Solution,
+                                entity_id: id.clone(),
+                            },
+                            solution.tags.join(", "),
+                        )
+                    }
+                    _ => return Ok(()),
+                }
+            } else {
+                return Ok(());
+            };
+
+        let cursor_pos = current_tags.len();
+        self.ui.input_mode = InputMode::Input {
+            prompt,
+            buffer: current_tags,
+            action,
+            cursor_pos,
+        };
+        Ok(())
+    }
+
+    pub(super) fn update_tags(
+        &mut self,
+        entity_type: &EntityType,
+        entity_id: &str,
+        input: &str,
+    ) -> Result<()> {
+        let mut tags: Vec<String> = input
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        // Case-insensitive dedup
+        let mut seen = std::collections::HashSet::new();
+        tags.retain(|t| seen.insert(t.to_lowercase()));
+        tags.sort();
+
+        match entity_type {
+            EntityType::Problem => {
+                self.store.with_metadata(
+                    &format!("Update problem tags: {}", entity_id),
+                    || {
+                        let mut problem = self.store.load_problem(entity_id)?;
+                        problem.tags = tags.clone();
+                        self.store.save_problem(&problem)
+                    },
+                )?;
+            }
+            EntityType::Solution => {
+                self.store.with_metadata(
+                    &format!("Update solution tags: {}", entity_id),
+                    || {
+                        let mut solution = self.store.load_solution(entity_id)?;
+                        solution.tags = tags.clone();
+                        self.store.save_solution(&solution)
+                    },
+                )?;
+            }
+            EntityType::Critique => return Ok(()),
+        }
+        self.show_flash("Tags updated");
+        self.refresh_data()?;
+        Ok(())
+    }
+
     pub(super) fn handle_action_a(&mut self) -> Result<()> {
         if let Some((id, entity_type)) = self.get_selected_entity() {
             match entity_type {

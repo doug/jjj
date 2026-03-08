@@ -405,6 +405,10 @@ pub enum ProblemAction {
         /// Remove a tag
         #[arg(long)]
         remove_tag: Option<String>,
+
+        /// Replace all tags (comma-separated; empty string clears tags)
+        #[arg(long, value_delimiter = ',')]
+        set_tags: Option<Vec<String>>,
     },
 
     /// Show problems as a hierarchy tree
@@ -579,6 +583,10 @@ pub enum SolutionAction {
         /// Remove a tag
         #[arg(long)]
         remove_tag: Option<String>,
+
+        /// Replace all tags (comma-separated; empty string clears tags)
+        #[arg(long, value_delimiter = ',')]
+        set_tags: Option<Vec<String>>,
     },
 
     /// Link the current jj change to a solution

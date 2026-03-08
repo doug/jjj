@@ -47,7 +47,8 @@ pub fn execute(ctx: &CommandContext, action: SolutionAction) -> Result<()> {
             status,
             add_tag,
             remove_tag,
-        } => edit_solution(ctx, solution_id, title, status, add_tag, remove_tag),
+            set_tags,
+        } => edit_solution(ctx, solution_id, title, status, add_tag, remove_tag, set_tags),
         SolutionAction::Attach { solution_id, force } => attach_change(ctx, solution_id, force),
         SolutionAction::Detach {
             solution_id,
@@ -473,6 +474,7 @@ fn edit_solution(
     status: Option<String>,
     add_tag: Option<String>,
     remove_tag: Option<String>,
+    set_tags: Option<Vec<String>>,
 ) -> Result<()> {
     let store = &ctx.store;
     let solution_id = ctx.resolve_solution(&solution_input)?;
@@ -491,6 +493,13 @@ fn edit_solution(
             solution
                 .try_set_status(new_status)
                 .map_err(crate::error::JjjError::Validation)?;
+        }
+
+        if let Some(ref tags) = set_tags {
+            let mut t: Vec<String> = tags.iter().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+            t.sort();
+            t.dedup();
+            solution.tags = t;
         }
 
         if let Some(ref tag) = add_tag {

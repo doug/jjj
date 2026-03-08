@@ -306,13 +306,13 @@ impl App {
                 TreeNode::Backlog { .. } => "[n]ew problem".to_string(),
                 TreeNode::Problem { id, .. } => {
                     format!(
-                        "{}: [n]ew solution [s]olve [d]issolve [e]dit [E]dit in $EDITOR [x] delete",
+                        "{}: [n]ew solution [s]olve [d]issolve [e]dit [t]ags [E]dit in $EDITOR [x] delete",
                         id
                     )
                 }
                 TreeNode::Solution { id, .. } => {
                     format!(
-                        "{}: [a]pprove [r] withdraw [g]o to change [n]ew critique [e]dit [E]dit in $EDITOR [x] delete",
+                        "{}: [a]pprove [r] withdraw [g]o to change [n]ew critique [e]dit [t]ags [E]dit in $EDITOR [x] delete",
                         id
                     )
                 }

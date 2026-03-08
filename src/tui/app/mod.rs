@@ -53,6 +53,10 @@ pub enum InputAction {
         entity_type: EntityType,
         entity_id: String,
     },
+    EditTags {
+        entity_type: EntityType,
+        entity_id: String,
+    },
     Search,
     DissolveP {
         problem_id: String,
@@ -319,6 +323,7 @@ impl App {
             KeyCode::Char('d') => self.handle_action_d()?,
             KeyCode::Char('n') => self.start_new_item()?,
             KeyCode::Char('e') => self.start_edit_title()?,
+            KeyCode::Char('t') => self.start_edit_tags()?,
             KeyCode::Char('s') => self.handle_action_s()?,
             KeyCode::Char('o') => self.handle_action_o()?,
             KeyCode::Char('D') => self.handle_action_shift_d()?,
@@ -435,7 +440,7 @@ impl App {
                 self.ui.input_mode = InputMode::Normal;
             }
             KeyCode::Enter => {
-                if !buffer.is_empty() {
+                if !buffer.is_empty() || matches!(action, InputAction::EditTags { .. }) {
                     self.execute_input_action(&action, &buffer)?;
                 }
                 self.ui.input_mode = InputMode::Normal;
@@ -515,6 +520,12 @@ impl App {
                 entity_id,
             } => {
                 self.update_title(entity_type, entity_id, title)?;
+            }
+            InputAction::EditTags {
+                entity_type,
+                entity_id,
+            } => {
+                self.update_tags(entity_type, entity_id, title)?;
             }
             InputAction::DissolveP { problem_id } => {
                 self.dissolve_problem(problem_id, title)?;

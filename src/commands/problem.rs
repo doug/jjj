@@ -49,7 +49,8 @@ pub fn execute(ctx: &CommandContext, action: ProblemAction) -> Result<()> {
             parent,
             add_tag,
             remove_tag,
-        } => edit_problem(ctx, problem_id, title, status, priority, parent, add_tag, remove_tag),
+            set_tags,
+        } => edit_problem(ctx, problem_id, title, status, priority, parent, add_tag, remove_tag, set_tags),
         ProblemAction::Tree { problem_id } => show_tree(ctx, problem_id),
         ProblemAction::Solve {
             problem_id,
@@ -467,6 +468,7 @@ fn edit_problem(
     parent: Option<String>,
     add_tag: Option<String>,
     remove_tag: Option<String>,
+    set_tags: Option<Vec<String>>,
 ) -> Result<()> {
     let store = &ctx.store;
 
@@ -529,6 +531,13 @@ fn edit_problem(
             } else {
                 Some(new_parent.clone())
             });
+        }
+
+        if let Some(ref tags) = set_tags {
+            let mut t: Vec<String> = tags.iter().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+            t.sort();
+            t.dedup();
+            problem.tags = t;
         }
 
         if let Some(ref tag) = add_tag {

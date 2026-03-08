@@ -42,7 +42,8 @@ class ProblemNode extends vscode.TreeItem {
       : vscode.TreeItemCollapsibleState.Collapsed);
     this.contextValue = "problem";
     const assigneeSuffix = problem.assignee ? ` · @${problem.assignee.split("<")[0].trim().slice(0, 15)}` : "";
-    this.description = `${problem.id} [${problem.status}]${problem.priority !== "medium" ? ` ${problem.priority}` : ""}${assigneeSuffix}`;
+    const tagsSuffix = problem.tags?.length ? ` ${problem.tags.map(t => `#${t}`).join(" ")}` : "";
+    this.description = `${problem.id} [${problem.status}]${problem.priority !== "medium" ? ` ${problem.priority}` : ""}${assigneeSuffix}${tagsSuffix}`;
     this.iconPath = problem.status === "solved"
       ? new vscode.ThemeIcon("check", new vscode.ThemeColor("testing.iconPassed"))
       : problem.status === "in_progress"
@@ -65,7 +66,8 @@ class SolutionNode extends vscode.TreeItem {
     const critDesc = critiqueCount > 0 ? ` — ${critiqueCount} critiques` : "";
     const changeDesc = solution.change_ids.length > 0 ? ` [${solution.change_ids.length} changes]` : "";
     const assigneeSuffix = solution.assignee ? ` · @${solution.assignee.split("<")[0].trim().slice(0, 15)}` : "";
-    this.description = `${solution.id} [${solution.status}]${critDesc}${changeDesc}${assigneeSuffix}`;
+    const tagsSuffix = solution.tags?.length ? ` ${solution.tags.map(t => `#${t}`).join(" ")}` : "";
+    this.description = `${solution.id} [${solution.status}]${critDesc}${changeDesc}${assigneeSuffix}${tagsSuffix}`;
     this.iconPath = solution.status === "approved"
       ? new vscode.ThemeIcon("check", new vscode.ThemeColor("testing.iconPassed"))
       : solution.status === "withdrawn"

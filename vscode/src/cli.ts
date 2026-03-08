@@ -19,6 +19,7 @@ export interface Problem {
   priority: "low" | "medium" | "high" | "critical";
   dissolved_reason: string | null;
   github_issue?: number | null;
+  tags: string[];
 }
 
 export interface Solution {
@@ -37,6 +38,7 @@ export interface Solution {
   supersedes: string | null;
   github_pr?: number | null;
   github_branch?: string | null;
+  tags: string[];
 }
 
 export interface Reply {
@@ -279,6 +281,18 @@ export class JjjCli {
 
   async editSolution(solutionId: string, title: string): Promise<string> {
     return this.exec(["solution", "edit", solutionId, "--title", title]);
+  }
+
+  async editProblemTags(id: string, tags: string[]): Promise<string> {
+    return this.exec(["problem", "edit", id, "--set-tags", tags.join(",") || ""]);
+  }
+
+  async editSolutionTags(id: string, tags: string[]): Promise<string> {
+    return this.exec(["solution", "edit", id, "--set-tags", tags.join(",") || ""]);
+  }
+
+  async listTags(): Promise<{tag: string; count: number}[]> {
+    return this.execJson<{tag: string; count: number}[]>(["tags"]);
   }
 
   // --- GitHub Sync ---

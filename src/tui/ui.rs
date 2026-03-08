@@ -511,6 +511,7 @@ fn get_context_actions(app: &App) -> Vec<Line<'static>> {
             lines.push(Line::from("    D       Dissolve (with reason)"));
             lines.push(Line::from("    A       Assign to me"));
             lines.push(Line::from("    e       Edit title"));
+            lines.push(Line::from("    t       Edit tags"));
             lines.push(Line::from("    E       Edit in $EDITOR"));
             lines.push(Line::from("    x       Delete"));
         }
@@ -522,6 +523,7 @@ fn get_context_actions(app: &App) -> Vec<Line<'static>> {
             lines.push(Line::from("    A       Assign to me"));
             lines.push(Line::from("    g       Go to change"));
             lines.push(Line::from("    e       Edit title"));
+            lines.push(Line::from("    t       Edit tags"));
             lines.push(Line::from("    E       Edit in $EDITOR"));
             lines.push(Line::from("    x       Delete"));
         }

@@ -202,6 +202,16 @@
         "command": "jjj.editSolution",
         "title": "Rename Solution",
         "category": "JJJ"
+      },
+      {
+        "command": "jjj.editProblemTags",
+        "title": "Edit Problem Tags",
+        "category": "JJJ"
+      },
+      {
+        "command": "jjj.editSolutionTags",
+        "title": "Edit Solution Tags",
+        "category": "JJJ"
       }
     ],
     "viewsContainers": {
@@ -351,9 +361,19 @@
           "group": "3_status@2"
         },
         {
+          "command": "jjj.editProblemTags",
+          "when": "viewItem == problem",
+          "group": "3_status@3"
+        },
+        {
           "command": "jjj.editSolution",
           "when": "viewItem =~ /^solution-/",
           "group": "3_status@2"
+        },
+        {
+          "command": "jjj.editSolutionTags",
+          "when": "viewItem =~ /^solution-/",
+          "group": "3_status@3"
         }
       ],
       "editor/context": [

@@ -471,6 +471,108 @@ export function registerCommands(
     }),
   );
 
+  // --- Edit Tags ---
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("jjj.editProblemTags", async (node?: unknown) => {
+      try {
+        let problemId: string;
+
+        if (node && typeof node === "object" && "problem" in node) {
+          problemId = (node as { problem: { id: string } }).problem.id;
+        } else {
+          const problems = cache.getProblems();
+          const pick = await vscode.window.showQuickPick(
+            problems.map(p => ({ label: p.title, description: p.id.slice(0, 8), id: p.id })),
+            { placeHolder: "Select problem to edit tags" },
+          );
+          if (!pick) { return; }
+          problemId = pick.id;
+        }
+
+        const problem = cache.getProblems().find(p => p.id === problemId);
+        const currentTags = new Set(problem?.tags ?? []);
+
+        // Get all known tags in the project
+        let allTags: string[] = [];
+        try {
+          const tagList = await cli.listTags();
+          allTags = tagList.map(t => t.tag);
+        } catch { /* ignore */ }
+
+        // Build QuickPick items: all known tags, pre-checked where applicable
+        const tagSet = new Set([...allTags, ...currentTags]);
+        const items = Array.from(tagSet).sort().map(tag => ({
+          label: tag,
+          picked: currentTags.has(tag),
+        }));
+
+        const selected = await vscode.window.showQuickPick(items, {
+          canPickMany: true,
+          placeHolder: "Select tags (type to add new)",
+        });
+        if (!selected) { return; }
+
+        await cli.editProblemTags(problemId, selected.map(s => s.label));
+        vscode.window.showInformationMessage("Tags updated");
+        await cache.refresh();
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e);
+        vscode.window.showErrorMessage(`JJJ: ${message}`);
+      }
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("jjj.editSolutionTags", async (node?: unknown) => {
+      try {
+        let solutionId: string;
+
+        if (node && typeof node === "object" && "solution" in node) {
+          solutionId = (node as { solution: { id: string } }).solution.id;
+        } else {
+          const solutions = cache.getSolutions();
+          const pick = await vscode.window.showQuickPick(
+            solutions.map(s => ({ label: s.title, description: s.id.slice(0, 8), id: s.id })),
+            { placeHolder: "Select solution to edit tags" },
+          );
+          if (!pick) { return; }
+          solutionId = pick.id;
+        }
+
+        const solution = cache.getSolutions().find(s => s.id === solutionId);
+        const currentTags = new Set(solution?.tags ?? []);
+
+        // Get all known tags in the project
+        let allTags: string[] = [];
+        try {
+          const tagList = await cli.listTags();
+          allTags = tagList.map(t => t.tag);
+        } catch { /* ignore */ }
+
+        // Build QuickPick items
+        const tagSet = new Set([...allTags, ...currentTags]);
+        const items = Array.from(tagSet).sort().map(tag => ({
+          label: tag,
+          picked: currentTags.has(tag),
+        }));
+
+        const selected = await vscode.window.showQuickPick(items, {
+          canPickMany: true,
+          placeHolder: "Select tags (type to add new)",
+        });
+        if (!selected) { return; }
+
+        await cli.editSolutionTags(solutionId, selected.map(s => s.label));
+        vscode.window.showInformationMessage("Tags updated");
+        await cache.refresh();
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e);
+        vscode.window.showErrorMessage(`JJJ: ${message}`);
+      }
+    }),
+  );
+
   context.subscriptions.push(
     vscode.commands.registerCommand("jjj.editSolution", async (node?: unknown) => {
       try {
