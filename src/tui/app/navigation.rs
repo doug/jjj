@@ -206,10 +206,13 @@ impl App {
     pub(super) fn start_search(&mut self) {
         use super::InputAction;
         use super::InputMode;
+        let buffer = self.ui.search_filter.clone().unwrap_or_default();
+        let cursor_pos = buffer.len();
         self.ui.input_mode = InputMode::Input {
             prompt: "/".to_string(),
-            buffer: self.ui.search_filter.clone().unwrap_or_default(),
+            buffer,
             action: InputAction::Search,
+            cursor_pos,
         };
     }
 
@@ -300,18 +303,21 @@ impl App {
                 TreeNode::Milestone { id, .. } => {
                     format!("{}: [e]dit", id)
                 }
-                TreeNode::Backlog { .. } => "[p]roblem new".to_string(),
+                TreeNode::Backlog { .. } => "[n]ew problem".to_string(),
                 TreeNode::Problem { id, .. } => {
-                    format!("{}: [n]ew solution [s]olve [d]issolve [e]dit", id)
+                    format!(
+                        "{}: [n]ew solution [s]olve [d]issolve [e]dit [E]dit in $EDITOR [x] delete",
+                        id
+                    )
                 }
                 TreeNode::Solution { id, .. } => {
                     format!(
-                        "{}: [a]pprove [r] withdraw [g]o to change [n]ew critique [e]dit",
+                        "{}: [a]pprove [r] withdraw [g]o to change [n]ew critique [e]dit [E]dit in $EDITOR [x] delete",
                         id
                     )
                 }
                 TreeNode::Critique { id, .. } => {
-                    format!("{}: [a]ddress [d]ismiss [e]dit", id)
+                    format!("{}: [a]ddress [d]ismiss [e]dit [E]dit in $EDITOR [x] delete", id)
                 }
             }
         } else {

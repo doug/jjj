@@ -168,7 +168,7 @@ fn test_problem_priority() {
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("P0/critical") || stdout.contains("Critical"),
+        stdout.contains("P0") || stdout.contains("Critical"),
         "Priority not shown in output: {}",
         stdout
     );
@@ -179,7 +179,7 @@ fn test_problem_priority() {
     let output = run_jjj(dir_path, &["problem", "show", "Normal bug"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("P2/medium") || stdout.contains("Medium"),
+        stdout.contains("P2") || stdout.contains("Medium"),
         "Default priority not shown: {}",
         stdout
     );

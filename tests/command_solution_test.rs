@@ -553,3 +553,75 @@ fn test_solution_show_nonexistent_fails() {
         "Expected failure for nonexistent solution"
     );
 }
+
+#[test]
+fn test_solution_new_with_tags() {
+    if !jj_available() {
+        return;
+    }
+    let dir = setup_test_repo();
+
+    run_jjj_success(&dir, &["problem", "new", "Problem"]);
+    run_jjj_success(
+        &dir,
+        &[
+            "solution",
+            "new",
+            "Tagged Solution",
+            "--problem",
+            "Problem",
+            "--tags",
+            "refactor,backend",
+        ],
+    );
+
+    let stdout = run_jjj_success(&dir, &["solution", "show", "Tagged Solution"]);
+    assert!(
+        stdout.contains("Tags:") && stdout.contains("backend") && stdout.contains("refactor"),
+        "Expected tags in show output: {}",
+        stdout
+    );
+}
+
+#[test]
+fn test_solution_edit_add_remove_tag() {
+    if !jj_available() {
+        return;
+    }
+    let dir = setup_test_repo();
+
+    run_jjj_success(&dir, &["problem", "new", "Problem"]);
+    run_jjj_success(
+        &dir,
+        &["solution", "new", "Tag Edit Sol", "--problem", "Problem"],
+    );
+    run_jjj_success(
+        &dir,
+        &["solution", "edit", "Tag Edit Sol", "--add-tag", "refactor"],
+    );
+
+    let stdout = run_jjj_success(&dir, &["solution", "show", "Tag Edit Sol"]);
+    assert!(
+        stdout.contains("refactor"),
+        "Expected tag refactor in output: {}",
+        stdout
+    );
+
+    // Remove the tag
+    run_jjj_success(
+        &dir,
+        &[
+            "solution",
+            "edit",
+            "Tag Edit Sol",
+            "--remove-tag",
+            "refactor",
+        ],
+    );
+    let stdout = run_jjj_success(&dir, &["solution", "show", "Tag Edit Sol"]);
+    assert!(
+        !stdout.contains("Tags:"),
+        "Expected no tags after removal: {}",
+        stdout
+    );
+}

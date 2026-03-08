@@ -25,11 +25,12 @@ Problems describe things that need solving. Create one with a title and
 priority:
 
 ```bash
-jjj problem new "Search is slow" --priority high
+jjj problem new "Search is slow" --priority high --tags backend,performance
 ```
 
 Priorities range from P0/critical to P3/low and affect how `jjj status`
-orders your work.
+orders your work. Tags are optional labels for categorization (e.g.,
+`backend`, `size:L`, `area:auth`). Use `jjj tags` to see all tags in use.
 
 ## Propose a Solution
 
@@ -191,6 +192,7 @@ problems surface first.
 | `jjj fetch` | Fetch code and metadata from remote |
 | `jjj milestone new "v1.0" --date 2025-06-01` | Create a milestone |
 | `jjj milestone roadmap` | Show milestone roadmap |
+| `jjj tags` | List all tags in use with counts |
 
 ## Next Steps
 

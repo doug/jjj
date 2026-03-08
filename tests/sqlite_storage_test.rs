@@ -32,6 +32,7 @@ fn test_full_sync_cycle() {
         solution_ids: vec![],
         child_ids: vec![],
         github_issue: None,
+        tags: vec![],
     };
     db::entities::upsert_problem(db.conn(), &problem).unwrap();
 
@@ -52,6 +53,7 @@ fn test_full_sync_cycle() {
         critique_ids: vec![],
         github_pr: None,
         github_branch: None,
+        tags: vec![],
     };
     db::entities::upsert_solution(db.conn(), &solution).unwrap();
 
@@ -110,6 +112,7 @@ fn test_validation_catches_invalid_refs() {
         critique_ids: vec![],
         github_pr: None,
         github_branch: None,
+        tags: vec![],
     };
     db::entities::upsert_solution(db.conn(), &solution).unwrap();
 
@@ -181,6 +184,7 @@ fn test_problem_roundtrip() {
         solution_ids: vec!["s1".to_string(), "s2".to_string()],
         child_ids: vec!["p2".to_string()],
         github_issue: None,
+        tags: vec![],
     };
 
     db::entities::upsert_problem(db.conn(), &problem).unwrap();

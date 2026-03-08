@@ -42,8 +42,8 @@ cd docs-site && npm run build  # Build docs
 ## Architecture
 
 ### Core Model
-- **Problems**: Things to solve (can form DAG via parent_id)
-- **Solutions**: Conjectures attached to jj Change IDs (not commit hashes)
+- **Problems**: Things to solve (can form DAG via parent_id). Support tags for categorization.
+- **Solutions**: Conjectures attached to jj Change IDs (not commit hashes). Support tags for categorization.
 - **Critiques**: Error-elimination feedback that blocks solution approval
 - **Milestones**: Time-based goals grouping problems
 

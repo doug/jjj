@@ -229,6 +229,14 @@ pub enum Commands {
         dry_run: bool,
     },
 
+    /// List all tags in use with counts
+    #[command(display_order = 33)]
+    Tags {
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
     // ── Setup & utilities ──────────────────────────────────────────────────
     /// Initialize jjj metadata in the current jj repository
     #[command(display_order = 50)]
@@ -315,6 +323,10 @@ pub enum ProblemAction {
         /// Initial context for the problem (why is this hard / background)
         #[arg(long)]
         context: Option<String>,
+
+        /// Comma-separated tags (e.g., --tags backend,auth,size:L)
+        #[arg(long, value_delimiter = ',')]
+        tags: Vec<String>,
     },
 
     /// List problems with optional filters
@@ -339,6 +351,10 @@ pub enum ProblemAction {
         /// Filter by assignee
         #[arg(long)]
         assignee: Option<String>,
+
+        /// Filter by tag (case-insensitive exact match)
+        #[arg(long)]
+        tag: Option<String>,
 
         /// Sort by: priority, status, created, title
         #[arg(long, default_value = "priority")]
@@ -381,6 +397,14 @@ pub enum ProblemAction {
         /// New parent problem (re-parents this as a sub-problem)
         #[arg(long)]
         parent: Option<String>,
+
+        /// Add a tag
+        #[arg(long)]
+        add_tag: Option<String>,
+
+        /// Remove a tag
+        #[arg(long)]
+        remove_tag: Option<String>,
     },
 
     /// Show problems as a hierarchy tree
@@ -485,6 +509,10 @@ pub enum SolutionAction {
         /// Skip duplicate-detection checks
         #[arg(long, short = 'f')]
         force: bool,
+
+        /// Comma-separated tags (e.g., --tags backend,refactor)
+        #[arg(long, value_delimiter = ',')]
+        tags: Vec<String>,
     },
 
     /// List solutions with optional filters
@@ -505,6 +533,10 @@ pub enum SolutionAction {
         /// Filter by title keyword
         #[arg(long)]
         search: Option<String>,
+
+        /// Filter by tag (case-insensitive exact match)
+        #[arg(long)]
+        tag: Option<String>,
 
         /// Sort by: status, created, title
         #[arg(long, default_value = "status")]
@@ -539,6 +571,14 @@ pub enum SolutionAction {
         /// New status: proposed, submitted, approved, withdrawn
         #[arg(long)]
         status: Option<String>,
+
+        /// Add a tag
+        #[arg(long)]
+        add_tag: Option<String>,
+
+        /// Remove a tag
+        #[arg(long)]
+        remove_tag: Option<String>,
     },
 
     /// Link the current jj change to a solution

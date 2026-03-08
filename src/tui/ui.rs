@@ -34,8 +34,13 @@ pub fn draw(f: &mut Frame, app: &App) {
 
     // Draw footer or input line
     match &app.ui.input_mode {
-        InputMode::Input { prompt, buffer, .. } => {
-            draw_input_line(f, prompt, buffer, vertical_chunks[1]);
+        InputMode::Input {
+            prompt,
+            buffer,
+            cursor_pos,
+            ..
+        } => {
+            draw_input_line(f, prompt, buffer, *cursor_pos, vertical_chunks[1]);
         }
         _ => {
             draw_footer(f, app, vertical_chunks[1]);
@@ -347,20 +352,46 @@ fn draw_related_panel(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     f.render_widget(list, area);
 }
 
-fn draw_input_line(f: &mut Frame, prompt: &str, buffer: &str, area: Rect) {
-    // First line: prompt and input
+fn draw_input_line(f: &mut Frame, prompt: &str, buffer: &str, cursor_pos: usize, area: Rect) {
+    // First line: prompt and input with cursor
     let input_area = Rect::new(area.x, area.y, area.width, 1);
 
     let prompt_span = Span::styled(prompt, Style::default().fg(Color::Yellow));
-    let buffer_span = Span::styled(
-        buffer,
+
+    let clamped_pos = cursor_pos.min(buffer.len());
+    let before_cursor = &buffer[..clamped_pos];
+    let after_cursor = if clamped_pos < buffer.len() {
+        &buffer[clamped_pos + 1..]
+    } else {
+        ""
+    };
+    let cursor_char = if clamped_pos < buffer.len() {
+        &buffer[clamped_pos..clamped_pos + 1]
+    } else {
+        "█"
+    };
+
+    let before_span = Span::styled(
+        before_cursor,
         Style::default()
             .fg(Color::White)
             .add_modifier(Modifier::BOLD),
     );
-    let cursor_span = Span::styled("█", Style::default().fg(Color::Cyan));
+    let cursor_span = Span::styled(
+        cursor_char,
+        Style::default()
+            .fg(Color::Black)
+            .bg(Color::Cyan)
+            .add_modifier(Modifier::BOLD),
+    );
+    let after_span = Span::styled(
+        after_cursor,
+        Style::default()
+            .fg(Color::White)
+            .add_modifier(Modifier::BOLD),
+    );
 
-    let line = Line::from(vec![prompt_span, buffer_span, cursor_span]);
+    let line = Line::from(vec![prompt_span, before_span, cursor_span, after_span]);
     let input = Paragraph::new(line);
     f.render_widget(input, input_area);
 
@@ -403,9 +434,9 @@ fn draw_footer(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
 fn draw_help_overlay(f: &mut Frame, app: &App) {
     let area = f.area();
 
-    // Calculate centered popup (40 wide, 19 tall)
+    // Calculate centered popup (40 wide, 22 tall)
     let popup_width = 40u16;
-    let popup_height = 19u16;
+    let popup_height = 22u16;
     let popup_x = area.width.saturating_sub(popup_width) / 2;
     let popup_y = area.height.saturating_sub(popup_height) / 2;
     let popup_area = Rect::new(popup_x, popup_y, popup_width, popup_height);
@@ -481,6 +512,7 @@ fn get_context_actions(app: &App) -> Vec<Line<'static>> {
             lines.push(Line::from("    A       Assign to me"));
             lines.push(Line::from("    e       Edit title"));
             lines.push(Line::from("    E       Edit in $EDITOR"));
+            lines.push(Line::from("    x       Delete"));
         }
         Some(EntityType::Solution) => {
             lines.push(Line::from("    n       New critique"));
@@ -491,6 +523,7 @@ fn get_context_actions(app: &App) -> Vec<Line<'static>> {
             lines.push(Line::from("    g       Go to change"));
             lines.push(Line::from("    e       Edit title"));
             lines.push(Line::from("    E       Edit in $EDITOR"));
+            lines.push(Line::from("    x       Delete"));
         }
         Some(EntityType::Critique) => {
             lines.push(Line::from("    a       Address"));
@@ -498,10 +531,12 @@ fn get_context_actions(app: &App) -> Vec<Line<'static>> {
             lines.push(Line::from("    v       Validate"));
             lines.push(Line::from("    e       Edit title"));
             lines.push(Line::from("    E       Edit in $EDITOR"));
+            lines.push(Line::from("    x       Delete"));
         }
         None => {
             // Milestone or Backlog
             lines.push(Line::from("    n       New problem"));
+            lines.push(Line::from("    m       New milestone"));
             lines.push(Line::from("    e       Edit title"));
             lines.push(Line::from("    E       Edit in $EDITOR"));
         }

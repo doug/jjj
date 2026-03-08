@@ -56,6 +56,10 @@ pub struct Problem {
     /// Linked GitHub issue number
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub github_issue: Option<u64>,
+
+    /// Tags for flexible categorization (e.g., "backend", "size:L", "area:auth")
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
 }
 
 /// Priority level for a problem (P0 = most critical, P3 = lowest)
@@ -72,10 +76,10 @@ pub enum Priority {
 impl std::fmt::Display for Priority {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Priority::Low => write!(f, "P3/low"),
-            Priority::Medium => write!(f, "P2/medium"),
-            Priority::High => write!(f, "P1/high"),
-            Priority::Critical => write!(f, "P0/critical"),
+            Priority::Low => write!(f, "P3"),
+            Priority::Medium => write!(f, "P2"),
+            Priority::High => write!(f, "P1"),
+            Priority::Critical => write!(f, "P0"),
         }
     }
 }
@@ -163,6 +167,7 @@ impl Problem {
             context: String::new(),
             dissolved_reason: None,
             github_issue: None,
+            tags: Vec::new(),
         }
     }
 
@@ -318,6 +323,8 @@ pub struct ProblemFrontmatter {
     pub dissolved_reason: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub github_issue: Option<u64>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
 }
 
 impl From<&Problem> for ProblemFrontmatter {
@@ -336,6 +343,7 @@ impl From<&Problem> for ProblemFrontmatter {
             updated_at: p.updated_at,
             dissolved_reason: p.dissolved_reason.clone(),
             github_issue: p.github_issue,
+            tags: p.tags.clone(),
         }
     }
 }
@@ -352,6 +360,7 @@ mod tests {
         assert_eq!(problem.status, ProblemStatus::Open);
         assert!(problem.is_root());
         assert!(problem.is_open());
+        assert!(problem.tags.is_empty());
     }
 
     #[test]
@@ -433,10 +442,10 @@ mod tests {
 
     #[test]
     fn test_priority_display() {
-        assert_eq!(format!("{}", Priority::Critical), "P0/critical");
-        assert_eq!(format!("{}", Priority::High), "P1/high");
-        assert_eq!(format!("{}", Priority::Medium), "P2/medium");
-        assert_eq!(format!("{}", Priority::Low), "P3/low");
+        assert_eq!(format!("{}", Priority::Critical), "P0");
+        assert_eq!(format!("{}", Priority::High), "P1");
+        assert_eq!(format!("{}", Priority::Medium), "P2");
+        assert_eq!(format!("{}", Priority::Low), "P3");
     }
 
     #[test]
@@ -462,5 +471,33 @@ mod tests {
             p.dissolved_reason.as_deref(),
             Some("The data was correct; our test was wrong")
         );
+    }
+
+    #[test]
+    fn test_problem_tags() {
+        let mut p = Problem::new("P-1".to_string(), "Test".to_string());
+        assert!(p.tags.is_empty());
+
+        p.tags = vec!["backend".to_string(), "auth".to_string(), "size:L".to_string()];
+
+        // Round-trip through frontmatter
+        let fm = ProblemFrontmatter::from(&p);
+        assert_eq!(fm.tags, vec!["backend".to_string(), "auth".to_string(), "size:L".to_string()]);
+
+        // Verify serde round-trip
+        let yaml = serde_yml::to_string(&fm).unwrap();
+        assert!(yaml.contains("tags:"));
+        assert!(yaml.contains("backend"));
+
+        let parsed: ProblemFrontmatter = serde_yml::from_str(&yaml).unwrap();
+        assert_eq!(parsed.tags, p.tags);
+    }
+
+    #[test]
+    fn test_problem_tags_serde_default() {
+        // YAML without tags field should deserialize with empty vec
+        let yaml = "id: P-1\ntitle: Test\nstatus: open\npriority: medium\nsolution_ids: []\ncreated_at: '2025-01-01T00:00:00Z'\nupdated_at: '2025-01-01T00:00:00Z'\n";
+        let fm: ProblemFrontmatter = serde_yml::from_str(yaml).unwrap();
+        assert!(fm.tags.is_empty());
     }
 }

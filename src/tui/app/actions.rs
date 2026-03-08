@@ -140,6 +140,7 @@ impl App {
             prompt,
             buffer: String::new(),
             action,
+            cursor_pos: 0,
         };
         Ok(())
     }
@@ -180,10 +181,12 @@ impl App {
                 return Ok(());
             };
 
+        let cursor_pos = current_title.len();
         self.ui.input_mode = InputMode::Input {
             prompt,
             buffer: current_title,
             action,
+            cursor_pos,
         };
         Ok(())
     }
@@ -509,6 +512,7 @@ impl App {
                         action: super::InputAction::DissolveP {
                             problem_id: id.clone(),
                         },
+                        cursor_pos: 0,
                     };
                 }
             }
@@ -581,6 +585,113 @@ impl App {
                 EntityType::Critique => {}
             }
         }
+        Ok(())
+    }
+
+    pub(super) fn start_delete(&mut self) -> Result<()> {
+        use super::super::tree::TreeNode;
+
+        if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
+            let (entity_type, entity_id, title) = match &item.node {
+                TreeNode::Critique { id, title, .. } => ("critique".to_string(), id.clone(), title.clone()),
+                TreeNode::Solution { id, title, .. } => {
+                    // Block if has critiques
+                    let has_critiques = self
+                        .data
+                        .critiques
+                        .iter()
+                        .any(|c| c.solution_id == *id);
+                    if has_critiques {
+                        self.show_flash("Delete critiques first");
+                        return Ok(());
+                    }
+                    ("solution".to_string(), id.clone(), title.clone())
+                }
+                TreeNode::Problem { id, title, .. } => {
+                    // Block if has solutions
+                    let has_solutions = self
+                        .data
+                        .solutions
+                        .iter()
+                        .any(|s| s.problem_id == *id);
+                    if has_solutions {
+                        self.show_flash("Delete solutions first");
+                        return Ok(());
+                    }
+                    ("problem".to_string(), id.clone(), title.clone())
+                }
+                _ => return Ok(()),
+            };
+
+            self.ui.input_mode = InputMode::Input {
+                prompt: format!("Delete '{}'? y to confirm: ", title),
+                buffer: String::new(),
+                action: InputAction::ConfirmDelete {
+                    entity_type,
+                    entity_id,
+                },
+                cursor_pos: 0,
+            };
+        }
+        Ok(())
+    }
+
+    pub(super) fn delete_entity(&mut self, entity_type: &str, entity_id: &str) -> Result<()> {
+        let id = entity_id.to_string();
+        let result = match entity_type {
+            "critique" => self
+                .store
+                .with_metadata(&format!("Delete critique {}", entity_id), || {
+                    self.store.delete_critique(entity_id)
+                }),
+            "solution" => self
+                .store
+                .with_metadata(&format!("Delete solution {}", entity_id), || {
+                    self.store.delete_solution(entity_id)
+                }),
+            "problem" => self
+                .store
+                .with_metadata(&format!("Delete problem {}", entity_id), || {
+                    self.store.delete_problem(entity_id)
+                }),
+            _ => return Ok(()),
+        };
+        match result {
+            Ok(_) => {
+                self.show_flash(&format!("Deleted {}", id));
+                self.refresh_data()?;
+            }
+            Err(e) => {
+                self.show_flash(&format!("Error: {}", e));
+            }
+        }
+        Ok(())
+    }
+
+    pub(super) fn start_new_milestone(&mut self) -> Result<()> {
+        self.ui.input_mode = InputMode::Input {
+            prompt: "New milestone title: ".to_string(),
+            buffer: String::new(),
+            action: InputAction::NewMilestone,
+            cursor_pos: 0,
+        };
+        Ok(())
+    }
+
+    pub(super) fn create_milestone(&mut self, title: &str) -> Result<()> {
+        use crate::id::generate_id;
+        use crate::models::Milestone;
+
+        let id = generate_id();
+        let milestone = Milestone::new(id.clone(), title);
+
+        self.store
+            .with_metadata(&format!("Create milestone: {}", title), || {
+                self.store.save_milestone(&milestone)
+            })?;
+
+        self.show_flash(&format!("Created milestone {}", id));
+        self.refresh_data()?;
         Ok(())
     }
 }

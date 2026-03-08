@@ -12,6 +12,7 @@ pub mod search;
 pub mod solution;
 pub mod status;
 pub mod sync;
+pub mod tags;
 pub mod timeline;
 pub mod ui;
 
@@ -105,6 +106,9 @@ fn execute_with_context(ctx: &CommandContext, command: Commands) -> Result<()> {
 
         // Timeline
         Commands::Timeline { problem_id, json } => timeline::execute(ctx, problem_id, json),
+
+        // Tags
+        Commands::Tags { json } => tags::execute(ctx, json),
 
         // Search
         Commands::Search {

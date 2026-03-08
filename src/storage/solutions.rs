@@ -42,6 +42,7 @@ impl MetadataStore {
             force_approved: frontmatter.force_approved,
             github_pr: frontmatter.github_pr,
             github_branch: frontmatter.github_branch,
+            tags: frontmatter.tags,
         };
 
         Ok(solution)
@@ -68,7 +69,7 @@ impl MetadataStore {
         let db_path = self.jj_client.repo_root().join(".jj").join("jjj.db");
         if db_path.exists() {
             if let Ok(db) = crate::db::schema::Database::open(&db_path) {
-                let fts_body = format!("{}\n{}", solution.approach, solution.tradeoffs);
+                let fts_body = format!("{}\n{}\n{}", solution.approach, solution.tradeoffs, solution.tags.join(" "));
                 let _ = crate::db::sync::update_fts_entry(
                     db.conn(),
                     "solution",

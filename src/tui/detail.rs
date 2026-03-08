@@ -35,6 +35,9 @@ impl DetailContent {
                 if let Some(milestone) = &p.milestone_id {
                     lines.push(format!("Milestone: {}", milestone));
                 }
+                if !p.tags.is_empty() {
+                    lines.push(format!("Tags: {}", p.tags.join(", ")));
+                }
                 lines
             }
             DetailContent::Solution(s) => {
@@ -57,6 +60,9 @@ impl DetailContent {
                 if !s.change_ids.is_empty() {
                     lines.push(String::new());
                     lines.push(format!("Changes: {}", s.change_ids.join(", ")));
+                }
+                if !s.tags.is_empty() {
+                    lines.push(format!("Tags: {}", s.tags.join(", ")));
                 }
                 lines
             }

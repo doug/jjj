@@ -20,6 +20,7 @@ jjj solution new <title> [OPTIONS]
 | `--problem` | string | no | Problem this solution addresses (prompts interactively if not provided) |
 | `--supersedes` | string | no | Solution this supersedes (title or UUID prefix) |
 | `--reviewer` | string (repeatable) | no | Assign reviewers at creation (e.g., `@alice`) |
+| `--tags` | string | no | Comma-separated tags (e.g., `refactor,backend,size:L`) |
 | `--force`, `-f` | flag | no | Create even if a similar solution already exists |
 
 When `--problem` is not provided, lists open problems and prompts you to select one interactively. After creation, automatically creates a jj change and attaches it to the solution. The solution stays in `proposed` status until you explicitly run `solution submit`.
@@ -53,6 +54,7 @@ jjj solution list [OPTIONS]
 | `--problem` | string | Filter by problem |
 | `--status` | string | Filter by status (proposed, submitted, withdrawn, approved) |
 | `--search` | string | Search solutions by title text |
+| `--tag` | string | Filter by tag (case-insensitive exact match) |
 | `--json` | bool | Output in JSON format |
 
 ```bash,test
@@ -90,6 +92,8 @@ jjj solution edit <solution_id> [OPTIONS]
 |------|------|-------------|
 | `--title` | string | New title |
 | `--status` | string | New status |
+| `--add-tag` | string | Add a tag |
+| `--remove-tag` | string | Remove a tag |
 
 ```bash
 jjj solution edit "Add connection" --title "Add connection pooling with retry"

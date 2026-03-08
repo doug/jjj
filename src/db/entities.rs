@@ -55,11 +55,14 @@ fn parse_enum<T: std::str::FromStr + Default>(s: &str, kind: &str, default_name:
 
 /// Insert or update a problem in the database.
 pub fn upsert_problem(conn: &Connection, problem: &Problem) -> SqliteResult<()> {
+    let tags_json =
+        serde_json::to_string(&problem.tags).unwrap_or_else(|_| "[]".to_string());
+
     conn.execute(
         "INSERT OR REPLACE INTO problems (
             id, title, status, priority, parent_id, milestone_id, assignee,
-            created_at, updated_at, description, context, dissolved_reason, github_issue
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+            created_at, updated_at, description, context, dissolved_reason, github_issue, tags
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
         params![
             problem.id,
             problem.title,
@@ -79,6 +82,7 @@ pub fn upsert_problem(conn: &Connection, problem: &Problem) -> SqliteResult<()> 
             problem.context,
             problem.dissolved_reason,
             problem.github_issue.map(|n| n as i64),
+            tags_json,
         ],
     )?;
     Ok(())
@@ -88,7 +92,7 @@ pub fn upsert_problem(conn: &Connection, problem: &Problem) -> SqliteResult<()> 
 pub fn load_problem(conn: &Connection, id: &str) -> SqliteResult<Option<Problem>> {
     let mut stmt = conn.prepare(
         "SELECT id, title, status, priority, parent_id, milestone_id, assignee,
-                created_at, updated_at, description, context, dissolved_reason, github_issue
+                created_at, updated_at, description, context, dissolved_reason, github_issue, tags
          FROM problems WHERE id = ?1",
     )?;
 
@@ -105,7 +109,7 @@ pub fn load_problem(conn: &Connection, id: &str) -> SqliteResult<Option<Problem>
 pub fn list_problems(conn: &Connection) -> SqliteResult<Vec<Problem>> {
     let mut stmt = conn.prepare(
         "SELECT id, title, status, priority, parent_id, milestone_id, assignee,
-                created_at, updated_at, description, context, dissolved_reason, github_issue
+                created_at, updated_at, description, context, dissolved_reason, github_issue, tags
          FROM problems ORDER BY created_at DESC",
     )?;
 
@@ -125,6 +129,9 @@ fn row_to_problem(row: &rusqlite::Row) -> SqliteResult<Problem> {
     let priority_str: String = row.get(3)?;
     let created_at_str: String = row.get(7)?;
     let updated_at_str: String = row.get(8)?;
+    let tags_json: String = row
+        .get::<_, Option<String>>(13)?
+        .unwrap_or_else(|| "[]".to_string());
 
     Ok(Problem {
         id: row.get(0)?,
@@ -140,6 +147,7 @@ fn row_to_problem(row: &rusqlite::Row) -> SqliteResult<Problem> {
         context: row.get::<_, Option<String>>(10)?.unwrap_or_default(),
         dissolved_reason: row.get(11)?,
         github_issue: row.get::<_, Option<i64>>(12)?.map(|n| n as u64),
+        tags: parse_json_vec(&tags_json, "tags"),
         // Computed fields - leave empty, will be populated by relationships
         solution_ids: Vec::new(),
         child_ids: Vec::new(),
@@ -154,13 +162,15 @@ fn row_to_problem(row: &rusqlite::Row) -> SqliteResult<Problem> {
 pub fn upsert_solution(conn: &Connection, solution: &Solution) -> SqliteResult<()> {
     let change_ids_json =
         serde_json::to_string(&solution.change_ids).unwrap_or_else(|_| "[]".to_string());
+    let tags_json =
+        serde_json::to_string(&solution.tags).unwrap_or_else(|_| "[]".to_string());
 
     conn.execute(
         "INSERT OR REPLACE INTO solutions (
             id, title, status, problem_id, change_ids, supersedes, assignee,
             force_approved, created_at, updated_at, approach, tradeoffs,
-            github_pr, github_branch
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+            github_pr, github_branch, tags
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
         params![
             solution.id,
             solution.title,
@@ -176,6 +186,7 @@ pub fn upsert_solution(conn: &Connection, solution: &Solution) -> SqliteResult<(
             solution.tradeoffs,
             solution.github_pr.map(|n| n as i64),
             solution.github_branch,
+            tags_json,
         ],
     )?;
     Ok(())
@@ -186,7 +197,7 @@ pub fn load_solution(conn: &Connection, id: &str) -> SqliteResult<Option<Solutio
     let mut stmt = conn.prepare(
         "SELECT id, title, status, problem_id, change_ids, supersedes, assignee,
                 force_approved, created_at, updated_at, approach, tradeoffs,
-                github_pr, github_branch
+                github_pr, github_branch, tags
          FROM solutions WHERE id = ?1",
     )?;
 
@@ -204,7 +215,7 @@ pub fn list_solutions(conn: &Connection) -> SqliteResult<Vec<Solution>> {
     let mut stmt = conn.prepare(
         "SELECT id, title, status, problem_id, change_ids, supersedes, assignee,
                 force_approved, created_at, updated_at, approach, tradeoffs,
-                github_pr, github_branch
+                github_pr, github_branch, tags
          FROM solutions ORDER BY created_at DESC",
     )?;
 
@@ -221,7 +232,7 @@ pub fn list_solutions_for_problem(
     let mut stmt = conn.prepare(
         "SELECT id, title, status, problem_id, change_ids, supersedes, assignee,
                 force_approved, created_at, updated_at, approach, tradeoffs,
-                github_pr, github_branch
+                github_pr, github_branch, tags
          FROM solutions WHERE problem_id = ?1 ORDER BY created_at DESC",
     )?;
 
@@ -243,6 +254,9 @@ fn row_to_solution(row: &rusqlite::Row) -> SqliteResult<Solution> {
         .unwrap_or_else(|| "[]".to_string());
     let created_at_str: String = row.get(8)?;
     let updated_at_str: String = row.get(9)?;
+    let tags_json: String = row
+        .get::<_, Option<String>>(14)?
+        .unwrap_or_else(|| "[]".to_string());
 
     Ok(Solution {
         id: row.get(0)?,
@@ -259,6 +273,7 @@ fn row_to_solution(row: &rusqlite::Row) -> SqliteResult<Solution> {
         tradeoffs: row.get::<_, Option<String>>(11)?.unwrap_or_default(),
         github_pr: row.get::<_, Option<i64>>(12)?.map(|n| n as u64),
         github_branch: row.get(13)?,
+        tags: parse_json_vec(&tags_json, "tags"),
         // Computed field - leave empty, will be populated by relationships
         critique_ids: Vec::new(),
     })

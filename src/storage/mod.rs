@@ -526,6 +526,7 @@ This is the context.
             updated_at: Utc::now(),
             dissolved_reason: None,
             github_issue: None,
+            tags: vec![],
         };
 
         let body = "## Description\n\nTest description";

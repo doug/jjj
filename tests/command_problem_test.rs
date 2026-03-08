@@ -37,7 +37,7 @@ fn test_problem_new_with_priority() {
 
     let stdout = run_jjj_success(&dir, &["problem", "show", "Critical Bug"]);
     assert!(
-        stdout.contains("P0/critical") || stdout.contains("Critical"),
+        stdout.contains("P0") || stdout.contains("Critical"),
         "Expected P0/critical priority: {}",
         stdout
     );
@@ -175,7 +175,7 @@ fn test_problem_show_displays_details() {
         stdout
     );
     assert!(
-        stdout.contains("P1/high") || stdout.contains("High"),
+        stdout.contains("P1") || stdout.contains("High"),
         "Expected priority: {}",
         stdout
     );
@@ -260,7 +260,7 @@ fn test_problem_edit_priority() {
 
     let stdout = run_jjj_success(&dir, &["problem", "show", "Low Priority"]);
     assert!(
-        stdout.contains("P0/critical") || stdout.contains("Critical"),
+        stdout.contains("P0") || stdout.contains("Critical"),
         "Expected P0 priority: {}",
         stdout
     );
@@ -376,6 +376,73 @@ fn test_problem_assign() {
     assert!(
         stdout.contains("alice"),
         "Expected assignee alice: {}",
+        stdout
+    );
+}
+
+#[test]
+fn test_problem_new_with_tags() {
+    if !jj_available() {
+        return;
+    }
+    let dir = setup_test_repo();
+
+    run_jjj_success(&dir, &["problem", "new", "Tagged Problem", "--tags", "backend,auth"]);
+
+    let stdout = run_jjj_success(&dir, &["problem", "show", "Tagged Problem"]);
+    assert!(
+        stdout.contains("Tags:") && stdout.contains("auth") && stdout.contains("backend"),
+        "Expected tags in show output: {}",
+        stdout
+    );
+}
+
+#[test]
+fn test_problem_edit_add_tag() {
+    if !jj_available() {
+        return;
+    }
+    let dir = setup_test_repo();
+
+    run_jjj_success(&dir, &["problem", "new", "Tag Edit Test"]);
+    run_jjj_success(&dir, &["problem", "edit", "Tag Edit Test", "--add-tag", "backend"]);
+
+    let stdout = run_jjj_success(&dir, &["problem", "show", "Tag Edit Test"]);
+    assert!(
+        stdout.contains("backend"),
+        "Expected tag backend in output: {}",
+        stdout
+    );
+
+    // Remove the tag
+    run_jjj_success(&dir, &["problem", "edit", "Tag Edit Test", "--remove-tag", "backend"]);
+    let stdout = run_jjj_success(&dir, &["problem", "show", "Tag Edit Test"]);
+    assert!(
+        !stdout.contains("Tags:"),
+        "Expected no tags after removal: {}",
+        stdout
+    );
+}
+
+#[test]
+fn test_problem_list_filter_by_tag() {
+    if !jj_available() {
+        return;
+    }
+    let dir = setup_test_repo();
+
+    run_jjj_success(&dir, &["problem", "new", "Tagged One", "--tags", "backend"]);
+    run_jjj_success(&dir, &["problem", "new", "Untagged One", "-f"]);
+
+    let stdout = run_jjj_success(&dir, &["problem", "list", "--tag", "backend"]);
+    assert!(
+        stdout.contains("Tagged One"),
+        "Expected tagged problem in filtered list: {}",
+        stdout
+    );
+    assert!(
+        !stdout.contains("Untagged One"),
+        "Expected untagged problem excluded: {}",
         stdout
     );
 }

@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS problems (
     context TEXT DEFAULT '',
     dissolved_reason TEXT,
     github_issue INTEGER,
+    tags TEXT DEFAULT '[]',
     FOREIGN KEY (parent_id) REFERENCES problems(id),
     FOREIGN KEY (milestone_id) REFERENCES milestones(id)
 );
@@ -42,6 +43,7 @@ CREATE TABLE IF NOT EXISTS solutions (
     tradeoffs TEXT DEFAULT '',
     github_pr INTEGER,
     github_branch TEXT,
+    tags TEXT DEFAULT '[]',
     FOREIGN KEY (problem_id) REFERENCES problems(id),
     FOREIGN KEY (supersedes) REFERENCES solutions(id)
 );

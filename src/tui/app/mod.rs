@@ -29,6 +29,7 @@ pub enum InputMode {
         prompt: String,
         buffer: String,
         action: InputAction,
+        cursor_pos: usize,
     },
 }
 
@@ -56,6 +57,11 @@ pub enum InputAction {
     DissolveP {
         problem_id: String,
     },
+    ConfirmDelete {
+        entity_type: String,
+        entity_id: String,
+    },
+    NewMilestone,
 }
 
 /// A pending request to suspend the TUI and open an entity in an external editor.
@@ -324,6 +330,8 @@ impl App {
             KeyCode::Char('R') => self.toggle_related_panel(),
             KeyCode::Char('g') => self.goto_change()?,
             KeyCode::Char('E') => self.open_in_editor()?,
+            KeyCode::Char('x') => self.start_delete()?,
+            KeyCode::Char('m') => self.start_new_milestone()?,
             KeyCode::Char('?') => self.toggle_help(),
             _ => {}
         }
@@ -332,12 +340,13 @@ impl App {
 
     fn handle_input_key(&mut self, key: KeyCode) -> Result<()> {
         // Extract current input state
-        let (prompt, buffer, action) = match &self.ui.input_mode {
+        let (prompt, buffer, action, cursor_pos) = match &self.ui.input_mode {
             InputMode::Input {
                 prompt,
                 buffer,
                 action,
-            } => (prompt.clone(), buffer.clone(), action.clone()),
+                cursor_pos,
+            } => (prompt.clone(), buffer.clone(), action.clone(), *cursor_pos),
             _ => return Ok(()),
         };
 
@@ -353,29 +362,66 @@ impl App {
                     // Keep filter active, just exit input mode
                     self.ui.input_mode = InputMode::Normal;
                 }
-                KeyCode::Backspace => {
-                    let mut new_buffer = buffer;
-                    new_buffer.pop();
-                    self.ui.search_filter = if new_buffer.is_empty() {
-                        None
-                    } else {
-                        Some(new_buffer.clone())
-                    };
+                KeyCode::Left => {
                     self.ui.input_mode = InputMode::Input {
                         prompt,
-                        buffer: new_buffer,
+                        buffer,
                         action,
+                        cursor_pos: cursor_pos.saturating_sub(1),
                     };
-                    self.apply_search_filter();
+                }
+                KeyCode::Right => {
+                    self.ui.input_mode = InputMode::Input {
+                        prompt,
+                        buffer: buffer.clone(),
+                        action,
+                        cursor_pos: (cursor_pos + 1).min(buffer.len()),
+                    };
+                }
+                KeyCode::Home => {
+                    self.ui.input_mode = InputMode::Input {
+                        prompt,
+                        buffer,
+                        action,
+                        cursor_pos: 0,
+                    };
+                }
+                KeyCode::End => {
+                    self.ui.input_mode = InputMode::Input {
+                        prompt,
+                        buffer: buffer.clone(),
+                        action,
+                        cursor_pos: buffer.len(),
+                    };
+                }
+                KeyCode::Backspace => {
+                    if cursor_pos > 0 {
+                        let mut new_buffer = buffer;
+                        new_buffer.remove(cursor_pos - 1);
+                        let new_cursor = cursor_pos - 1;
+                        self.ui.search_filter = if new_buffer.is_empty() {
+                            None
+                        } else {
+                            Some(new_buffer.clone())
+                        };
+                        self.ui.input_mode = InputMode::Input {
+                            prompt,
+                            buffer: new_buffer,
+                            action,
+                            cursor_pos: new_cursor,
+                        };
+                        self.apply_search_filter();
+                    }
                 }
                 KeyCode::Char(c) => {
                     let mut new_buffer = buffer;
-                    new_buffer.push(c);
+                    new_buffer.insert(cursor_pos, c);
                     self.ui.search_filter = Some(new_buffer.clone());
                     self.ui.input_mode = InputMode::Input {
                         prompt,
                         buffer: new_buffer,
                         action,
+                        cursor_pos: cursor_pos + 1,
                     };
                     self.apply_search_filter();
                 }
@@ -394,22 +440,58 @@ impl App {
                 }
                 self.ui.input_mode = InputMode::Normal;
             }
-            KeyCode::Backspace => {
-                let mut new_buffer = buffer;
-                new_buffer.pop();
+            KeyCode::Left => {
                 self.ui.input_mode = InputMode::Input {
                     prompt,
-                    buffer: new_buffer,
+                    buffer,
                     action,
+                    cursor_pos: cursor_pos.saturating_sub(1),
                 };
+            }
+            KeyCode::Right => {
+                self.ui.input_mode = InputMode::Input {
+                    prompt,
+                    buffer: buffer.clone(),
+                    action,
+                    cursor_pos: (cursor_pos + 1).min(buffer.len()),
+                };
+            }
+            KeyCode::Home => {
+                self.ui.input_mode = InputMode::Input {
+                    prompt,
+                    buffer,
+                    action,
+                    cursor_pos: 0,
+                };
+            }
+            KeyCode::End => {
+                self.ui.input_mode = InputMode::Input {
+                    prompt,
+                    buffer: buffer.clone(),
+                    action,
+                    cursor_pos: buffer.len(),
+                };
+            }
+            KeyCode::Backspace => {
+                if cursor_pos > 0 {
+                    let mut new_buffer = buffer;
+                    new_buffer.remove(cursor_pos - 1);
+                    self.ui.input_mode = InputMode::Input {
+                        prompt,
+                        buffer: new_buffer,
+                        action,
+                        cursor_pos: cursor_pos - 1,
+                    };
+                }
             }
             KeyCode::Char(c) => {
                 let mut new_buffer = buffer;
-                new_buffer.push(c);
+                new_buffer.insert(cursor_pos, c);
                 self.ui.input_mode = InputMode::Input {
                     prompt,
                     buffer: new_buffer,
                     action,
+                    cursor_pos: cursor_pos + 1,
                 };
             }
             _ => {}
@@ -436,6 +518,19 @@ impl App {
             }
             InputAction::DissolveP { problem_id } => {
                 self.dissolve_problem(problem_id, title)?;
+            }
+            InputAction::ConfirmDelete {
+                entity_type,
+                entity_id,
+            } => {
+                if title.trim() == "y" {
+                    self.delete_entity(entity_type, entity_id)?;
+                } else {
+                    self.show_flash("Delete cancelled");
+                }
+            }
+            InputAction::NewMilestone => {
+                self.create_milestone(title)?;
             }
             InputAction::Search => {
                 // Search is handled directly in handle_input_key

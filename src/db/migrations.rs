@@ -88,6 +88,18 @@ pub fn all_migrations() -> Vec<Migration> {
                 Ok(())
             },
         },
+        Migration {
+            version: 7,
+            description: "Add tags column to problems and solutions",
+            requires_rebuild: false,
+            up: |conn| {
+                conn.execute_batch(
+                    "ALTER TABLE problems ADD COLUMN tags TEXT DEFAULT '[]';
+                     ALTER TABLE solutions ADD COLUMN tags TEXT DEFAULT '[]';"
+                )?;
+                Ok(())
+            },
+        },
     ]
 }
 

@@ -57,6 +57,10 @@ pub struct Solution {
     /// GitHub branch name for this solution's PR
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub github_branch: Option<String>,
+
+    /// Tags for flexible categorization (e.g., "backend", "size:L", "area:auth")
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
 }
 
 /// Status of a solution (conjecture)
@@ -129,6 +133,7 @@ impl Solution {
             supersedes: None,
             github_pr: None,
             github_branch: None,
+            tags: Vec::new(),
         }
     }
 
@@ -276,6 +281,8 @@ pub struct SolutionFrontmatter {
     pub github_pr: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub github_branch: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -294,6 +301,7 @@ impl From<&Solution> for SolutionFrontmatter {
             supersedes: s.supersedes.clone(),
             github_pr: s.github_pr,
             github_branch: s.github_branch.clone(),
+            tags: s.tags.clone(),
             created_at: s.created_at,
             updated_at: s.updated_at,
         }
@@ -316,6 +324,7 @@ mod tests {
         assert_eq!(solution.problem_id, "P-1");
         assert_eq!(solution.status, SolutionStatus::Proposed);
         assert!(solution.is_active());
+        assert!(solution.tags.is_empty());
     }
 
     #[test]
@@ -399,5 +408,23 @@ mod tests {
         let mut s2 = s.clone();
         s2.supersedes = Some("S-1".to_string());
         assert_eq!(s2.supersedes.as_deref(), Some("S-1"));
+    }
+
+    #[test]
+    fn test_solution_tags() {
+        let mut s = Solution::new("S-1".to_string(), "Test".to_string(), "P-1".to_string());
+        assert!(s.tags.is_empty());
+
+        s.tags = vec!["refactor".to_string(), "backend".to_string()];
+
+        let fm = SolutionFrontmatter::from(&s);
+        assert_eq!(fm.tags, vec!["refactor".to_string(), "backend".to_string()]);
+
+        let yaml = serde_yml::to_string(&fm).unwrap();
+        assert!(yaml.contains("tags:"));
+        assert!(yaml.contains("refactor"));
+
+        let parsed: SolutionFrontmatter = serde_yml::from_str(&yaml).unwrap();
+        assert_eq!(parsed.tags, s.tags);
     }
 }

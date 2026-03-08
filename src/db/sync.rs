@@ -115,7 +115,7 @@ pub fn rebuild_fts(db: &Database) -> Result<()> {
     // Index problems
     let problems = list_problems(conn)?;
     for problem in &problems {
-        let body = format!("{}\n{}", problem.description, problem.context);
+        let body = format!("{}\n{}\n{}", problem.description, problem.context, problem.tags.join(" "));
         conn.execute(
             "INSERT INTO fts (entity_type, entity_id, title, body) VALUES (?1, ?2, ?3, ?4)",
             params!["problem", &problem.id, &problem.title, &body],
@@ -125,7 +125,7 @@ pub fn rebuild_fts(db: &Database) -> Result<()> {
     // Index solutions
     let solutions = list_solutions(conn)?;
     for solution in &solutions {
-        let body = format!("{}\n{}", solution.approach, solution.tradeoffs);
+        let body = format!("{}\n{}\n{}", solution.approach, solution.tradeoffs, solution.tags.join(" "));
         conn.execute(
             "INSERT INTO fts (entity_type, entity_id, title, body) VALUES (?1, ?2, ?3, ?4)",
             params!["solution", &solution.id, &solution.title, &body],

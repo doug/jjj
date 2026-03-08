@@ -30,6 +30,7 @@ jjj problem new <title> [OPTIONS]
 | `--priority` | string | `medium` | Priority: P0/critical, P1/high, P2/medium, P3/low |
 | `--parent` | string | | Parent problem (title, prefix, or UUID) |
 | `--milestone` | string | | Milestone to target (title, prefix, or UUID) |
+| `--tags` | string | | Comma-separated tags (e.g., `backend,auth,size:L`) |
 | `--force`, `-f` | flag | | Create even if a similar problem already exists |
 
 ```bash,test
@@ -53,6 +54,7 @@ jjj problem list [OPTIONS]
 | `--tree` | bool | Show hierarchical tree view |
 | `--milestone` | string | Filter by milestone |
 | `--search` | string | Search problems by title text |
+| `--tag` | string | Filter by tag (case-insensitive exact match) |
 | `--json` | bool | Output in JSON format |
 
 ```bash,test
@@ -93,6 +95,8 @@ jjj problem edit <problem> [OPTIONS]
 | `--status` | string | New status (open, in_progress, solved, dissolved) |
 | `--priority` | string | Set priority (P0/critical, P1/high, P2/medium, P3/low) |
 | `--parent` | string | Set parent problem |
+| `--add-tag` | string | Add a tag |
+| `--remove-tag` | string | Remove a tag |
 
 ```bash,test
 jjj problem edit "App crashes" --title "App crashes on cold startup" --priority critical

@@ -47,6 +47,7 @@ impl MetadataStore {
             context: sections.get("Context").cloned().unwrap_or_default(),
             dissolved_reason: frontmatter.dissolved_reason,
             github_issue: frontmatter.github_issue,
+            tags: frontmatter.tags,
         };
 
         Ok(problem)
@@ -73,7 +74,7 @@ impl MetadataStore {
         let db_path = self.jj_client.repo_root().join(".jj").join("jjj.db");
         if db_path.exists() {
             if let Ok(db) = crate::db::schema::Database::open(&db_path) {
-                let body = problem.description.clone();
+                let body = format!("{}\n{}", problem.description, problem.tags.join(" "));
                 let _ = crate::db::sync::update_fts_entry(
                     db.conn(),
                     "problem",

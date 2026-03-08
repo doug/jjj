@@ -181,6 +181,9 @@ priority: high
 assignee: alice
 milestone_id: 01959c4d-e5f6-7a7b-8c9d-0e1f2a3b4c5d
 github_issue: 42
+tags:
+  - backend
+  - performance
 created_at: 2025-11-23T10:00:00Z
 updated_at: 2025-11-23T15:30:00Z
 ---

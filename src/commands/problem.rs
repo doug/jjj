@@ -18,13 +18,15 @@ pub fn execute(ctx: &CommandContext, action: ProblemAction) -> Result<()> {
             milestone,
             force,
             context,
-        } => new_problem(ctx, title, priority, parent, milestone, force, context),
+            tags,
+        } => new_problem(ctx, title, priority, parent, milestone, force, context, tags),
         ProblemAction::List {
             status,
             tree,
             milestone,
             search,
             assignee,
+            tag,
             sort,
             json,
         } => list_problems(
@@ -34,6 +36,7 @@ pub fn execute(ctx: &CommandContext, action: ProblemAction) -> Result<()> {
             milestone,
             search.as_deref(),
             assignee,
+            tag,
             &sort,
             json,
         ),
@@ -44,7 +47,9 @@ pub fn execute(ctx: &CommandContext, action: ProblemAction) -> Result<()> {
             status,
             priority,
             parent,
-        } => edit_problem(ctx, problem_id, title, status, priority, parent),
+            add_tag,
+            remove_tag,
+        } => edit_problem(ctx, problem_id, title, status, priority, parent, add_tag, remove_tag),
         ProblemAction::Tree { problem_id } => show_tree(ctx, problem_id),
         ProblemAction::Solve {
             problem_id,
@@ -62,6 +67,7 @@ pub fn execute(ctx: &CommandContext, action: ProblemAction) -> Result<()> {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn new_problem(
     ctx: &CommandContext,
     title: String,
@@ -70,6 +76,7 @@ fn new_problem(
     milestone: Option<String>,
     force: bool,
     context: Option<String>,
+    tags: Vec<String>,
 ) -> Result<()> {
     let store = &ctx.store;
 
@@ -160,6 +167,14 @@ fn new_problem(
             problem.context = ctx_text.clone();
         }
 
+        // Set tags (trim, dedup, sort)
+        if !tags.is_empty() {
+            let mut t: Vec<String> = tags.iter().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+            t.sort();
+            t.dedup();
+            problem.tags = t;
+        }
+
         // Set parent
         if let Some(ref parent_id) = resolved_parent {
             problem.set_parent(Some(parent_id.clone()));
@@ -221,6 +236,7 @@ fn list_problems(
     milestone_filter: Option<String>,
     search_query: Option<&str>,
     assignee_filter: Option<String>,
+    tag_filter: Option<String>,
     sort: &str,
     json: bool,
 ) -> Result<()> {
@@ -254,6 +270,12 @@ fn list_problems(
                 .map(|a| a.to_lowercase().contains(&pattern))
                 .unwrap_or(false)
         });
+    }
+
+    // Filter by tag (case-insensitive exact match)
+    if let Some(ref tag_pattern) = tag_filter {
+        let pattern = tag_pattern.to_lowercase();
+        problems.retain(|p| p.tags.iter().any(|t| t.to_lowercase() == pattern));
     }
 
     // Filter by search query using FTS (auto-populate DB if needed)
@@ -381,6 +403,10 @@ fn show_problem(ctx: &CommandContext, problem_input: String, json: bool) -> Resu
         println!("Assignee: {}", assignee);
     }
 
+    if !problem.tags.is_empty() {
+        println!("Tags: {}", problem.tags.join(", "));
+    }
+
     // Show description
     if !problem.description.is_empty() {
         println!("\n## Description\n{}", problem.description);
@@ -431,6 +457,7 @@ fn show_problem(ctx: &CommandContext, problem_input: String, json: bool) -> Resu
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn edit_problem(
     ctx: &CommandContext,
     problem_input: String,
@@ -438,6 +465,8 @@ fn edit_problem(
     status: Option<String>,
     priority: Option<String>,
     parent: Option<String>,
+    add_tag: Option<String>,
+    remove_tag: Option<String>,
 ) -> Result<()> {
     let store = &ctx.store;
 
@@ -500,6 +529,19 @@ fn edit_problem(
             } else {
                 Some(new_parent.clone())
             });
+        }
+
+        if let Some(ref tag) = add_tag {
+            let tag = tag.trim().to_string();
+            if !tag.is_empty() && !problem.tags.iter().any(|t| t.to_lowercase() == tag.to_lowercase()) {
+                problem.tags.push(tag);
+                problem.tags.sort();
+            }
+        }
+
+        if let Some(ref tag) = remove_tag {
+            let tag_lower = tag.trim().to_lowercase();
+            problem.tags.retain(|t| t.to_lowercase() != tag_lower);
         }
 
         store.save_problem(&problem)?;
