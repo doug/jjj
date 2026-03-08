@@ -15,6 +15,8 @@ Launch the interactive terminal UI:
 jjj ui
 ```
 
+![jjj TUI demo](/demo/tui.gif)
+
 The TUI provides two panes:
 
 The TUI shows a **Project Tree** on the left and a **Detail** pane on the right. Use `Tab` to jump to the next action item in the tree.

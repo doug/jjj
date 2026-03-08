@@ -7,6 +7,8 @@ description: How to request, perform, and complete code reviews using jjj
 
 jjj provides built-in code review capabilities that work seamlessly with Jujutsu's change-based workflow.
 
+![jjj code review demo](/demo/code-review.gif)
+
 ## Why Code Review in jjj?
 
 Traditional code review tools (GitHub PRs, GitLab MRs) are designed for Git's commit-based model. They struggle with:

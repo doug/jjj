@@ -15,26 +15,36 @@ VHS also requires `ttyd` and `ffmpeg` (installed automatically by Homebrew as de
 Re-record all demos:
 
 ```bash
-cd demo
-vhs workflow.tape
-vhs tui.tape
+for tape in demo/*.tape; do vhs "$tape"; done
 ```
 
-Or from the project root:
+Or individually:
 
 ```bash
 vhs demo/workflow.tape
 vhs demo/tui.tape
+vhs demo/code-review.tape
+vhs demo/problem-solving.tape
+vhs demo/jj-integration.tape
 ```
 
-Each tape outputs a `.gif` in the `demo/` directory. The GIFs are referenced by `../README.md`.
+Each tape outputs a `.gif` in the `demo/` directory. GIFs are used in both the project `README.md` and the docs site (`docs-site/public/demo/`).
+
+After re-recording, copy to the docs site:
+
+```bash
+cp demo/*.gif docs-site/public/demo/
+```
 
 ## Tapes
 
-| File | Output | Description |
-|------|--------|-------------|
-| `workflow.tape` | `workflow.gif` | Full Popperian cycle: create problem, propose solution, add critique, address it, submit, approve |
-| `tui.tape` | `tui.gif` | Interactive TUI: navigate panes, expand tree nodes, scroll detail, help overlay |
+| File | Output | Used in |
+|------|--------|---------|
+| `workflow.tape` | `workflow.gif` | README, docs landing page, Quick Start guide |
+| `tui.tape` | `tui.gif` | README, TUI & Status guide |
+| `code-review.tape` | `code-review.gif` | Code Review Workflow guide |
+| `problem-solving.tape` | `problem-solving.gif` | Problem Solving guide |
+| `jj-integration.tape` | `jj-integration.gif` | Jujutsu Integration guide |
 
 ## Editing
 

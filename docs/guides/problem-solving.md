@@ -7,6 +7,8 @@ description: Workflow guide for defining problems, proposing solutions, and reso
 
 This guide covers the core of working with jjj: identifying problems, decomposing them, prioritizing work, and reaching resolution.
 
+![jjj problem solving demo](/demo/problem-solving.gif)
+
 ## When to Create a Problem
 
 A problem in jjj represents something that needs to be addressed. You should create a problem when you encounter:

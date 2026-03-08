@@ -8,6 +8,8 @@ description: Get up and running with jjj in 5 minutes — full Problem/Solution/
 Get up and running with jjj in 5 minutes. This walkthrough covers the full
 Problem/Solution/Critique workflow.
 
+![jjj workflow demo](/demo/workflow.gif)
+
 ## Initialize
 
 Navigate to an existing Jujutsu repository and initialize jjj:

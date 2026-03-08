@@ -32,7 +32,7 @@ export function Hero({ base = '/' }: { base?: string }) {
         </p>
 
         {/* CTA Buttons */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+        <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
           <a href={`${base}getting-started/installation`}>
             <Button size="lg">Get Started</Button>
           </a>
@@ -41,6 +41,11 @@ export function Hero({ base = '/' }: { base?: string }) {
               View on GitHub
             </Button>
           </a>
+        </div>
+
+        {/* Demo GIF */}
+        <div className="max-w-3xl mx-auto rounded-xl overflow-hidden shadow-2xl shadow-black/30">
+          <img src="/demo/workflow.gif" alt="jjj workflow demo — creating problems, solutions, critiques" className="w-full" />
         </div>
       </div>
     </section>
