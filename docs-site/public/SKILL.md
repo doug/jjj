@@ -30,10 +30,13 @@ State machines:
 |------|---------|
 | Initialize | `jjj init` |
 | Status | `jjj status` |
+| Next action | `jjj next [--top N] [--mine] [--claim]` |
 | Interactive TUI | `jjj ui` |
 | Sync | `jjj push` / `jjj fetch` / `jjj sync` |
 | Full-text search | `jjj search "query"` |
 | Timeline | `jjj timeline "title"` |
+| File overlaps | `jjj overlaps` |
+| Project insights | `jjj insights` |
 
 ### Problems
 
@@ -162,6 +165,8 @@ jjj sync                       # fetch + push jjj metadata
 Use jjj for all problem tracking, decision records, and code review when the project uses Jujutsu (jj). The metadata persists across rebases, making it reliable for long-running work.
 
 - Check `jjj status` first — it shows what needs attention
-- Use `jjj next` to find the highest-priority open item
+- Use `jjj next` to find the highest-priority open item, or `jjj next --claim` to grab it
+- Use `jjj overlaps` to check for file conflicts between active solutions
+- Use `jjj insights` to review project health and cycle times
 - Add critiques liberally; they're cheap to address and create a clear audit trail
 - Rationales on `solution approve` and `solution withdraw` are searchable via `jjj events --search`

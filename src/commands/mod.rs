@@ -4,8 +4,10 @@ pub mod db;
 pub mod events;
 pub mod fetch;
 pub mod init;
+pub mod insights;
 pub mod milestone;
 pub mod next;
+pub mod overlaps;
 pub mod problem;
 pub mod push;
 pub mod search;
@@ -61,7 +63,18 @@ fn execute_with_context(ctx: &CommandContext, command: Commands) -> Result<()> {
             json,
         } => status::execute(ctx, all, mine, limit, json),
 
-        Commands::Next { top, mine, json } => next::execute(ctx, top, mine, json),
+        Commands::Next {
+            top,
+            mine,
+            json,
+            claim,
+        } => next::execute(ctx, top, mine, json, claim),
+
+        // Overlap detection
+        Commands::Overlaps { json } => overlaps::execute(ctx, json),
+
+        // Insights
+        Commands::Insights { json } => insights::execute(ctx, json),
 
         // Transport: fetch, push, sync (fetch + push)
         Commands::Fetch { remote } => fetch::execute(ctx, &remote),

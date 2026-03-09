@@ -56,13 +56,60 @@ jjj next [OPTIONS]
 | `--top` | integer | Number of items to show (default: 1, 0 for all) |
 | `--mine` | bool | Only show items assigned to you |
 | `--json` | bool | Output as JSON |
+| `--claim` | bool | Claim the top item: assign it to yourself and display it |
 
 ```bash
 jjj next
 jjj next --top 5
 jjj next --mine
 jjj next --json
+jjj next --claim            # Grab the top item and assign it to you
+jjj next --claim --json     # Same, with JSON output
 ```
+
+## `jjj overlaps`
+
+Show files touched by multiple in-progress solutions. Useful for detecting potential merge conflicts before they happen.
+
+```
+jjj overlaps [OPTIONS]
+```
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `--json` | bool | Output as JSON |
+
+```bash
+jjj overlaps
+jjj overlaps --json
+```
+
+When overlaps exist, `jjj status` also shows a warning at the bottom of its output.
+
+## `jjj insights`
+
+Show aggregate statistics from the event log: approval rates, cycle times, top contributors, and most active problems.
+
+```
+jjj insights [OPTIONS]
+```
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `--json` | bool | Output as JSON |
+
+```bash
+jjj insights
+jjj insights --json
+```
+
+Statistics include:
+- **Approval rate**: percentage of solutions approved vs. withdrawn
+- **Avg time to solve**: mean time from problem creation to solved
+- **Avg critique resolution**: mean time from critique raised to resolved
+- **Critiques per solution**: ratio of critiques to solutions
+- **Top contributors**: most active team members by event count
+- **Most active problems**: problems with the most events
 
 ## `jjj fetch`
 

@@ -126,9 +126,12 @@ TUI (src/tui/)               # Ratatui-based interactive UI
 - `Left/Right`: Collapse/expand tree nodes
 - `a/r/d`: Approve/Withdraw/Dismiss actions
 
-### Events and Timeline
+### Events, Insights, and Timeline
 ```bash
 jjj events                           # Recent events
 jjj events --problem 01957d          # Events for a problem (by prefix)
 jjj timeline "auth bug"              # Full timeline (by fuzzy title)
+jjj insights                         # Aggregate stats (approval rate, cycle times)
+jjj overlaps                         # Files touched by multiple solutions
+jjj next --claim                     # Claim top work item (assign + display)
 ```

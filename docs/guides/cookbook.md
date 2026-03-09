@@ -117,7 +117,50 @@ If a team member leaves or a solution goes stale, you can cleanly hand it off or
     jjj solution withdraw "Old approach" --rationale "Superseded by the new caching architecture."
     ```
 
-## 8. Using Search to Find Context
+## 8. Detecting File Overlaps Early
+
+When multiple solutions modify the same files, merge conflicts are likely. Detect them before they happen:
+
+```bash
+# Check for overlapping files
+jjj overlaps
+```
+
+If overlaps exist, you have several options:
+1. **Coordinate**: Talk to the other solution's author and agree on an approach.
+2. **Sequence**: Withdraw one solution, approve the other first, then rebase.
+3. **Critique**: Raise a critique on one of the solutions noting the conflict risk.
+   ```bash
+   jjj critique new "connection pooling" "Overlaps with caching solution on src/db/pool.rs" --severity medium
+   ```
+
+The `jjj status` command also shows overlap warnings automatically.
+
+## 9. Claiming Work Items
+
+Use `jjj next --claim` to atomically find the highest-priority item and assign it to yourself:
+
+```bash
+# Grab the top item
+jjj next --claim
+
+# See what you claimed in JSON
+jjj next --claim --json
+```
+
+This is useful in team settings where multiple people may be looking for work at the same time. The claim is idempotent — running it again on an already-assigned item is a no-op.
+
+## 10. Reviewing Project Health
+
+Use `jjj insights` to get aggregate statistics about your project:
+
+```bash
+jjj insights
+```
+
+This shows approval rates, average time to solve problems, critique resolution times, and top contributors. Use `--json` for structured output that can feed into dashboards or reports.
+
+## 11. Using Search to Find Context
 
 Use full-text or semantic search to find related work before starting something new:
 

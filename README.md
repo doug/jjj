@@ -63,6 +63,9 @@ Launch `jjj ui` for a full terminal interface with project tree, detail pane, an
 jjj init                    # Initialize jjj bookmark
 jjj status                  # Show next actions (what to work on)
 jjj next                    # Top next actions (--top N, --mine, --json)
+jjj next --claim            # Claim the top item (assign to yourself)
+jjj overlaps                # Detect files touched by multiple solutions
+jjj insights                # Show project statistics (approval rate, cycle times)
 jjj ui                      # Launch interactive TUI
 jjj fetch                   # Fetch code and metadata from remote
 jjj push                    # Push code and metadata to remote

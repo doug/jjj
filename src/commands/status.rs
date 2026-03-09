@@ -59,6 +59,20 @@ pub fn execute(
             .filter(|c| c.status == CritiqueStatus::Open)
             .count();
 
+        // Check file overlaps for JSON output
+        let overlaps = super::overlaps::find_overlaps(ctx)?;
+        let overlaps_json: Vec<serde_json::Value> = overlaps
+            .iter()
+            .map(|o| {
+                serde_json::json!({
+                    "file": o.file.to_string_lossy(),
+                    "solutions": o.solutions.iter().map(|(id, title)| {
+                        serde_json::json!({ "id": id, "title": title })
+                    }).collect::<Vec<_>>(),
+                })
+            })
+            .collect();
+
         let output = serde_json::json!({
             "active_solution": active_json,
             "items": items,
@@ -68,7 +82,8 @@ pub fn execute(
                 "open_problems": open_problems,
                 "review_solutions": review_solutions,
                 "open_critiques": open_critiques,
-            }
+            },
+            "overlaps": overlaps_json,
         });
         println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
@@ -190,6 +205,29 @@ pub fn execute(
             "\nSummary: {} open problems, {} in review, {} open critiques",
             open_problems, review_solutions, open_critiques
         );
+
+        // Check file overlaps
+        let overlaps = super::overlaps::find_overlaps(ctx)?;
+        if !overlaps.is_empty() {
+            let total_files: usize = overlaps.len();
+            println!(
+                "\n⚠ {} file{} touched by multiple active solutions:",
+                total_files,
+                if total_files == 1 { "" } else { "s" }
+            );
+            for overlap in &overlaps {
+                let sol_names: Vec<&str> = overlap
+                    .solutions
+                    .iter()
+                    .map(|(_, title)| title.as_str())
+                    .collect();
+                println!(
+                    "  {} — {}",
+                    overlap.file.display(),
+                    sol_names.join(", ")
+                );
+            }
+        }
     }
 
     Ok(())

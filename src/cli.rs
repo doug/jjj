@@ -69,6 +69,10 @@ pub enum Commands {
         /// Output as JSON
         #[arg(long)]
         json: bool,
+
+        /// Claim the top item: assign it to yourself and display it
+        #[arg(long)]
+        claim: bool,
     },
 
     // ── Core entities ──────────────────────────────────────────────────────
@@ -126,6 +130,22 @@ pub enum Commands {
         /// Problem ID or title
         problem_id: String,
 
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Show files touched by multiple in-progress solutions (conflict detection)
+    #[command(display_order = 3)]
+    Overlaps {
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Show aggregate statistics from the event log (approval rates, cycle times)
+    #[command(display_order = 4)]
+    Insights {
         /// Output as JSON
         #[arg(long)]
         json: bool,

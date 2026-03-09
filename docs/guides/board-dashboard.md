@@ -137,13 +137,31 @@ jjj status --json
    jjj solution new "Rate limit with token bucket algorithm" --problem "rate limiting"
    ```
 
-4. **Nothing assigned?** Run `jjj status --all` to see all items across the project.
+4. **Nothing assigned?** Claim the top item in one step:
+   ```bash
+   jjj next --claim
+   ```
+   Or run `jjj status --all` to see all items across the project.
+
+### Overlap Warnings
+
+When multiple active solutions touch the same files, `jjj status` shows a warning:
+
+```
+⚠ 2 files touched by multiple active solutions:
+  src/auth/handler.rs — Add OAuth, Fix token refresh
+  src/auth/config.rs — Add OAuth, Fix token refresh
+```
+
+Run `jjj overlaps` for the full detail, or `jjj overlaps --json` for structured output.
 
 ## Combining TUI and Status
 
 - **Quick check**: Use `jjj status` for a command-line summary
 - **Interactive work**: Use `jjj ui` for browsing and taking actions
 - **Scripting**: Use `jjj status --json` for automation
+- **Grab work**: Use `jjj next --claim` to pick up the top item
+- **Project health**: Use `jjj insights` for aggregate statistics
 
 ## Next Steps
 

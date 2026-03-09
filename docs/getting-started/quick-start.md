@@ -176,7 +176,9 @@ problems surface first.
 |---------|-------------|
 | `jjj init` | Initialize jjj in current repository |
 | `jjj status` | Show status and prioritized next actions |
-| `jjj next` | Top next actions (`--top N`, `--mine`, `--json`) |
+| `jjj next` | Top next actions (`--top N`, `--mine`, `--json`, `--claim`) |
+| `jjj overlaps` | Show files touched by multiple active solutions |
+| `jjj insights` | Show project statistics (approval rate, cycle times) |
 | `jjj ui` | Launch interactive TUI |
 | `jjj problem new "title" --priority high` | Create a problem |
 | `jjj problem list` | List all problems |
