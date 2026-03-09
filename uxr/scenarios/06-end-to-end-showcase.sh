@@ -80,12 +80,12 @@ assert_contains "already" "error says already initialized"
 section "Step 2: Identify a problem"
 # ============================================================================
 
-run_jjj problem new "Auth has no rate limiting" --priority high
+run_jjj problem new "Auth has no rate limiting" --priority p1
 assert_success "create a high-priority security problem"
 assert_contains "Auth has no rate limiting" "title echoed back"
 RATE_LIMIT_PROBLEM_ID=$(echo "$OUTPUT" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
 
-run_jjj problem new "DB queries not sanitized" --priority critical
+run_jjj problem new "DB queries not sanitized" --priority p0
 assert_success "create a critical problem"
 
 run_jjj problem list

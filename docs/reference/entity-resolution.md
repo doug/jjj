@@ -122,7 +122,7 @@ The `p/`, `s/`, `c/`, `m/` prefixes indicate:
 
 ```bash
 # Create a problem
-jjj problem new "Search is slow" --priority high
+jjj problem new "Search is slow" --priority p1
 
 # Reference by title when creating a solution
 jjj solution new "Add search index" --problem "Search is slow"

@@ -25,7 +25,7 @@ Tests must be run in order — each builds on the state created by previous test
 
 **Prompt:** "Create a high-priority problem called 'Login page crashes on empty password'"
 
-**Expected:** Agent runs `jjj problem new "Login page crashes on empty password" --priority high`
+**Expected:** Agent runs `jjj problem new "Login page crashes on empty password" --priority p1`
 
 ### 2. Solution creation with problem link
 

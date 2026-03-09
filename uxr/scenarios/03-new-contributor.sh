@@ -23,11 +23,11 @@ assert_success "init"
 
 # Create realistic project state
 $JJJ milestone new "v2.0 Beta" --date 2025-09-01 2>/dev/null
-$JJJ problem new "Authentication fails on expired tokens" --priority critical 2>/dev/null
-$JJJ problem new "Search pagination broken" --priority high 2>/dev/null
-$JJJ problem new "Dashboard loads slowly" --priority medium 2>/dev/null
-$JJJ problem new "Add dark mode support" --priority low 2>/dev/null
-$JJJ problem new "API rate limiting missing" --priority high 2>/dev/null
+$JJJ problem new "Authentication fails on expired tokens" --priority p0 2>/dev/null
+$JJJ problem new "Search pagination broken" --priority p1 2>/dev/null
+$JJJ problem new "Dashboard loads slowly" --priority p2 2>/dev/null
+$JJJ problem new "Add dark mode support" --priority p3 2>/dev/null
+$JJJ problem new "API rate limiting missing" --priority p1 2>/dev/null
 
 # Add problems to milestone
 $JJJ milestone add-problem "v2.0" "auth" 2>/dev/null

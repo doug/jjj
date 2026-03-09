@@ -22,7 +22,7 @@ setup_repo "solution-diff"
 run_jjj init
 assert_success "init"
 
-run_jjj problem new "Rendering lag on large datasets" --priority high --force
+run_jjj problem new "Rendering lag on large datasets" --priority p1 --force
 assert_success "create problem"
 
 # ============================================================================

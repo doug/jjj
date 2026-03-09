@@ -79,17 +79,17 @@ section "Step 3: problem new --milestone (assign on creation)"
 # ============================================================================
 
 run_jjj problem new "Login crashes on empty password" \
-    --priority critical \
+    --priority p0 \
     --milestone "v1.0 GA"
 assert_success "create problem assigned to milestone on creation"
 
 run_jjj problem new "Settings page layout broken" \
-    --priority high \
+    --priority p1 \
     --milestone "v1.0 GA"
 assert_success "create second problem for v1.0 milestone"
 
 run_jjj problem new "Add export to CSV" \
-    --priority medium \
+    --priority p2 \
     --milestone "v1.1 Patch"
 assert_success "create problem for v1.1 milestone"
 
@@ -104,7 +104,7 @@ observe "problem new --milestone saves a step — no need to milestone add-probl
 section "Step 4: milestone add-problem (explicit)"
 # ============================================================================
 
-run_jjj problem new "Dark mode flickers" --priority low
+run_jjj problem new "Dark mode flickers" --priority p3
 assert_success "create problem without milestone"
 
 run_jjj milestone add-problem "v1.1 Patch" "Dark mode flickers"

@@ -24,11 +24,11 @@ Type "cd $TMPDIR && jj git init myproject && cd myproject" Enter
 Sleep 1s
 Type "jjj init" Enter
 Sleep 500ms
-Type "jjj problem new 'Search is slow' --priority P1 --tags backend,performance" Enter
+Type "jjj problem new 'Search is slow' --priority p1 --tags backend,performance" Enter
 Sleep 300ms
-Type "jjj problem new 'Login page redesign' --priority P2 --tags frontend,ux" Enter
+Type "jjj problem new 'Login page redesign' --priority p2 --tags frontend,ux" Enter
 Sleep 300ms
-Type "jjj problem new 'API rate limiting' --priority P0 --tags backend,security" Enter
+Type "jjj problem new 'API rate limiting' --priority p0 --tags backend,security" Enter
 Sleep 300ms
 Type "jjj solution new 'Add search index' --problem 'Search is slow'" Enter
 Sleep 300ms

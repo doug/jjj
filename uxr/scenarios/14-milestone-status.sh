@@ -30,11 +30,11 @@ run_jjj milestone new "Beta Release" --date "2026-12-01"
 assert_success "create milestone"
 assert_contains "Beta Release" "milestone title in output"
 
-run_jjj problem new "Fix login crash" --priority critical --force
+run_jjj problem new "Fix login crash" --priority p0 --force
 assert_success "create problem 1"
-run_jjj problem new "Add rate limiting" --priority high --force
+run_jjj problem new "Add rate limiting" --priority p1 --force
 assert_success "create problem 2"
-run_jjj problem new "Improve error messages" --priority medium --force
+run_jjj problem new "Improve error messages" --priority p2 --force
 assert_success "create problem 3"
 
 run_jjj milestone add-problem "Beta Release" "Fix login crash"

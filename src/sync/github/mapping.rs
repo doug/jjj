@@ -403,7 +403,7 @@ mod tests {
         assert!(body.contains("Tokens expire after 15 min causing UX friction."));
         assert!(body.contains("## Context"));
         assert!(body.contains("Reported by enterprise customers on SSO plan."));
-        assert!(body.contains("P1"));
+        assert!(body.contains("p1"));
         assert!(body.contains("open"));
         assert!(body.contains("Synced from jjj"));
     }
@@ -416,7 +416,7 @@ mod tests {
         // Should NOT have description section but should have footer
         assert!(!body.starts_with("\n\n"));
         assert!(body.contains("Synced from jjj"));
-        assert!(body.contains("P2"));
+        assert!(body.contains("p2"));
     }
 
     #[test]

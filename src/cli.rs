@@ -324,8 +324,8 @@ pub enum ProblemAction {
         /// Problem title (the question to answer)
         title: String,
 
-        /// Priority: critical (P0), high (P1), medium (P2), low (P3)
-        #[arg(long, default_value = "medium")]
+        /// Priority: p0 (critical), p1 (high), p2 (medium, default), p3 (low)
+        #[arg(long, default_value = "p2")]
         priority: String,
 
         /// Parent problem ID — makes this a sub-problem
@@ -410,7 +410,7 @@ pub enum ProblemAction {
         #[arg(long)]
         status: Option<String>,
 
-        /// New priority: critical (P0), high (P1), medium (P2), low (P3)
+        /// New priority: p0 (critical), p1 (high), p2 (medium), p3 (low)
         #[arg(long)]
         priority: Option<String>,
 

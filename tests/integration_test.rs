@@ -155,7 +155,7 @@ fn test_problem_priority() {
     // Create with P0 priority
     let output = run_jjj(
         dir_path,
-        &["problem", "new", "Critical bug", "--priority", "P0"],
+        &["problem", "new", "Critical bug", "--priority", "p0"],
     );
     assert!(
         output.status.success(),
@@ -168,7 +168,7 @@ fn test_problem_priority() {
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("P0") || stdout.contains("Critical"),
+        stdout.contains("p0"),
         "Priority not shown in output: {}",
         stdout
     );
@@ -179,7 +179,7 @@ fn test_problem_priority() {
     let output = run_jjj(dir_path, &["problem", "show", "Normal bug"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("P2") || stdout.contains("Medium"),
+        stdout.contains("p2"),
         "Default priority not shown: {}",
         stdout
     );
@@ -322,15 +322,15 @@ fn test_next_priority_sorting() {
     // Create problems with different priorities
     run_jjj(
         dir_path,
-        &["problem", "new", "Low priority task", "--priority", "P3"],
+        &["problem", "new", "Low priority task", "--priority", "p3"],
     );
     run_jjj(
         dir_path,
-        &["problem", "new", "Critical issue", "--priority", "P0"],
+        &["problem", "new", "Critical issue", "--priority", "p0"],
     );
     run_jjj(
         dir_path,
-        &["problem", "new", "High priority work", "--priority", "P1"],
+        &["problem", "new", "High priority work", "--priority", "p1"],
     );
 
     // All should appear as TODO (no solutions)

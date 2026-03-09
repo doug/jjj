@@ -49,6 +49,20 @@ fn parse_enum<T: std::str::FromStr + Default>(s: &str, kind: &str, default_name:
     })
 }
 
+/// Parse priority from DB, accepting both P0-P3 and legacy word forms.
+fn parse_priority_lenient(s: &str) -> Priority {
+    match s.to_lowercase().as_str() {
+        "p0" | "critical" => Priority::Critical,
+        "p1" | "high" => Priority::High,
+        "p2" | "medium" => Priority::Medium,
+        "p3" | "low" => Priority::Low,
+        _ => {
+            eprintln!("Warning: invalid priority '{}', defaulting to p2", s);
+            Priority::default()
+        }
+    }
+}
+
 // ============================================================================
 // Problems
 // ============================================================================
@@ -68,10 +82,10 @@ pub fn upsert_problem(conn: &Connection, problem: &Problem) -> SqliteResult<()> 
             problem.title,
             problem.status.to_string(),
             match problem.priority {
-                Priority::Low => "low",
-                Priority::Medium => "medium",
-                Priority::High => "high",
-                Priority::Critical => "critical",
+                Priority::Low => "p3",
+                Priority::Medium => "p2",
+                Priority::High => "p1",
+                Priority::Critical => "p0",
             },
             problem.parent_id,
             problem.milestone_id,
@@ -137,7 +151,7 @@ fn row_to_problem(row: &rusqlite::Row) -> SqliteResult<Problem> {
         id: row.get(0)?,
         title: row.get(1)?,
         status: parse_enum(&status_str, "problem status", "Open"),
-        priority: parse_enum(&priority_str, "priority", "Medium"),
+        priority: parse_priority_lenient(&priority_str),
         parent_id: row.get(4)?,
         milestone_id: row.get(5)?,
         assignee: row.get(6)?,

@@ -42,11 +42,11 @@ State machines:
 
 | Task | Command |
 |------|---------|
-| Create | `jjj problem new "Title" [--priority critical\|high\|medium\|low]` |
+| Create | `jjj problem new "Title" [--priority p0\|p1\|p2\|p3]` |
 | List | `jjj problem list [--status open\|in_progress\|solved\|dissolved]` |
 | Show | `jjj problem show "title or id"` |
 | Tree view | `jjj problem tree` |
-| Edit | `jjj problem edit "title" --title "New" --priority high` |
+| Edit | `jjj problem edit "title" --title "New" --priority p1` |
 | Solve | `jjj problem solve "title"` |
 | Dissolve | `jjj problem dissolve "title" --reason "..."` |
 | Reopen | `jjj problem reopen "title"` |
@@ -112,7 +112,7 @@ jjj solution approve "nil check" # partial title
 
 ```bash
 # 1. Identify a problem
-jjj problem new "Login crashes on empty password" --priority critical
+jjj problem new "Login crashes on empty password" --priority p0
 
 # 2. Propose a solution (auto-links to current jj change)
 jjj solution new "Add nil guard to auth handler" --problem "Login crashes"

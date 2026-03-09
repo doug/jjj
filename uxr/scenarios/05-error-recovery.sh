@@ -88,7 +88,7 @@ assert_success "unicode in title"
 section "Invalid Status Transitions"
 # ============================================================================
 
-run_jjj problem new "Transition test" --priority medium
+run_jjj problem new "Transition test" --priority p2
 assert_success "create test problem"
 
 # Can't go from open to solved without approved solution
@@ -143,7 +143,7 @@ observe "Ghost critique error: $OUTPUT"
 section "Approve Solution With Open Critiques"
 # ============================================================================
 
-$JJJ problem new "Blocked approve test" --priority low 2>/dev/null
+$JJJ problem new "Blocked approve test" --priority p3 2>/dev/null
 $JJJ solution new "Blocked solution" --problem "Blocked approve" 2>/dev/null
 $JJJ solution submit "Blocked solution" 2>/dev/null
 $JJJ critique new "Blocked solution" "Blocking critique" --severity high 2>/dev/null
@@ -160,7 +160,7 @@ assert_success "force approve bypasses critique check"
 section "Double Operations (Idempotency)"
 # ============================================================================
 
-$JJJ problem new "Idempotency test" --priority low 2>/dev/null
+$JJJ problem new "Idempotency test" --priority p3 2>/dev/null
 $JJJ solution new "Idemp solution" --problem "Idempotency" 2>/dev/null
 
 # Address nonexistent critique
@@ -189,8 +189,8 @@ section "Sort Flags"
 # ============================================================================
 
 # Create a few problems for sorting
-$JJJ problem new "AAA first alphabetically" --priority low 2>/dev/null
-$JJJ problem new "ZZZ last alphabetically" --priority critical 2>/dev/null
+$JJJ problem new "AAA first alphabetically" --priority p3 2>/dev/null
+$JJJ problem new "ZZZ last alphabetically" --priority p0 2>/dev/null
 
 run_jjj problem list --sort title
 assert_success "sort by title"
@@ -221,7 +221,7 @@ run_jjj milestone new "Past milestone" --date 2020-01-01
 assert_success "milestone with past date (should work)"
 
 # Add same problem to milestone twice
-$JJJ problem new "Double add test" --priority low 2>/dev/null
+$JJJ problem new "Double add test" --priority p3 2>/dev/null
 $JJJ milestone add-problem "No date" "Double add" 2>/dev/null
 run_jjj milestone add-problem "No date" "Double add"
 assert_success "double add-problem warns but succeeds"
