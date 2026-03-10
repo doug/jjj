@@ -230,9 +230,9 @@ fn test_status_priority_sorting() {
     let dir = setup_test_repo();
 
     // Create problems with different priorities
-    run_jjj_success(&dir, &["problem", "new", "Low", "--priority", "p3"]);
-    run_jjj_success(&dir, &["problem", "new", "Critical", "--priority", "p0"]);
-    run_jjj_success(&dir, &["problem", "new", "High", "--priority", "p1"]);
+    run_jjj_success(&dir, &["problem", "new", "Low", "--priority", "low"]);
+    run_jjj_success(&dir, &["problem", "new", "Critical", "--priority", "critical"]);
+    run_jjj_success(&dir, &["problem", "new", "High", "--priority", "high"]);
 
     let stdout = run_jjj_success(&dir, &["status", "--json", "--all"]);
     let json: serde_json::Value = serde_json::from_str(&stdout).expect("Failed to parse JSON");

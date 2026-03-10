@@ -30,10 +30,10 @@ run_jjj init
 assert_success "init"
 
 # Create problems, solutions, critiques to generate varied events
-run_jjj problem new "Memory leak in worker pool" --priority p0
+run_jjj problem new "Memory leak in worker pool" --priority critical
 assert_success "create first problem"
 
-run_jjj problem new "Slow startup time" --priority p1
+run_jjj problem new "Slow startup time" --priority high
 assert_success "create second problem"
 
 run_jjj solution new "Fix worker lifecycle" --problem "Memory leak"
@@ -250,7 +250,7 @@ section "Step 12: approve emits two events in one commit"
 
 # Approving a solution that fully resolves its parent problem emits both
 # solution_approved and problem_solved in the SAME commit (two jjj: lines).
-run_jjj problem new "Two-Event Problem" --priority p1
+run_jjj problem new "Two-Event Problem" --priority high
 assert_success "create problem for two-event test"
 
 run_jjj solution new "Two-Event Solution" --problem "Two-Event Problem"

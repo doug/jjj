@@ -30,7 +30,7 @@ jjj organizes work around Karl Popper's theory of knowledge growth: bold conject
 jjj init
 
 # Define a problem
-jjj problem new "Search is slow" --priority p1
+jjj problem new "Search is slow" --priority high
 
 # Propose a solution (references problem by title)
 jjj solution new "Add search index" --problem "Search is slow"

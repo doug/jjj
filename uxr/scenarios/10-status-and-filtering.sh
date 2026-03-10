@@ -38,21 +38,21 @@ run_jjj init
 assert_success "init"
 
 # Create problems with different priorities and assignees
-run_jjj problem new "Performance regression in search" --priority p0
-assert_success "create p0 problem"
+run_jjj problem new "Performance regression in search" --priority critical
+assert_success "create critical problem"
 
-run_jjj problem new "Missing dark mode" --priority p3
-assert_success "create p3 problem"
+run_jjj problem new "Missing dark mode" --priority low
+assert_success "create low problem"
 
-run_jjj problem new "Auth tokens expire too quickly" --priority p1
-assert_success "create p1 problem"
+run_jjj problem new "Auth tokens expire too quickly" --priority high
+assert_success "create high problem"
 
-run_jjj problem new "Onboarding flow is confusing" --priority p2
-assert_success "create p2 problem"
+run_jjj problem new "Onboarding flow is confusing" --priority medium
+assert_success "create medium problem"
 
 # Assign some problems (filters use exact string match)
 run_jjj problem assign "Performance regression" --to "alice@example.com"
-assert_success "assign p0 to alice"
+assert_success "assign critical to alice"
 
 run_jjj problem assign "Auth tokens" --to "bob@example.com"
 assert_success "assign auth problem to bob"
@@ -62,7 +62,7 @@ run_jjj milestone new "v2.0 Release" --date "2026-06-01"
 assert_success "create milestone"
 
 run_jjj milestone add-problem "v2.0" "Performance regression"
-assert_success "add p0 to milestone"
+assert_success "add critical to milestone"
 
 run_jjj milestone add-problem "v2.0" "Auth tokens"
 assert_success "add auth problem to milestone"
@@ -128,7 +128,7 @@ assert_not_contains "Performance regression" "in_progress problem excluded from 
 run_jjj problem list --status in_progress
 assert_success "problem list --status in_progress"
 assert_contains "in_progress" "in_progress problems listed"
-assert_contains "Performance regression" "p0 with solution is in_progress"
+assert_contains "Performance regression" "critical with solution is in_progress"
 
 # assignee filter uses substring comparison
 run_jjj problem list --assignee "alice"

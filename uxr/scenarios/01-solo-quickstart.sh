@@ -31,8 +31,8 @@ assert_contains "already" "error mentions already initialized"
 section "Step 2: Create a Problem"
 # ============================================================================
 
-run_jjj problem new "Search is slow" --priority p1
-assert_success "create problem with --priority p1"
+run_jjj problem new "Search is slow" --priority high
+assert_success "create problem with --priority high"
 assert_contains "Search is slow" "output shows the title"
 
 # Verify it appears in list
@@ -118,7 +118,7 @@ section "Step 9: Entity Resolution Methods"
 # ============================================================================
 
 # Create another problem for testing resolution
-run_jjj problem new "Authentication is broken" --priority p0
+run_jjj problem new "Authentication is broken" --priority critical
 assert_success "create second problem"
 
 # Full title match

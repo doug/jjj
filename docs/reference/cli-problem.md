@@ -27,7 +27,7 @@ jjj problem new <title> [OPTIONS]
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--priority` | string | `p2` | Priority: p0 (critical), p1 (high), p2 (medium), p3 (low) |
+| `--priority` | string | `medium` | Priority: critical, high, medium, low |
 | `--parent` | string | | Parent problem (title, prefix, or UUID) |
 | `--milestone` | string | | Milestone to target (title, prefix, or UUID) |
 | `--tags` | string | | Comma-separated tags (e.g., `backend,auth,size:L`) |
@@ -35,7 +35,7 @@ jjj problem new <title> [OPTIONS]
 
 ```bash,test
 jjj init
-jjj problem new "App crashes on startup" --priority p1
+jjj problem new "App crashes on startup" --priority high
 jjj problem new "Null pointer in auth module" --parent "App crashes"
 jjj problem new "Improve test coverage"
 ```
@@ -93,13 +93,13 @@ jjj problem edit <problem> [OPTIONS]
 |------|------|-------------|
 | `--title` | string | New title |
 | `--status` | string | New status (open, in_progress, solved, dissolved) |
-| `--priority` | string | Set priority: p0 (critical), p1 (high), p2 (medium), p3 (low) |
+| `--priority` | string | Set priority: critical, high, medium, low |
 | `--parent` | string | Set parent problem |
 | `--add-tag` | string | Add a tag |
 | `--remove-tag` | string | Remove a tag |
 
 ```bash,test
-jjj problem edit "App crashes" --title "App crashes on cold startup" --priority p0
+jjj problem edit "App crashes" --title "App crashes on cold startup" --priority critical
 ```
 
 ## `jjj problem tree`

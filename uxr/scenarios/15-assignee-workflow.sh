@@ -36,15 +36,15 @@ SELF_SUBSTR="$SELF_NAME"
 observe "Detected jj self identity name: $SELF_SUBSTR"
 
 # Create three problems with different priorities
-run_jjj problem new "Database connection pool exhausted" --priority p0 --force
+run_jjj problem new "Database connection pool exhausted" --priority critical --force
 assert_success "create problem 1 (critical)"
 assert_contains "Database connection" "problem title in output"
 
-run_jjj problem new "Search results are slow" --priority p1 --force
+run_jjj problem new "Search results are slow" --priority high --force
 assert_success "create problem 2 (high)"
 assert_contains "Search results" "problem title in output"
 
-run_jjj problem new "Avatar upload fails silently" --priority p2 --force
+run_jjj problem new "Avatar upload fails silently" --priority medium --force
 assert_success "create problem 3 (medium)"
 assert_contains "Avatar upload" "problem title in output"
 

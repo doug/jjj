@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS problems (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'open',
-    priority TEXT NOT NULL DEFAULT 'p2',
+    priority TEXT NOT NULL DEFAULT 'medium',
     parent_id TEXT,
     milestone_id TEXT,
     assignee TEXT,

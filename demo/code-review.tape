@@ -24,7 +24,7 @@ Type "cd $TMPDIR && jj git init myproject && cd myproject" Enter
 Sleep 1s
 Type "jjj init" Enter
 Sleep 500ms
-Type "jjj problem new 'Auth tokens expire silently' --priority p1" Enter
+Type "jjj problem new 'Auth tokens expire silently' --priority high" Enter
 Sleep 300ms
 Type "clear" Enter
 Sleep 500ms

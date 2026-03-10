@@ -29,13 +29,13 @@ run_jjj milestone new "v1.0 Sprint" --date 2025-06-01
 assert_success "create milestone"
 assert_contains "v1.0 Sprint" "milestone title in output"
 
-run_jjj problem new "User login broken" --priority p0
+run_jjj problem new "User login broken" --priority critical
 assert_success "create critical problem"
 
-run_jjj problem new "Search is slow" --priority p1
+run_jjj problem new "Search is slow" --priority high
 assert_success "create high-priority problem"
 
-run_jjj problem new "Dashboard crashes" --priority p2
+run_jjj problem new "Dashboard crashes" --priority medium
 assert_success "create medium-priority problem"
 
 # Add to milestone

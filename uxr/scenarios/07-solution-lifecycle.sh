@@ -34,7 +34,7 @@ setup_repo "solution-lifecycle"
 run_jjj init
 assert_success "init"
 
-run_jjj problem new "Login takes too long" --priority p1
+run_jjj problem new "Login takes too long" --priority high
 assert_success "create problem"
 
 # ============================================================================
@@ -186,7 +186,7 @@ observe "Rationale on approve records the 'why' alongside the decision"
 section "Step 7: solution assign"
 # ============================================================================
 
-run_jjj problem new "DB connection pool exhaustion" --priority p0
+run_jjj problem new "DB connection pool exhaustion" --priority critical
 assert_success "create second problem"
 
 run_jjj solution new "Increase pool size" --problem "DB connection"

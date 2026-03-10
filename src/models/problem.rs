@@ -62,27 +62,24 @@ pub struct Problem {
     pub tags: Vec<String>,
 }
 
-/// Priority level for a problem (p0 = most critical, p3 = lowest)
+/// Priority level for a problem
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
+#[serde(rename_all = "snake_case")]
 pub enum Priority {
-    #[serde(rename = "p3", alias = "low")]
     Low,
     #[default]
-    #[serde(rename = "p2", alias = "medium")]
     Medium,
-    #[serde(rename = "p1", alias = "high")]
     High,
-    #[serde(rename = "p0", alias = "critical")]
     Critical,
 }
 
 impl std::fmt::Display for Priority {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Priority::Low => write!(f, "p3"),
-            Priority::Medium => write!(f, "p2"),
-            Priority::High => write!(f, "p1"),
-            Priority::Critical => write!(f, "p0"),
+            Priority::Low => write!(f, "low"),
+            Priority::Medium => write!(f, "medium"),
+            Priority::High => write!(f, "high"),
+            Priority::Critical => write!(f, "critical"),
         }
     }
 }
@@ -92,12 +89,12 @@ impl std::str::FromStr for Priority {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "p0" => Ok(Priority::Critical),
-            "p1" => Ok(Priority::High),
-            "p2" => Ok(Priority::Medium),
-            "p3" => Ok(Priority::Low),
+            "critical" => Ok(Priority::Critical),
+            "high" => Ok(Priority::High),
+            "medium" => Ok(Priority::Medium),
+            "low" => Ok(Priority::Low),
             _ => Err(format!(
-                "Invalid priority: '{}'. Use p0, p1, p2, or p3",
+                "Invalid priority: '{}'. Use critical, high, medium, or low",
                 s
             )),
         }
@@ -433,27 +430,25 @@ mod tests {
 
     #[test]
     fn test_priority_from_str() {
-        assert_eq!("P0".parse::<Priority>().unwrap(), Priority::Critical);
-        assert_eq!("p0".parse::<Priority>().unwrap(), Priority::Critical);
-        assert_eq!("P1".parse::<Priority>().unwrap(), Priority::High);
-        assert_eq!("p1".parse::<Priority>().unwrap(), Priority::High);
-        assert_eq!("P2".parse::<Priority>().unwrap(), Priority::Medium);
-        assert_eq!("p2".parse::<Priority>().unwrap(), Priority::Medium);
-        assert_eq!("P3".parse::<Priority>().unwrap(), Priority::Low);
-        assert_eq!("p3".parse::<Priority>().unwrap(), Priority::Low);
-        // Legacy word forms are no longer accepted
-        assert!("critical".parse::<Priority>().is_err());
-        assert!("high".parse::<Priority>().is_err());
-        assert!("medium".parse::<Priority>().is_err());
-        assert!("low".parse::<Priority>().is_err());
+        assert_eq!("critical".parse::<Priority>().unwrap(), Priority::Critical);
+        assert_eq!("Critical".parse::<Priority>().unwrap(), Priority::Critical);
+        assert_eq!("high".parse::<Priority>().unwrap(), Priority::High);
+        assert_eq!("HIGH".parse::<Priority>().unwrap(), Priority::High);
+        assert_eq!("medium".parse::<Priority>().unwrap(), Priority::Medium);
+        assert_eq!("low".parse::<Priority>().unwrap(), Priority::Low);
+        // Numeric codes are not accepted
+        assert!("p0".parse::<Priority>().is_err());
+        assert!("p1".parse::<Priority>().is_err());
+        assert!("p2".parse::<Priority>().is_err());
+        assert!("p3".parse::<Priority>().is_err());
     }
 
     #[test]
     fn test_priority_display() {
-        assert_eq!(format!("{}", Priority::Critical), "p0");
-        assert_eq!(format!("{}", Priority::High), "p1");
-        assert_eq!(format!("{}", Priority::Medium), "p2");
-        assert_eq!(format!("{}", Priority::Low), "p3");
+        assert_eq!(format!("{}", Priority::Critical), "critical");
+        assert_eq!(format!("{}", Priority::High), "high");
+        assert_eq!(format!("{}", Priority::Medium), "medium");
+        assert_eq!(format!("{}", Priority::Low), "low");
     }
 
     #[test]
@@ -504,7 +499,6 @@ mod tests {
     #[test]
     fn test_problem_tags_serde_default() {
         // YAML without tags field should deserialize with empty vec
-        // Legacy "medium" should still deserialize via serde alias
         let yaml = "id: P-1\ntitle: Test\nstatus: open\npriority: medium\nsolution_ids: []\ncreated_at: '2025-01-01T00:00:00Z'\nupdated_at: '2025-01-01T00:00:00Z'\n";
         let fm: ProblemFrontmatter = serde_yml::from_str(yaml).unwrap();
         assert!(fm.tags.is_empty());

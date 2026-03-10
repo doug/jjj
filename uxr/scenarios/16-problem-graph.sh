@@ -26,15 +26,15 @@ assert_success "init"
 section "Step 1: Create 3-level hierarchy"
 # ============================================================================
 
-run_jjj problem new "Authentication system" --priority p1 --force
+run_jjj problem new "Authentication system" --priority high --force
 assert_success "create root problem"
 assert_contains "Authentication system" "root problem title in output"
 
-run_jjj problem new "Login flow" --parent "Authentication system" --priority p2 --force
+run_jjj problem new "Login flow" --parent "Authentication system" --priority medium --force
 assert_success "create child problem"
 assert_contains "Login flow" "child problem title in output"
 
-run_jjj problem new "OAuth2 integration" --parent "Login flow" --priority p2 --force
+run_jjj problem new "OAuth2 integration" --parent "Login flow" --priority medium --force
 assert_success "create grandchild problem"
 assert_contains "OAuth2 integration" "grandchild problem title in output"
 
@@ -57,15 +57,15 @@ observe "Graph renders all three levels with tree characters"
 section "Step 3: Add a second root; verify two separate trees shown"
 # ============================================================================
 
-run_jjj problem new "Performance monitoring" --priority p3 --force
+run_jjj problem new "Performance monitoring" --priority low --force
 assert_success "create second root problem"
 assert_contains "Performance monitoring" "second root problem title in output"
 
-run_jjj problem new "Request latency tracking" --parent "Performance monitoring" --priority p3 --force
+run_jjj problem new "Request latency tracking" --parent "Performance monitoring" --priority low --force
 assert_success "create first child of second root"
 
 # Add a second child to Authentication system so ├─ appears (first child = ├─, last = └─)
-run_jjj problem new "Session management" --parent "Authentication system" --priority p2 --force
+run_jjj problem new "Session management" --parent "Authentication system" --priority medium --force
 assert_success "create second child of first root"
 
 run_jjj problem graph

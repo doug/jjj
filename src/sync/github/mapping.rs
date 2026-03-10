@@ -22,10 +22,10 @@ pub fn issue_to_problem(json: &serde_json::Value, number: u64) -> Result<Problem
         for label in labels {
             if let Some(name) = label["name"].as_str() {
                 match name.to_lowercase().as_str() {
-                    "p0" | "critical" => problem.priority = Priority::Critical,
-                    "p1" | "high" | "priority: high" => problem.priority = Priority::High,
-                    "p2" | "medium" | "priority: medium" => problem.priority = Priority::Medium,
-                    "p3" | "low" | "priority: low" => problem.priority = Priority::Low,
+                    "critical" => problem.priority = Priority::Critical,
+                    "high" | "priority: high" => problem.priority = Priority::High,
+                    "medium" | "priority: medium" => problem.priority = Priority::Medium,
+                    "low" | "priority: low" => problem.priority = Priority::Low,
                     _ => {}
                 }
             }
@@ -271,29 +271,20 @@ mod tests {
     }
 
     #[test]
-    fn test_issue_to_problem_priority_p0_critical() {
+    fn test_issue_to_problem_priority_critical() {
         let issue = json!({
-            "title": "Data loss on save",
-            "body": "",
-            "labels": [{ "name": "p0" }],
-            "author": { "login": "alice" }
-        });
-        let p = issue_to_problem(&issue, 1).unwrap();
-        assert_eq!(p.priority, Priority::Critical);
-
-        let issue2 = json!({
             "title": "Data loss on save",
             "body": "",
             "labels": [{ "name": "critical" }],
             "author": { "login": "alice" }
         });
-        let p2 = issue_to_problem(&issue2, 2).unwrap();
-        assert_eq!(p2.priority, Priority::Critical);
+        let p = issue_to_problem(&issue, 1).unwrap();
+        assert_eq!(p.priority, Priority::Critical);
     }
 
     #[test]
-    fn test_issue_to_problem_priority_p1_high() {
-        for label in &["p1", "high", "priority: high"] {
+    fn test_issue_to_problem_priority_high() {
+        for label in &["high", "priority: high"] {
             let issue = json!({
                 "title": "Slow query",
                 "body": "",
@@ -311,8 +302,8 @@ mod tests {
     }
 
     #[test]
-    fn test_issue_to_problem_priority_p2_medium() {
-        for label in &["p2", "medium", "priority: medium"] {
+    fn test_issue_to_problem_priority_medium() {
+        for label in &["medium", "priority: medium"] {
             let issue = json!({
                 "title": "UI glitch",
                 "body": "",
@@ -330,8 +321,8 @@ mod tests {
     }
 
     #[test]
-    fn test_issue_to_problem_priority_p3_low() {
-        for label in &["p3", "low", "priority: low"] {
+    fn test_issue_to_problem_priority_low() {
+        for label in &["low", "priority: low"] {
             let issue = json!({
                 "title": "Typo in docs",
                 "body": "",
@@ -403,7 +394,7 @@ mod tests {
         assert!(body.contains("Tokens expire after 15 min causing UX friction."));
         assert!(body.contains("## Context"));
         assert!(body.contains("Reported by enterprise customers on SSO plan."));
-        assert!(body.contains("p1"));
+        assert!(body.contains("high"));
         assert!(body.contains("open"));
         assert!(body.contains("Synced from jjj"));
     }
@@ -416,7 +407,7 @@ mod tests {
         // Should NOT have description section but should have footer
         assert!(!body.starts_with("\n\n"));
         assert!(body.contains("Synced from jjj"));
-        assert!(body.contains("p2"));
+        assert!(body.contains("medium"));
     }
 
     #[test]

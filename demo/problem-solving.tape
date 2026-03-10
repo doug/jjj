@@ -31,7 +31,7 @@ Show
 Sleep 500ms
 
 # Create root problem
-Type "jjj problem new 'Search results include deleted items' --priority p1"
+Type "jjj problem new 'Search results include deleted items' --priority high"
 Sleep 500ms
 Enter
 Sleep 2s

@@ -32,7 +32,7 @@ setup_repo "critique-depth"
 run_jjj init
 assert_success "init"
 
-run_jjj problem new "API lacks input validation" --priority p0
+run_jjj problem new "API lacks input validation" --priority critical
 assert_success "create problem"
 
 run_jjj solution new "Add JSON schema validation" --problem "API lacks"

@@ -26,7 +26,7 @@ run_jjj init
 assert_success "init origin"
 
 # Create initial data
-$JJJ problem new "Shared problem" --priority p1 2>/dev/null
+$JJJ problem new "Shared problem" --priority high 2>/dev/null
 $JJJ solution new "Initial approach" --problem "Shared" 2>/dev/null
 $JJJ critique new "Initial approach" "Needs tests" --severity medium 2>/dev/null
 
@@ -46,13 +46,13 @@ run_jjj problem edit "Shared" --title "Shared problem (updated by Alice)"
 assert_success "alice edits problem title"
 
 # Bob edits the problem priority (different field)
-run_jjj problem edit "updated by Alice" --priority p0
+run_jjj problem edit "updated by Alice" --priority critical
 assert_success "bob edits problem priority"
 
 # Verify both edits persisted
 run_jjj problem show "updated by Alice"
 assert_success "problem still accessible"
-assert_contains "p0" "bob's priority edit persisted"
+assert_contains "critical" "bob's priority edit persisted"
 assert_contains "Alice" "alice's title edit persisted"
 
 # ============================================================================
@@ -100,7 +100,7 @@ assert_contains "in_progress" "status is in_progress"
 section "Test 4: Competing Solutions for Same Problem"
 # ============================================================================
 
-$JJJ problem new "Performance issue" --priority p1 2>/dev/null
+$JJJ problem new "Performance issue" --priority high 2>/dev/null
 
 # Alice proposes one solution
 run_jjj solution new "Add caching layer" --problem "Performance"
@@ -139,13 +139,13 @@ section "Test 5: Concurrent Entity Creation"
 # ============================================================================
 
 # Simulate rapid creation of multiple entities
-run_jjj problem new "Bug A" --priority p3
+run_jjj problem new "Bug A" --priority low
 assert_success "create bug A"
 
-run_jjj problem new "Bug B" --priority p3
+run_jjj problem new "Bug B" --priority low
 assert_success "create bug B"
 
-run_jjj problem new "Bug C" --priority p3
+run_jjj problem new "Bug C" --priority low
 assert_success "create bug C"
 
 # All three should exist with unique IDs
@@ -183,32 +183,32 @@ section "Test 7: Frontmatter Integrity After Many Edits"
 # ============================================================================
 
 # Create a problem and edit it many times
-run_jjj problem new "Stress test entity" --priority p3
+run_jjj problem new "Stress test entity" --priority low
 assert_success "create stress test entity"
 
-run_jjj problem edit "Stress test" --priority p2
+run_jjj problem edit "Stress test" --priority medium
 assert_success "edit 1: priority to medium"
 
-run_jjj problem edit "Stress test" --priority p1
+run_jjj problem edit "Stress test" --priority high
 assert_success "edit 2: priority to high"
 
 run_jjj problem edit "Stress test" --title "Stress test entity (v3)"
 assert_success "edit 3: update title"
 
-run_jjj problem edit "Stress test" --priority p0
+run_jjj problem edit "Stress test" --priority critical
 assert_success "edit 4: priority to critical"
 
 # Verify final state is consistent
 run_jjj problem show "Stress test"
 assert_success "show after many edits"
-assert_contains "p0" "final priority is p0"
+assert_contains "critical" "final priority is critical"
 assert_contains "v3" "final title has v3"
 
 # ============================================================================
 section "Test 8: Solution State Machine Under Concurrent Pressure"
 # ============================================================================
 
-$JJJ problem new "State machine test" --priority p2 2>/dev/null
+$JJJ problem new "State machine test" --priority medium 2>/dev/null
 run_jjj solution new "SM solution" --problem "State machine"
 assert_success "create solution for state test"
 
@@ -238,7 +238,7 @@ section "Test 9: Cascade Effects"
 # ============================================================================
 
 # Create a problem with a solution that has critiques
-$JJJ problem new "Cascade test" --priority p3 2>/dev/null
+$JJJ problem new "Cascade test" --priority low 2>/dev/null
 $JJJ solution new "Cascade solution" --problem "Cascade test" 2>/dev/null
 $JJJ critique new "Cascade solution" "Cascade critique" --severity low 2>/dev/null
 

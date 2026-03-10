@@ -27,10 +27,10 @@ Problems describe things that need solving. Create one with a title and
 priority:
 
 ```bash
-jjj problem new "Search is slow" --priority p1 --tags backend,performance
+jjj problem new "Search is slow" --priority high --tags backend,performance
 ```
 
-Priorities range from p0 (critical) to p3 (low) and affect how `jjj status`
+Priorities range from critical to low and affect how `jjj status`
 orders your work. Tags are optional labels for categorization (e.g.,
 `backend`, `size:L`, `area:auth`). Use `jjj tags` to see all tags in use.
 
@@ -166,7 +166,7 @@ pushed or fetched independently.
 critiques. All criticism must be explicitly addressed, validated, or dismissed.
 This enforces intellectual honesty.
 
-**Priority** -- Problems are prioritized P0 (critical) through P3 (low).
+**Priority** -- Problems are prioritized from critical through low.
 Priority affects how `jjj status` orders work items, ensuring the most important
 problems surface first.
 
@@ -180,7 +180,7 @@ problems surface first.
 | `jjj overlaps` | Show files touched by multiple active solutions |
 | `jjj insights` | Show project statistics (approval rate, cycle times) |
 | `jjj ui` | Launch interactive TUI |
-| `jjj problem new "title" --priority p1` | Create a problem |
+| `jjj problem new "title" --priority high` | Create a problem |
 | `jjj problem list` | List all problems |
 | `jjj problem show "Search is slow"` | Show problem details and solutions |
 | `jjj solution new "title" --problem "Search"` | Propose a solution |

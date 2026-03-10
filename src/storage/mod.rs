@@ -471,7 +471,7 @@ mod tests {
 id: p1
 title: Test Problem
 status: open
-priority: p2
+priority: medium
 created_at: 2024-01-15T10:30:00Z
 updated_at: 2024-01-15T10:30:00Z
 ---

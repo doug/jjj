@@ -32,13 +32,13 @@ fn test_problem_new_with_priority() {
 
     run_jjj_success(
         &dir,
-        &["problem", "new", "Critical Bug", "--priority", "p0"],
+        &["problem", "new", "Critical Bug", "--priority", "critical"],
     );
 
     let stdout = run_jjj_success(&dir, &["problem", "show", "Critical Bug"]);
     assert!(
-        stdout.contains("p0"),
-        "Expected p0 priority: {}",
+        stdout.contains("critical"),
+        "Expected critical priority: {}",
         stdout
     );
 }
@@ -165,7 +165,7 @@ fn test_problem_show_displays_details() {
 
     run_jjj_success(
         &dir,
-        &["problem", "new", "Detailed Problem", "--priority", "p1"],
+        &["problem", "new", "Detailed Problem", "--priority", "high"],
     );
 
     let stdout = run_jjj_success(&dir, &["problem", "show", "Detailed Problem"]);
@@ -175,8 +175,8 @@ fn test_problem_show_displays_details() {
         stdout
     );
     assert!(
-        stdout.contains("p1"),
-        "Expected p1 priority: {}",
+        stdout.contains("high"),
+        "Expected high priority: {}",
         stdout
     );
     assert!(
@@ -255,13 +255,13 @@ fn test_problem_edit_priority() {
     run_jjj_success(&dir, &["problem", "new", "Low Priority"]);
     run_jjj_success(
         &dir,
-        &["problem", "edit", "Low Priority", "--priority", "p0"],
+        &["problem", "edit", "Low Priority", "--priority", "critical"],
     );
 
     let stdout = run_jjj_success(&dir, &["problem", "show", "Low Priority"]);
     assert!(
-        stdout.contains("p0"),
-        "Expected p0 priority: {}",
+        stdout.contains("critical"),
+        "Expected critical priority: {}",
         stdout
     );
 }

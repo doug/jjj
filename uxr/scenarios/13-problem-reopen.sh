@@ -28,7 +28,7 @@ assert_success "init"
 section "Step 1: Create and solve a problem, then verify it disappears from open list"
 # ============================================================================
 
-run_jjj problem new "Login times out after idle" --priority p1 --force
+run_jjj problem new "Login times out after idle" --priority high --force
 assert_success "create problem"
 assert_contains "Login times out" "problem title in output"
 
@@ -79,7 +79,7 @@ observe "problem reopen transitions solved → open with no extra steps"
 section "Step 3: Dissolve a problem and then reopen it"
 # ============================================================================
 
-run_jjj problem new "Confusing error messages" --priority p2 --force
+run_jjj problem new "Confusing error messages" --priority medium --force
 assert_success "create second problem"
 
 run_jjj problem dissolve "Confusing error" --reason "Error messages were already clarified in v1.2"
@@ -104,7 +104,7 @@ observe "problem reopen works from both solved and dissolved states"
 section "Step 4: Reopening an already-open problem should fail"
 # ============================================================================
 
-run_jjj problem new "Another open issue" --priority p3 --force
+run_jjj problem new "Another open issue" --priority low --force
 assert_success "create open problem"
 
 run_jjj problem reopen "Another open"

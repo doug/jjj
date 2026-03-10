@@ -32,7 +32,7 @@ Show
 Sleep 500ms
 
 # Create a problem with tags
-Type "jjj problem new 'Search is too slow' --priority p1 --tags backend,performance"
+Type "jjj problem new 'Search is too slow' --priority high --tags backend,performance"
 Sleep 500ms
 Enter
 Sleep 2s

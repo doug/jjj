@@ -291,7 +291,7 @@ jjj is designed for offline-first workflows:
 
 ```bash
 # Create problems offline
-jjj problem new "Fix login flow" --priority p1
+jjj problem new "Fix login flow" --priority high
 jjj problem new "Add test coverage"
 
 # Propose solutions (reference by title)

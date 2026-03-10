@@ -43,7 +43,7 @@ pub struct GitHubConfig {
     #[serde(default = "default_problem_label")]
     pub problem_label: String,
 
-    /// Map GitHub issue labels to jjj priority (e.g., "urgent" → "p0", "important" → "p1")
+    /// Map GitHub issue labels to jjj priority (e.g., "urgent" → "critical", "important" → "high")
     #[serde(default)]
     pub label_priority: HashMap<String, String>,
 }

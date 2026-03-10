@@ -16,7 +16,7 @@ A problem in jjj represents something that needs to be addressed. You should cre
 **Observed defects** -- Something is broken or behaving incorrectly.
 
 ```bash
-jjj problem new "Login fails when email contains a plus sign" --priority p1
+jjj problem new "Login fails when email contains a plus sign" --priority high
 ```
 
 **Feature requests** -- A capability is missing that users need.
@@ -28,7 +28,7 @@ jjj problem new "Users cannot export reports as PDF"
 **Performance issues** -- The system works but not well enough.
 
 ```bash
-jjj problem new "Search queries take over 5 seconds on large datasets" --priority p1
+jjj problem new "Search queries take over 5 seconds on large datasets" --priority high
 ```
 
 **Technical debt** -- Internal quality issues that slow down development.
@@ -78,10 +78,10 @@ jjj problem tree
 Output:
 
 ```
-01957d Authentication system is unreliable [open, p2/medium]
-  01958a Token refresh fails silently [open, p2/medium]
-  01958b Session state lost after network interruption [open, p2/medium]
-  01958c No retry logic for auth API calls [open, p2/medium]
+01957d Authentication system is unreliable [open, medium]
+  01958a Token refresh fails silently [open, medium]
+  01958b Session state lost after network interruption [open, medium]
+  01958c No retry logic for auth API calls [open, medium]
 ```
 
 ### Depth guidelines
@@ -92,14 +92,14 @@ Output:
 
 ## Priority Guidelines
 
-Every problem has a priority level. The default is p2/medium, which is appropriate for most work. Adjust the priority to reflect urgency and impact.
+Every problem has a priority level. The default is medium, which is appropriate for most work. Adjust the priority to reflect urgency and impact.
 
-### p0 / Critical
+### Critical
 
 The system is down, data is being lost, or there is a security vulnerability. Drop everything and work on this.
 
 ```bash
-jjj problem new "Database credentials exposed in public log" --priority p0
+jjj problem new "Database credentials exposed in public log" --priority critical
 ```
 
 Examples:
@@ -108,12 +108,12 @@ Examples:
 - Security breach or vulnerability being exploited
 - Regulatory compliance violation
 
-### p1 / High
+### High
 
 A major feature is broken or there is significant performance degradation. This should be addressed in the current work cycle.
 
 ```bash
-jjj problem new "Payment processing fails for international cards" --priority p1
+jjj problem new "Payment processing fails for international cards" --priority high
 ```
 
 Examples:
@@ -122,13 +122,13 @@ Examples:
 - Blocking issue for an upcoming release
 - Data integrity issue that is not yet causing loss
 
-### p2 / Medium (default)
+### Medium (default)
 
 Normal work items. Bugs that have workarounds, enhancements, and planned improvements. This is the priority for most day-to-day work.
 
 ```bash
 jjj problem new "Add dark mode support for settings page"
-# Priority defaults to p2/medium
+# Priority defaults to medium
 ```
 
 Examples:
@@ -137,12 +137,12 @@ Examples:
 - Refactoring and code quality improvements
 - Documentation gaps
 
-### p3 / Low
+### Low
 
 Nice-to-have improvements. Cosmetic issues, minor optimizations, and polish items. Work on these when higher-priority problems are resolved.
 
 ```bash
-jjj problem new "Align button spacing on mobile nav" --priority p3
+jjj problem new "Align button spacing on mobile nav" --priority low
 ```
 
 Examples:
@@ -156,10 +156,10 @@ Examples:
 Priorities are not permanent. Reassess when context changes:
 
 ```bash
-jjj problem edit "button spacing" --priority p1
+jjj problem edit "button spacing" --priority high
 ```
 
-A p3 cosmetic issue becomes p1 if your CEO is demo-ing the product tomorrow. A p1 bug becomes p3 if a workaround is found and the affected feature is being replaced.
+A low-priority cosmetic issue becomes high if your CEO is demo-ing the product tomorrow. A high-priority bug becomes low if a workaround is found and the affected feature is being replaced.
 
 ## Resolving Problems
 
@@ -211,7 +211,7 @@ Milestones group problems for release planning and delivery tracking. Assigning 
 
 ```bash
 # Assign during creation
-jjj problem new "Implement SSO" --milestone "v2.0" --priority p1
+jjj problem new "Implement SSO" --milestone "v2.0" --priority high
 
 # Or assign later
 jjj milestone add-problem "v2.0" "Implement SSO"
@@ -234,7 +234,7 @@ Here is a typical problem-solving workflow from start to finish:
 
 ```bash
 # 1. Identify the problem
-jjj problem new "Search results include deleted items" --priority p1
+jjj problem new "Search results include deleted items" --priority high
 
 # 2. Investigate and decompose if needed
 jjj problem new "Soft-deleted records not filtered in search index" --parent "deleted items"

@@ -73,7 +73,7 @@ section "Problem creation fires automation"
 
 rm -f "$MARKER"
 
-run_jjj problem new "Fix login timeout" --priority p1 --force
+run_jjj problem new "Fix login timeout" --priority high --force
 assert_success "create problem"
 assert_contains "auto: shell" "automation reports shell action"
 
@@ -133,7 +133,7 @@ assert_contains "SOLVED: Fix login timeout" "auto-solve triggered problem_solved
 section "Problem dissolve fires automation"
 # ============================================================================
 
-run_jjj problem new "False alarm" --priority p3 --force
+run_jjj problem new "False alarm" --priority low --force
 assert_success "create second problem"
 
 run_jjj problem dissolve "False alarm" --reason "was user error, not a bug"
