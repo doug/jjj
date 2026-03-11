@@ -43,7 +43,7 @@ function makeSolution(overrides: Partial<Solution> = {}): Solution {
     updated_at: "",
     approach: "",
     tradeoffs: "",
-    supersedes: null,
+    supersedes: null, tags: [],
     ...overrides,
   };
 }

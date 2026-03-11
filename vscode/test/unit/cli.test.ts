@@ -146,4 +146,172 @@ describe("JjjCli", () => {
       await assert.rejects(() => cli.listProblems());
     });
   });
+
+  describe("error handling", () => {
+    it("propagates errors from exec to callers", async () => {
+      execStub.rejects(new Error("something went wrong"));
+      await assert.rejects(() => cli.newProblem("test"), { message: "something went wrong" });
+    });
+
+    it("propagates errors with stderr message", async () => {
+      execStub.rejects(new Error("command not found"));
+      await assert.rejects(() => cli.listProblems(), { message: "command not found" });
+    });
+  });
+
+  describe("remaining mutations", () => {
+    it("submitSolution passes correct args", async () => {
+      execStub.resolves("ok");
+      await cli.submitSolution("s1");
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["solution", "submit", "s1"]);
+    });
+
+    it("withdrawSolution passes correct args", async () => {
+      execStub.resolves("ok");
+      await cli.withdrawSolution("s1");
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["solution", "withdraw", "s1"]);
+    });
+
+    it("lgtmSolution passes correct args", async () => {
+      execStub.resolves("ok");
+      await cli.lgtmSolution("s1");
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["solution", "lgtm", "s1"]);
+    });
+
+    it("solveProblem passes correct args", async () => {
+      execStub.resolves("ok");
+      await cli.solveProblem("p1");
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["problem", "solve", "p1"]);
+    });
+
+    it("dissolveProblem passes correct args", async () => {
+      execStub.resolves("ok");
+      await cli.dissolveProblem("p1");
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["problem", "dissolve", "p1"]);
+    });
+
+    it("newMilestone passes correct args", async () => {
+      execStub.resolves("ok");
+      await cli.newMilestone("Q1 Release");
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["milestone", "new", "Q1 Release"]);
+    });
+
+    it("addressCritique passes correct args", async () => {
+      execStub.resolves("ok");
+      await cli.addressCritique("c1");
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["critique", "address", "c1"]);
+    });
+
+    it("dismissCritique passes correct args", async () => {
+      execStub.resolves("ok");
+      await cli.dismissCritique("c1");
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["critique", "dismiss", "c1"]);
+    });
+
+    it("validateCritique passes correct args", async () => {
+      execStub.resolves("ok");
+      await cli.validateCritique("c1");
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["critique", "validate", "c1"]);
+    });
+
+    it("replyCritique passes correct args", async () => {
+      execStub.resolves("ok");
+      await cli.replyCritique("c1", "I agree");
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["critique", "reply", "c1", "I agree"]);
+    });
+
+    it("reopenProblem passes correct args", async () => {
+      execStub.resolves("ok");
+      await cli.reopenProblem("p1");
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["problem", "reopen", "p1"]);
+    });
+
+    it("editProblem passes correct args", async () => {
+      execStub.resolves("ok");
+      await cli.editProblem("p1", "New title");
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["problem", "edit", "p1", "--title", "New title"]);
+    });
+
+    it("editSolution passes correct args", async () => {
+      execStub.resolves("ok");
+      await cli.editSolution("s1", "Better title");
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["solution", "edit", "s1", "--title", "Better title"]);
+    });
+
+    it("editProblemTags passes correct args", async () => {
+      execStub.resolves("ok");
+      await cli.editProblemTags("p1", ["bug", "urgent"]);
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["problem", "edit", "p1", "--set-tags", "bug,urgent"]);
+    });
+
+    it("editSolutionTags passes correct args", async () => {
+      execStub.resolves("ok");
+      await cli.editSolutionTags("s1", ["refactor", "v2"]);
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["solution", "edit", "s1", "--set-tags", "refactor,v2"]);
+    });
+
+    it("listTags passes correct args", async () => {
+      execStub.resolves('[{"tag":"bug","count":3}]');
+      await cli.listTags();
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["tags", "--json"]);
+    });
+  });
+
+  describe("github sync", () => {
+    it("syncGithub passes correct args", async () => {
+      execStub.resolves("ok");
+      await cli.syncGithub();
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["github"]);
+    });
+
+    it("syncGithubImport passes issue number", async () => {
+      execStub.resolves("ok");
+      await cli.syncGithubImport("42");
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["github", "import", "42"]);
+    });
+
+    it("syncGithubStatus passes correct args", async () => {
+      execStub.resolves("ok");
+      await cli.syncGithubStatus();
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["github", "status"]);
+    });
+  });
+
+  describe("show methods", () => {
+    it("showSolution passes correct args", async () => {
+      execStub.resolves('{"id":"s1"}');
+      await cli.showSolution("s1");
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["solution", "show", "s1", "--json"]);
+    });
+
+    it("showCritique passes correct args", async () => {
+      execStub.resolves('{"id":"c1"}');
+      await cli.showCritique("c1");
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["critique", "show", "c1", "--json"]);
+    });
+
+    it("showMilestone passes correct args", async () => {
+      execStub.resolves('{"id":"m1"}');
+      await cli.showMilestone("m1");
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["milestone", "show", "m1", "--json"]);
+    });
+  });
+
+  describe("newSolution with reviewers", () => {
+    it("newSolution includes reviewers", async () => {
+      execStub.resolves("ok");
+      await cli.newSolution("Fix", "p1", ["alice", "bob"]);
+      assert.deepStrictEqual(execStub.firstCall.args[0],
+        ["solution", "new", "Fix", "--problem", "p1", "--reviewer", "alice", "--reviewer", "bob"]);
+    });
+  });
+
+  describe("newCritique with reviewer", () => {
+    it("newCritique includes reviewer", async () => {
+      execStub.resolves("ok");
+      await cli.newCritique("s1", "Issue", "high", "src/foo.rs", 10, "alice");
+      assert.deepStrictEqual(execStub.firstCall.args[0],
+        ["critique", "new", "s1", "Issue", "--severity", "high", "--file", "src/foo.rs", "--line", "10", "--reviewer", "alice"]);
+    });
+  });
 });

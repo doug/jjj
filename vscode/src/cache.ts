@@ -12,10 +12,13 @@ export class DataCache implements vscode.Disposable {
   private milestones: Milestone[] = [];
   private statusResult: StatusResult | null = null;
   private loading = false;
+  private _cliAvailable: boolean | null = null;
 
   constructor(cli: JjjCli) {
     this.cli = cli;
   }
+
+  get cliAvailable(): boolean | null { return this._cliAvailable; }
 
   dispose(): void {
     this._onDidChange.dispose();
@@ -25,6 +28,18 @@ export class DataCache implements vscode.Disposable {
     if (this.loading) { return; }
     this.loading = true;
     try {
+      // Probe CLI availability on first refresh or after a previous failure
+      if (this._cliAvailable !== true) {
+        try {
+          await this.cli.version();
+          this._cliAvailable = true;
+        } catch {
+          this._cliAvailable = false;
+          this._onDidChange.fire();
+          return;
+        }
+      }
+
       const [problems, solutions, critiques, milestones, next] = await Promise.all([
         this.cli.listProblems().catch(() => this.problems),
         this.cli.listSolutions().catch(() => this.solutions),

@@ -11,7 +11,7 @@ function makeProblem(overrides: Partial<Problem> = {}): Problem {
     solution_ids: ["s1"], child_ids: [], milestone_id: "m1",
     assignee: "doug", created_at: "", updated_at: "",
     description: "Search queries take 3+ seconds", context: "",
-    priority: "medium", dissolved_reason: null,
+    priority: "medium", dissolved_reason: null, tags: [],
     ...overrides,
   };
 }
@@ -23,7 +23,7 @@ function makeSolution(overrides: Partial<Solution> = {}): Solution {
     assignee: "doug",
     force_approved: false, created_at: "", updated_at: "",
     approach: "Add a B-tree index", tradeoffs: "Extra storage",
-    supersedes: null,
+    supersedes: null, tags: [],
     ...overrides,
   };
 }

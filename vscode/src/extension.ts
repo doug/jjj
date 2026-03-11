@@ -142,6 +142,13 @@ export function activate(context: vscode.ExtensionContext) {
   );
   context.subscriptions.push({ dispose: () => { if (debounceTimer) { clearTimeout(debounceTimer); } } });
 
+  // --- CLI availability context ---
+  context.subscriptions.push(
+    cache.onDidChange(() => {
+      vscode.commands.executeCommand("setContext", "jjj.cliAvailable", cache.cliAvailable === true);
+    }),
+  );
+
   // --- Initial Load ---
   cache.refresh();
 

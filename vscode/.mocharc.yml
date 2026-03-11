@@ -2,3 +2,4 @@ require:
   - ./test/setup.js
 spec: out-test/test/unit/**/*.test.js
 timeout: 5000
+exit: true

@@ -13,10 +13,22 @@
     "vscode": "^1.85.0"
   },
   "categories": [
-    "Other"
+    "Other",
+    "SCM Providers"
   ],
+  "keywords": [
+    "jujutsu",
+    "jj",
+    "project management",
+    "code review"
+  ],
+  "bugs": {
+    "url": "https://github.com/doug/jjj/issues"
+  },
   "main": "./out/extension.js",
-  "activationEvents": [],
+  "activationEvents": [
+    "onView:jjj-project-tree"
+  ],
   "contributes": {
     "configuration": {
       "title": "JJJ",
@@ -231,6 +243,18 @@
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "jjj-project-tree",
+        "contents": "The jjj CLI was not found.\n\nInstall with cargo:\n```\ncargo install jjj\n```\n\nOr see the [installation guide](https://github.com/doug/jjj#installation) for other options.\n\nIf jjj is already installed but not on PATH, set the path in settings:\n\n[Open Settings](command:workbench.action.openSettings?%5B%22jjj.path%22%5D)",
+        "when": "!jjj.cliAvailable"
+      },
+      {
+        "view": "jjj-project-tree",
+        "contents": "No problems yet.\n\n[Create a Problem](command:jjj.newProblem)",
+        "when": "jjj.cliAvailable"
+      }
+    ],
     "menus": {
       "view/title": [
         {

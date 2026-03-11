@@ -131,6 +131,10 @@ export class JjjCli {
     return JSON.parse(output) as T;
   }
 
+  async version(): Promise<string> {
+    return this.exec(["--version"]);
+  }
+
   // --- Queries ---
 
   async status(all = false): Promise<StatusResult> {
