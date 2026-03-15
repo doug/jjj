@@ -189,6 +189,10 @@ impl App {
         self.ui.detail_scroll = self.ui.detail_scroll.saturating_add(10);
     }
 
+    pub(super) fn page_detail_up(&mut self) {
+        self.ui.detail_scroll = self.ui.detail_scroll.saturating_sub(10);
+    }
+
     pub(super) fn toggle_related_panel(&mut self) {
         self.ui.show_related = !self.ui.show_related;
     }
@@ -300,25 +304,29 @@ impl App {
 
         if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
             match &item.node {
+                TreeNode::ProjectRoot { .. } => "[n]ew milestone".to_string(),
                 TreeNode::Milestone { id, .. } => {
-                    format!("{}: [e]dit", id)
+                    format!(
+                        "{}: [n]ew problem [e]dit [E]ditor [s] complete [o] activate [D] cancel [A]ssign [x] delete",
+                        id
+                    )
                 }
                 TreeNode::Backlog { .. } => "[n]ew problem".to_string(),
                 TreeNode::Problem { id, .. } => {
                     format!(
-                        "{}: [n]ew solution [s]olve [d]issolve [e]dit [t]ags [E]dit in $EDITOR [x] delete",
+                        "{}: [n]ew solution [s]olve [d]issolve [o] reopen [A]ssign [m]ove [e]dit [t]ags [E]ditor [x] delete",
                         id
                     )
                 }
                 TreeNode::Solution { id, .. } => {
                     format!(
-                        "{}: [a]pprove [r] withdraw [g]o to change [n]ew critique [e]dit [t]ags [E]dit in $EDITOR [x] delete",
+                        "{}: [n]ew critique [u] submit [a]pprove [d] withdraw [A]ssign [g]o to change [e]dit [t]ags [E]ditor [x] delete",
                         id
                     )
                 }
                 TreeNode::Critique { id, .. } => {
                     format!(
-                        "{}: [a]ddress [d]ismiss [e]dit [E]dit in $EDITOR [x] delete",
+                        "{}: [a]ddress [d]ismiss [v]alidate [e]dit [E]ditor [x] delete",
                         id
                     )
                 }
@@ -341,7 +349,9 @@ impl App {
                     .cloned()
                     .map(super::super::DetailContent::Milestone)
                     .unwrap_or(super::super::DetailContent::None),
-                TreeNode::Backlog { .. } => super::super::DetailContent::None,
+                TreeNode::ProjectRoot { .. } | TreeNode::Backlog { .. } => {
+                    super::super::DetailContent::None
+                }
                 TreeNode::Problem { id, .. } => self
                     .data
                     .problems
@@ -390,6 +400,10 @@ impl App {
                 TreeNode::Critique { id, .. } => {
                     Some((id.clone(), super::super::next_actions::EntityType::Critique))
                 }
+                TreeNode::Milestone { id, .. } => Some((
+                    id.clone(),
+                    super::super::next_actions::EntityType::Milestone,
+                )),
                 _ => None,
             })
     }
@@ -405,7 +419,7 @@ impl App {
                 TreeNode::Solution { id, .. } => Some(("solution".to_string(), id.clone())),
                 TreeNode::Critique { id, .. } => Some(("critique".to_string(), id.clone())),
                 TreeNode::Milestone { id, .. } => Some(("milestone".to_string(), id.clone())),
-                TreeNode::Backlog { .. } => None,
+                TreeNode::ProjectRoot { .. } | TreeNode::Backlog { .. } => None,
             })
     }
 }

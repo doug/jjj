@@ -97,6 +97,16 @@ impl App {
                     },
                 )?;
             }
+            EntityType::Milestone => {
+                self.store.with_metadata(
+                    &format!("Update milestone title: {}", new_title),
+                    || {
+                        let mut milestone = self.store.load_milestone(entity_id)?;
+                        milestone.title = new_title.to_string();
+                        self.store.save_milestone(&milestone)
+                    },
+                )?;
+            }
         }
         self.show_flash(&format!("Updated title: {}", new_title));
         self.refresh_data()?;
@@ -108,6 +118,10 @@ impl App {
 
         let (prompt, action) = if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
             match &item.node {
+                TreeNode::ProjectRoot { .. } => (
+                    "New milestone title: ".to_string(),
+                    InputAction::NewMilestone,
+                ),
                 TreeNode::Milestone { id, .. } => (
                     "New problem title: ".to_string(),
                     InputAction::NewProblem {
@@ -171,6 +185,14 @@ impl App {
                         "Edit title: ".to_string(),
                         InputAction::EditTitle {
                             entity_type: EntityType::Critique,
+                            entity_id: id.clone(),
+                        },
+                        title.clone(),
+                    ),
+                    TreeNode::Milestone { id, title, .. } => (
+                        "Edit title: ".to_string(),
+                        InputAction::EditTitle {
+                            entity_type: EntityType::Milestone,
                             entity_id: id.clone(),
                         },
                         title.clone(),
@@ -270,7 +292,7 @@ impl App {
                     },
                 )?;
             }
-            EntityType::Critique => return Ok(()),
+            EntityType::Critique | EntityType::Milestone => return Ok(()),
         }
         self.show_flash("Tags updated");
         self.refresh_data()?;
@@ -282,16 +304,7 @@ impl App {
             match entity_type {
                 EntityType::Solution => self.approve_solution(&id)?,
                 EntityType::Critique => self.address_critique(&id)?,
-                EntityType::Problem => {} // No 'a' action for problems
-            }
-        }
-        Ok(())
-    }
-
-    pub(super) fn handle_action_r(&mut self) -> Result<()> {
-        if let Some((id, entity_type)) = self.get_selected_entity() {
-            if entity_type == EntityType::Solution {
-                self.withdraw_solution(&id)?;
+                EntityType::Problem | EntityType::Milestone => {}
             }
         }
         Ok(())
@@ -307,62 +320,169 @@ impl App {
     }
 
     pub(super) fn handle_action_d(&mut self) -> Result<()> {
-        if let Some((id, entity_type)) = self.get_selected_entity() {
-            if entity_type == EntityType::Critique {
+        use super::super::tree::TreeNode;
+        use crate::models::{MilestoneStatus, ProblemStatus};
+
+        // Extract action info from the selected tree item (clone to release borrow)
+        enum DeclineAction {
+            DismissCritique(String),
+            WithdrawSolution(String),
+            DissolveProblem(String),
+            CancelMilestone(String),
+            None,
+        }
+
+        let action = if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
+            match &item.node {
+                TreeNode::Critique { id, .. } => DeclineAction::DismissCritique(id.clone()),
+                TreeNode::Solution { id, .. } => DeclineAction::WithdrawSolution(id.clone()),
+                TreeNode::Problem { id, status, .. } => {
+                    if matches!(status, ProblemStatus::Open | ProblemStatus::InProgress) {
+                        DeclineAction::DissolveProblem(id.clone())
+                    } else {
+                        DeclineAction::None
+                    }
+                }
+                TreeNode::Milestone { id, status, .. } => {
+                    if matches!(status, MilestoneStatus::Planning | MilestoneStatus::Active) {
+                        DeclineAction::CancelMilestone(id.clone())
+                    } else {
+                        DeclineAction::None
+                    }
+                }
+                _ => DeclineAction::None,
+            }
+        } else {
+            DeclineAction::None
+        };
+
+        match action {
+            DeclineAction::DismissCritique(id) => {
                 self.dismiss_critique(&id)?;
             }
-            // For problems, 'd' would be dissolve - add later with input
-        }
-        Ok(())
-    }
-
-    pub(super) fn handle_action_s(&mut self) -> Result<()> {
-        use crate::models::ProblemStatus;
-
-        if let Some((id, entity_type)) = self.get_selected_entity() {
-            if entity_type == EntityType::Problem {
+            DeclineAction::WithdrawSolution(id) => {
+                self.withdraw_solution(&id)?;
+            }
+            DeclineAction::DissolveProblem(id) => {
+                self.ui.input_mode = super::InputMode::Input {
+                    prompt: "Dissolve reason: ".to_string(),
+                    buffer: String::new(),
+                    action: super::InputAction::DissolveP { problem_id: id },
+                    cursor_pos: 0,
+                };
+            }
+            DeclineAction::CancelMilestone(id) => {
                 let id_clone = id.clone();
                 match self
                     .store
-                    .with_metadata(&format!("Solve problem {}", id), || {
-                        let mut problem = self.store.load_problem(&id)?;
-                        problem.set_status(ProblemStatus::Solved);
-                        self.store.save_problem(&problem)
+                    .with_metadata(&format!("Cancel milestone {}", id), || {
+                        let mut milestone = self.store.load_milestone(&id_clone)?;
+                        milestone.set_status(MilestoneStatus::Cancelled);
+                        self.store.save_milestone(&milestone)
                     }) {
                     Ok(_) => {
-                        self.show_flash(&format!("{} solved", id_clone));
+                        self.show_flash(&format!("{} cancelled", id_clone));
                         self.refresh_data()?;
                     }
                     Err(e) => {
                         self.show_flash(&format!("Error: {}", e));
                     }
                 }
+            }
+            DeclineAction::None => {}
+        }
+        Ok(())
+    }
+
+    pub(super) fn handle_action_s(&mut self) -> Result<()> {
+        use crate::models::{MilestoneStatus, ProblemStatus};
+
+        if let Some((id, entity_type)) = self.get_selected_entity() {
+            match entity_type {
+                EntityType::Problem => {
+                    let id_clone = id.clone();
+                    match self
+                        .store
+                        .with_metadata(&format!("Solve problem {}", id), || {
+                            let mut problem = self.store.load_problem(&id)?;
+                            problem.set_status(ProblemStatus::Solved);
+                            self.store.save_problem(&problem)
+                        }) {
+                        Ok(_) => {
+                            self.show_flash(&format!("{} solved", id_clone));
+                            self.refresh_data()?;
+                        }
+                        Err(e) => {
+                            self.show_flash(&format!("Error: {}", e));
+                        }
+                    }
+                }
+                EntityType::Milestone => {
+                    let id_clone = id.clone();
+                    match self
+                        .store
+                        .with_metadata(&format!("Complete milestone {}", id), || {
+                            let mut milestone = self.store.load_milestone(&id)?;
+                            milestone.set_status(MilestoneStatus::Completed);
+                            self.store.save_milestone(&milestone)
+                        }) {
+                        Ok(_) => {
+                            self.show_flash(&format!("{} completed", id_clone));
+                            self.refresh_data()?;
+                        }
+                        Err(e) => {
+                            self.show_flash(&format!("Error: {}", e));
+                        }
+                    }
+                }
+                _ => {}
             }
         }
         Ok(())
     }
 
     pub(super) fn handle_action_o(&mut self) -> Result<()> {
-        use crate::models::ProblemStatus;
+        use crate::models::{MilestoneStatus, ProblemStatus};
 
         if let Some((id, entity_type)) = self.get_selected_entity() {
-            if entity_type == EntityType::Problem {
-                let id_clone = id.clone();
-                match self
-                    .store
-                    .with_metadata(&format!("Reopen problem {}", id), || {
-                        let mut problem = self.store.load_problem(&id)?;
-                        problem.set_status(ProblemStatus::Open);
-                        self.store.save_problem(&problem)
-                    }) {
-                    Ok(_) => {
-                        self.show_flash(&format!("{} reopened", id_clone));
-                        self.refresh_data()?;
-                    }
-                    Err(e) => {
-                        self.show_flash(&format!("Error: {}", e));
+            match entity_type {
+                EntityType::Problem => {
+                    let id_clone = id.clone();
+                    match self
+                        .store
+                        .with_metadata(&format!("Reopen problem {}", id), || {
+                            let mut problem = self.store.load_problem(&id)?;
+                            problem.set_status(ProblemStatus::Open);
+                            self.store.save_problem(&problem)
+                        }) {
+                        Ok(_) => {
+                            self.show_flash(&format!("{} reopened", id_clone));
+                            self.refresh_data()?;
+                        }
+                        Err(e) => {
+                            self.show_flash(&format!("Error: {}", e));
+                        }
                     }
                 }
+                EntityType::Milestone => {
+                    let id_clone = id.clone();
+                    match self
+                        .store
+                        .with_metadata(&format!("Activate milestone {}", id), || {
+                            let mut milestone = self.store.load_milestone(&id)?;
+                            milestone.set_status(MilestoneStatus::Active);
+                            self.store.save_milestone(&milestone)
+                        }) {
+                        Ok(_) => {
+                            self.show_flash(&format!("{} activated", id_clone));
+                            self.refresh_data()?;
+                        }
+                        Err(e) => {
+                            self.show_flash(&format!("Error: {}", e));
+                        }
+                    }
+                }
+                _ => {}
             }
         }
         Ok(())
@@ -585,27 +705,6 @@ impl App {
         self.update_selected_detail();
     }
 
-    pub(super) fn handle_action_shift_d(&mut self) -> Result<()> {
-        use super::super::tree::TreeNode;
-        use crate::models::ProblemStatus;
-
-        if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
-            if let TreeNode::Problem { id, status, .. } = &item.node {
-                if matches!(status, ProblemStatus::Open | ProblemStatus::InProgress) {
-                    self.ui.input_mode = super::InputMode::Input {
-                        prompt: "Dissolve reason: ".to_string(),
-                        buffer: String::new(),
-                        action: super::InputAction::DissolveP {
-                            problem_id: id.clone(),
-                        },
-                        cursor_pos: 0,
-                    };
-                }
-            }
-        }
-        Ok(())
-    }
-
     pub(super) fn dissolve_problem(&mut self, problem_id: &str, reason: &str) -> Result<()> {
         let id = problem_id.to_string();
         match self
@@ -668,6 +767,22 @@ impl App {
                         Err(e) => self.show_flash(&format!("Error: {}", e)),
                     }
                 }
+                EntityType::Milestone => {
+                    match self.store.with_metadata(
+                        &format!("Assign milestone {} to {}", id, user),
+                        || {
+                            let mut milestone = self.store.load_milestone(&id)?;
+                            milestone.assignee = Some(user.clone());
+                            self.store.save_milestone(&milestone)
+                        },
+                    ) {
+                        Ok(_) => {
+                            self.show_flash(&format!("{} assigned to {}", id_clone, user_clone));
+                            self.refresh_data()?;
+                        }
+                        Err(e) => self.show_flash(&format!("Error: {}", e)),
+                    }
+                }
                 EntityType::Critique => {}
             }
         }
@@ -699,6 +814,19 @@ impl App {
                         return Ok(());
                     }
                     ("problem".to_string(), id.clone(), title.clone())
+                }
+                TreeNode::Milestone { id, title, .. } => {
+                    // Block if has child problems
+                    let has_problems = self
+                        .data
+                        .problems
+                        .iter()
+                        .any(|p| p.milestone_id.as_deref() == Some(id));
+                    if has_problems {
+                        self.show_flash("Remove problems first");
+                        return Ok(());
+                    }
+                    ("milestone".to_string(), id.clone(), title.clone())
                 }
                 _ => return Ok(()),
             };
@@ -734,6 +862,11 @@ impl App {
                 .with_metadata(&format!("Delete problem {}", entity_id), || {
                     self.store.delete_problem(entity_id)
                 }),
+            "milestone" => self
+                .store
+                .with_metadata(&format!("Delete milestone {}", entity_id), || {
+                    self.store.delete_milestone(entity_id)
+                }),
             _ => return Ok(()),
         };
         match result {
@@ -748,13 +881,83 @@ impl App {
         Ok(())
     }
 
-    pub(super) fn start_new_milestone(&mut self) -> Result<()> {
-        self.ui.input_mode = InputMode::Input {
-            prompt: "New milestone title: ".to_string(),
-            buffer: String::new(),
-            action: InputAction::NewMilestone,
-            cursor_pos: 0,
+    pub(super) fn start_move_to_milestone(&mut self) -> Result<()> {
+        use super::super::tree::TreeNode;
+
+        if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
+            if let TreeNode::Problem { id, .. } = &item.node {
+                self.ui.input_mode = InputMode::Input {
+                    prompt: "Milestone [→ backlog]: ".to_string(),
+                    buffer: String::new(),
+                    action: InputAction::MoveProblemToMilestone {
+                        problem_id: id.clone(),
+                    },
+                    cursor_pos: 0,
+                };
+            }
+        }
+        Ok(())
+    }
+
+    pub(super) fn move_problem_to_milestone(
+        &mut self,
+        problem_id: &str,
+        input: &str,
+    ) -> Result<()> {
+        let input = input.trim();
+
+        // Find target milestone by fuzzy title match
+        let target_milestone = if input.is_empty() {
+            None
+        } else {
+            let input_lower = input.to_lowercase();
+            self.data
+                .milestones
+                .iter()
+                .find(|m| m.title.to_lowercase().contains(&input_lower))
         };
+
+        if !input.is_empty() && target_milestone.is_none() {
+            self.show_flash("No matching milestone found");
+            return Ok(());
+        }
+
+        let target_id = target_milestone.map(|m| m.id.clone());
+
+        // Load problem to find old milestone
+        let problem = self.store.load_problem(problem_id)?;
+        let old_milestone_id = problem.milestone_id.clone();
+
+        self.store
+            .with_metadata(&format!("Move problem {} to milestone", problem_id), || {
+                // Update problem's milestone_id
+                let mut problem = self.store.load_problem(problem_id)?;
+                problem.milestone_id = target_id.clone();
+                self.store.save_problem(&problem)?;
+
+                // Remove from old milestone
+                if let Some(ref old_id) = old_milestone_id {
+                    if let Ok(mut old_milestone) = self.store.load_milestone(old_id) {
+                        old_milestone.remove_problem(problem_id);
+                        self.store.save_milestone(&old_milestone)?;
+                    }
+                }
+
+                // Add to new milestone
+                if let Some(ref new_id) = target_id {
+                    let mut new_milestone = self.store.load_milestone(new_id)?;
+                    new_milestone.add_problem(problem_id);
+                    self.store.save_milestone(&new_milestone)?;
+                }
+
+                Ok(())
+            })?;
+
+        let dest = target_milestone
+            .map(|m| m.title.as_str())
+            .unwrap_or("backlog");
+        self.show_flash(&format!("Moved to {}", dest));
+        self.refresh_data()?;
         Ok(())
     }
 

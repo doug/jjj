@@ -50,6 +50,7 @@ pub enum EntityType {
     Problem,
     Solution,
     Critique,
+    Milestone,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

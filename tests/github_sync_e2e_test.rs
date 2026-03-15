@@ -209,6 +209,9 @@ fn test_github_sync_e2e_full_flow() {
 
     eprintln!("Created GitHub issue #{} on {}", issue_number, TEST_REPO);
 
+    // Wait for GitHub's GraphQL API to replicate the newly created issue
+    std::thread::sleep(std::time::Duration::from_secs(2));
+
     // Import the issue via jjj github import
     let issue_ref = format!("#{}", issue_number);
     let stdout = run_jjj_success(path, &["github", "import", &issue_ref]);
@@ -436,6 +439,9 @@ fn test_github_sync_import_idempotent() {
     };
 
     let issue_ref = format!("#{}", issue_number);
+
+    // Wait for GitHub's GraphQL API to replicate the newly created issue
+    std::thread::sleep(std::time::Duration::from_secs(2));
 
     // First import
     let stdout = run_jjj_success(path, &["github", "import", &issue_ref]);

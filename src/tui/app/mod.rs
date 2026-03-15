@@ -66,6 +66,9 @@ pub enum InputAction {
         entity_id: String,
     },
     NewMilestone,
+    MoveProblemToMilestone {
+        problem_id: String,
+    },
 }
 
 /// A pending request to suspend the TUI and open an entity in an external editor.
@@ -203,7 +206,8 @@ impl App {
         let data = ProjectData::load(&store)?;
         let mut ui = UiState::new();
 
-        // Also expand first milestone by default
+        // Expand root and first milestone by default
+        ui.expanded_nodes.insert("project-root".to_string());
         if let Some(m) = data.milestones.first() {
             ui.expanded_nodes.insert(m.id.clone());
         }
@@ -318,15 +322,14 @@ impl App {
             KeyCode::Char('j') => self.scroll_detail_down(),
             KeyCode::Char('k') => self.scroll_detail_up(),
             KeyCode::Char(' ') => self.page_detail_down(),
+            KeyCode::Char('b') => self.page_detail_up(),
             KeyCode::Char('a') => self.handle_action_a()?,
-            KeyCode::Char('r') => self.handle_action_r()?,
             KeyCode::Char('d') => self.handle_action_d()?,
             KeyCode::Char('n') => self.start_new_item()?,
             KeyCode::Char('e') => self.start_edit_title()?,
             KeyCode::Char('t') => self.start_edit_tags()?,
             KeyCode::Char('s') => self.handle_action_s()?,
             KeyCode::Char('o') => self.handle_action_o()?,
-            KeyCode::Char('D') => self.handle_action_shift_d()?,
             KeyCode::Char('A') => self.handle_action_shift_a()?,
             KeyCode::Char('u') => self.handle_action_u()?,
             KeyCode::Char('v') => self.handle_action_v()?,
@@ -336,7 +339,7 @@ impl App {
             KeyCode::Char('g') => self.goto_change()?,
             KeyCode::Char('E') => self.open_in_editor()?,
             KeyCode::Char('x') => self.start_delete()?,
-            KeyCode::Char('m') => self.start_new_milestone()?,
+            KeyCode::Char('m') => self.start_move_to_milestone()?,
             KeyCode::Char('?') => self.toggle_help(),
             _ => {}
         }
@@ -440,7 +443,12 @@ impl App {
                 self.ui.input_mode = InputMode::Normal;
             }
             KeyCode::Enter => {
-                if !buffer.is_empty() || matches!(action, InputAction::EditTags { .. }) {
+                if !buffer.is_empty()
+                    || matches!(
+                        action,
+                        InputAction::EditTags { .. } | InputAction::MoveProblemToMilestone { .. }
+                    )
+                {
                     self.execute_input_action(&action, &buffer)?;
                 }
                 self.ui.input_mode = InputMode::Normal;
@@ -501,7 +509,47 @@ impl App {
             }
             _ => {}
         }
+        self.update_milestone_prompt_hint();
         Ok(())
+    }
+
+    /// When typing a milestone name, update the prompt to show the live fuzzy match.
+    fn update_milestone_prompt_hint(&mut self) {
+        if let InputMode::Input {
+            prompt,
+            buffer,
+            action,
+            cursor_pos,
+        } = &self.ui.input_mode
+        {
+            if !matches!(action, InputAction::MoveProblemToMilestone { .. }) {
+                return;
+            }
+            let hint = if buffer.is_empty() {
+                "→ backlog".to_string()
+            } else {
+                let input_lower = buffer.to_lowercase();
+                self.data
+                    .milestones
+                    .iter()
+                    .find(|m| m.title.to_lowercase().contains(&input_lower))
+                    .map(|m| format!("→ {}", m.title))
+                    .unwrap_or_else(|| "→ (no match)".to_string())
+            };
+            let new_prompt = format!("Milestone [{}]: ", hint);
+            // Only update if prompt actually changed to avoid unnecessary clones
+            if *prompt != new_prompt {
+                let buffer = buffer.clone();
+                let action = action.clone();
+                let cursor_pos = *cursor_pos;
+                self.ui.input_mode = InputMode::Input {
+                    prompt: new_prompt,
+                    buffer,
+                    action,
+                    cursor_pos,
+                };
+            }
+        }
     }
 
     fn execute_input_action(&mut self, action: &InputAction, title: &str) -> Result<()> {
@@ -542,6 +590,9 @@ impl App {
             }
             InputAction::NewMilestone => {
                 self.create_milestone(title)?;
+            }
+            InputAction::MoveProblemToMilestone { problem_id } => {
+                self.move_problem_to_milestone(problem_id, title)?;
             }
             InputAction::Search => {
                 // Search is handled directly in handle_input_key

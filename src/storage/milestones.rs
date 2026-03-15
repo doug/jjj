@@ -105,5 +105,33 @@ impl MetadataStore {
         Ok(crate::id::generate_id())
     }
 
-    // =========================================================================
+    /// Delete a milestone by ID, orphaning any associated problems
+    pub fn delete_milestone(&self, milestone_id: &str) -> Result<()> {
+        self.ensure_meta_checkout()?;
+
+        let milestone_path = self
+            .meta_path
+            .join(MILESTONES_DIR)
+            .join(format!("{}.md", milestone_id));
+
+        if !milestone_path.exists() {
+            return Err(JjjError::MilestoneNotFound(milestone_id.to_string()));
+        }
+
+        // Orphan any associated problems (unset milestone_id)
+        let milestone = self.load_milestone(milestone_id)?;
+        for problem_id in &milestone.problem_ids {
+            if let Ok(mut problem) = self.load_problem(problem_id) {
+                if problem.milestone_id.as_deref() == Some(milestone_id) {
+                    problem.milestone_id = None;
+                    if let Err(e) = self.save_problem(&problem) {
+                        eprintln!("Warning: failed to orphan problem {}: {}", problem_id, e);
+                    }
+                }
+            }
+        }
+
+        fs::remove_file(milestone_path)?;
+        Ok(())
+    }
 }

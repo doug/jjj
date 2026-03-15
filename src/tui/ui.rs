@@ -128,6 +128,11 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
             let action_sym = item.action_symbol.as_deref().unwrap_or("");
 
             let (label, color, dim) = match &item.node {
+                TreeNode::ProjectRoot { .. } => (
+                    format!("{}{}Project", indent, expand_char),
+                    Color::White,
+                    false,
+                ),
                 TreeNode::Milestone { title, .. } => (
                     format!("{}{}{}", indent, expand_char, title),
                     Color::Magenta,
@@ -434,9 +439,9 @@ fn draw_footer(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
 fn draw_help_overlay(f: &mut Frame, app: &App) {
     let area = f.area();
 
-    // Calculate centered popup (40 wide, 22 tall)
-    let popup_width = 40u16;
-    let popup_height = 22u16;
+    // Calculate centered popup, clamped to terminal size
+    let popup_width = 40u16.min(area.width);
+    let popup_height = 25u16.min(area.height);
     let popup_x = area.width.saturating_sub(popup_width) / 2;
     let popup_y = area.height.saturating_sub(popup_height) / 2;
     let popup_area = Rect::new(popup_x, popup_y, popup_width, popup_height);
@@ -455,6 +460,7 @@ fn draw_help_overlay(f: &mut Frame, app: &App) {
         Line::from("    /       Search/filter tree"),
         Line::from("    f       Toggle filter (full/actions)"),
         Line::from("    j/k     Scroll detail"),
+        Line::from("    Space/b Page detail down/up"),
         Line::from("    R       Toggle related"),
         Line::from(""),
     ];
@@ -500,16 +506,18 @@ fn get_context_actions(app: &App) -> Vec<Line<'static>> {
             TreeNode::Problem { .. } => Some(EntityType::Problem),
             TreeNode::Solution { .. } => Some(EntityType::Solution),
             TreeNode::Critique { .. } => Some(EntityType::Critique),
-            TreeNode::Milestone { .. } | TreeNode::Backlog { .. } => None,
+            TreeNode::Milestone { .. } => Some(EntityType::Milestone),
+            TreeNode::ProjectRoot { .. } | TreeNode::Backlog { .. } => None,
         });
 
     match entity_type {
         Some(EntityType::Problem) => {
             lines.push(Line::from("    n       New solution"));
             lines.push(Line::from("    s       Mark solved"));
+            lines.push(Line::from("    d       Dissolve (with reason)"));
             lines.push(Line::from("    o       Reopen"));
-            lines.push(Line::from("    D       Dissolve (with reason)"));
             lines.push(Line::from("    A       Assign to me"));
+            lines.push(Line::from("    m       Move to milestone"));
             lines.push(Line::from("    e       Edit title"));
             lines.push(Line::from("    t       Edit tags"));
             lines.push(Line::from("    E       Edit in $EDITOR"));
@@ -519,7 +527,7 @@ fn get_context_actions(app: &App) -> Vec<Line<'static>> {
             lines.push(Line::from("    n       New critique"));
             lines.push(Line::from("    u       Submit for review"));
             lines.push(Line::from("    a       Approve"));
-            lines.push(Line::from("    r       Withdraw"));
+            lines.push(Line::from("    d       Withdraw"));
             lines.push(Line::from("    A       Assign to me"));
             lines.push(Line::from("    g       Go to change"));
             lines.push(Line::from("    e       Edit title"));
@@ -535,12 +543,19 @@ fn get_context_actions(app: &App) -> Vec<Line<'static>> {
             lines.push(Line::from("    E       Edit in $EDITOR"));
             lines.push(Line::from("    x       Delete"));
         }
-        None => {
-            // Milestone or Backlog
+        Some(EntityType::Milestone) => {
             lines.push(Line::from("    n       New problem"));
-            lines.push(Line::from("    m       New milestone"));
+            lines.push(Line::from("    s       Mark completed"));
+            lines.push(Line::from("    d       Cancel"));
+            lines.push(Line::from("    o       Activate"));
+            lines.push(Line::from("    A       Assign to me"));
             lines.push(Line::from("    e       Edit title"));
             lines.push(Line::from("    E       Edit in $EDITOR"));
+            lines.push(Line::from("    x       Delete"));
+        }
+        None => {
+            // ProjectRoot or Backlog
+            lines.push(Line::from("    n       New (milestone/problem)"));
         }
     }
 
