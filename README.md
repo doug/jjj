@@ -205,6 +205,10 @@ npm install
 npm run dev
 ```
 
+## Note for Previous `jjj` Crate Users
+
+This crate previously hosted a modal interface for Jujutsu by [@icorbrey](https://github.com/icorbrey). That project has been renamed and is now available as [**megamerge**](https://crates.io/crates/megamerge).
+
 ## License
 
 Apache-2.0

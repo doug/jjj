@@ -1,12 +1,16 @@
 [package]
 name = "jjj"
-version = "0.1.0"
+version = "0.3.0"
 edition = "2021"
 rust-version = "1.82"
 authors = ["jjj contributors"]
 description = "Distributed project management and code review for Jujutsu"
 license = "Apache-2.0"
 repository = "https://github.com/doug/jjj"
+homepage = "https://jjj.recursivewhy.com"
+readme = "README.md"
+keywords = ["jj", "jujutsu", "project-management", "code-review", "kanban"]
+categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 # CLI parsing
