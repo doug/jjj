@@ -156,10 +156,10 @@ jj bookmark track jjj@origin
 ## Installation
 
 ```bash
-# Build from source
-cargo build --release
+# From crates.io
+cargo install jjj
 
-# Install
+# Or build from source
 cargo install --path .
 
 # Generate shell completions
