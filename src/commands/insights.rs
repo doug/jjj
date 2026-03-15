@@ -33,10 +33,13 @@ pub fn execute(ctx: &CommandContext, json: bool) -> Result<()> {
 
     if events.is_empty() {
         if json {
-            println!("{}", serde_json::to_string_pretty(&serde_json::json!({
-                "total_events": 0,
-                "message": "No events recorded yet"
-            }))?);
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "total_events": 0,
+                    "message": "No events recorded yet"
+                }))?
+            );
         } else {
             println!("No events recorded yet.");
         }

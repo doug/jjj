@@ -48,7 +48,15 @@ pub fn execute(ctx: &CommandContext, action: SolutionAction) -> Result<()> {
             add_tag,
             remove_tag,
             set_tags,
-        } => edit_solution(ctx, solution_id, title, status, add_tag, remove_tag, set_tags),
+        } => edit_solution(
+            ctx,
+            solution_id,
+            title,
+            status,
+            add_tag,
+            remove_tag,
+            set_tags,
+        ),
         SolutionAction::Attach { solution_id, force } => attach_change(ctx, solution_id, force),
         SolutionAction::Detach {
             solution_id,
@@ -189,7 +197,11 @@ fn new_solution(
 
         // Set tags (trim, dedup, sort)
         if !tags.is_empty() {
-            let mut t: Vec<String> = tags.iter().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+            let mut t: Vec<String> = tags
+                .iter()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
             t.sort();
             t.dedup();
             solution.tags = t;
@@ -496,7 +508,11 @@ fn edit_solution(
         }
 
         if let Some(ref tags) = set_tags {
-            let mut t: Vec<String> = tags.iter().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+            let mut t: Vec<String> = tags
+                .iter()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
             t.sort();
             t.dedup();
             solution.tags = t;
@@ -504,7 +520,12 @@ fn edit_solution(
 
         if let Some(ref tag) = add_tag {
             let tag = tag.trim().to_string();
-            if !tag.is_empty() && !solution.tags.iter().any(|t| t.to_lowercase() == tag.to_lowercase()) {
+            if !tag.is_empty()
+                && !solution
+                    .tags
+                    .iter()
+                    .any(|t| t.to_lowercase() == tag.to_lowercase())
+            {
                 solution.tags.push(tag);
                 solution.tags.sort();
             }

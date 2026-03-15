@@ -387,7 +387,10 @@ fn test_problem_new_with_tags() {
     }
     let dir = setup_test_repo();
 
-    run_jjj_success(&dir, &["problem", "new", "Tagged Problem", "--tags", "backend,auth"]);
+    run_jjj_success(
+        &dir,
+        &["problem", "new", "Tagged Problem", "--tags", "backend,auth"],
+    );
 
     let stdout = run_jjj_success(&dir, &["problem", "show", "Tagged Problem"]);
     assert!(
@@ -405,7 +408,10 @@ fn test_problem_edit_add_tag() {
     let dir = setup_test_repo();
 
     run_jjj_success(&dir, &["problem", "new", "Tag Edit Test"]);
-    run_jjj_success(&dir, &["problem", "edit", "Tag Edit Test", "--add-tag", "backend"]);
+    run_jjj_success(
+        &dir,
+        &["problem", "edit", "Tag Edit Test", "--add-tag", "backend"],
+    );
 
     let stdout = run_jjj_success(&dir, &["problem", "show", "Tag Edit Test"]);
     assert!(
@@ -415,7 +421,16 @@ fn test_problem_edit_add_tag() {
     );
 
     // Remove the tag
-    run_jjj_success(&dir, &["problem", "edit", "Tag Edit Test", "--remove-tag", "backend"]);
+    run_jjj_success(
+        &dir,
+        &[
+            "problem",
+            "edit",
+            "Tag Edit Test",
+            "--remove-tag",
+            "backend",
+        ],
+    );
     let stdout = run_jjj_success(&dir, &["problem", "show", "Tag Edit Test"]);
     assert!(
         !stdout.contains("Tags:"),
@@ -457,13 +472,37 @@ fn test_problem_edit_set_tags() {
     run_jjj_success(&dir, &["problem", "new", "Set Tags Test", "--tags", "old"]);
 
     // Replace all tags atomically
-    run_jjj_success(&dir, &["problem", "edit", "Set Tags Test", "--set-tags", "alpha,beta"]);
+    run_jjj_success(
+        &dir,
+        &[
+            "problem",
+            "edit",
+            "Set Tags Test",
+            "--set-tags",
+            "alpha,beta",
+        ],
+    );
     let stdout = run_jjj_success(&dir, &["problem", "show", "Set Tags Test"]);
-    assert!(stdout.contains("alpha") && stdout.contains("beta"), "Expected new tags: {}", stdout);
-    assert!(!stdout.contains("old"), "Expected old tag removed: {}", stdout);
+    assert!(
+        stdout.contains("alpha") && stdout.contains("beta"),
+        "Expected new tags: {}",
+        stdout
+    );
+    assert!(
+        !stdout.contains("old"),
+        "Expected old tag removed: {}",
+        stdout
+    );
 
     // Clear all tags with empty --set-tags
-    run_jjj_success(&dir, &["problem", "edit", "Set Tags Test", "--set-tags", ""]);
+    run_jjj_success(
+        &dir,
+        &["problem", "edit", "Set Tags Test", "--set-tags", ""],
+    );
     let stdout = run_jjj_success(&dir, &["problem", "show", "Set Tags Test"]);
-    assert!(!stdout.contains("Tags:"), "Expected no tags after clear: {}", stdout);
+    assert!(
+        !stdout.contains("Tags:"),
+        "Expected no tags after clear: {}",
+        stdout
+    );
 }

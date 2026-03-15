@@ -57,8 +57,7 @@ fn test_next_claim() {
 
     // Verify assignment by checking the problem
     let show_stdout = run_jjj_success(&dir, &["problem", "show", "Claimable", "--json"]);
-    let json: serde_json::Value =
-        serde_json::from_str(&show_stdout).expect("Failed to parse JSON");
+    let json: serde_json::Value = serde_json::from_str(&show_stdout).expect("Failed to parse JSON");
     assert!(
         json["assignee"].is_string(),
         "Expected assignee to be set after claim: {:?}",

@@ -253,14 +253,12 @@ impl App {
 
         match entity_type {
             EntityType::Problem => {
-                self.store.with_metadata(
-                    &format!("Update problem tags: {}", entity_id),
-                    || {
+                self.store
+                    .with_metadata(&format!("Update problem tags: {}", entity_id), || {
                         let mut problem = self.store.load_problem(entity_id)?;
                         problem.tags = tags.clone();
                         self.store.save_problem(&problem)
-                    },
-                )?;
+                    })?;
             }
             EntityType::Solution => {
                 self.store.with_metadata(
@@ -681,14 +679,12 @@ impl App {
 
         if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
             let (entity_type, entity_id, title) = match &item.node {
-                TreeNode::Critique { id, title, .. } => ("critique".to_string(), id.clone(), title.clone()),
+                TreeNode::Critique { id, title, .. } => {
+                    ("critique".to_string(), id.clone(), title.clone())
+                }
                 TreeNode::Solution { id, title, .. } => {
                     // Block if has critiques
-                    let has_critiques = self
-                        .data
-                        .critiques
-                        .iter()
-                        .any(|c| c.solution_id == *id);
+                    let has_critiques = self.data.critiques.iter().any(|c| c.solution_id == *id);
                     if has_critiques {
                         self.show_flash("Delete critiques first");
                         return Ok(());
@@ -697,11 +693,7 @@ impl App {
                 }
                 TreeNode::Problem { id, title, .. } => {
                     // Block if has solutions
-                    let has_solutions = self
-                        .data
-                        .solutions
-                        .iter()
-                        .any(|s| s.problem_id == *id);
+                    let has_solutions = self.data.solutions.iter().any(|s| s.problem_id == *id);
                     if has_solutions {
                         self.show_flash("Delete solutions first");
                         return Ok(());

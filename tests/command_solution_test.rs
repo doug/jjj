@@ -636,17 +636,39 @@ fn test_solution_edit_set_tags() {
     run_jjj_success(&dir, &["problem", "new", "Problem"]);
     run_jjj_success(
         &dir,
-        &["solution", "new", "Set Tags Sol", "--problem", "Problem", "--tags", "old"],
+        &[
+            "solution",
+            "new",
+            "Set Tags Sol",
+            "--problem",
+            "Problem",
+            "--tags",
+            "old",
+        ],
     );
 
     // Replace all tags atomically
     run_jjj_success(
         &dir,
-        &["solution", "edit", "Set Tags Sol", "--set-tags", "alpha,beta"],
+        &[
+            "solution",
+            "edit",
+            "Set Tags Sol",
+            "--set-tags",
+            "alpha,beta",
+        ],
     );
     let stdout = run_jjj_success(&dir, &["solution", "show", "Set Tags Sol"]);
-    assert!(stdout.contains("alpha") && stdout.contains("beta"), "Expected new tags: {}", stdout);
-    assert!(!stdout.contains("old"), "Expected old tag removed: {}", stdout);
+    assert!(
+        stdout.contains("alpha") && stdout.contains("beta"),
+        "Expected new tags: {}",
+        stdout
+    );
+    assert!(
+        !stdout.contains("old"),
+        "Expected old tag removed: {}",
+        stdout
+    );
 
     // Clear all tags with empty --set-tags
     run_jjj_success(
@@ -654,5 +676,9 @@ fn test_solution_edit_set_tags() {
         &["solution", "edit", "Set Tags Sol", "--set-tags", ""],
     );
     let stdout = run_jjj_success(&dir, &["solution", "show", "Set Tags Sol"]);
-    assert!(!stdout.contains("Tags:"), "Expected no tags after clear: {}", stdout);
+    assert!(
+        !stdout.contains("Tags:"),
+        "Expected no tags after clear: {}",
+        stdout
+    );
 }

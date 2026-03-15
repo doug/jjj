@@ -95,7 +95,7 @@ pub fn all_migrations() -> Vec<Migration> {
             up: |conn| {
                 conn.execute_batch(
                     "ALTER TABLE problems ADD COLUMN tags TEXT DEFAULT '[]';
-                     ALTER TABLE solutions ADD COLUMN tags TEXT DEFAULT '[]';"
+                     ALTER TABLE solutions ADD COLUMN tags TEXT DEFAULT '[]';",
                 )?;
                 Ok(())
             },

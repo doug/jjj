@@ -125,6 +125,13 @@ impl JjClient {
         self.current_change_id()
     }
 
+    /// Create a new empty change whose parent is root(), producing an orphan branch.
+    pub fn new_orphan_change(&self, message: &str) -> Result<String> {
+        self.execute(&["new", "-r", "root()"])?;
+        self.describe(message)?;
+        self.current_change_id()
+    }
+
     /// Set the description of the current change
     pub fn describe(&self, message: &str) -> Result<()> {
         self.execute(&["describe", "-m", message])?;

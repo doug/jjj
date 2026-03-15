@@ -19,7 +19,9 @@ pub fn execute(ctx: &CommandContext, action: ProblemAction) -> Result<()> {
             force,
             context,
             tags,
-        } => new_problem(ctx, title, priority, parent, milestone, force, context, tags),
+        } => new_problem(
+            ctx, title, priority, parent, milestone, force, context, tags,
+        ),
         ProblemAction::List {
             status,
             tree,
@@ -50,7 +52,9 @@ pub fn execute(ctx: &CommandContext, action: ProblemAction) -> Result<()> {
             add_tag,
             remove_tag,
             set_tags,
-        } => edit_problem(ctx, problem_id, title, status, priority, parent, add_tag, remove_tag, set_tags),
+        } => edit_problem(
+            ctx, problem_id, title, status, priority, parent, add_tag, remove_tag, set_tags,
+        ),
         ProblemAction::Tree { problem_id } => show_tree(ctx, problem_id),
         ProblemAction::Solve {
             problem_id,
@@ -170,7 +174,11 @@ fn new_problem(
 
         // Set tags (trim, dedup, sort)
         if !tags.is_empty() {
-            let mut t: Vec<String> = tags.iter().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+            let mut t: Vec<String> = tags
+                .iter()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
             t.sort();
             t.dedup();
             problem.tags = t;

@@ -69,7 +69,12 @@ impl MetadataStore {
         let db_path = self.jj_client.repo_root().join(".jj").join("jjj.db");
         if db_path.exists() {
             if let Ok(db) = crate::db::schema::Database::open(&db_path) {
-                let fts_body = format!("{}\n{}\n{}", solution.approach, solution.tradeoffs, solution.tags.join(" "));
+                let fts_body = format!(
+                    "{}\n{}\n{}",
+                    solution.approach,
+                    solution.tradeoffs,
+                    solution.tags.join(" ")
+                );
                 let _ = crate::db::sync::update_fts_entry(
                     db.conn(),
                     "solution",

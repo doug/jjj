@@ -13,7 +13,13 @@ fn test_insights_basic() {
     run_jjj_success(&dir, &["problem", "new", "Test Problem"]);
     run_jjj_success(
         &dir,
-        &["solution", "new", "Test Solution", "--problem", "Test Problem"],
+        &[
+            "solution",
+            "new",
+            "Test Solution",
+            "--problem",
+            "Test Problem",
+        ],
     );
 
     let stdout = run_jjj_success(&dir, &["insights"]);
@@ -74,10 +80,7 @@ fn test_insights_with_data() {
         &["solution", "new", "Solution", "--problem", "Problem"],
     );
     run_jjj_success(&dir, &["solution", "submit", "Solution"]);
-    run_jjj_success(
-        &dir,
-        &["solution", "approve", "Solution", "--no-rationale"],
-    );
+    run_jjj_success(&dir, &["solution", "approve", "Solution", "--no-rationale"]);
 
     let stdout = run_jjj_success(&dir, &["insights", "--json"]);
     let json: serde_json::Value = serde_json::from_str(&stdout).expect("Failed to parse JSON");
