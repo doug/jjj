@@ -210,8 +210,8 @@ impl MetadataStore {
             ));
         }
 
-        // Create an empty orphan root
-        let change_id = self.jj_client.new_empty_change("Initialize jjj metadata")?;
+        // Create an empty orphan root descending from root()
+        let change_id = self.jj_client.new_orphan_change("Initialize jjj metadata")?;
 
         // Create the bookmark
         self.jj_client.create_bookmark(META_BOOKMARK, &change_id)?;
@@ -245,7 +245,7 @@ impl MetadataStore {
         if !self.meta_path.exists() {
             // Auto-initialize if the jjj bookmark has never been created.
             if !self.jj_client.bookmark_exists(META_BOOKMARK)? {
-                let change_id = self.jj_client.new_empty_change("Initialize jjj metadata")?;
+                let change_id = self.jj_client.new_orphan_change("Initialize jjj metadata")?;
                 self.jj_client.create_bookmark(META_BOOKMARK, &change_id)?;
             }
             let meta_path_str = self

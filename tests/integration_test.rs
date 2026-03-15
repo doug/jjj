@@ -1,6 +1,75 @@
 mod test_helpers;
 use std::process::Command;
-use test_helpers::{jj_available, run_jjj, setup_test_repo};
+use test_helpers::{jj_available, jjj_binary, run_jjj, setup_test_repo};
+
+/// Regression test for https://github.com/doug/jjj/issues/1
+/// `jjj init` must create the metadata branch from root(), not on top of @.
+#[test]
+fn test_init_creates_orphan_from_root() {
+    if !jj_available() {
+        return;
+    }
+
+    let dir = tempfile::TempDir::new().expect("Failed to create temp dir");
+
+    // Initialize a jj repo and make a real commit so @ is not at root
+    Command::new("jj")
+        .args(["git", "init"])
+        .current_dir(dir.path())
+        .output()
+        .expect("jj git init");
+    Command::new("jj")
+        .args(["config", "set", "--repo", "user.name", "Test User"])
+        .current_dir(dir.path())
+        .status()
+        .ok();
+    Command::new("jj")
+        .args(["config", "set", "--repo", "user.email", "test@example.com"])
+        .current_dir(dir.path())
+        .status()
+        .ok();
+
+    // Create a file and describe the change so @ has content
+    std::fs::write(dir.path().join("hello.txt"), "hello").unwrap();
+    Command::new("jj")
+        .args(["describe", "-m", "user commit"])
+        .current_dir(dir.path())
+        .output()
+        .expect("jj describe");
+
+    // Now run jjj init
+    let output = Command::new(jjj_binary())
+        .arg("init")
+        .current_dir(dir.path())
+        .output()
+        .expect("jjj init");
+    assert!(
+        output.status.success(),
+        "jjj init failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    // Verify: the jjj bookmark's ancestor chain should include root() but
+    // should NOT include the "user commit" change.
+    let log_output = Command::new("jj")
+        .args([
+            "log",
+            "--no-graph",
+            "-r",
+            "ancestors(jjj)",
+            "-T",
+            r#"description ++ "\n""#,
+        ])
+        .current_dir(dir.path())
+        .output()
+        .expect("jj log");
+    let log_stdout = String::from_utf8_lossy(&log_output.stdout);
+    assert!(
+        !log_stdout.contains("user commit"),
+        "jjj bookmark should NOT descend from @; got ancestors:\n{}",
+        log_stdout
+    );
+}
 
 #[test]
 fn test_init_and_create_problem_solution() {
