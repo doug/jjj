@@ -231,7 +231,10 @@ fn test_status_priority_sorting() {
 
     // Create problems with different priorities
     run_jjj_success(&dir, &["problem", "new", "Low", "--priority", "low"]);
-    run_jjj_success(&dir, &["problem", "new", "Critical", "--priority", "critical"]);
+    run_jjj_success(
+        &dir,
+        &["problem", "new", "Critical", "--priority", "critical"],
+    );
     run_jjj_success(&dir, &["problem", "new", "High", "--priority", "high"]);
 
     let stdout = run_jjj_success(&dir, &["status", "--json", "--all"]);

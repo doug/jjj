@@ -55,8 +55,7 @@ fn parse_enum<T: std::str::FromStr + Default>(s: &str, kind: &str, default_name:
 
 /// Insert or update a problem in the database.
 pub fn upsert_problem(conn: &Connection, problem: &Problem) -> SqliteResult<()> {
-    let tags_json =
-        serde_json::to_string(&problem.tags).unwrap_or_else(|_| "[]".to_string());
+    let tags_json = serde_json::to_string(&problem.tags).unwrap_or_else(|_| "[]".to_string());
 
     conn.execute(
         "INSERT OR REPLACE INTO problems (
@@ -162,8 +161,7 @@ fn row_to_problem(row: &rusqlite::Row) -> SqliteResult<Problem> {
 pub fn upsert_solution(conn: &Connection, solution: &Solution) -> SqliteResult<()> {
     let change_ids_json =
         serde_json::to_string(&solution.change_ids).unwrap_or_else(|_| "[]".to_string());
-    let tags_json =
-        serde_json::to_string(&solution.tags).unwrap_or_else(|_| "[]".to_string());
+    let tags_json = serde_json::to_string(&solution.tags).unwrap_or_else(|_| "[]".to_string());
 
     conn.execute(
         "INSERT OR REPLACE INTO solutions (

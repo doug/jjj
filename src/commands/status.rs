@@ -221,11 +221,7 @@ pub fn execute(
                     .iter()
                     .map(|(_, title)| title.as_str())
                     .collect();
-                println!(
-                    "  {} — {}",
-                    overlap.file.display(),
-                    sol_names.join(", ")
-                );
+                println!("  {} — {}", overlap.file.display(), sol_names.join(", "));
             }
         }
     }

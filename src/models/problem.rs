@@ -481,11 +481,22 @@ mod tests {
         let mut p = Problem::new("P-1".to_string(), "Test".to_string());
         assert!(p.tags.is_empty());
 
-        p.tags = vec!["backend".to_string(), "auth".to_string(), "size:L".to_string()];
+        p.tags = vec![
+            "backend".to_string(),
+            "auth".to_string(),
+            "size:L".to_string(),
+        ];
 
         // Round-trip through frontmatter
         let fm = ProblemFrontmatter::from(&p);
-        assert_eq!(fm.tags, vec!["backend".to_string(), "auth".to_string(), "size:L".to_string()]);
+        assert_eq!(
+            fm.tags,
+            vec![
+                "backend".to_string(),
+                "auth".to_string(),
+                "size:L".to_string()
+            ]
+        );
 
         // Verify serde round-trip
         let yaml = serde_yml::to_string(&fm).unwrap();

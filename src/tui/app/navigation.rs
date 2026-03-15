@@ -317,7 +317,10 @@ impl App {
                     )
                 }
                 TreeNode::Critique { id, .. } => {
-                    format!("{}: [a]ddress [d]ismiss [e]dit [E]dit in $EDITOR [x] delete", id)
+                    format!(
+                        "{}: [a]ddress [d]ismiss [e]dit [E]dit in $EDITOR [x] delete",
+                        id
+                    )
                 }
             }
         } else {
