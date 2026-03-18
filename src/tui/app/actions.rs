@@ -881,13 +881,50 @@ impl App {
     pub(super) fn start_delete(&mut self) -> Result<()> {
         use super::super::tree::TreeNode;
 
+        if !self.ui.selected_ids.is_empty() {
+            // Batch delete: collect all selected entities
+            let mut entities = Vec::new();
+            for item in &self.cache.tree_items {
+                if !self.ui.selected_ids.contains(item.node.id()) {
+                    continue;
+                }
+                match &item.node {
+                    TreeNode::Critique { id, .. } => {
+                        entities.push(("critique".to_string(), id.clone()));
+                    }
+                    TreeNode::Solution { id, .. } => {
+                        entities.push(("solution".to_string(), id.clone()));
+                    }
+                    TreeNode::Problem { id, .. } => {
+                        entities.push(("problem".to_string(), id.clone()));
+                    }
+                    TreeNode::Milestone { id, .. } => {
+                        entities.push(("milestone".to_string(), id.clone()));
+                    }
+                    _ => {}
+                }
+            }
+
+            if entities.is_empty() {
+                return Ok(());
+            }
+
+            self.ui.input_mode = InputMode::Input {
+                prompt: format!("Delete {} items? y to confirm: ", entities.len()),
+                buffer: String::new(),
+                action: InputAction::BatchConfirmDelete { entities },
+                cursor_pos: 0,
+            };
+            return Ok(());
+        }
+
+        // Single delete (existing logic)
         if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
             let (entity_type, entity_id, title) = match &item.node {
                 TreeNode::Critique { id, title, .. } => {
                     ("critique".to_string(), id.clone(), title.clone())
                 }
                 TreeNode::Solution { id, title, .. } => {
-                    // Block if has critiques
                     let has_critiques = self.data.critiques.iter().any(|c| c.solution_id == *id);
                     if has_critiques {
                         self.show_flash("Delete critiques first");
@@ -896,7 +933,6 @@ impl App {
                     ("solution".to_string(), id.clone(), title.clone())
                 }
                 TreeNode::Problem { id, title, .. } => {
-                    // Block if has solutions
                     let has_solutions = self.data.solutions.iter().any(|s| s.problem_id == *id);
                     if has_solutions {
                         self.show_flash("Delete solutions first");
@@ -905,7 +941,6 @@ impl App {
                     ("problem".to_string(), id.clone(), title.clone())
                 }
                 TreeNode::Milestone { id, title, .. } => {
-                    // Block if has child problems
                     let has_problems = self
                         .data
                         .problems
@@ -930,6 +965,39 @@ impl App {
                 cursor_pos: 0,
             };
         }
+        Ok(())
+    }
+
+    pub(super) fn batch_delete(&mut self, entities: &[(String, String)]) -> Result<()> {
+        let count = entities.len();
+
+        self.store.with_metadata(
+            &format!("Batch delete {} items", count),
+            || {
+                for (entity_type, entity_id) in entities {
+                    match entity_type.as_str() {
+                        "critique" => {
+                            let _ = self.store.delete_critique(entity_id);
+                        }
+                        "solution" => {
+                            let _ = self.store.delete_solution(entity_id);
+                        }
+                        "problem" => {
+                            let _ = self.store.delete_problem(entity_id);
+                        }
+                        "milestone" => {
+                            let _ = self.store.delete_milestone(entity_id);
+                        }
+                        _ => {}
+                    }
+                }
+                Ok(())
+            },
+        )?;
+
+        self.show_flash(&format!("Deleted {} items", count));
+        self.ui.selected_ids.clear();
+        self.refresh_data()?;
         Ok(())
     }
 

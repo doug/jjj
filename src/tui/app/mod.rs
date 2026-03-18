@@ -69,6 +69,9 @@ pub enum InputAction {
     MoveProblemToMilestone {
         problem_id: String,
     },
+    BatchConfirmDelete {
+        entities: Vec<(String, String)>, // Vec<(entity_type, entity_id)>
+    },
 }
 
 /// A pending request to suspend the TUI and open an entity in an external editor.
@@ -600,6 +603,13 @@ impl App {
             }
             InputAction::MoveProblemToMilestone { problem_id } => {
                 self.move_problem_to_milestone(problem_id, title)?;
+            }
+            InputAction::BatchConfirmDelete { entities } => {
+                if title.trim() == "y" {
+                    self.batch_delete(entities)?;
+                } else {
+                    self.show_flash("Delete cancelled");
+                }
             }
             InputAction::Search => {
                 // Search is handled directly in handle_input_key
