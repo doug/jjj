@@ -448,6 +448,39 @@ impl App {
             })
     }
 
+    /// Returns entity IDs and types to act on.
+    /// If multi-selection is active, returns selected items.
+    /// Otherwise returns the single cursor item (if selectable).
+    pub(super) fn action_targets(&self) -> Vec<(String, super::super::next_actions::EntityType)> {
+        use super::super::tree::TreeNode;
+
+        if !self.ui.selected_ids.is_empty() {
+            self.cache
+                .tree_items
+                .iter()
+                .filter(|item| self.ui.selected_ids.contains(item.node.id()))
+                .filter_map(|item| match &item.node {
+                    TreeNode::Problem { id, .. } => {
+                        Some((id.clone(), super::super::next_actions::EntityType::Problem))
+                    }
+                    TreeNode::Solution { id, .. } => {
+                        Some((id.clone(), super::super::next_actions::EntityType::Solution))
+                    }
+                    TreeNode::Critique { id, .. } => {
+                        Some((id.clone(), super::super::next_actions::EntityType::Critique))
+                    }
+                    TreeNode::Milestone { id, .. } => Some((
+                        id.clone(),
+                        super::super::next_actions::EntityType::Milestone,
+                    )),
+                    _ => None,
+                })
+                .collect()
+        } else {
+            self.get_selected_entity().into_iter().collect()
+        }
+    }
+
     pub(super) fn get_selected_entity_info(&self) -> Option<(String, String)> {
         use super::super::tree::TreeNode;
 

@@ -428,12 +428,18 @@ fn draw_footer(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
         .split(area);
 
     // Context line (top) - or flash message if present
+    let selection_info = if !app.ui.selected_ids.is_empty() {
+        format!("[{} selected] ", app.ui.selected_ids.len())
+    } else {
+        String::new()
+    };
+
     let context_text = if let Some((msg, _)) = &app.ui.flash_message {
         msg.clone()
     } else if let Some(ref filter) = app.ui.search_filter {
-        format!("[/{}] {}", filter, app.context_hints())
+        format!("{}[/{}] {}", selection_info, filter, app.context_hints())
     } else {
-        app.context_hints()
+        format!("{}{}", selection_info, app.context_hints())
     };
     let context_style = if app.ui.flash_message.is_some() {
         Style::default().fg(Color::Green)
@@ -444,9 +450,10 @@ fn draw_footer(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     f.render_widget(context, chunks[0]);
 
     // Global shortcuts (bottom)
-    let global =
-        Paragraph::new("[Tab] next action | [R] related | [j/k] scroll | [?] help | [q] quit")
-            .style(Style::default().fg(Color::DarkGray));
+    let global = Paragraph::new(
+        "[Space] select | [Tab] next action | [R] related | [j/k] scroll | [?] help | [q] quit",
+    )
+    .style(Style::default().fg(Color::DarkGray));
     f.render_widget(global, chunks[1]);
 }
 
