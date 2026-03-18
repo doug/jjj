@@ -3,7 +3,7 @@ use crate::error::Result;
 use crate::jj::JjClient;
 use crate::models::{Critique, Milestone, Problem, Solution};
 use crate::storage::MetadataStore;
-use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{backend::Backend, Terminal};
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
@@ -277,7 +277,7 @@ impl App {
             if event::poll(Duration::from_millis(100))? {
                 if let Event::Key(key) = event::read()? {
                     if key.kind == KeyEventKind::Press {
-                        self.handle_key(key.code)?;
+                        self.handle_key(key)?;
                     }
                 }
             }
@@ -297,14 +297,14 @@ impl App {
         }
     }
 
-    fn handle_key(&mut self, key: KeyCode) -> Result<()> {
+    fn handle_key(&mut self, key: KeyEvent) -> Result<()> {
         match &self.ui.input_mode {
             InputMode::Help => {
                 // Any key exits help
                 self.ui.input_mode = InputMode::Normal;
             }
             InputMode::Input { .. } => {
-                self.handle_input_key(key)?;
+                self.handle_input_key(key.code)?;
             }
             InputMode::Normal => {
                 self.handle_normal_key(key)?;
@@ -313,8 +313,8 @@ impl App {
         Ok(())
     }
 
-    fn handle_normal_key(&mut self, key: KeyCode) -> Result<()> {
-        match key {
+    fn handle_normal_key(&mut self, key: KeyEvent) -> Result<()> {
+        match key.code {
             KeyCode::Char('q') => self.should_quit = true,
             KeyCode::Tab => self.jump_to_next_action(false),
             KeyCode::BackTab => self.jump_to_next_action(true),
