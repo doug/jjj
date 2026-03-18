@@ -324,8 +324,11 @@ impl App {
             KeyCode::Right => self.expand_or_child(),
             KeyCode::Char('j') => self.scroll_detail_down(),
             KeyCode::Char('k') => self.scroll_detail_up(),
-            KeyCode::Char(' ') => self.page_detail_down(),
+            KeyCode::Char(' ') => self.toggle_selection(),
             KeyCode::Char('b') => self.page_detail_up(),
+            KeyCode::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.select_all_visible();
+            }
             KeyCode::Char('a') => self.handle_action_a()?,
             KeyCode::Char('d') => self.handle_action_d()?,
             KeyCode::Char('n') => self.start_new_item()?,
@@ -344,6 +347,7 @@ impl App {
             KeyCode::Char('x') => self.start_delete()?,
             KeyCode::Char('m') => self.start_move_to_milestone()?,
             KeyCode::Char('?') => self.toggle_help(),
+            KeyCode::Esc => self.clear_selection(),
             _ => {}
         }
         Ok(())

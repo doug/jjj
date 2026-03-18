@@ -193,6 +193,46 @@ impl App {
         self.ui.detail_scroll = self.ui.detail_scroll.saturating_sub(10);
     }
 
+    /// Toggle multi-select on the current tree item and advance cursor.
+    pub(super) fn toggle_selection(&mut self) {
+        if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
+            if item.node.is_selectable() {
+                let id = item.node.id().to_string();
+                if !self.ui.selected_ids.remove(&id) {
+                    self.ui.selected_ids.insert(id);
+                }
+            }
+        }
+        // Advance cursor (like file managers)
+        self.navigate_down();
+    }
+
+    /// Select all visible selectable items, or clear if all already selected.
+    pub(super) fn select_all_visible(&mut self) {
+        let visible_ids: Vec<String> = self
+            .cache
+            .tree_items
+            .iter()
+            .filter(|item| item.node.is_selectable())
+            .map(|item| item.node.id().to_string())
+            .collect();
+
+        let all_selected = visible_ids
+            .iter()
+            .all(|id| self.ui.selected_ids.contains(id));
+
+        if all_selected {
+            self.ui.selected_ids.clear();
+        } else {
+            self.ui.selected_ids.extend(visible_ids);
+        }
+    }
+
+    /// Clear multi-selection.
+    pub(super) fn clear_selection(&mut self) {
+        self.ui.selected_ids.clear();
+    }
+
     pub(super) fn toggle_related_panel(&mut self) {
         self.ui.show_related = !self.ui.show_related;
     }
