@@ -121,10 +121,7 @@ mod tests {
 
     #[test]
     fn test_sanitize_user() {
-        assert_eq!(
-            sanitize_user("Alice Smith <alice@test.com>"),
-            "alice-smith"
-        );
+        assert_eq!(sanitize_user("Alice Smith <alice@test.com>"), "alice-smith");
         assert_eq!(sanitize_user("bob"), "bob");
     }
 

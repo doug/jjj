@@ -148,12 +148,7 @@ mod tests {
         }
 
         let results = suggest_matchups(&ratings, &[], 5);
-        assert_eq!(
-            results.len(),
-            5,
-            "Expected 5 pairs, got {}",
-            results.len()
-        );
+        assert_eq!(results.len(), 5, "Expected 5 pairs, got {}", results.len());
     }
 
     /// With only 2 items (1 possible pair), requesting 5 should yield 1.

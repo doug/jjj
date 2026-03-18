@@ -159,9 +159,7 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                 } => {
                     let priority_sym = priority_prefix(priority);
                     let dim = matches!(priority, Priority::Low);
-                    let rank_prefix = rank
-                        .map(|r| format!("#{} ", r))
-                        .unwrap_or_default();
+                    let rank_prefix = rank.map(|r| format!("#{} ", r)).unwrap_or_default();
                     let assignee_suffix = assignee
                         .as_deref()
                         .map(|a| {

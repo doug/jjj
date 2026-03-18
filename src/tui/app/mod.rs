@@ -133,11 +133,10 @@ impl ProjectData {
         let base = store.meta_path();
 
         for milestone in milestones {
-            let attributed =
-                match ranking_store::load_attributed_comparisons(base, &milestone.id) {
-                    Ok(a) => a,
-                    Err(_) => continue,
-                };
+            let attributed = match ranking_store::load_attributed_comparisons(base, &milestone.id) {
+                Ok(a) => a,
+                Err(_) => continue,
+            };
             if attributed.is_empty() {
                 continue;
             }

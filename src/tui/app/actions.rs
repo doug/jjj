@@ -991,13 +991,12 @@ impl App {
             .tree_items
             .get(self.ui.tree_index)
             .and_then(|item| match &item.node {
-                TreeNode::Problem { id, .. } => {
-                    self.data
-                        .problems
-                        .iter()
-                        .find(|p| p.id == *id)
-                        .and_then(|p| p.milestone_id.clone())
-                }
+                TreeNode::Problem { id, .. } => self
+                    .data
+                    .problems
+                    .iter()
+                    .find(|p| p.id == *id)
+                    .and_then(|p| p.milestone_id.clone()),
                 TreeNode::Milestone { id, .. } => Some(id.clone()),
                 _ => None,
             })
@@ -1029,10 +1028,7 @@ impl App {
             .data
             .problems
             .iter()
-            .filter(|p| {
-                p.milestone_id.as_deref() == Some(&milestone_id)
-                    && p.is_open()
-            })
+            .filter(|p| p.milestone_id.as_deref() == Some(&milestone_id) && p.is_open())
             .collect();
 
         if open_problems.len() < 2 {
@@ -1056,9 +1052,7 @@ impl App {
         let mut ratings = glicko2::compute_ratings(&weighted);
         // Ensure all open problems have ratings
         for p in &open_problems {
-            ratings
-                .entry(p.id.clone())
-                .or_default();
+            ratings.entry(p.id.clone()).or_default();
         }
 
         // Build recent pairs for exclusion
@@ -1102,12 +1096,7 @@ impl App {
                 matchups,
                 current,
                 completed,
-            } => (
-                milestone_id.clone(),
-                matchups.clone(),
-                *current,
-                *completed,
-            ),
+            } => (milestone_id.clone(), matchups.clone(), *current, *completed),
             _ => return Ok(()),
         };
 
@@ -1125,10 +1114,9 @@ impl App {
                     let base = self.store.meta_path().to_path_buf();
                     let m_id = milestone_id.clone();
                     let user_clone = user.clone();
-                    self.store
-                        .with_metadata("Record ranking comparison", || {
-                            ranking_store::append_comparison(&base, &m_id, &user_clone, &comparison)
-                        })?;
+                    self.store.with_metadata("Record ranking comparison", || {
+                        ranking_store::append_comparison(&base, &m_id, &user_clone, &comparison)
+                    })?;
 
                     let new_completed = completed + 1;
                     let new_current = current + 1;
@@ -1163,10 +1151,9 @@ impl App {
                     let base = self.store.meta_path().to_path_buf();
                     let m_id = milestone_id.clone();
                     let user_clone = user.clone();
-                    self.store
-                        .with_metadata("Record ranking comparison", || {
-                            ranking_store::append_comparison(&base, &m_id, &user_clone, &comparison)
-                        })?;
+                    self.store.with_metadata("Record ranking comparison", || {
+                        ranking_store::append_comparison(&base, &m_id, &user_clone, &comparison)
+                    })?;
 
                     let new_completed = completed + 1;
                     let new_current = current + 1;

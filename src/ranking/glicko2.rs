@@ -294,7 +294,11 @@ pub fn sorted_ranking(ratings: &HashMap<String, Rating>) -> Vec<(String, Rating)
         .iter()
         .map(|(k, v)| (k.clone(), v.clone()))
         .collect();
-    ranked.sort_by(|a, b| b.1.mu.partial_cmp(&a.1.mu).unwrap_or(std::cmp::Ordering::Equal));
+    ranked.sort_by(|a, b| {
+        b.1.mu
+            .partial_cmp(&a.1.mu)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     ranked
 }
 

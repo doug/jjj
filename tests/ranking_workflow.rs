@@ -1,7 +1,9 @@
-use jjj::ranking::glicko2::{compute_ratings, Comparison, WeightedComparison};
-use jjj::ranking::store::{append_comparison, load_comparisons, load_attributed_comparisons, sanitize_user};
-use jjj::ranking::matchups::suggest_matchups;
 use chrono::Utc;
+use jjj::ranking::glicko2::{compute_ratings, Comparison, WeightedComparison};
+use jjj::ranking::matchups::suggest_matchups;
+use jjj::ranking::store::{
+    append_comparison, load_attributed_comparisons, load_comparisons, sanitize_user,
+};
 use tempfile::TempDir;
 
 #[test]
@@ -11,18 +13,30 @@ fn test_full_ranking_workflow() {
 
     // 1. Record comparisons from two users
     for (w, l) in &[("P-1", "P-2"), ("P-1", "P-3"), ("P-2", "P-3")] {
-        append_comparison(dir.path(), milestone_id, "Alice <alice@test.com>", &Comparison {
-            winner: w.to_string(),
-            loser: l.to_string(),
-            ts: Utc::now(),
-        }).unwrap();
+        append_comparison(
+            dir.path(),
+            milestone_id,
+            "Alice <alice@test.com>",
+            &Comparison {
+                winner: w.to_string(),
+                loser: l.to_string(),
+                ts: Utc::now(),
+            },
+        )
+        .unwrap();
     }
 
-    append_comparison(dir.path(), milestone_id, "Bob <bob@test.com>", &Comparison {
-        winner: "P-3".into(),
-        loser: "P-1".into(),
-        ts: Utc::now(),
-    }).unwrap();
+    append_comparison(
+        dir.path(),
+        milestone_id,
+        "Bob <bob@test.com>",
+        &Comparison {
+            winner: "P-3".into(),
+            loser: "P-1".into(),
+            ts: Utc::now(),
+        },
+    )
+    .unwrap();
 
     // 2. Load and verify
     let all = load_comparisons(dir.path(), milestone_id).unwrap();
@@ -57,7 +71,10 @@ fn test_full_ranking_workflow() {
 
     // Bob only compared P-3 vs P-1, so P-2 should appear in suggestions
     let has_p2 = matchups.iter().any(|(a, b)| a == "P-2" || b == "P-2");
-    assert!(has_p2, "Should suggest matchups involving the least-compared item");
+    assert!(
+        has_p2,
+        "Should suggest matchups involving the least-compared item"
+    );
 }
 
 #[test]
