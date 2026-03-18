@@ -226,13 +226,27 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                 ),
             };
 
+            // Check if this item is selected
+            let is_selected = app.ui.selected_ids.contains(item.node.id());
+
             let style = if dim {
                 Style::default().fg(Color::DarkGray)
             } else {
                 Style::default().fg(color)
             };
 
-            ListItem::new(Line::from(Span::styled(label, style)))
+            // Add bold modifier for selected items
+            let style = if is_selected {
+                style.add_modifier(Modifier::BOLD)
+            } else {
+                style
+            };
+
+            // Prefix: selected marker
+            let prefix = if is_selected { "* " } else { "  " };
+            let full_label = format!("{}{}", prefix, label);
+
+            ListItem::new(Line::from(Span::styled(full_label, style)))
         })
         .collect();
 
