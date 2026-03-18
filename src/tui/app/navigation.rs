@@ -342,6 +342,13 @@ impl App {
     pub fn context_hints(&self) -> String {
         use super::super::tree::TreeNode;
 
+        if !self.ui.selected_ids.is_empty() {
+            return format!(
+                "{} selected: [s]olve [d]ecline [A]ssign [m]ove [x]delete [Esc]clear",
+                self.ui.selected_ids.len()
+            );
+        }
+
         if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
             match &item.node {
                 TreeNode::ProjectRoot { .. } => "[n]ew milestone".to_string(),

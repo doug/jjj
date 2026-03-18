@@ -481,8 +481,15 @@ fn draw_help_overlay(f: &mut Frame, app: &App) {
         Line::from("    /       Search/filter tree"),
         Line::from("    f       Toggle filter (full/actions)"),
         Line::from("    j/k     Scroll detail"),
-        Line::from("    Space/b Page detail down/up"),
         Line::from("    R       Toggle related"),
+        Line::from(""),
+        Line::from(Span::styled(
+            "  Selection",
+            Style::default().add_modifier(Modifier::BOLD),
+        )),
+        Line::from("    Space   Toggle select + move down"),
+        Line::from("    Ctrl+A  Select all / deselect all"),
+        Line::from("    Esc     Clear selection"),
         Line::from(""),
     ];
 
