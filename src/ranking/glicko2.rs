@@ -157,6 +157,9 @@ fn new_volatility(sigma: f64, phi: f64, v: f64, delta: f64) -> f64 {
         let mut k = 1.0_f64;
         while f(a - k * TAU) < 0.0 {
             k += 1.0;
+            if k > 100.0 {
+                break;
+            }
         }
         a - k * TAU
     };
@@ -166,6 +169,9 @@ fn new_volatility(sigma: f64, phi: f64, v: f64, delta: f64) -> f64 {
     let mut f_b = f(b_val);
 
     while (b_val - a_val).abs() > EPSILON {
+        if (f_b - f_a).abs() < 1e-15 {
+            break;
+        }
         let c = a_val + (a_val - b_val) * f_a / (f_b - f_a);
         let f_c = f(c);
 
@@ -205,9 +211,10 @@ fn update_single(
     // Step 3: Compute the estimated variance v and estimated improvement Δ.
     let g_val = g(phi_j2);
     let e_val = expected(mu2, mu_j2, phi_j2);
+    let e_clamped = e_val.clamp(1e-10, 1.0 - 1e-10);
 
     // Apply weight: scale the "number of games" effectively.
-    let v = 1.0 / (weight * g_val * g_val * e_val * (1.0 - e_val));
+    let v = 1.0 / (weight * g_val * g_val * e_clamped * (1.0 - e_clamped));
     let delta = v * weight * g_val * (score - e_val);
 
     // Step 4-5: Update volatility.
@@ -233,6 +240,8 @@ fn update_single(
 ///
 /// `weight` scales the comparison's impact (1.0 = normal, 2.0 = double).
 pub fn update_ratings(winner: &mut Rating, loser: &mut Rating, weight: f64) {
+    debug_assert!(weight > 0.0, "weight must be positive, got {}", weight);
+
     // Snapshot current values so each update uses pre-update opponent values.
     let w_mu = winner.mu;
     let w_phi = winner.phi;
