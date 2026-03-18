@@ -977,4 +977,275 @@ impl App {
         self.refresh_data()?;
         Ok(())
     }
+
+    /// Enter ranking mode: find a milestone, suggest matchups, switch to Ranking input mode.
+    pub(super) fn start_ranking(&mut self) -> Result<()> {
+        use super::super::tree::TreeNode;
+        use crate::ranking::glicko2;
+        use crate::ranking::matchups::suggest_matchups;
+        use crate::ranking::store as ranking_store;
+
+        // Find the milestone for the selected problem, or the first active milestone
+        let milestone_id = self
+            .cache
+            .tree_items
+            .get(self.ui.tree_index)
+            .and_then(|item| match &item.node {
+                TreeNode::Problem { id, .. } => {
+                    self.data
+                        .problems
+                        .iter()
+                        .find(|p| p.id == *id)
+                        .and_then(|p| p.milestone_id.clone())
+                }
+                TreeNode::Milestone { id, .. } => Some(id.clone()),
+                _ => None,
+            })
+            .or_else(|| {
+                // Fall back to first active milestone
+                self.data
+                    .milestones
+                    .iter()
+                    .find(|m| {
+                        matches!(
+                            m.status,
+                            crate::models::MilestoneStatus::Active
+                                | crate::models::MilestoneStatus::Planning
+                        )
+                    })
+                    .map(|m| m.id.clone())
+            });
+
+        let milestone_id = match milestone_id {
+            Some(id) => id,
+            None => {
+                self.show_flash("No milestone found for ranking");
+                return Ok(());
+            }
+        };
+
+        // Get open problems in this milestone
+        let open_problems: Vec<&crate::models::Problem> = self
+            .data
+            .problems
+            .iter()
+            .filter(|p| {
+                p.milestone_id.as_deref() == Some(&milestone_id)
+                    && p.is_open()
+            })
+            .collect();
+
+        if open_problems.len() < 2 {
+            self.show_flash("Need at least 2 open problems to rank");
+            return Ok(());
+        }
+
+        // Load existing ratings
+        let base = self.store.meta_path();
+        let attributed =
+            ranking_store::load_attributed_comparisons(base, &milestone_id).unwrap_or_default();
+        let weighted: Vec<glicko2::WeightedComparison> = attributed
+            .iter()
+            .map(|(c, _)| glicko2::WeightedComparison {
+                winner: c.winner.clone(),
+                loser: c.loser.clone(),
+                weight: 1.0,
+            })
+            .collect();
+
+        let mut ratings = glicko2::compute_ratings(&weighted);
+        // Ensure all open problems have ratings
+        for p in &open_problems {
+            ratings
+                .entry(p.id.clone())
+                .or_default();
+        }
+
+        // Build recent pairs for exclusion
+        let recent_pairs: Vec<(String, String)> = attributed
+            .iter()
+            .map(|(c, _)| (c.winner.clone(), c.loser.clone()))
+            .collect();
+
+        let matchups = suggest_matchups(&ratings, &recent_pairs, 5);
+
+        if matchups.is_empty() {
+            self.show_flash("All pairs already compared");
+            return Ok(());
+        }
+
+        // Enter ranking mode
+        self.ui.input_mode = super::InputMode::Ranking {
+            milestone_id,
+            matchups: matchups.clone(),
+            current: 0,
+            completed: 0,
+        };
+
+        // Show the first matchup in the detail pane
+        self.update_ranking_detail(&matchups, 0);
+
+        self.show_flash("Ranking: A or B? (s=skip, q=quit)");
+        Ok(())
+    }
+
+    /// Handle key presses when in Ranking mode.
+    pub(super) fn handle_ranking_key(&mut self, key: crossterm::event::KeyCode) -> Result<()> {
+        use crate::ranking::glicko2::Comparison;
+        use crate::ranking::store as ranking_store;
+        use crossterm::event::KeyCode;
+
+        // Extract ranking state (clone to release borrow)
+        let (milestone_id, matchups, current, completed) = match &self.ui.input_mode {
+            super::InputMode::Ranking {
+                milestone_id,
+                matchups,
+                current,
+                completed,
+            } => (
+                milestone_id.clone(),
+                matchups.clone(),
+                *current,
+                *completed,
+            ),
+            _ => return Ok(()),
+        };
+
+        match key {
+            KeyCode::Char('a') => {
+                // First item wins
+                if current < matchups.len() {
+                    let (ref id_a, ref id_b) = matchups[current];
+                    let user = self.store.jj_client.user_identity().unwrap_or_default();
+                    let comparison = Comparison {
+                        winner: id_a.clone(),
+                        loser: id_b.clone(),
+                        ts: chrono::Utc::now(),
+                    };
+                    let base = self.store.meta_path().to_path_buf();
+                    let m_id = milestone_id.clone();
+                    let user_clone = user.clone();
+                    self.store
+                        .with_metadata("Record ranking comparison", || {
+                            ranking_store::append_comparison(&base, &m_id, &user_clone, &comparison)
+                        })?;
+
+                    let new_completed = completed + 1;
+                    let new_current = current + 1;
+
+                    if new_current >= matchups.len() {
+                        self.ui.input_mode = super::InputMode::Normal;
+                        self.show_flash(&format!("Recorded {} comparison(s)", new_completed));
+                        self.refresh_data()?;
+                        return Ok(());
+                    }
+
+                    self.ui.input_mode = super::InputMode::Ranking {
+                        milestone_id,
+                        matchups: matchups.clone(),
+                        current: new_current,
+                        completed: new_completed,
+                    };
+                    self.update_ranking_detail(&matchups, new_current);
+                    self.refresh_data()?;
+                }
+            }
+            KeyCode::Char('b') => {
+                // Second item wins
+                if current < matchups.len() {
+                    let (ref id_a, ref id_b) = matchups[current];
+                    let user = self.store.jj_client.user_identity().unwrap_or_default();
+                    let comparison = Comparison {
+                        winner: id_b.clone(),
+                        loser: id_a.clone(),
+                        ts: chrono::Utc::now(),
+                    };
+                    let base = self.store.meta_path().to_path_buf();
+                    let m_id = milestone_id.clone();
+                    let user_clone = user.clone();
+                    self.store
+                        .with_metadata("Record ranking comparison", || {
+                            ranking_store::append_comparison(&base, &m_id, &user_clone, &comparison)
+                        })?;
+
+                    let new_completed = completed + 1;
+                    let new_current = current + 1;
+
+                    if new_current >= matchups.len() {
+                        self.ui.input_mode = super::InputMode::Normal;
+                        self.show_flash(&format!("Recorded {} comparison(s)", new_completed));
+                        self.refresh_data()?;
+                        return Ok(());
+                    }
+
+                    self.ui.input_mode = super::InputMode::Ranking {
+                        milestone_id,
+                        matchups: matchups.clone(),
+                        current: new_current,
+                        completed: new_completed,
+                    };
+                    self.update_ranking_detail(&matchups, new_current);
+                    self.refresh_data()?;
+                }
+            }
+            KeyCode::Char('s') => {
+                // Skip
+                let new_current = current + 1;
+                if new_current >= matchups.len() {
+                    self.ui.input_mode = super::InputMode::Normal;
+                    self.show_flash(&format!("Recorded {} comparison(s)", completed));
+                    if completed > 0 {
+                        self.refresh_data()?;
+                    }
+                    return Ok(());
+                }
+
+                self.ui.input_mode = super::InputMode::Ranking {
+                    milestone_id,
+                    matchups: matchups.clone(),
+                    current: new_current,
+                    completed,
+                };
+                self.update_ranking_detail(&matchups, new_current);
+            }
+            KeyCode::Char('q') | KeyCode::Esc => {
+                self.ui.input_mode = super::InputMode::Normal;
+                self.show_flash(&format!("Recorded {} comparison(s)", completed));
+                if completed > 0 {
+                    self.refresh_data()?;
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    /// Update the detail pane to show the current ranking matchup.
+    fn update_ranking_detail(&mut self, matchups: &[(String, String)], current: usize) {
+        if let Some((ref id_a, ref id_b)) = matchups.get(current) {
+            let title_a = self
+                .data
+                .problems
+                .iter()
+                .find(|p| p.id == **id_a)
+                .map(|p| p.title.clone())
+                .unwrap_or_else(|| id_a.to_string());
+            let title_b = self
+                .data
+                .problems
+                .iter()
+                .find(|p| p.id == **id_b)
+                .map(|p| p.title.clone())
+                .unwrap_or_else(|| id_b.to_string());
+
+            self.cache.selected_detail = super::super::DetailContent::RankingMatchup {
+                title_a,
+                title_b,
+                id_a: id_a.to_string(),
+                id_b: id_b.to_string(),
+                current,
+                total: matchups.len(),
+            };
+        }
+    }
 }

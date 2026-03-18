@@ -6,6 +6,14 @@ pub enum DetailContent {
     Solution(Solution),
     Critique(Critique),
     Milestone(Milestone),
+    RankingMatchup {
+        title_a: String,
+        title_b: String,
+        id_a: String,
+        id_b: String,
+        current: usize,
+        total: usize,
+    },
 }
 
 impl DetailContent {
@@ -99,6 +107,33 @@ impl DetailContent {
                     }
                 }
                 lines
+            }
+            DetailContent::RankingMatchup {
+                title_a,
+                title_b,
+                id_a,
+                id_b,
+                current,
+                total,
+            } => {
+                vec![
+                    format!("Ranking: comparison {} of {}", current + 1, total),
+                    String::new(),
+                    "Which problem is more important?".to_string(),
+                    String::new(),
+                    format!("  [A]  {} ({})", title_a, &id_a[..8.min(id_a.len())]),
+                    String::new(),
+                    "       vs".to_string(),
+                    String::new(),
+                    format!("  [B]  {} ({})", title_b, &id_b[..8.min(id_b.len())]),
+                    String::new(),
+                    String::new(),
+                    "Keys:".to_string(),
+                    "  a  - Pick first problem".to_string(),
+                    "  b  - Pick second problem".to_string(),
+                    "  s  - Skip this pair".to_string(),
+                    "  q / Esc - Quit ranking".to_string(),
+                ]
             }
             DetailContent::Milestone(m) => {
                 let mut lines = vec![

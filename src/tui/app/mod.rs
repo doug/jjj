@@ -2,6 +2,8 @@ use crate::db::search::SimilarityResult;
 use crate::error::Result;
 use crate::jj::JjClient;
 use crate::models::{Critique, Milestone, Problem, Solution};
+use crate::ranking::glicko2::{self, WeightedComparison};
+use crate::ranking::store as ranking_store;
 use crate::storage::MetadataStore;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{backend::Backend, Terminal};
@@ -30,6 +32,12 @@ pub enum InputMode {
         buffer: String,
         action: InputAction,
         cursor_pos: usize,
+    },
+    Ranking {
+        milestone_id: String,
+        matchups: Vec<(String, String)>,
+        current: usize,
+        completed: usize,
     },
 }
 
@@ -95,16 +103,82 @@ pub struct ProjectData {
     pub problems: Vec<Problem>,
     pub solutions: Vec<Solution>,
     pub critiques: Vec<Critique>,
+    /// problem_id -> (rank_position, confidence_label)
+    pub rankings: HashMap<String, (usize, String)>,
 }
 
 impl ProjectData {
     pub fn load(store: &MetadataStore) -> Result<Self> {
+        let milestones = store.list_milestones()?;
+        let problems = store.list_problems()?;
+        let solutions = store.list_solutions()?;
+        let critiques = store.list_critiques()?;
+        let rankings = Self::compute_rankings(store, &milestones);
         Ok(Self {
-            milestones: store.list_milestones()?,
-            problems: store.list_problems()?,
-            solutions: store.list_solutions()?,
-            critiques: store.list_critiques()?,
+            milestones,
+            problems,
+            solutions,
+            critiques,
+            rankings,
         })
+    }
+
+    /// Compute Glicko-2 rankings for all milestones and build a
+    /// problem_id -> (rank_position, confidence) map.
+    fn compute_rankings(
+        store: &MetadataStore,
+        milestones: &[Milestone],
+    ) -> HashMap<String, (usize, String)> {
+        let mut result = HashMap::new();
+        let base = store.meta_path();
+
+        for milestone in milestones {
+            let attributed =
+                match ranking_store::load_attributed_comparisons(base, &milestone.id) {
+                    Ok(a) => a,
+                    Err(_) => continue,
+                };
+            if attributed.is_empty() {
+                continue;
+            }
+
+            // Build weighted comparisons: milestone assignee gets 2x weight
+            let milestone_assignee = milestone
+                .assignee
+                .as_deref()
+                .map(ranking_store::sanitize_user);
+
+            let weighted: Vec<WeightedComparison> = attributed
+                .iter()
+                .map(|(c, user_slug)| {
+                    let weight = if milestone_assignee
+                        .as_deref()
+                        .is_some_and(|owner| owner == user_slug)
+                    {
+                        2.0
+                    } else {
+                        1.0
+                    };
+                    WeightedComparison {
+                        winner: c.winner.clone(),
+                        loser: c.loser.clone(),
+                        weight,
+                    }
+                })
+                .collect();
+
+            let ratings = glicko2::compute_ratings(&weighted);
+            let sorted = glicko2::sorted_ranking(&ratings);
+
+            for (rank_pos, (problem_id, rating)) in sorted.iter().enumerate() {
+                result.insert(
+                    problem_id.clone(),
+                    (rank_pos + 1, rating.confidence().to_string()),
+                );
+            }
+        }
+
+        result
     }
 }
 
@@ -215,12 +289,13 @@ impl App {
         let user = store.jj_client.user_identity().unwrap_or_default();
         let next_actions =
             super::build_next_actions(&data.problems, &data.solutions, &data.critiques, &user);
-        let tree_items = super::build_flat_tree(
+        let tree_items = super::tree::build_flat_tree_ranked(
             &data.milestones,
             &data.problems,
             &data.solutions,
             &data.critiques,
             &ui.expanded_nodes,
+            &data.rankings,
         );
 
         let mut cache = RenderCache {
@@ -303,6 +378,9 @@ impl App {
             InputMode::Input { .. } => {
                 self.handle_input_key(key)?;
             }
+            InputMode::Ranking { .. } => {
+                self.handle_ranking_key(key)?;
+            }
             InputMode::Normal => {
                 self.handle_normal_key(key)?;
             }
@@ -339,6 +417,7 @@ impl App {
             KeyCode::Char('g') => self.goto_change()?,
             KeyCode::Char('E') => self.open_in_editor()?,
             KeyCode::Char('x') => self.start_delete()?,
+            KeyCode::Char('r') => self.start_ranking()?,
             KeyCode::Char('m') => self.start_move_to_milestone()?,
             KeyCode::Char('?') => self.toggle_help(),
             _ => {}

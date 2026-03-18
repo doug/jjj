@@ -42,6 +42,11 @@ pub fn draw(f: &mut Frame, app: &App) {
         } => {
             draw_input_line(f, prompt, buffer, *cursor_pos, vertical_chunks[1]);
         }
+        InputMode::Ranking {
+            current, matchups, ..
+        } => {
+            draw_ranking_footer(f, *current, matchups.len(), vertical_chunks[1]);
+        }
         _ => {
             draw_footer(f, app, vertical_chunks[1]);
         }
@@ -149,10 +154,14 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                     status,
                     priority,
                     assignee,
+                    rank,
                     ..
                 } => {
                     let priority_sym = priority_prefix(priority);
                     let dim = matches!(priority, Priority::Low);
+                    let rank_prefix = rank
+                        .map(|r| format!("#{} ", r))
+                        .unwrap_or_default();
                     let assignee_suffix = assignee
                         .as_deref()
                         .map(|a| {
@@ -164,12 +173,13 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                         .unwrap_or_default();
                     (
                         format!(
-                            "{}{}{}{}{}: {}{}",
+                            "{}{}{}{}{}: {}{}{}",
                             indent,
                             expand_char,
                             priority_sym,
                             action_sym,
                             &id[..8.min(id.len())],
+                            rank_prefix,
                             title,
                             assignee_suffix
                         ),
@@ -436,6 +446,25 @@ fn draw_footer(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     f.render_widget(global, chunks[1]);
 }
 
+fn draw_ranking_footer(f: &mut Frame, current: usize, total: usize, area: ratatui::layout::Rect) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(1), Constraint::Length(1)])
+        .split(area);
+
+    let context = Paragraph::new(format!(
+        "Ranking: pair {} of {} | [a] first | [b] second | [s] skip | [q] quit",
+        current + 1,
+        total
+    ))
+    .style(Style::default().fg(Color::Yellow));
+    f.render_widget(context, chunks[0]);
+
+    let hint = Paragraph::new("Choose which problem is more important")
+        .style(Style::default().fg(Color::DarkGray));
+    f.render_widget(hint, chunks[1]);
+}
+
 fn draw_help_overlay(f: &mut Frame, app: &App) {
     let area = f.area();
 
@@ -516,6 +545,7 @@ fn get_context_actions(app: &App) -> Vec<Line<'static>> {
             lines.push(Line::from("    s       Mark solved"));
             lines.push(Line::from("    d       Dissolve (with reason)"));
             lines.push(Line::from("    o       Reopen"));
+            lines.push(Line::from("    r       Rank problems (A/B)"));
             lines.push(Line::from("    A       Assign to me"));
             lines.push(Line::from("    m       Move to milestone"));
             lines.push(Line::from("    e       Edit title"));
@@ -548,6 +578,7 @@ fn get_context_actions(app: &App) -> Vec<Line<'static>> {
             lines.push(Line::from("    s       Mark completed"));
             lines.push(Line::from("    d       Cancel"));
             lines.push(Line::from("    o       Activate"));
+            lines.push(Line::from("    r       Rank problems (A/B)"));
             lines.push(Line::from("    A       Assign to me"));
             lines.push(Line::from("    e       Edit title"));
             lines.push(Line::from("    E       Edit in $EDITOR"));

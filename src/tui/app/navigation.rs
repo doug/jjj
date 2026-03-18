@@ -261,12 +261,13 @@ impl App {
     }
 
     pub fn rebuild_tree(&mut self) {
-        self.cache.tree_items = super::super::build_flat_tree(
+        self.cache.tree_items = super::super::tree::build_flat_tree_ranked(
             &self.data.milestones,
             &self.data.problems,
             &self.data.solutions,
             &self.data.critiques,
             &self.ui.expanded_nodes,
+            &self.data.rankings,
         );
         // Re-apply search filter if active
         if self.ui.search_filter.is_some() {
@@ -314,7 +315,7 @@ impl App {
                 TreeNode::Backlog { .. } => "[n]ew problem".to_string(),
                 TreeNode::Problem { id, .. } => {
                     format!(
-                        "{}: [n]ew solution [s]olve [d]issolve [o] reopen [A]ssign [m]ove [e]dit [t]ags [E]ditor [x] delete",
+                        "{}: [n]ew solution [s]olve [d]issolve [o] reopen [r]ank [A]ssign [m]ove [e]dit [t]ags [E]ditor [x] delete",
                         id
                     )
                 }
