@@ -323,74 +323,145 @@ impl App {
         use super::super::tree::TreeNode;
         use crate::models::{MilestoneStatus, ProblemStatus};
 
-        // Extract action info from the selected tree item (clone to release borrow)
-        enum DeclineAction {
-            DismissCritique(String),
-            WithdrawSolution(String),
-            DissolveProblem(String),
-            CancelMilestone(String),
-            None,
+        let targets = self.action_targets();
+        if targets.is_empty() {
+            return Ok(());
         }
 
-        let action = if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
-            match &item.node {
-                TreeNode::Critique { id, .. } => DeclineAction::DismissCritique(id.clone()),
-                TreeNode::Solution { id, .. } => DeclineAction::WithdrawSolution(id.clone()),
-                TreeNode::Problem { id, status, .. } => {
-                    if matches!(status, ProblemStatus::Open | ProblemStatus::InProgress) {
-                        DeclineAction::DissolveProblem(id.clone())
-                    } else {
-                        DeclineAction::None
-                    }
+        // Single item without multi-select: use original behavior (dissolve reason prompt for problems)
+        if self.ui.selected_ids.is_empty() && targets.len() == 1 {
+            let (ref id, ref entity_type) = targets[0];
+            match entity_type {
+                EntityType::Critique => {
+                    self.dismiss_critique(id)?;
+                    return Ok(());
                 }
-                TreeNode::Milestone { id, status, .. } => {
-                    if matches!(status, MilestoneStatus::Planning | MilestoneStatus::Active) {
-                        DeclineAction::CancelMilestone(id.clone())
-                    } else {
-                        DeclineAction::None
-                    }
+                EntityType::Solution => {
+                    self.withdraw_solution(id)?;
+                    return Ok(());
                 }
-                _ => DeclineAction::None,
-            }
-        } else {
-            DeclineAction::None
-        };
-
-        match action {
-            DeclineAction::DismissCritique(id) => {
-                self.dismiss_critique(&id)?;
-            }
-            DeclineAction::WithdrawSolution(id) => {
-                self.withdraw_solution(&id)?;
-            }
-            DeclineAction::DissolveProblem(id) => {
-                self.ui.input_mode = super::InputMode::Input {
-                    prompt: "Dissolve reason: ".to_string(),
-                    buffer: String::new(),
-                    action: super::InputAction::DissolveP { problem_id: id },
-                    cursor_pos: 0,
-                };
-            }
-            DeclineAction::CancelMilestone(id) => {
-                let id_clone = id.clone();
-                match self
-                    .store
-                    .with_metadata(&format!("Cancel milestone {}", id), || {
-                        let mut milestone = self.store.load_milestone(&id_clone)?;
-                        milestone.set_status(MilestoneStatus::Cancelled);
-                        self.store.save_milestone(&milestone)
-                    }) {
-                    Ok(_) => {
-                        self.show_flash(&format!("{} cancelled", id_clone));
-                        self.refresh_data()?;
+                EntityType::Problem => {
+                    if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
+                        if let TreeNode::Problem { status, .. } = &item.node {
+                            if matches!(status, ProblemStatus::Open | ProblemStatus::InProgress) {
+                                self.ui.input_mode = super::InputMode::Input {
+                                    prompt: "Dissolve reason: ".to_string(),
+                                    buffer: String::new(),
+                                    action: super::InputAction::DissolveP {
+                                        problem_id: id.clone(),
+                                    },
+                                    cursor_pos: 0,
+                                };
+                            }
+                        }
                     }
-                    Err(e) => {
-                        self.show_flash(&format!("Error: {}", e));
+                    return Ok(());
+                }
+                EntityType::Milestone => {
+                    if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
+                        if let TreeNode::Milestone { status, .. } = &item.node {
+                            if matches!(status, MilestoneStatus::Planning | MilestoneStatus::Active)
+                            {
+                                let id_clone = id.clone();
+                                match self.store.with_metadata(
+                                    &format!("Cancel milestone {}", id),
+                                    || {
+                                        let mut milestone =
+                                            self.store.load_milestone(&id_clone)?;
+                                        milestone.set_status(MilestoneStatus::Cancelled);
+                                        self.store.save_milestone(&milestone)
+                                    },
+                                ) {
+                                    Ok(_) => {
+                                        self.show_flash(&format!(
+                                            "{} cancelled",
+                                            &id[..8.min(id.len())]
+                                        ));
+                                        self.refresh_data()?;
+                                    }
+                                    Err(e) => self.show_flash(&format!("Error: {}", e)),
+                                }
+                            }
+                        }
                     }
+                    return Ok(());
                 }
             }
-            DeclineAction::None => {}
         }
+
+        // Batch mode
+        let mut dismissed = 0usize;
+        let mut withdrawn = 0usize;
+        let mut dissolved = 0usize;
+        let mut cancelled = 0usize;
+
+        self.store.with_metadata(
+            &format!("Batch decline {} items", targets.len()),
+            || {
+                for (id, entity_type) in &targets {
+                    match entity_type {
+                        EntityType::Critique => {
+                            if let Ok(mut critique) = self.store.load_critique(id) {
+                                critique.dismiss();
+                                if self.store.save_critique(&critique).is_ok() {
+                                    dismissed += 1;
+                                }
+                            }
+                        }
+                        EntityType::Solution => {
+                            if let Ok(mut solution) = self.store.load_solution(id) {
+                                solution.withdraw();
+                                if self.store.save_solution(&solution).is_ok() {
+                                    withdrawn += 1;
+                                }
+                            }
+                        }
+                        EntityType::Problem => {
+                            if let Ok(mut problem) = self.store.load_problem(id) {
+                                if matches!(
+                                    problem.status,
+                                    ProblemStatus::Open | ProblemStatus::InProgress
+                                ) {
+                                    problem.dissolve("Batch dissolved".to_string());
+                                    if self.store.save_problem(&problem).is_ok() {
+                                        dissolved += 1;
+                                    }
+                                }
+                            }
+                        }
+                        EntityType::Milestone => {
+                            if let Ok(mut milestone) = self.store.load_milestone(id) {
+                                milestone.set_status(MilestoneStatus::Cancelled);
+                                if self.store.save_milestone(&milestone).is_ok() {
+                                    cancelled += 1;
+                                }
+                            }
+                        }
+                    }
+                }
+                Ok(())
+            },
+        )?;
+
+        let mut parts = Vec::new();
+        if dismissed > 0 {
+            parts.push(format!("{} dismissed", dismissed));
+        }
+        if withdrawn > 0 {
+            parts.push(format!("{} withdrawn", withdrawn));
+        }
+        if dissolved > 0 {
+            parts.push(format!("{} dissolved", dissolved));
+        }
+        if cancelled > 0 {
+            parts.push(format!("{} cancelled", cancelled));
+        }
+        if !parts.is_empty() {
+            self.show_flash(&parts.join(", "));
+        }
+
+        self.ui.selected_ids.clear();
+        self.refresh_data()?;
         Ok(())
     }
 
