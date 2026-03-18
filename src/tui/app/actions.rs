@@ -762,61 +762,48 @@ impl App {
             .get_current_user()
             .unwrap_or_else(|_| "unknown".to_string());
 
-        if let Some((id, entity_type)) = self.get_selected_entity() {
-            let id_clone = id.clone();
-            let user_clone = user.clone();
-            match entity_type {
-                EntityType::Problem => {
-                    match self.store.with_metadata(
-                        &format!("Assign problem {} to {}", id, user),
-                        || {
-                            let mut problem = self.store.load_problem(&id)?;
+        let targets = self.action_targets();
+        if targets.is_empty() {
+            return Ok(());
+        }
+
+        let mut assigned = 0usize;
+
+        self.store.with_metadata(
+            &format!("Batch assign {} items to {}", targets.len(), user),
+            || {
+                for (id, entity_type) in &targets {
+                    let result: crate::error::Result<()> = match entity_type {
+                        EntityType::Problem => {
+                            let mut problem = self.store.load_problem(id)?;
                             problem.assignee = Some(user.clone());
                             self.store.save_problem(&problem)
-                        },
-                    ) {
-                        Ok(_) => {
-                            self.show_flash(&format!("{} assigned to {}", id_clone, user_clone));
-                            self.refresh_data()?;
                         }
-                        Err(e) => self.show_flash(&format!("Error: {}", e)),
-                    }
-                }
-                EntityType::Solution => {
-                    match self.store.with_metadata(
-                        &format!("Assign solution {} to {}", id, user),
-                        || {
-                            let mut solution = self.store.load_solution(&id)?;
+                        EntityType::Solution => {
+                            let mut solution = self.store.load_solution(id)?;
                             solution.assignee = Some(user.clone());
                             self.store.save_solution(&solution)
-                        },
-                    ) {
-                        Ok(_) => {
-                            self.show_flash(&format!("{} assigned to {}", id_clone, user_clone));
-                            self.refresh_data()?;
                         }
-                        Err(e) => self.show_flash(&format!("Error: {}", e)),
-                    }
-                }
-                EntityType::Milestone => {
-                    match self.store.with_metadata(
-                        &format!("Assign milestone {} to {}", id, user),
-                        || {
-                            let mut milestone = self.store.load_milestone(&id)?;
+                        EntityType::Milestone => {
+                            let mut milestone = self.store.load_milestone(id)?;
                             milestone.assignee = Some(user.clone());
                             self.store.save_milestone(&milestone)
-                        },
-                    ) {
-                        Ok(_) => {
-                            self.show_flash(&format!("{} assigned to {}", id_clone, user_clone));
-                            self.refresh_data()?;
                         }
-                        Err(e) => self.show_flash(&format!("Error: {}", e)),
+                        EntityType::Critique => continue,
+                    };
+                    if result.is_ok() {
+                        assigned += 1;
                     }
                 }
-                EntityType::Critique => {}
-            }
-        }
+                Ok(())
+            },
+        )?;
+
+        // Extract short name for flash
+        let name = user.split('<').next().unwrap_or(&user).trim();
+        self.show_flash(&format!("{} assigned to {}", assigned, name));
+        self.ui.selected_ids.clear();
+        self.refresh_data()?;
         Ok(())
     }
 
