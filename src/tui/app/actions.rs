@@ -677,6 +677,8 @@ impl App {
     }
 
     pub(super) fn refresh_data(&mut self) -> Result<()> {
+        use std::collections::HashSet;
+
         use super::ProjectData;
         self.data = ProjectData::load(&self.store)?;
         self.ui.related_cache.clear();
@@ -686,6 +688,14 @@ impl App {
         if self.ui.tree_index > max_index {
             self.ui.tree_index = max_index;
         }
+        // Prune selected_ids that no longer exist in the tree
+        let valid_ids: HashSet<String> = self
+            .cache
+            .tree_items
+            .iter()
+            .map(|item| item.node.id().to_string())
+            .collect();
+        self.ui.selected_ids.retain(|id| valid_ids.contains(id));
         Ok(())
     }
 
