@@ -90,6 +90,12 @@ impl TreeNode {
     pub fn can_expand(&self) -> bool {
         !matches!(self, TreeNode::Critique { .. })
     }
+
+    /// Whether this node type can be multi-selected.
+    /// ProjectRoot and Backlog are structural nodes, not selectable.
+    pub fn is_selectable(&self) -> bool {
+        !matches!(self, TreeNode::ProjectRoot { .. } | TreeNode::Backlog { .. })
+    }
 }
 
 #[derive(Debug, Clone)]

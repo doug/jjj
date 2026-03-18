@@ -130,6 +130,8 @@ pub struct UiState {
     pub related_selected: usize,
     pub input_mode: InputMode,
     pub filter_actions_only: bool,
+    /// IDs of multi-selected entities (UUID7, globally unique across types).
+    pub selected_ids: HashSet<String>,
     /// Text search filter for the tree (set via '/' key)
     pub search_filter: Option<String>,
     /// Pending debounce request: `(entity_type, entity_id, requested_at)`.
@@ -167,6 +169,7 @@ impl UiState {
             related_selected: 0,
             input_mode: InputMode::Normal,
             filter_actions_only: false,
+            selected_ids: HashSet::new(),
             search_filter: None,
             related_pending_load: None,
             related_cache: HashMap::new(),
