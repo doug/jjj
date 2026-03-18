@@ -397,47 +397,68 @@ impl App {
     pub(super) fn handle_action_s(&mut self) -> Result<()> {
         use crate::models::{MilestoneStatus, ProblemStatus};
 
-        if let Some((id, entity_type)) = self.get_selected_entity() {
-            match entity_type {
-                EntityType::Problem => {
-                    let id_clone = id.clone();
-                    match self
-                        .store
-                        .with_metadata(&format!("Solve problem {}", id), || {
-                            let mut problem = self.store.load_problem(&id)?;
-                            problem.set_status(ProblemStatus::Solved);
-                            self.store.save_problem(&problem)
-                        }) {
-                        Ok(_) => {
-                            self.show_flash(&format!("{} solved", id_clone));
-                            self.refresh_data()?;
-                        }
-                        Err(e) => {
-                            self.show_flash(&format!("Error: {}", e));
-                        }
-                    }
-                }
-                EntityType::Milestone => {
-                    let id_clone = id.clone();
-                    match self
-                        .store
-                        .with_metadata(&format!("Complete milestone {}", id), || {
-                            let mut milestone = self.store.load_milestone(&id)?;
-                            milestone.set_status(MilestoneStatus::Completed);
-                            self.store.save_milestone(&milestone)
-                        }) {
-                        Ok(_) => {
-                            self.show_flash(&format!("{} completed", id_clone));
-                            self.refresh_data()?;
-                        }
-                        Err(e) => {
-                            self.show_flash(&format!("Error: {}", e));
-                        }
-                    }
-                }
-                _ => {}
-            }
+        let targets = self.action_targets();
+        if targets.is_empty() {
+            return Ok(());
         }
+
+        let mut solved = 0usize;
+        let mut completed = 0usize;
+        let mut errors = Vec::new();
+
+        self.store.with_metadata(
+            &format!("Batch solve/complete {} items", targets.len()),
+            || {
+                for (id, entity_type) in &targets {
+                    match entity_type {
+                        EntityType::Problem => {
+                            match (|| -> crate::error::Result<()> {
+                                let mut problem = self.store.load_problem(id)?;
+                                problem.set_status(ProblemStatus::Solved);
+                                self.store.save_problem(&problem)
+                            })() {
+                                Ok(_) => solved += 1,
+                                Err(e) => {
+                                    errors.push(format!("{}: {}", &id[..8.min(id.len())], e))
+                                }
+                            }
+                        }
+                        EntityType::Milestone => {
+                            match (|| -> crate::error::Result<()> {
+                                let mut milestone = self.store.load_milestone(id)?;
+                                milestone.set_status(MilestoneStatus::Completed);
+                                self.store.save_milestone(&milestone)
+                            })() {
+                                Ok(_) => completed += 1,
+                                Err(e) => {
+                                    errors.push(format!("{}: {}", &id[..8.min(id.len())], e))
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                Ok(())
+            },
+        )?;
+
+        // Build flash message
+        let mut parts = Vec::new();
+        if solved > 0 {
+            parts.push(format!("{} solved", solved));
+        }
+        if completed > 0 {
+            parts.push(format!("{} completed", completed));
+        }
+        if !errors.is_empty() {
+            parts.push(format!("{} errors", errors.len()));
+        }
+        if !parts.is_empty() {
+            self.show_flash(&parts.join(", "));
+        }
+
+        self.ui.selected_ids.clear();
+        self.refresh_data()?;
         Ok(())
     }
 
