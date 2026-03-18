@@ -366,8 +366,7 @@ impl App {
                                 match self.store.with_metadata(
                                     &format!("Cancel milestone {}", id),
                                     || {
-                                        let mut milestone =
-                                            self.store.load_milestone(&id_clone)?;
+                                        let mut milestone = self.store.load_milestone(&id_clone)?;
                                         milestone.set_status(MilestoneStatus::Cancelled);
                                         self.store.save_milestone(&milestone)
                                     },
@@ -395,9 +394,8 @@ impl App {
         let mut dissolved = 0usize;
         let mut cancelled = 0usize;
 
-        self.store.with_metadata(
-            &format!("Batch decline {} items", targets.len()),
-            || {
+        self.store
+            .with_metadata(&format!("Batch decline {} items", targets.len()), || {
                 for (id, entity_type) in &targets {
                     match entity_type {
                         EntityType::Critique => {
@@ -440,8 +438,7 @@ impl App {
                     }
                 }
                 Ok(())
-            },
-        )?;
+            })?;
 
         let mut parts = Vec::new();
         if dismissed > 0 {
@@ -489,9 +486,7 @@ impl App {
                                 self.store.save_problem(&problem)
                             })() {
                                 Ok(_) => solved += 1,
-                                Err(e) => {
-                                    errors.push(format!("{}: {}", &id[..8.min(id.len())], e))
-                                }
+                                Err(e) => errors.push(format!("{}: {}", &id[..8.min(id.len())], e)),
                             }
                         }
                         EntityType::Milestone => {
@@ -501,9 +496,7 @@ impl App {
                                 self.store.save_milestone(&milestone)
                             })() {
                                 Ok(_) => completed += 1,
-                                Err(e) => {
-                                    errors.push(format!("{}: {}", &id[..8.min(id.len())], e))
-                                }
+                                Err(e) => errors.push(format!("{}: {}", &id[..8.min(id.len())], e)),
                             }
                         }
                         _ => {}
@@ -971,9 +964,8 @@ impl App {
     pub(super) fn batch_delete(&mut self, entities: &[(String, String)]) -> Result<()> {
         let count = entities.len();
 
-        self.store.with_metadata(
-            &format!("Batch delete {} items", count),
-            || {
+        self.store
+            .with_metadata(&format!("Batch delete {} items", count), || {
                 for (entity_type, entity_id) in entities {
                     match entity_type.as_str() {
                         "critique" => {
@@ -992,8 +984,7 @@ impl App {
                     }
                 }
                 Ok(())
-            },
-        )?;
+            })?;
 
         self.show_flash(&format!("Deleted {} items", count));
         self.ui.selected_ids.clear();

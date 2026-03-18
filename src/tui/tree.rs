@@ -94,7 +94,10 @@ impl TreeNode {
     /// Whether this node type can be multi-selected.
     /// ProjectRoot and Backlog are structural nodes, not selectable.
     pub fn is_selectable(&self) -> bool {
-        !matches!(self, TreeNode::ProjectRoot { .. } | TreeNode::Backlog { .. })
+        !matches!(
+            self,
+            TreeNode::ProjectRoot { .. } | TreeNode::Backlog { .. }
+        )
     }
 }
 

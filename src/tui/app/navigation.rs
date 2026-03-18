@@ -185,10 +185,6 @@ impl App {
         self.ui.detail_scroll = self.ui.detail_scroll.saturating_sub(1);
     }
 
-    pub(super) fn page_detail_down(&mut self) {
-        self.ui.detail_scroll = self.ui.detail_scroll.saturating_add(10);
-    }
-
     pub(super) fn page_detail_up(&mut self) {
         self.ui.detail_scroll = self.ui.detail_scroll.saturating_sub(10);
     }
