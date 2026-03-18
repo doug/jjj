@@ -1041,6 +1041,37 @@ impl App {
     pub(super) fn start_move_to_milestone(&mut self) -> Result<()> {
         use super::super::tree::TreeNode;
 
+        if !self.ui.selected_ids.is_empty() {
+            // Collect selected problem IDs
+            let problem_ids: Vec<String> = self
+                .cache
+                .tree_items
+                .iter()
+                .filter(|item| self.ui.selected_ids.contains(item.node.id()))
+                .filter_map(|item| match &item.node {
+                    TreeNode::Problem { id, .. } => Some(id.clone()),
+                    _ => None,
+                })
+                .collect();
+
+            if problem_ids.is_empty() {
+                self.show_flash("No problems selected");
+                return Ok(());
+            }
+
+            self.ui.input_mode = InputMode::Input {
+                prompt: format!(
+                    "Move {} problems to milestone [→ backlog]: ",
+                    problem_ids.len()
+                ),
+                buffer: String::new(),
+                action: InputAction::MoveProblemsToMilestone { problem_ids },
+                cursor_pos: 0,
+            };
+            return Ok(());
+        }
+
+        // Single move (existing logic)
         if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
             if let TreeNode::Problem { id, .. } = &item.node {
                 self.ui.input_mode = InputMode::Input {
@@ -1053,6 +1084,70 @@ impl App {
                 };
             }
         }
+        Ok(())
+    }
+
+    pub(super) fn batch_move_to_milestone(
+        &mut self,
+        problem_ids: &[String],
+        input: &str,
+    ) -> Result<()> {
+        let input = input.trim();
+
+        let target_milestone = if input.is_empty() {
+            None
+        } else {
+            let input_lower = input.to_lowercase();
+            self.data
+                .milestones
+                .iter()
+                .find(|m| m.title.to_lowercase().contains(&input_lower))
+        };
+
+        if !input.is_empty() && target_milestone.is_none() {
+            self.show_flash("No matching milestone found");
+            return Ok(());
+        }
+
+        let target_id = target_milestone.map(|m| m.id.clone());
+        let dest = target_milestone
+            .map(|m| m.title.clone())
+            .unwrap_or_else(|| "backlog".to_string());
+
+        self.store.with_metadata(
+            &format!("Batch move {} problems to {}", problem_ids.len(), dest),
+            || {
+                for problem_id in problem_ids {
+                    let old_milestone_id = self
+                        .store
+                        .load_problem(problem_id)
+                        .ok()
+                        .and_then(|p| p.milestone_id.clone());
+
+                    let mut problem = self.store.load_problem(problem_id)?;
+                    problem.milestone_id = target_id.clone();
+                    self.store.save_problem(&problem)?;
+
+                    if let Some(ref old_id) = old_milestone_id {
+                        if let Ok(mut old_milestone) = self.store.load_milestone(old_id) {
+                            old_milestone.remove_problem(problem_id);
+                            self.store.save_milestone(&old_milestone)?;
+                        }
+                    }
+
+                    if let Some(ref new_id) = target_id {
+                        let mut new_milestone = self.store.load_milestone(new_id)?;
+                        new_milestone.add_problem(problem_id);
+                        self.store.save_milestone(&new_milestone)?;
+                    }
+                }
+                Ok(())
+            },
+        )?;
+
+        self.show_flash(&format!("Moved {} to {}", problem_ids.len(), dest));
+        self.ui.selected_ids.clear();
+        self.refresh_data()?;
         Ok(())
     }
 

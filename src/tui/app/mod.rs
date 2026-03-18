@@ -72,6 +72,9 @@ pub enum InputAction {
     BatchConfirmDelete {
         entities: Vec<(String, String)>, // Vec<(entity_type, entity_id)>
     },
+    MoveProblemsToMilestone {
+        problem_ids: Vec<String>,
+    },
 }
 
 /// A pending request to suspend the TUI and open an entity in an external editor.
@@ -456,7 +459,9 @@ impl App {
                 if !buffer.is_empty()
                     || matches!(
                         action,
-                        InputAction::EditTags { .. } | InputAction::MoveProblemToMilestone { .. }
+                        InputAction::EditTags { .. }
+                            | InputAction::MoveProblemToMilestone { .. }
+                            | InputAction::MoveProblemsToMilestone { .. }
                     )
                 {
                     self.execute_input_action(&action, &buffer)?;
@@ -532,7 +537,11 @@ impl App {
             cursor_pos,
         } = &self.ui.input_mode
         {
-            if !matches!(action, InputAction::MoveProblemToMilestone { .. }) {
+            if !matches!(
+                action,
+                InputAction::MoveProblemToMilestone { .. }
+                    | InputAction::MoveProblemsToMilestone { .. }
+            ) {
                 return;
             }
             let hint = if buffer.is_empty() {
@@ -603,6 +612,9 @@ impl App {
             }
             InputAction::MoveProblemToMilestone { problem_id } => {
                 self.move_problem_to_milestone(problem_id, title)?;
+            }
+            InputAction::MoveProblemsToMilestone { problem_ids } => {
+                self.batch_move_to_milestone(problem_ids, title)?;
             }
             InputAction::BatchConfirmDelete { entities } => {
                 if title.trim() == "y" {
