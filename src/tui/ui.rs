@@ -314,19 +314,21 @@ fn draw_detail(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
         (area, None)
     };
 
-    let lines = app.cache.selected_detail.to_lines();
+    let lines = app.cache.selected_detail.to_styled_lines();
+    let border_color = app.cache.selected_detail.border_color();
+    let title = app.cache.selected_detail.block_title();
+
     let text: Vec<Line> = lines
-        .iter()
+        .into_iter()
         .skip(app.ui.detail_scroll as usize)
-        .map(|s| Line::from(s.as_str()))
         .collect();
 
     let detail = Paragraph::new(text)
         .block(
             Block::default()
-                .title("Detail")
+                .title(title)
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::DarkGray)),
+                .border_style(Style::default().fg(border_color)),
         )
         .wrap(ratatui::widgets::Wrap { trim: false });
 
