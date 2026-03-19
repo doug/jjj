@@ -1069,18 +1069,40 @@ impl App {
         }
 
         // Enter ranking mode
+        let problem_a = Box::new(self.ranking_problem_from_id(&matchups[0].0));
+        let problem_b = Box::new(self.ranking_problem_from_id(&matchups[0].1));
         self.ui.input_mode = super::InputMode::Ranking {
             milestone_id,
-            matchups: matchups.clone(),
+            matchups,
             current: 0,
             completed: 0,
+            problem_a,
+            problem_b,
         };
 
-        // Show the first matchup in the detail pane
-        self.update_ranking_detail(&matchups, 0);
-
-        self.show_flash("Ranking: A or B? (s=skip, q=quit)");
         Ok(())
+    }
+
+    /// Build a RankingProblem from a problem ID by looking it up in loaded data.
+    fn ranking_problem_from_id(&self, id: &str) -> super::RankingProblem {
+        self.data
+            .problems
+            .iter()
+            .find(|p| p.id == id)
+            .map(|p| super::RankingProblem {
+                id: p.id.clone(),
+                title: p.title.clone(),
+                description: p.description.clone(),
+                priority: p.priority.clone(),
+                tags: p.tags.clone(),
+                assignee: p.assignee.clone(),
+                status: p.status.clone(),
+            })
+            .unwrap_or_else(|| super::RankingProblem {
+                id: id.to_string(),
+                title: id.to_string(),
+                ..Default::default()
+            })
     }
 
     /// Handle key presses when in Ranking mode.
@@ -1096,13 +1118,14 @@ impl App {
                 matchups,
                 current,
                 completed,
+                ..
             } => (milestone_id.clone(), matchups.clone(), *current, *completed),
             _ => return Ok(()),
         };
 
         match key {
             KeyCode::Char('a') => {
-                // First item wins
+                // Left problem wins
                 if current < matchups.len() {
                     let (ref id_a, ref id_b) = matchups[current];
                     let user = self.store.jj_client.user_identity().unwrap_or_default();
@@ -1128,18 +1151,22 @@ impl App {
                         return Ok(());
                     }
 
+                    let problem_a =
+                        Box::new(self.ranking_problem_from_id(&matchups[new_current].0));
+                    let problem_b =
+                        Box::new(self.ranking_problem_from_id(&matchups[new_current].1));
                     self.ui.input_mode = super::InputMode::Ranking {
                         milestone_id,
-                        matchups: matchups.clone(),
+                        matchups,
                         current: new_current,
                         completed: new_completed,
+                        problem_a,
+                        problem_b,
                     };
-                    self.update_ranking_detail(&matchups, new_current);
-                    self.refresh_data()?;
                 }
             }
-            KeyCode::Char('b') => {
-                // Second item wins
+            KeyCode::Char('d') => {
+                // Right problem wins
                 if current < matchups.len() {
                     let (ref id_a, ref id_b) = matchups[current];
                     let user = self.store.jj_client.user_identity().unwrap_or_default();
@@ -1165,14 +1192,18 @@ impl App {
                         return Ok(());
                     }
 
+                    let problem_a =
+                        Box::new(self.ranking_problem_from_id(&matchups[new_current].0));
+                    let problem_b =
+                        Box::new(self.ranking_problem_from_id(&matchups[new_current].1));
                     self.ui.input_mode = super::InputMode::Ranking {
                         milestone_id,
-                        matchups: matchups.clone(),
+                        matchups,
                         current: new_current,
                         completed: new_completed,
+                        problem_a,
+                        problem_b,
                     };
-                    self.update_ranking_detail(&matchups, new_current);
-                    self.refresh_data()?;
                 }
             }
             KeyCode::Char('s') => {
@@ -1187,13 +1218,16 @@ impl App {
                     return Ok(());
                 }
 
+                let problem_a = Box::new(self.ranking_problem_from_id(&matchups[new_current].0));
+                let problem_b = Box::new(self.ranking_problem_from_id(&matchups[new_current].1));
                 self.ui.input_mode = super::InputMode::Ranking {
                     milestone_id,
-                    matchups: matchups.clone(),
+                    matchups,
                     current: new_current,
                     completed,
+                    problem_a,
+                    problem_b,
                 };
-                self.update_ranking_detail(&matchups, new_current);
             }
             KeyCode::Char('q') | KeyCode::Esc => {
                 self.ui.input_mode = super::InputMode::Normal;
@@ -1205,34 +1239,5 @@ impl App {
             _ => {}
         }
         Ok(())
-    }
-
-    /// Update the detail pane to show the current ranking matchup.
-    fn update_ranking_detail(&mut self, matchups: &[(String, String)], current: usize) {
-        if let Some((ref id_a, ref id_b)) = matchups.get(current) {
-            let title_a = self
-                .data
-                .problems
-                .iter()
-                .find(|p| p.id == **id_a)
-                .map(|p| p.title.clone())
-                .unwrap_or_else(|| id_a.to_string());
-            let title_b = self
-                .data
-                .problems
-                .iter()
-                .find(|p| p.id == **id_b)
-                .map(|p| p.title.clone())
-                .unwrap_or_else(|| id_b.to_string());
-
-            self.cache.selected_detail = super::super::DetailContent::RankingMatchup {
-                title_a,
-                title_b,
-                id_a: id_a.to_string(),
-                id_b: id_b.to_string(),
-                current,
-                total: matchups.len(),
-            };
-        }
     }
 }

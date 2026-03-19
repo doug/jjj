@@ -9,6 +9,12 @@ use ratatui::{
 };
 
 pub fn draw(f: &mut Frame, app: &App) {
+    // Full-screen ranking overlay takes over the entire terminal
+    if matches!(app.ui.input_mode, InputMode::Ranking { .. }) {
+        draw_ranking_overlay(f, app);
+        return;
+    }
+
     let size = f.area();
 
     // Vertical split: main content and footer
@@ -41,11 +47,6 @@ pub fn draw(f: &mut Frame, app: &App) {
             ..
         } => {
             draw_input_line(f, prompt, buffer, *cursor_pos, vertical_chunks[1]);
-        }
-        InputMode::Ranking {
-            current, matchups, ..
-        } => {
-            draw_ranking_footer(f, *current, matchups.len(), vertical_chunks[1]);
         }
         _ => {
             draw_footer(f, app, vertical_chunks[1]);
@@ -444,23 +445,165 @@ fn draw_footer(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     f.render_widget(global, chunks[1]);
 }
 
-fn draw_ranking_footer(f: &mut Frame, current: usize, total: usize, area: ratatui::layout::Rect) {
+fn draw_ranking_overlay(f: &mut Frame, app: &App) {
+    use super::app::RankingProblem;
+
+    let (current, total, problem_a, problem_b) = match &app.ui.input_mode {
+        InputMode::Ranking {
+            matchups,
+            current,
+            problem_a,
+            problem_b,
+            ..
+        } => (*current, matchups.len(), problem_a, problem_b),
+        _ => return,
+    };
+
+    let area = f.area();
+    f.render_widget(Clear, area);
+
+    // Layout: header (3 lines) | columns (fill) | footer (3 lines)
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(1), Constraint::Length(1)])
+        .constraints([
+            Constraint::Length(3), // Header
+            Constraint::Min(5),    // Columns
+            Constraint::Length(3), // Footer
+        ])
         .split(area);
 
-    let context = Paragraph::new(format!(
-        "Ranking: pair {} of {} | [a] first | [b] second | [s] skip | [q] quit",
-        current + 1,
-        total
-    ))
-    .style(Style::default().fg(Color::Yellow));
-    f.render_widget(context, chunks[0]);
+    // Header
+    let header = Paragraph::new(vec![
+        Line::from(""),
+        Line::from(Span::styled(
+            format!(
+                "  Rank: {} of {}  —  Which problem is more important?",
+                current + 1,
+                total
+            ),
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )),
+        Line::from(""),
+    ])
+    .block(
+        Block::default()
+            .borders(Borders::BOTTOM)
+            .border_style(Style::default().fg(Color::DarkGray)),
+    );
+    f.render_widget(header, chunks[0]);
 
-    let hint = Paragraph::new("Choose which problem is more important")
-        .style(Style::default().fg(Color::DarkGray));
-    f.render_widget(hint, chunks[1]);
+    // Two columns
+    let columns = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .split(chunks[1]);
+
+    fn render_problem_column(f: &mut Frame, problem: &RankingProblem, label: &str, area: Rect) {
+        let mut lines = vec![
+            Line::from(""),
+            Line::from(Span::styled(
+                format!("  {}", problem.title),
+                Style::default().add_modifier(Modifier::BOLD),
+            )),
+            Line::from(""),
+            Line::from(format!("  Priority: {}", problem.priority)),
+        ];
+
+        if !problem.tags.is_empty() {
+            lines.push(Line::from(format!("  Tags: {}", problem.tags.join(", "))));
+        }
+
+        if let Some(ref assignee) = problem.assignee {
+            let name = assignee.split('<').next().unwrap_or(assignee).trim();
+            lines.push(Line::from(format!("  Assignee: {}", name)));
+        } else {
+            lines.push(Line::from("  Assignee: —"));
+        }
+
+        lines.push(Line::from(format!("  Status: {}", problem.status)));
+        lines.push(Line::from(""));
+
+        if !problem.description.is_empty() {
+            lines.push(Line::from(Span::styled(
+                "  Description:",
+                Style::default().add_modifier(Modifier::BOLD),
+            )));
+            for desc_line in problem.description.lines() {
+                lines.push(Line::from(format!("  {}", desc_line)));
+            }
+        }
+
+        let status_color = status_color_problem(&problem.status);
+        let block = Block::default()
+            .title(format!(" {} ", label))
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(status_color));
+
+        let paragraph = Paragraph::new(lines)
+            .block(block)
+            .wrap(ratatui::widgets::Wrap { trim: false });
+        f.render_widget(paragraph, area);
+    }
+
+    render_problem_column(f, problem_a, "A", columns[0]);
+    render_problem_column(f, problem_b, "B", columns[1]);
+
+    // Footer with flash message or key hints
+    let footer_lines =
+        if let Some((msg, _)) = &app.ui.flash_message {
+            vec![
+            Line::from(Span::styled(msg.as_str(), Style::default().fg(Color::Green))),
+            Line::from(Span::styled(
+                "  [a] \u{2190} left wins    [s] skip    [d] right wins \u{2192}    [q/Esc] quit",
+                Style::default().fg(Color::DarkGray),
+            )),
+            Line::from(""),
+        ]
+        } else {
+            vec![
+                Line::from(vec![
+                    Span::styled(
+                        "  [a] ",
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled("\u{2190} left wins", Style::default().fg(Color::White)),
+                    Span::styled(
+                        "    [s] ",
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled("skip", Style::default().fg(Color::White)),
+                    Span::styled(
+                        "    [d] ",
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled("right wins \u{2192}", Style::default().fg(Color::White)),
+                ]),
+                Line::from(vec![
+                    Span::styled(
+                        "  [q/Esc] ",
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled("quit ranking", Style::default().fg(Color::White)),
+                ]),
+                Line::from(""),
+            ]
+        };
+    let footer = Paragraph::new(footer_lines).block(
+        Block::default()
+            .borders(Borders::TOP)
+            .border_style(Style::default().fg(Color::DarkGray)),
+    );
+    f.render_widget(footer, chunks[2]);
 }
 
 fn draw_help_overlay(f: &mut Frame, app: &App) {
@@ -543,7 +686,7 @@ fn get_context_actions(app: &App) -> Vec<Line<'static>> {
             lines.push(Line::from("    s       Mark solved"));
             lines.push(Line::from("    d       Dissolve (with reason)"));
             lines.push(Line::from("    o       Reopen"));
-            lines.push(Line::from("    r       Rank problems (A/B)"));
+            lines.push(Line::from("    r       Rank problems (a/d/s/q)"));
             lines.push(Line::from("    A       Assign to me"));
             lines.push(Line::from("    m       Move to milestone"));
             lines.push(Line::from("    e       Edit title"));
@@ -576,7 +719,7 @@ fn get_context_actions(app: &App) -> Vec<Line<'static>> {
             lines.push(Line::from("    s       Mark completed"));
             lines.push(Line::from("    d       Cancel"));
             lines.push(Line::from("    o       Activate"));
-            lines.push(Line::from("    r       Rank problems (A/B)"));
+            lines.push(Line::from("    r       Rank problems (a/d/s/q)"));
             lines.push(Line::from("    A       Assign to me"));
             lines.push(Line::from("    e       Edit title"));
             lines.push(Line::from("    E       Edit in $EDITOR"));
