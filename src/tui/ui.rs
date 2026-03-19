@@ -53,7 +53,7 @@ pub fn draw(f: &mut Frame, app: &App) {
     }
 }
 
-fn status_color_problem(status: &crate::models::ProblemStatus) -> Color {
+pub(super) fn status_color_problem(status: &crate::models::ProblemStatus) -> Color {
     use crate::models::ProblemStatus;
     match status {
         ProblemStatus::Solved => Color::Green,
@@ -63,7 +63,7 @@ fn status_color_problem(status: &crate::models::ProblemStatus) -> Color {
     }
 }
 
-fn status_color_solution(status: &crate::models::SolutionStatus) -> Color {
+pub(super) fn status_color_solution(status: &crate::models::SolutionStatus) -> Color {
     use crate::models::SolutionStatus;
     match status {
         SolutionStatus::Approved => Color::Green,
@@ -73,7 +73,7 @@ fn status_color_solution(status: &crate::models::SolutionStatus) -> Color {
     }
 }
 
-fn status_color_critique(status: &crate::models::CritiqueStatus) -> Color {
+pub(super) fn status_color_critique(status: &crate::models::CritiqueStatus) -> Color {
     use crate::models::CritiqueStatus;
     match status {
         CritiqueStatus::Addressed | CritiqueStatus::Dismissed => Color::Green,
@@ -82,11 +82,40 @@ fn status_color_critique(status: &crate::models::CritiqueStatus) -> Color {
     }
 }
 
-fn priority_prefix(priority: &Priority) -> &'static str {
+pub(super) fn status_color_milestone(status: &crate::models::MilestoneStatus) -> Color {
+    use crate::models::MilestoneStatus;
+    match status {
+        MilestoneStatus::Completed => Color::Green,
+        MilestoneStatus::Active => Color::Yellow,
+        MilestoneStatus::Cancelled => Color::Red,
+        MilestoneStatus::Planning => Color::Cyan,
+    }
+}
+
+pub(super) fn severity_color(severity: &crate::models::CritiqueSeverity) -> Color {
+    use crate::models::CritiqueSeverity;
+    match severity {
+        CritiqueSeverity::Critical => Color::Red,
+        CritiqueSeverity::High => Color::Yellow,
+        CritiqueSeverity::Medium => Color::White,
+        CritiqueSeverity::Low => Color::DarkGray,
+    }
+}
+
+pub(super) fn priority_prefix(priority: &Priority) -> &'static str {
     match priority {
         Priority::Critical => "🔴 ",
         Priority::High => "🟡 ",
         Priority::Medium | Priority::Low => "",
+    }
+}
+
+pub(super) fn priority_color(priority: &Priority) -> Color {
+    match priority {
+        Priority::Critical => Color::Red,
+        Priority::High => Color::Yellow,
+        Priority::Medium => Color::White,
+        Priority::Low => Color::DarkGray,
     }
 }
 
