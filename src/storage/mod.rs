@@ -33,6 +33,7 @@ pub(super) const PROBLEMS_DIR: &str = "problems";
 pub(super) const SOLUTIONS_DIR: &str = "solutions";
 pub(super) const CRITIQUES_DIR: &str = "critiques";
 pub(super) const MILESTONES_DIR: &str = "milestones";
+pub(super) const RANKINGS_DIR: &str = "rankings";
 
 /// The core storage abstraction for jjj metadata.
 ///
@@ -226,6 +227,7 @@ impl MetadataStore {
         fs::create_dir_all(self.meta_path.join(SOLUTIONS_DIR))?;
         fs::create_dir_all(self.meta_path.join(CRITIQUES_DIR))?;
         fs::create_dir_all(self.meta_path.join(MILESTONES_DIR))?;
+        fs::create_dir_all(self.meta_path.join(RANKINGS_DIR))?;
 
         // Create default config
         let default_config = ProjectConfig::default();
@@ -263,6 +265,7 @@ impl MetadataStore {
             fs::create_dir_all(self.meta_path.join(SOLUTIONS_DIR))?;
             fs::create_dir_all(self.meta_path.join(CRITIQUES_DIR))?;
             fs::create_dir_all(self.meta_path.join(MILESTONES_DIR))?;
+            fs::create_dir_all(self.meta_path.join(RANKINGS_DIR))?;
         }
         Ok(())
     }

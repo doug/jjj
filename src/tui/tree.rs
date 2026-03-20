@@ -26,6 +26,7 @@ pub enum TreeNode {
         priority: Priority,
         assignee: Option<String>,
         expanded: bool,
+        rank: Option<usize>,
     },
     Solution {
         id: String,
@@ -116,6 +117,24 @@ pub fn build_flat_tree(
     critiques: &[Critique],
     expanded_nodes: &std::collections::HashSet<String>,
 ) -> Vec<FlatTreeItem> {
+    build_flat_tree_ranked(
+        milestones,
+        problems,
+        solutions,
+        critiques,
+        expanded_nodes,
+        &std::collections::HashMap::new(),
+    )
+}
+
+pub fn build_flat_tree_ranked(
+    milestones: &[Milestone],
+    problems: &[Problem],
+    solutions: &[Solution],
+    critiques: &[Critique],
+    expanded_nodes: &std::collections::HashSet<String>,
+    rankings: &std::collections::HashMap<String, (usize, String)>,
+) -> Vec<FlatTreeItem> {
     let mut items = Vec::new();
 
     // ProjectRoot is selectable (for creating milestones) but not collapsible
@@ -154,6 +173,7 @@ pub fn build_flat_tree(
                 critiques,
                 expanded_nodes,
                 1,
+                rankings,
             );
         }
     }
@@ -182,6 +202,7 @@ pub fn build_flat_tree(
             critiques,
             expanded_nodes,
             1,
+            rankings,
         );
     }
 
@@ -195,6 +216,7 @@ fn add_problems(
     critiques: &[Critique],
     expanded_nodes: &std::collections::HashSet<String>,
     depth: usize,
+    rankings: &std::collections::HashMap<String, (usize, String)>,
 ) {
     for problem in problems {
         let problem_solutions: Vec<_> = solutions
@@ -203,6 +225,7 @@ fn add_problems(
             .collect();
 
         let expanded = expanded_nodes.contains(&problem.id);
+        let rank = rankings.get(&problem.id).map(|(pos, _)| *pos);
         items.push(FlatTreeItem {
             node: TreeNode::Problem {
                 id: problem.id.clone(),
@@ -211,6 +234,7 @@ fn add_problems(
                 priority: problem.priority.clone(),
                 assignee: problem.assignee.clone(),
                 expanded,
+                rank,
             },
             depth,
             has_children: !problem_solutions.is_empty(),
@@ -854,6 +878,7 @@ mod tests {
             priority: Priority::Medium,
             assignee: None,
             expanded: false,
+            rank: None,
         };
         assert!(!node.is_expanded());
         node.set_expanded(true);
