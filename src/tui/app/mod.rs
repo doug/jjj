@@ -123,8 +123,8 @@ pub struct ProjectData {
     pub problems: Vec<Problem>,
     pub solutions: Vec<Solution>,
     pub critiques: Vec<Critique>,
-    /// problem_id -> (rank_position, confidence_label)
-    pub rankings: HashMap<String, (usize, String)>,
+    /// milestone_id -> problem_id -> (rank_position, confidence_label)
+    pub rankings: HashMap<String, HashMap<String, (usize, String)>>,
 }
 
 impl ProjectData {
@@ -143,12 +143,12 @@ impl ProjectData {
         })
     }
 
-    /// Compute Glicko-2 rankings for all milestones and build a
-    /// problem_id -> (rank_position, confidence) map.
+    /// Compute Glicko-2 rankings per milestone.
+    /// Returns milestone_id -> problem_id -> (rank_position, confidence).
     fn compute_rankings(
         store: &MetadataStore,
         milestones: &[Milestone],
-    ) -> HashMap<String, (usize, String)> {
+    ) -> HashMap<String, HashMap<String, (usize, String)>> {
         let mut result = HashMap::new();
         let base = store.meta_path();
 
@@ -189,12 +189,14 @@ impl ProjectData {
             let ratings = glicko2::compute_ratings(&weighted);
             let sorted = glicko2::sorted_ranking(&ratings);
 
+            let mut milestone_rankings = HashMap::new();
             for (rank_pos, (problem_id, rating)) in sorted.iter().enumerate() {
-                result.insert(
+                milestone_rankings.insert(
                     problem_id.clone(),
                     (rank_pos + 1, rating.confidence().to_string()),
                 );
             }
+            result.insert(milestone.id.clone(), milestone_rankings);
         }
 
         result

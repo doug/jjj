@@ -123,7 +123,7 @@ pub fn build_flat_tree(
         solutions,
         critiques,
         expanded_nodes,
-        &std::collections::HashMap::new(),
+        &std::collections::HashMap::<String, std::collections::HashMap<String, (usize, String)>>::new(),
     )
 }
 
@@ -133,8 +133,9 @@ pub fn build_flat_tree_ranked(
     solutions: &[Solution],
     critiques: &[Critique],
     expanded_nodes: &std::collections::HashSet<String>,
-    rankings: &std::collections::HashMap<String, (usize, String)>,
+    rankings: &std::collections::HashMap<String, std::collections::HashMap<String, (usize, String)>>,
 ) -> Vec<FlatTreeItem> {
+    let empty_rankings = std::collections::HashMap::new();
     let mut items = Vec::new();
 
     // ProjectRoot is selectable (for creating milestones) but not collapsible
@@ -166,6 +167,7 @@ pub fn build_flat_tree_ranked(
         });
 
         if expanded {
+            let milestone_rankings = rankings.get(&milestone.id).unwrap_or(&empty_rankings);
             add_problems(
                 &mut items,
                 &milestone_problems,
@@ -173,12 +175,12 @@ pub fn build_flat_tree_ranked(
                 critiques,
                 expanded_nodes,
                 1,
-                rankings,
+                milestone_rankings,
             );
         }
     }
 
-    // Add backlog (problems without milestone)
+    // Add backlog (problems without milestone) — no rankings for backlog
     let backlog_problems: Vec<_> = problems
         .iter()
         .filter(|p| p.milestone_id.is_none())
@@ -202,7 +204,7 @@ pub fn build_flat_tree_ranked(
             critiques,
             expanded_nodes,
             1,
-            rankings,
+            &empty_rankings,
         );
     }
 
