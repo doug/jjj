@@ -309,8 +309,13 @@ impl App {
         }
 
         let user = store.jj_client.user_identity().unwrap_or_default();
-        let next_actions =
-            super::build_next_actions(&data.problems, &data.solutions, &data.critiques, &user);
+        let next_actions = super::next_actions::build_next_actions_ranked(
+            &data.problems,
+            &data.solutions,
+            &data.critiques,
+            &user,
+            &data.rankings,
+        );
         let tree_items = super::tree::build_flat_tree_ranked(
             &data.milestones,
             &data.problems,

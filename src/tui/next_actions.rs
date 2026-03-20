@@ -1,5 +1,4 @@
 use crate::models::{Critique, CritiqueStatus, Priority, Problem, Solution};
-use crate::ranking::glicko2::Rating;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -183,28 +182,34 @@ pub fn build_next_actions(
 
 /// Build next actions with optional Glicko-2 ranking for sorting.
 ///
-/// When `rankings` is provided, TODO items are sorted by Glicko-2 rating
-/// instead of static priority. Other categories continue priority-based sorting.
-#[allow(dead_code)]
+/// When `rankings` is provided, TODO items are sorted by rank position
+/// (lower = higher priority) instead of static priority. Other categories
+/// continue priority-based sorting. Unranked items sort after ranked ones,
+/// falling back to priority-then-age.
 pub fn build_next_actions_ranked(
     problems: &[Problem],
     solutions: &[Solution],
     critiques: &[Critique],
     user: &str,
-    rankings: Option<&HashMap<String, Rating>>,
+    rankings: &HashMap<String, (usize, String)>,
 ) -> Vec<NextAction> {
     let mut items = build_next_actions(problems, solutions, critiques, user);
 
-    if let Some(ratings) = rankings {
+    if !rankings.is_empty() {
         items.sort_by(|a, b| {
             let cat_cmp = a.category.sort_order().cmp(&b.category.sort_order());
             if cat_cmp != std::cmp::Ordering::Equal {
                 return cat_cmp;
             }
             if a.category == Category::Todo && b.category == Category::Todo {
-                let ra = ratings.get(&a.entity_id).map(|r| r.mu).unwrap_or(1500.0);
-                let rb = ratings.get(&b.entity_id).map(|r| r.mu).unwrap_or(1500.0);
-                return rb.partial_cmp(&ra).unwrap_or(std::cmp::Ordering::Equal);
+                let ra = rankings.get(&a.entity_id).map(|(pos, _)| *pos);
+                let rb = rankings.get(&b.entity_id).map(|(pos, _)| *pos);
+                match (ra, rb) {
+                    (Some(a_pos), Some(b_pos)) => return a_pos.cmp(&b_pos),
+                    (Some(_), None) => return std::cmp::Ordering::Less,
+                    (None, Some(_)) => return std::cmp::Ordering::Greater,
+                    (None, None) => {} // fall through to priority
+                }
             }
             b.priority.cmp(&a.priority)
         });
@@ -557,44 +562,23 @@ mod tests {
 
     #[test]
     fn test_todo_sorting_with_rankings() {
-        use crate::ranking::glicko2::Rating;
         use std::collections::HashMap;
 
         let problems = vec![
-            make_problem("P-1", "Low-rated problem"),
-            make_problem("P-2", "High-rated problem"),
-            make_problem("P-3", "Mid-rated problem"),
+            make_problem("P-1", "Low-ranked problem"),
+            make_problem("P-2", "Top-ranked problem"),
+            make_problem("P-3", "Mid-ranked problem"),
         ];
 
         let mut rankings = HashMap::new();
-        rankings.insert(
-            "P-1".to_string(),
-            Rating {
-                mu: 1400.0,
-                phi: 50.0,
-                sigma: 0.06,
-            },
-        );
-        rankings.insert(
-            "P-2".to_string(),
-            Rating {
-                mu: 1700.0,
-                phi: 50.0,
-                sigma: 0.06,
-            },
-        );
-        rankings.insert(
-            "P-3".to_string(),
-            Rating {
-                mu: 1550.0,
-                phi: 50.0,
-                sigma: 0.06,
-            },
-        );
+        rankings.insert("P-1".to_string(), (3, "high".to_string()));
+        rankings.insert("P-2".to_string(), (1, "high".to_string()));
+        rankings.insert("P-3".to_string(), (2, "medium".to_string()));
 
-        let actions = build_next_actions_ranked(&problems, &[], &[], "alice", Some(&rankings));
+        let actions = build_next_actions_ranked(&problems, &[], &[], "alice", &rankings);
 
         assert_eq!(actions.len(), 3);
+        // Sorted by rank position ascending: #1, #2, #3
         assert_eq!(actions[0].entity_id, "P-2");
         assert_eq!(actions[1].entity_id, "P-3");
         assert_eq!(actions[2].entity_id, "P-1");
@@ -607,9 +591,33 @@ mod tests {
             make_problem_with_priority("P-2", "Critical", Priority::Critical),
         ];
 
-        let actions = build_next_actions_ranked(&problems, &[], &[], "alice", None);
+        let empty_rankings = HashMap::new();
+        let actions = build_next_actions_ranked(&problems, &[], &[], "alice", &empty_rankings);
 
         assert_eq!(actions[0].entity_id, "P-2");
         assert_eq!(actions[1].entity_id, "P-1");
+    }
+
+    #[test]
+    fn test_ranked_items_sort_before_unranked() {
+        use std::collections::HashMap;
+
+        let problems = vec![
+            make_problem_with_priority("P-1", "Unranked critical", Priority::Critical),
+            make_problem("P-2", "Ranked #2"),
+            make_problem("P-3", "Ranked #1"),
+        ];
+
+        let mut rankings = HashMap::new();
+        rankings.insert("P-2".to_string(), (2, "high".to_string()));
+        rankings.insert("P-3".to_string(), (1, "high".to_string()));
+
+        let actions = build_next_actions_ranked(&problems, &[], &[], "alice", &rankings);
+
+        assert_eq!(actions.len(), 3);
+        // Ranked items first (by position), then unranked (by priority)
+        assert_eq!(actions[0].entity_id, "P-3"); // rank #1
+        assert_eq!(actions[1].entity_id, "P-2"); // rank #2
+        assert_eq!(actions[2].entity_id, "P-1"); // unranked, falls back to priority
     }
 }
