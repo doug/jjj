@@ -37,6 +37,7 @@ impl MetadataStore {
             parent_id: frontmatter.parent_id,
             status: frontmatter.status,
             priority: frontmatter.priority,
+            confidence: frontmatter.confidence,
             solution_ids: frontmatter.solution_ids,
             child_ids: frontmatter.child_ids,
             milestone_id: frontmatter.milestone_id,

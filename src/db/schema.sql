@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS problems (
     title TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'open',
     priority TEXT NOT NULL DEFAULT 'medium',
+    confidence TEXT NOT NULL DEFAULT 'unknown',
     parent_id TEXT,
     milestone_id TEXT,
     assignee TEXT,

@@ -100,6 +100,17 @@ pub fn all_migrations() -> Vec<Migration> {
                 Ok(())
             },
         },
+        Migration {
+            version: 8,
+            description: "Add confidence column to problems",
+            requires_rebuild: false,
+            up: |conn| {
+                conn.execute_batch(
+                    "ALTER TABLE problems ADD COLUMN confidence TEXT NOT NULL DEFAULT 'unknown';",
+                )?;
+                Ok(())
+            },
+        },
     ]
 }
 

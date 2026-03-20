@@ -30,7 +30,7 @@ pub(crate) fn parse_editor_content(
 
     // Fields where inline comments should be stripped (enum/date fields only).
     // Freeform fields like title and tags are left as-is to preserve # in text.
-    const COMMENT_FIELDS: &[&str] = &["status", "priority", "severity", "target_date"];
+    const COMMENT_FIELDS: &[&str] = &["status", "priority", "confidence", "severity", "target_date"];
 
     // Parse all frontmatter fields into a map
     let mut fields = std::collections::HashMap::new();
@@ -163,10 +163,11 @@ impl App {
                     format!("tags: {}\n", problem.tags.join(", "))
                 };
                 Ok(format!(
-                    "---\ntitle: {}\nstatus: {} # open, in_progress, solved, dissolved\npriority: {} # critical, high, medium, low\n{}---\n\n## Description\n\n{}\n",
+                    "---\ntitle: {}\nstatus: {} # open, in_progress, solved, dissolved\npriority: {} # critical, high, medium, low\nconfidence: {} # unknown, red, amber, green\n{}---\n\n## Description\n\n{}\n",
                     problem.title,
                     problem.status,
                     problem.priority,
+                    problem.confidence,
                     tags_line,
                     if problem.description.is_empty() {
                         ""
@@ -306,6 +307,10 @@ impl App {
                     .fields
                     .get("priority")
                     .and_then(|s| s.parse::<crate::models::Priority>().ok());
+                let confidence = parsed
+                    .fields
+                    .get("confidence")
+                    .and_then(|s| s.parse::<crate::models::Confidence>().ok());
                 let status = parsed
                     .fields
                     .get("status")
@@ -318,6 +323,9 @@ impl App {
                         problem.tags = parsed.tags.clone();
                         if let Some(p) = priority {
                             problem.priority = p;
+                        }
+                        if let Some(c) = confidence {
+                            problem.confidence = c;
                         }
                         if let Some(s) = status {
                             problem.set_status(s);
