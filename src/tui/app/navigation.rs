@@ -304,6 +304,10 @@ impl App {
             &self.data.critiques,
             &self.ui.expanded_nodes,
         );
+        super::super::annotate_tree_with_actions(
+            &mut self.cache.tree_items,
+            &self.cache.next_actions,
+        );
         // Re-apply search filter if active
         if self.ui.search_filter.is_some() {
             self.apply_search_filter_to_tree();

@@ -598,18 +598,21 @@ impl App {
     }
 
     fn approve_solution(&mut self, solution_id: &str) -> Result<()> {
-        // Block if there are open critiques
-        let open_critiques = self
+        // Block if there are open or valid critiques
+        let blocking_critiques = self
             .store
             .list_critiques()
             .unwrap_or_default()
             .into_iter()
-            .filter(|c| c.solution_id == solution_id && c.status == CritiqueStatus::Open)
+            .filter(|c| {
+                c.solution_id == solution_id
+                    && matches!(c.status, CritiqueStatus::Open | CritiqueStatus::Valid)
+            })
             .count();
-        if open_critiques > 0 {
+        if blocking_critiques > 0 {
             self.show_flash(&format!(
-                "Blocked: {} open critique(s) must be resolved first",
-                open_critiques
+                "Blocked: {} unresolved critique(s) must be addressed first",
+                blocking_critiques
             ));
             return Ok(());
         }

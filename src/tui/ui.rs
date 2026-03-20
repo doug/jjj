@@ -110,41 +110,39 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
         "Project Tree"
     };
 
+    let cursor_id = app
+        .cache
+        .tree_items
+        .get(app.ui.tree_index)
+        .map(|i| i.node.id().to_string());
+
     let items: Vec<ListItem> = display_items
         .iter()
         .map(|item| {
+            let is_selected = app.ui.selected_ids.contains(item.node.id());
+            let is_cursor = cursor_id.as_deref() == Some(item.node.id());
             let indent = "  ".repeat(item.depth);
-            let expand_char = if item.has_children {
-                if item.node.is_expanded() {
-                    "▼ "
-                } else {
-                    "▶ "
-                }
-            } else {
-                "  " // Changed from "○ " to align better
-            };
 
             // Action symbol (if any)
             let action_sym = item.action_symbol.as_deref().unwrap_or("");
 
             let (label, color, dim) = match &item.node {
                 TreeNode::ProjectRoot { .. } => (
-                    format!("{}{}Project", indent, expand_char),
+                    format!("{}Root", indent),
                     Color::White,
                     false,
                 ),
                 TreeNode::Milestone { title, .. } => (
-                    format!("{}{}{}", indent, expand_char, title),
+                    format!("{}{}", indent, title),
                     Color::Magenta,
                     false,
                 ),
                 TreeNode::Backlog { .. } => (
-                    format!("{}{}Backlog", indent, expand_char),
+                    format!("{}Backlog", indent),
                     Color::DarkGray,
                     false,
                 ),
                 TreeNode::Problem {
-                    id,
                     title,
                     status,
                     priority,
@@ -164,12 +162,10 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                         .unwrap_or_default();
                     (
                         format!(
-                            "{}{}{}{}{}: {}{}",
+                            "{}{}{}{}{}",
                             indent,
-                            expand_char,
                             priority_sym,
                             action_sym,
-                            &id[..8.min(id.len())],
                             title,
                             assignee_suffix
                         ),
@@ -178,7 +174,6 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                     )
                 }
                 TreeNode::Solution {
-                    id,
                     title,
                     status,
                     assignee,
@@ -194,11 +189,9 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                         .unwrap_or_default();
                     (
                         format!(
-                            "{}{}{}{}: {}{}",
+                            "{}{}{}{}",
                             indent,
-                            expand_char,
                             action_sym,
-                            &id[..8.min(id.len())],
                             title,
                             assignee_suffix
                         ),
@@ -207,17 +200,15 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                     )
                 }
                 TreeNode::Critique {
-                    id,
                     title,
                     status,
                     severity,
+                    ..
                 } => (
                     format!(
-                        "{}{}{}{}: {} [{}]",
+                        "{}{}{} [{}]",
                         indent,
-                        expand_char,
                         action_sym,
-                        &id[..8.min(id.len())],
                         title,
                         severity
                     ),
@@ -225,9 +216,6 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                     false,
                 ),
             };
-
-            // Check if this item is selected
-            let is_selected = app.ui.selected_ids.contains(item.node.id());
 
             let style = if dim {
                 Style::default().fg(Color::DarkGray)
@@ -242,11 +230,17 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                 style
             };
 
-            // Prefix: selected marker
-            let prefix = if is_selected { "* " } else { "  " };
-            let full_label = format!("{}{}", prefix, label);
-
-            ListItem::new(Line::from(Span::styled(full_label, style)))
+            // Gutter: cursor gets "> ", selected gets "> " (persistent), else "  "
+            let gutter = if is_cursor || is_selected { "> " } else { "  " };
+            let gutter_style = if is_cursor {
+                Style::default().fg(Color::White).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::Cyan)
+            };
+            ListItem::new(Line::from(vec![
+                Span::styled(gutter, gutter_style),
+                Span::styled(label, style),
+            ]))
         })
         .collect();
 
@@ -257,8 +251,7 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                 .borders(Borders::ALL)
                 .border_style(border_style),
         )
-        .highlight_style(Style::default().add_modifier(Modifier::REVERSED))
-        .highlight_symbol("> ");
+        .highlight_style(Style::default().add_modifier(Modifier::REVERSED));
 
     // Find selection in display items by matching ID
     let selected_id = app
