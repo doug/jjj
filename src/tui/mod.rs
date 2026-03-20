@@ -1,6 +1,5 @@
 mod app;
 mod detail;
-mod markdown;
 mod next_actions;
 mod tree;
 mod ui;

@@ -40,6 +40,7 @@ rusqlite = { version = "0.31", features = ["bundled"] }
 
 # UUID generation
 uuid = { version = "1.11", features = ["v7"] }
+pulldown-cmark = { version = "0.13.1", default-features = false, features = ["html"] }
 
 
 [dev-dependencies]

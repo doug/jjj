@@ -1,4 +1,5 @@
 use crate::models::{Critique, Milestone, Problem, Solution};
+use pulldown_cmark::{Event, Options as ParseOptions, Parser, Tag, TagEnd};
 use ratatui::{
     style::{Color, Modifier, Style},
     text::{Line, Span},
@@ -50,8 +51,6 @@ impl DetailContent {
 }
 
 fn problem_lines(p: &Problem) -> Vec<Line<'static>> {
-    use super::markdown::markdown_to_line;
-
     let status_color = super::ui::status_color_problem(&p.status);
     let priority_sym = super::ui::priority_prefix(&p.priority);
 
@@ -66,7 +65,11 @@ fn problem_lines(p: &Problem) -> Vec<Line<'static>> {
         Line::from(""),
     ];
 
-    lines.push(meta_line("Status", &p.status.to_string(), Some(status_color)));
+    lines.push(meta_line(
+        "Status",
+        &p.status.to_string(),
+        Some(status_color),
+    ));
     lines.push(meta_line(
         "Priority",
         &p.priority.to_string(),
@@ -92,17 +95,13 @@ fn problem_lines(p: &Problem) -> Vec<Line<'static>> {
     if !p.description.is_empty() {
         lines.push(Line::from(""));
         lines.push(section_header("Description"));
-        for text_line in p.description.lines() {
-            lines.push(indent_md(markdown_to_line(text_line)));
-        }
+        lines.extend(render_md_body(&p.description));
     }
 
     if !p.context.is_empty() {
         lines.push(Line::from(""));
         lines.push(section_header("Context"));
-        for text_line in p.context.lines() {
-            lines.push(indent_md(markdown_to_line(text_line)));
-        }
+        lines.extend(render_md_body(&p.context));
     }
 
     lines.push(Line::from(""));
@@ -110,8 +109,6 @@ fn problem_lines(p: &Problem) -> Vec<Line<'static>> {
 }
 
 fn solution_lines(s: &Solution) -> Vec<Line<'static>> {
-    use super::markdown::markdown_to_line;
-
     let status_color = super::ui::status_color_solution(&s.status);
 
     let mut lines = vec![
@@ -151,16 +148,12 @@ fn solution_lines(s: &Solution) -> Vec<Line<'static>> {
     if !s.approach.is_empty() {
         lines.push(Line::from(""));
         lines.push(section_header("Approach"));
-        for text_line in s.approach.lines() {
-            lines.push(indent_md(markdown_to_line(text_line)));
-        }
+        lines.extend(render_md_body(&s.approach));
     }
     if !s.tradeoffs.is_empty() {
         lines.push(Line::from(""));
         lines.push(section_header("Tradeoffs"));
-        for text_line in s.tradeoffs.lines() {
-            lines.push(indent_md(markdown_to_line(text_line)));
-        }
+        lines.extend(render_md_body(&s.tradeoffs));
     }
 
     lines.push(Line::from(""));
@@ -168,8 +161,6 @@ fn solution_lines(s: &Solution) -> Vec<Line<'static>> {
 }
 
 fn critique_lines(c: &Critique) -> Vec<Line<'static>> {
-    use super::markdown::markdown_to_line;
-
     let status_color = super::ui::status_color_critique(&c.status);
     let sev_color = super::ui::severity_color(&c.severity);
 
@@ -209,16 +200,12 @@ fn critique_lines(c: &Critique) -> Vec<Line<'static>> {
     if !c.argument.is_empty() {
         lines.push(Line::from(""));
         lines.push(section_header("Argument"));
-        for text_line in c.argument.lines() {
-            lines.push(indent_md(markdown_to_line(text_line)));
-        }
+        lines.extend(render_md_body(&c.argument));
     }
     if !c.evidence.is_empty() {
         lines.push(Line::from(""));
         lines.push(section_header("Evidence"));
-        for text_line in c.evidence.lines() {
-            lines.push(indent_md(markdown_to_line(text_line)));
-        }
+        lines.extend(render_md_body(&c.evidence));
     }
     if !c.replies.is_empty() {
         lines.push(Line::from(""));
@@ -236,9 +223,7 @@ fn critique_lines(c: &Critique) -> Vec<Line<'static>> {
                     Style::default().fg(Color::DarkGray),
                 ),
             ]));
-            for reply_line in reply.body.lines() {
-                lines.push(indent_md(markdown_to_line(reply_line)));
-            }
+            lines.extend(render_md_body(&reply.body));
         }
     }
 
@@ -247,8 +232,6 @@ fn critique_lines(c: &Critique) -> Vec<Line<'static>> {
 }
 
 fn milestone_lines(m: &Milestone) -> Vec<Line<'static>> {
-    use super::markdown::markdown_to_line;
-
     let status_color = super::ui::status_color_milestone(&m.status);
 
     let mut lines = vec![
@@ -284,16 +267,12 @@ fn milestone_lines(m: &Milestone) -> Vec<Line<'static>> {
     if !m.goals.is_empty() {
         lines.push(Line::from(""));
         lines.push(section_header("Goals"));
-        for text_line in m.goals.lines() {
-            lines.push(indent_md(markdown_to_line(text_line)));
-        }
+        lines.extend(render_md_body(&m.goals));
     }
     if !m.success_criteria.is_empty() {
         lines.push(Line::from(""));
         lines.push(section_header("Success Criteria"));
-        for text_line in m.success_criteria.lines() {
-            lines.push(indent_md(markdown_to_line(text_line)));
-        }
+        lines.extend(render_md_body(&m.success_criteria));
     }
 
     lines.push(Line::from(""));
@@ -348,9 +327,155 @@ fn section_header(title: &str) -> Line<'static> {
     ))
 }
 
-/// Prepend indentation to a markdown-parsed line.
-fn indent_md(line: Line<'static>) -> Line<'static> {
-    let mut spans = vec![Span::raw("    ".to_string())];
-    spans.extend(line.spans);
-    Line::from(spans)
+/// Render a markdown body block into indented, styled lines using pulldown-cmark.
+fn render_md_body(text: &str) -> Vec<Line<'static>> {
+    let mut opts = ParseOptions::empty();
+    opts.insert(ParseOptions::ENABLE_STRIKETHROUGH);
+    opts.insert(ParseOptions::ENABLE_TASKLISTS);
+    let parser = Parser::new_ext(text, opts);
+
+    let mut lines: Vec<Line<'static>> = Vec::new();
+    let mut current_spans: Vec<Span<'static>> = Vec::new();
+    let mut style_stack: Vec<Style> = Vec::new();
+    let mut list_depth: usize = 0;
+    let mut list_indices: Vec<Option<u64>> = Vec::new();
+
+    let current_style =
+        |stack: &[Style]| -> Style { stack.iter().fold(Style::default(), |acc, s| acc.patch(*s)) };
+
+    let flush_line = |lines: &mut Vec<Line<'static>>, spans: &mut Vec<Span<'static>>| {
+        let mut result = vec![Span::raw("    ".to_string())];
+        result.append(spans);
+        lines.push(Line::from(result));
+    };
+
+    for event in parser {
+        match event {
+            Event::Start(tag) => match tag {
+                Tag::Paragraph => {}
+                Tag::Heading { .. } => {
+                    style_stack.push(
+                        Style::default()
+                            .fg(Color::White)
+                            .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+                    );
+                }
+                Tag::Emphasis => {
+                    style_stack.push(Style::default().add_modifier(Modifier::ITALIC));
+                }
+                Tag::Strong => {
+                    style_stack.push(Style::default().add_modifier(Modifier::BOLD));
+                }
+                Tag::Strikethrough => {
+                    style_stack.push(Style::default().add_modifier(Modifier::CROSSED_OUT));
+                }
+                Tag::BlockQuote(_) => {
+                    style_stack.push(Style::default().fg(Color::DarkGray));
+                }
+                Tag::CodeBlock(_) => {
+                    style_stack.push(Style::default().fg(Color::Cyan).bg(Color::DarkGray));
+                }
+                Tag::List(start) => {
+                    list_depth += 1;
+                    list_indices.push(start);
+                }
+                Tag::Item => {
+                    if !current_spans.is_empty() {
+                        flush_line(&mut lines, &mut current_spans);
+                    }
+                    let indent = "  ".repeat(list_depth.saturating_sub(1));
+                    if let Some(idx) = list_indices.last_mut() {
+                        match idx {
+                            Some(n) => {
+                                current_spans.push(Span::styled(
+                                    format!("{}{n}. ", indent),
+                                    Style::default().fg(Color::DarkGray),
+                                ));
+                                *n += 1;
+                            }
+                            None => {
+                                current_spans.push(Span::styled(
+                                    format!("{}\u{2022} ", indent),
+                                    Style::default().fg(Color::DarkGray),
+                                ));
+                            }
+                        }
+                    }
+                }
+                Tag::Link { .. } => {
+                    style_stack.push(Style::default().fg(Color::Blue));
+                }
+                _ => {}
+            },
+            Event::End(tag) => match tag {
+                TagEnd::Paragraph | TagEnd::Heading(_) => {
+                    flush_line(&mut lines, &mut current_spans);
+                    if matches!(tag, TagEnd::Heading(_)) {
+                        style_stack.pop();
+                    }
+                }
+                TagEnd::Emphasis | TagEnd::Strong | TagEnd::Strikethrough | TagEnd::Link => {
+                    style_stack.pop();
+                }
+                TagEnd::BlockQuote(_) => {
+                    style_stack.pop();
+                }
+                TagEnd::CodeBlock => {
+                    style_stack.pop();
+                }
+                TagEnd::List(_) => {
+                    list_depth = list_depth.saturating_sub(1);
+                    list_indices.pop();
+                }
+                TagEnd::Item => {
+                    if !current_spans.is_empty() {
+                        flush_line(&mut lines, &mut current_spans);
+                    }
+                }
+                _ => {}
+            },
+            Event::Text(text) => {
+                let style = current_style(&style_stack);
+                current_spans.push(Span::styled(text.to_string(), style));
+            }
+            Event::Code(code) => {
+                current_spans.push(Span::styled(
+                    code.to_string(),
+                    Style::default().fg(Color::Cyan).bg(Color::DarkGray),
+                ));
+            }
+            Event::SoftBreak => {
+                current_spans.push(Span::raw(" ".to_string()));
+            }
+            Event::HardBreak => {
+                flush_line(&mut lines, &mut current_spans);
+            }
+            Event::Rule => {
+                flush_line(&mut lines, &mut current_spans);
+                lines.push(Line::from(Span::styled(
+                    format!("    {}", "\u{2500}".repeat(30)),
+                    Style::default().fg(Color::DarkGray),
+                )));
+            }
+            Event::TaskListMarker(checked) => {
+                let marker = if checked { "\u{2611} " } else { "\u{2610} " };
+                current_spans.push(Span::styled(
+                    marker.to_string(),
+                    Style::default().fg(if checked {
+                        Color::Green
+                    } else {
+                        Color::DarkGray
+                    }),
+                ));
+            }
+            _ => {}
+        }
+    }
+
+    // Flush any remaining spans
+    if !current_spans.is_empty() {
+        flush_line(&mut lines, &mut current_spans);
+    }
+
+    lines
 }
