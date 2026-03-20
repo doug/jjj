@@ -1124,7 +1124,7 @@ impl App {
         };
 
         match key {
-            KeyCode::Char('a') => {
+            KeyCode::Left | KeyCode::Char('a') | KeyCode::Char('1') => {
                 // Left problem wins
                 if current < matchups.len() {
                     let (ref id_a, ref id_b) = matchups[current];
@@ -1165,7 +1165,7 @@ impl App {
                     };
                 }
             }
-            KeyCode::Char('d') => {
+            KeyCode::Right | KeyCode::Char('d') | KeyCode::Char('2') => {
                 // Right problem wins
                 if current < matchups.len() {
                     let (ref id_a, ref id_b) = matchups[current];
@@ -1206,7 +1206,7 @@ impl App {
                     };
                 }
             }
-            KeyCode::Char('s') => {
+            KeyCode::Char(' ') | KeyCode::Char('s') => {
                 // Skip
                 let new_current = current + 1;
                 if new_current >= matchups.len() {

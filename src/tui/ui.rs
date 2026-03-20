@@ -556,7 +556,7 @@ fn draw_ranking_overlay(f: &mut Frame, app: &App) {
             vec![
             Line::from(Span::styled(msg.as_str(), Style::default().fg(Color::Green))),
             Line::from(Span::styled(
-                "  [a] \u{2190} left wins    [s] skip    [d] right wins \u{2192}    [q/Esc] quit",
+                "  [\u{2190}/1] left wins    [Space] skip    [\u{2192}/2] right wins    [q/Esc] quit",
                 Style::default().fg(Color::DarkGray),
             )),
             Line::from(""),
@@ -565,21 +565,21 @@ fn draw_ranking_overlay(f: &mut Frame, app: &App) {
             vec![
                 Line::from(vec![
                     Span::styled(
-                        "  [a] ",
+                        "  [\u{2190}/1] ",
                         Style::default()
                             .fg(Color::Cyan)
                             .add_modifier(Modifier::BOLD),
                     ),
                     Span::styled("\u{2190} left wins", Style::default().fg(Color::White)),
                     Span::styled(
-                        "    [s] ",
+                        "    [Space] ",
                         Style::default()
                             .fg(Color::Cyan)
                             .add_modifier(Modifier::BOLD),
                     ),
                     Span::styled("skip", Style::default().fg(Color::White)),
                     Span::styled(
-                        "    [d] ",
+                        "    [\u{2192}/2] ",
                         Style::default()
                             .fg(Color::Cyan)
                             .add_modifier(Modifier::BOLD),
@@ -686,7 +686,7 @@ fn get_context_actions(app: &App) -> Vec<Line<'static>> {
             lines.push(Line::from("    s       Mark solved"));
             lines.push(Line::from("    d       Dissolve (with reason)"));
             lines.push(Line::from("    o       Reopen"));
-            lines.push(Line::from("    r       Rank problems (a/d/s/q)"));
+            lines.push(Line::from("    r       Rank problems (\u{2190}/\u{2192}/Space/q)"));
             lines.push(Line::from("    A       Assign to me"));
             lines.push(Line::from("    m       Move to milestone"));
             lines.push(Line::from("    e       Edit title"));
@@ -719,7 +719,7 @@ fn get_context_actions(app: &App) -> Vec<Line<'static>> {
             lines.push(Line::from("    s       Mark completed"));
             lines.push(Line::from("    d       Cancel"));
             lines.push(Line::from("    o       Activate"));
-            lines.push(Line::from("    r       Rank problems (a/d/s/q)"));
+            lines.push(Line::from("    r       Rank problems (\u{2190}/\u{2192}/Space/q)"));
             lines.push(Line::from("    A       Assign to me"));
             lines.push(Line::from("    e       Edit title"));
             lines.push(Line::from("    E       Edit in $EDITOR"));
