@@ -323,121 +323,206 @@ impl App {
         use super::super::tree::TreeNode;
         use crate::models::{MilestoneStatus, ProblemStatus};
 
-        // Extract action info from the selected tree item (clone to release borrow)
-        enum DeclineAction {
-            DismissCritique(String),
-            WithdrawSolution(String),
-            DissolveProblem(String),
-            CancelMilestone(String),
-            None,
+        let targets = self.action_targets();
+        if targets.is_empty() {
+            return Ok(());
         }
 
-        let action = if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
-            match &item.node {
-                TreeNode::Critique { id, .. } => DeclineAction::DismissCritique(id.clone()),
-                TreeNode::Solution { id, .. } => DeclineAction::WithdrawSolution(id.clone()),
-                TreeNode::Problem { id, status, .. } => {
-                    if matches!(status, ProblemStatus::Open | ProblemStatus::InProgress) {
-                        DeclineAction::DissolveProblem(id.clone())
-                    } else {
-                        DeclineAction::None
-                    }
+        // Single item without multi-select: use original behavior (dissolve reason prompt for problems)
+        if self.ui.selected_ids.is_empty() && targets.len() == 1 {
+            let (ref id, ref entity_type) = targets[0];
+            match entity_type {
+                EntityType::Critique => {
+                    self.dismiss_critique(id)?;
+                    return Ok(());
                 }
-                TreeNode::Milestone { id, status, .. } => {
-                    if matches!(status, MilestoneStatus::Planning | MilestoneStatus::Active) {
-                        DeclineAction::CancelMilestone(id.clone())
-                    } else {
-                        DeclineAction::None
-                    }
+                EntityType::Solution => {
+                    self.withdraw_solution(id)?;
+                    return Ok(());
                 }
-                _ => DeclineAction::None,
-            }
-        } else {
-            DeclineAction::None
-        };
-
-        match action {
-            DeclineAction::DismissCritique(id) => {
-                self.dismiss_critique(&id)?;
-            }
-            DeclineAction::WithdrawSolution(id) => {
-                self.withdraw_solution(&id)?;
-            }
-            DeclineAction::DissolveProblem(id) => {
-                self.ui.input_mode = super::InputMode::Input {
-                    prompt: "Dissolve reason: ".to_string(),
-                    buffer: String::new(),
-                    action: super::InputAction::DissolveP { problem_id: id },
-                    cursor_pos: 0,
-                };
-            }
-            DeclineAction::CancelMilestone(id) => {
-                let id_clone = id.clone();
-                match self
-                    .store
-                    .with_metadata(&format!("Cancel milestone {}", id), || {
-                        let mut milestone = self.store.load_milestone(&id_clone)?;
-                        milestone.set_status(MilestoneStatus::Cancelled);
-                        self.store.save_milestone(&milestone)
-                    }) {
-                    Ok(_) => {
-                        self.show_flash(&format!("{} cancelled", id_clone));
-                        self.refresh_data()?;
+                EntityType::Problem => {
+                    if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
+                        if let TreeNode::Problem { status, .. } = &item.node {
+                            if matches!(status, ProblemStatus::Open | ProblemStatus::InProgress) {
+                                self.ui.input_mode = super::InputMode::Input {
+                                    prompt: "Dissolve reason: ".to_string(),
+                                    buffer: String::new(),
+                                    action: super::InputAction::DissolveP {
+                                        problem_id: id.clone(),
+                                    },
+                                    cursor_pos: 0,
+                                };
+                            }
+                        }
                     }
-                    Err(e) => {
-                        self.show_flash(&format!("Error: {}", e));
+                    return Ok(());
+                }
+                EntityType::Milestone => {
+                    if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
+                        if let TreeNode::Milestone { status, .. } = &item.node {
+                            if matches!(status, MilestoneStatus::Planning | MilestoneStatus::Active)
+                            {
+                                let id_clone = id.clone();
+                                match self.store.with_metadata(
+                                    &format!("Cancel milestone {}", id),
+                                    || {
+                                        let mut milestone = self.store.load_milestone(&id_clone)?;
+                                        milestone.set_status(MilestoneStatus::Cancelled);
+                                        self.store.save_milestone(&milestone)
+                                    },
+                                ) {
+                                    Ok(_) => {
+                                        self.show_flash(&format!(
+                                            "{} cancelled",
+                                            &id[..8.min(id.len())]
+                                        ));
+                                        self.refresh_data()?;
+                                    }
+                                    Err(e) => self.show_flash(&format!("Error: {}", e)),
+                                }
+                            }
+                        }
                     }
+                    return Ok(());
                 }
             }
-            DeclineAction::None => {}
         }
+
+        // Batch mode
+        let mut dismissed = 0usize;
+        let mut withdrawn = 0usize;
+        let mut dissolved = 0usize;
+        let mut cancelled = 0usize;
+
+        self.store
+            .with_metadata(&format!("Batch decline {} items", targets.len()), || {
+                for (id, entity_type) in &targets {
+                    match entity_type {
+                        EntityType::Critique => {
+                            if let Ok(mut critique) = self.store.load_critique(id) {
+                                critique.dismiss();
+                                if self.store.save_critique(&critique).is_ok() {
+                                    dismissed += 1;
+                                }
+                            }
+                        }
+                        EntityType::Solution => {
+                            if let Ok(mut solution) = self.store.load_solution(id) {
+                                solution.withdraw();
+                                if self.store.save_solution(&solution).is_ok() {
+                                    withdrawn += 1;
+                                }
+                            }
+                        }
+                        EntityType::Problem => {
+                            if let Ok(mut problem) = self.store.load_problem(id) {
+                                if matches!(
+                                    problem.status,
+                                    ProblemStatus::Open | ProblemStatus::InProgress
+                                ) {
+                                    problem.dissolve("Batch dissolved".to_string());
+                                    if self.store.save_problem(&problem).is_ok() {
+                                        dissolved += 1;
+                                    }
+                                }
+                            }
+                        }
+                        EntityType::Milestone => {
+                            if let Ok(mut milestone) = self.store.load_milestone(id) {
+                                milestone.set_status(MilestoneStatus::Cancelled);
+                                if self.store.save_milestone(&milestone).is_ok() {
+                                    cancelled += 1;
+                                }
+                            }
+                        }
+                    }
+                }
+                Ok(())
+            })?;
+
+        let mut parts = Vec::new();
+        if dismissed > 0 {
+            parts.push(format!("{} dismissed", dismissed));
+        }
+        if withdrawn > 0 {
+            parts.push(format!("{} withdrawn", withdrawn));
+        }
+        if dissolved > 0 {
+            parts.push(format!("{} dissolved", dissolved));
+        }
+        if cancelled > 0 {
+            parts.push(format!("{} cancelled", cancelled));
+        }
+        if !parts.is_empty() {
+            self.show_flash(&parts.join(", "));
+        }
+
+        self.ui.selected_ids.clear();
+        self.refresh_data()?;
         Ok(())
     }
 
     pub(super) fn handle_action_s(&mut self) -> Result<()> {
         use crate::models::{MilestoneStatus, ProblemStatus};
 
-        if let Some((id, entity_type)) = self.get_selected_entity() {
-            match entity_type {
-                EntityType::Problem => {
-                    let id_clone = id.clone();
-                    match self
-                        .store
-                        .with_metadata(&format!("Solve problem {}", id), || {
-                            let mut problem = self.store.load_problem(&id)?;
-                            problem.set_status(ProblemStatus::Solved);
-                            self.store.save_problem(&problem)
-                        }) {
-                        Ok(_) => {
-                            self.show_flash(&format!("{} solved", id_clone));
-                            self.refresh_data()?;
-                        }
-                        Err(e) => {
-                            self.show_flash(&format!("Error: {}", e));
-                        }
-                    }
-                }
-                EntityType::Milestone => {
-                    let id_clone = id.clone();
-                    match self
-                        .store
-                        .with_metadata(&format!("Complete milestone {}", id), || {
-                            let mut milestone = self.store.load_milestone(&id)?;
-                            milestone.set_status(MilestoneStatus::Completed);
-                            self.store.save_milestone(&milestone)
-                        }) {
-                        Ok(_) => {
-                            self.show_flash(&format!("{} completed", id_clone));
-                            self.refresh_data()?;
-                        }
-                        Err(e) => {
-                            self.show_flash(&format!("Error: {}", e));
-                        }
-                    }
-                }
-                _ => {}
-            }
+        let targets = self.action_targets();
+        if targets.is_empty() {
+            return Ok(());
         }
+
+        let mut solved = 0usize;
+        let mut completed = 0usize;
+        let mut errors = Vec::new();
+
+        self.store.with_metadata(
+            &format!("Batch solve/complete {} items", targets.len()),
+            || {
+                for (id, entity_type) in &targets {
+                    match entity_type {
+                        EntityType::Problem => {
+                            match (|| -> crate::error::Result<()> {
+                                let mut problem = self.store.load_problem(id)?;
+                                problem.set_status(ProblemStatus::Solved);
+                                self.store.save_problem(&problem)
+                            })() {
+                                Ok(_) => solved += 1,
+                                Err(e) => errors.push(format!("{}: {}", &id[..8.min(id.len())], e)),
+                            }
+                        }
+                        EntityType::Milestone => {
+                            match (|| -> crate::error::Result<()> {
+                                let mut milestone = self.store.load_milestone(id)?;
+                                milestone.set_status(MilestoneStatus::Completed);
+                                self.store.save_milestone(&milestone)
+                            })() {
+                                Ok(_) => completed += 1,
+                                Err(e) => errors.push(format!("{}: {}", &id[..8.min(id.len())], e)),
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                Ok(())
+            },
+        )?;
+
+        // Build flash message
+        let mut parts = Vec::new();
+        if solved > 0 {
+            parts.push(format!("{} solved", solved));
+        }
+        if completed > 0 {
+            parts.push(format!("{} completed", completed));
+        }
+        if !errors.is_empty() {
+            parts.push(format!("{} errors", errors.len()));
+        }
+        if !parts.is_empty() {
+            self.show_flash(&parts.join(", "));
+        }
+
+        self.ui.selected_ids.clear();
+        self.refresh_data()?;
         Ok(())
     }
 
@@ -513,18 +598,21 @@ impl App {
     }
 
     fn approve_solution(&mut self, solution_id: &str) -> Result<()> {
-        // Block if there are open critiques
-        let open_critiques = self
+        // Block if there are open or valid critiques
+        let blocking_critiques = self
             .store
             .list_critiques()
             .unwrap_or_default()
             .into_iter()
-            .filter(|c| c.solution_id == solution_id && c.status == CritiqueStatus::Open)
+            .filter(|c| {
+                c.solution_id == solution_id
+                    && matches!(c.status, CritiqueStatus::Open | CritiqueStatus::Valid)
+            })
             .count();
-        if open_critiques > 0 {
+        if blocking_critiques > 0 {
             self.show_flash(&format!(
-                "Blocked: {} open critique(s) must be resolved first",
-                open_critiques
+                "Blocked: {} unresolved critique(s) must be addressed first",
+                blocking_critiques
             ));
             return Ok(());
         }
@@ -677,6 +765,8 @@ impl App {
     }
 
     pub(super) fn refresh_data(&mut self) -> Result<()> {
+        use std::collections::HashSet;
+
         use super::ProjectData;
         self.data = ProjectData::load(&self.store)?;
         self.ui.related_cache.clear();
@@ -686,6 +776,14 @@ impl App {
         if self.ui.tree_index > max_index {
             self.ui.tree_index = max_index;
         }
+        // Prune selected_ids that no longer exist in the tree
+        let valid_ids: HashSet<String> = self
+            .cache
+            .tree_items
+            .iter()
+            .map(|item| item.node.id().to_string())
+            .collect();
+        self.ui.selected_ids.retain(|id| valid_ids.contains(id));
         Ok(())
     }
 
@@ -731,74 +829,98 @@ impl App {
             .get_current_user()
             .unwrap_or_else(|_| "unknown".to_string());
 
-        if let Some((id, entity_type)) = self.get_selected_entity() {
-            let id_clone = id.clone();
-            let user_clone = user.clone();
-            match entity_type {
-                EntityType::Problem => {
-                    match self.store.with_metadata(
-                        &format!("Assign problem {} to {}", id, user),
-                        || {
-                            let mut problem = self.store.load_problem(&id)?;
+        let targets = self.action_targets();
+        if targets.is_empty() {
+            return Ok(());
+        }
+
+        let mut assigned = 0usize;
+
+        self.store.with_metadata(
+            &format!("Batch assign {} items to {}", targets.len(), user),
+            || {
+                for (id, entity_type) in &targets {
+                    let result: crate::error::Result<()> = match entity_type {
+                        EntityType::Problem => {
+                            let mut problem = self.store.load_problem(id)?;
                             problem.assignee = Some(user.clone());
                             self.store.save_problem(&problem)
-                        },
-                    ) {
-                        Ok(_) => {
-                            self.show_flash(&format!("{} assigned to {}", id_clone, user_clone));
-                            self.refresh_data()?;
                         }
-                        Err(e) => self.show_flash(&format!("Error: {}", e)),
-                    }
-                }
-                EntityType::Solution => {
-                    match self.store.with_metadata(
-                        &format!("Assign solution {} to {}", id, user),
-                        || {
-                            let mut solution = self.store.load_solution(&id)?;
+                        EntityType::Solution => {
+                            let mut solution = self.store.load_solution(id)?;
                             solution.assignee = Some(user.clone());
                             self.store.save_solution(&solution)
-                        },
-                    ) {
-                        Ok(_) => {
-                            self.show_flash(&format!("{} assigned to {}", id_clone, user_clone));
-                            self.refresh_data()?;
                         }
-                        Err(e) => self.show_flash(&format!("Error: {}", e)),
-                    }
-                }
-                EntityType::Milestone => {
-                    match self.store.with_metadata(
-                        &format!("Assign milestone {} to {}", id, user),
-                        || {
-                            let mut milestone = self.store.load_milestone(&id)?;
+                        EntityType::Milestone => {
+                            let mut milestone = self.store.load_milestone(id)?;
                             milestone.assignee = Some(user.clone());
                             self.store.save_milestone(&milestone)
-                        },
-                    ) {
-                        Ok(_) => {
-                            self.show_flash(&format!("{} assigned to {}", id_clone, user_clone));
-                            self.refresh_data()?;
                         }
-                        Err(e) => self.show_flash(&format!("Error: {}", e)),
+                        EntityType::Critique => continue,
+                    };
+                    if result.is_ok() {
+                        assigned += 1;
                     }
                 }
-                EntityType::Critique => {}
-            }
-        }
+                Ok(())
+            },
+        )?;
+
+        // Extract short name for flash
+        let name = user.split('<').next().unwrap_or(&user).trim();
+        self.show_flash(&format!("{} assigned to {}", assigned, name));
+        self.ui.selected_ids.clear();
+        self.refresh_data()?;
         Ok(())
     }
 
     pub(super) fn start_delete(&mut self) -> Result<()> {
         use super::super::tree::TreeNode;
 
+        if !self.ui.selected_ids.is_empty() {
+            // Batch delete: collect all selected entities
+            let mut entities = Vec::new();
+            for item in &self.cache.tree_items {
+                if !self.ui.selected_ids.contains(item.node.id()) {
+                    continue;
+                }
+                match &item.node {
+                    TreeNode::Critique { id, .. } => {
+                        entities.push(("critique".to_string(), id.clone()));
+                    }
+                    TreeNode::Solution { id, .. } => {
+                        entities.push(("solution".to_string(), id.clone()));
+                    }
+                    TreeNode::Problem { id, .. } => {
+                        entities.push(("problem".to_string(), id.clone()));
+                    }
+                    TreeNode::Milestone { id, .. } => {
+                        entities.push(("milestone".to_string(), id.clone()));
+                    }
+                    _ => {}
+                }
+            }
+
+            if entities.is_empty() {
+                return Ok(());
+            }
+
+            self.ui.input_mode = InputMode::Input {
+                prompt: format!("Delete {} items? y to confirm: ", entities.len()),
+                buffer: String::new(),
+                action: InputAction::BatchConfirmDelete { entities },
+                cursor_pos: 0,
+            };
+            return Ok(());
+        }
+
+        // Single delete (existing logic)
         if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
             let (entity_type, entity_id, title) = match &item.node {
                 TreeNode::Critique { id, title, .. } => {
                     ("critique".to_string(), id.clone(), title.clone())
                 }
                 TreeNode::Solution { id, title, .. } => {
-                    // Block if has critiques
                     let has_critiques = self.data.critiques.iter().any(|c| c.solution_id == *id);
                     if has_critiques {
                         self.show_flash("Delete critiques first");
@@ -807,7 +929,6 @@ impl App {
                     ("solution".to_string(), id.clone(), title.clone())
                 }
                 TreeNode::Problem { id, title, .. } => {
-                    // Block if has solutions
                     let has_solutions = self.data.solutions.iter().any(|s| s.problem_id == *id);
                     if has_solutions {
                         self.show_flash("Delete solutions first");
@@ -816,7 +937,6 @@ impl App {
                     ("problem".to_string(), id.clone(), title.clone())
                 }
                 TreeNode::Milestone { id, title, .. } => {
-                    // Block if has child problems
                     let has_problems = self
                         .data
                         .problems
@@ -841,6 +961,37 @@ impl App {
                 cursor_pos: 0,
             };
         }
+        Ok(())
+    }
+
+    pub(super) fn batch_delete(&mut self, entities: &[(String, String)]) -> Result<()> {
+        let count = entities.len();
+
+        self.store
+            .with_metadata(&format!("Batch delete {} items", count), || {
+                for (entity_type, entity_id) in entities {
+                    match entity_type.as_str() {
+                        "critique" => {
+                            let _ = self.store.delete_critique(entity_id);
+                        }
+                        "solution" => {
+                            let _ = self.store.delete_solution(entity_id);
+                        }
+                        "problem" => {
+                            let _ = self.store.delete_problem(entity_id);
+                        }
+                        "milestone" => {
+                            let _ = self.store.delete_milestone(entity_id);
+                        }
+                        _ => {}
+                    }
+                }
+                Ok(())
+            })?;
+
+        self.show_flash(&format!("Deleted {} items", count));
+        self.ui.selected_ids.clear();
+        self.refresh_data()?;
         Ok(())
     }
 
@@ -884,6 +1035,37 @@ impl App {
     pub(super) fn start_move_to_milestone(&mut self) -> Result<()> {
         use super::super::tree::TreeNode;
 
+        if !self.ui.selected_ids.is_empty() {
+            // Collect selected problem IDs
+            let problem_ids: Vec<String> = self
+                .cache
+                .tree_items
+                .iter()
+                .filter(|item| self.ui.selected_ids.contains(item.node.id()))
+                .filter_map(|item| match &item.node {
+                    TreeNode::Problem { id, .. } => Some(id.clone()),
+                    _ => None,
+                })
+                .collect();
+
+            if problem_ids.is_empty() {
+                self.show_flash("No problems selected");
+                return Ok(());
+            }
+
+            self.ui.input_mode = InputMode::Input {
+                prompt: format!(
+                    "Move {} problems to milestone [→ backlog]: ",
+                    problem_ids.len()
+                ),
+                buffer: String::new(),
+                action: InputAction::MoveProblemsToMilestone { problem_ids },
+                cursor_pos: 0,
+            };
+            return Ok(());
+        }
+
+        // Single move (existing logic)
         if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
             if let TreeNode::Problem { id, .. } = &item.node {
                 self.ui.input_mode = InputMode::Input {
@@ -896,6 +1078,70 @@ impl App {
                 };
             }
         }
+        Ok(())
+    }
+
+    pub(super) fn batch_move_to_milestone(
+        &mut self,
+        problem_ids: &[String],
+        input: &str,
+    ) -> Result<()> {
+        let input = input.trim();
+
+        let target_milestone = if input.is_empty() {
+            None
+        } else {
+            let input_lower = input.to_lowercase();
+            self.data
+                .milestones
+                .iter()
+                .find(|m| m.title.to_lowercase().contains(&input_lower))
+        };
+
+        if !input.is_empty() && target_milestone.is_none() {
+            self.show_flash("No matching milestone found");
+            return Ok(());
+        }
+
+        let target_id = target_milestone.map(|m| m.id.clone());
+        let dest = target_milestone
+            .map(|m| m.title.clone())
+            .unwrap_or_else(|| "backlog".to_string());
+
+        self.store.with_metadata(
+            &format!("Batch move {} problems to {}", problem_ids.len(), dest),
+            || {
+                for problem_id in problem_ids {
+                    let old_milestone_id = self
+                        .store
+                        .load_problem(problem_id)
+                        .ok()
+                        .and_then(|p| p.milestone_id.clone());
+
+                    let mut problem = self.store.load_problem(problem_id)?;
+                    problem.milestone_id = target_id.clone();
+                    self.store.save_problem(&problem)?;
+
+                    if let Some(ref old_id) = old_milestone_id {
+                        if let Ok(mut old_milestone) = self.store.load_milestone(old_id) {
+                            old_milestone.remove_problem(problem_id);
+                            self.store.save_milestone(&old_milestone)?;
+                        }
+                    }
+
+                    if let Some(ref new_id) = target_id {
+                        let mut new_milestone = self.store.load_milestone(new_id)?;
+                        new_milestone.add_problem(problem_id);
+                        self.store.save_milestone(&new_milestone)?;
+                    }
+                }
+                Ok(())
+            },
+        )?;
+
+        self.show_flash(&format!("Moved {} to {}", problem_ids.len(), dest));
+        self.ui.selected_ids.clear();
+        self.refresh_data()?;
         Ok(())
     }
 

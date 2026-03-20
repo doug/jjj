@@ -3,7 +3,7 @@ use crate::error::Result;
 use crate::jj::JjClient;
 use crate::models::{Critique, Milestone, Problem, Solution};
 use crate::storage::MetadataStore;
-use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{backend::Backend, Terminal};
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
@@ -69,6 +69,12 @@ pub enum InputAction {
     MoveProblemToMilestone {
         problem_id: String,
     },
+    BatchConfirmDelete {
+        entities: Vec<(String, String)>, // Vec<(entity_type, entity_id)>
+    },
+    MoveProblemsToMilestone {
+        problem_ids: Vec<String>,
+    },
 }
 
 /// A pending request to suspend the TUI and open an entity in an external editor.
@@ -130,6 +136,8 @@ pub struct UiState {
     pub related_selected: usize,
     pub input_mode: InputMode,
     pub filter_actions_only: bool,
+    /// IDs of multi-selected entities (UUID7, globally unique across types).
+    pub selected_ids: HashSet<String>,
     /// Text search filter for the tree (set via '/' key)
     pub search_filter: Option<String>,
     /// Pending debounce request: `(entity_type, entity_id, requested_at)`.
@@ -167,6 +175,7 @@ impl UiState {
             related_selected: 0,
             input_mode: InputMode::Normal,
             filter_actions_only: false,
+            selected_ids: HashSet::new(),
             search_filter: None,
             related_pending_load: None,
             related_cache: HashMap::new(),
@@ -274,7 +283,7 @@ impl App {
             if event::poll(Duration::from_millis(100))? {
                 if let Event::Key(key) = event::read()? {
                     if key.kind == KeyEventKind::Press {
-                        self.handle_key(key.code)?;
+                        self.handle_key(key)?;
                     }
                 }
             }
@@ -294,14 +303,14 @@ impl App {
         }
     }
 
-    fn handle_key(&mut self, key: KeyCode) -> Result<()> {
+    fn handle_key(&mut self, key: KeyEvent) -> Result<()> {
         match &self.ui.input_mode {
             InputMode::Help => {
                 // Any key exits help
                 self.ui.input_mode = InputMode::Normal;
             }
             InputMode::Input { .. } => {
-                self.handle_input_key(key)?;
+                self.handle_input_key(key.code)?;
             }
             InputMode::Normal => {
                 self.handle_normal_key(key)?;
@@ -310,8 +319,8 @@ impl App {
         Ok(())
     }
 
-    fn handle_normal_key(&mut self, key: KeyCode) -> Result<()> {
-        match key {
+    fn handle_normal_key(&mut self, key: KeyEvent) -> Result<()> {
+        match key.code {
             KeyCode::Char('q') => self.should_quit = true,
             KeyCode::Tab => self.jump_to_next_action(false),
             KeyCode::BackTab => self.jump_to_next_action(true),
@@ -321,8 +330,11 @@ impl App {
             KeyCode::Right => self.expand_or_child(),
             KeyCode::Char('j') => self.scroll_detail_down(),
             KeyCode::Char('k') => self.scroll_detail_up(),
-            KeyCode::Char(' ') => self.page_detail_down(),
+            KeyCode::Char(' ') => self.toggle_selection(),
             KeyCode::Char('b') => self.page_detail_up(),
+            KeyCode::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.select_all_visible();
+            }
             KeyCode::Char('a') => self.handle_action_a()?,
             KeyCode::Char('d') => self.handle_action_d()?,
             KeyCode::Char('n') => self.start_new_item()?,
@@ -341,6 +353,7 @@ impl App {
             KeyCode::Char('x') => self.start_delete()?,
             KeyCode::Char('m') => self.start_move_to_milestone()?,
             KeyCode::Char('?') => self.toggle_help(),
+            KeyCode::Esc => self.clear_selection(),
             _ => {}
         }
         Ok(())
@@ -446,7 +459,9 @@ impl App {
                 if !buffer.is_empty()
                     || matches!(
                         action,
-                        InputAction::EditTags { .. } | InputAction::MoveProblemToMilestone { .. }
+                        InputAction::EditTags { .. }
+                            | InputAction::MoveProblemToMilestone { .. }
+                            | InputAction::MoveProblemsToMilestone { .. }
                     )
                 {
                     self.execute_input_action(&action, &buffer)?;
@@ -522,7 +537,11 @@ impl App {
             cursor_pos,
         } = &self.ui.input_mode
         {
-            if !matches!(action, InputAction::MoveProblemToMilestone { .. }) {
+            if !matches!(
+                action,
+                InputAction::MoveProblemToMilestone { .. }
+                    | InputAction::MoveProblemsToMilestone { .. }
+            ) {
                 return;
             }
             let hint = if buffer.is_empty() {
@@ -593,6 +612,16 @@ impl App {
             }
             InputAction::MoveProblemToMilestone { problem_id } => {
                 self.move_problem_to_milestone(problem_id, title)?;
+            }
+            InputAction::MoveProblemsToMilestone { problem_ids } => {
+                self.batch_move_to_milestone(problem_ids, title)?;
+            }
+            InputAction::BatchConfirmDelete { entities } => {
+                if title.trim() == "y" {
+                    self.batch_delete(entities)?;
+                } else {
+                    self.show_flash("Delete cancelled");
+                }
             }
             InputAction::Search => {
                 // Search is handled directly in handle_input_key

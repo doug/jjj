@@ -185,12 +185,48 @@ impl App {
         self.ui.detail_scroll = self.ui.detail_scroll.saturating_sub(1);
     }
 
-    pub(super) fn page_detail_down(&mut self) {
-        self.ui.detail_scroll = self.ui.detail_scroll.saturating_add(10);
-    }
-
     pub(super) fn page_detail_up(&mut self) {
         self.ui.detail_scroll = self.ui.detail_scroll.saturating_sub(10);
+    }
+
+    /// Toggle multi-select on the current tree item and advance cursor.
+    pub(super) fn toggle_selection(&mut self) {
+        if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
+            if item.node.is_selectable() {
+                let id = item.node.id().to_string();
+                if !self.ui.selected_ids.remove(&id) {
+                    self.ui.selected_ids.insert(id);
+                }
+            }
+        }
+        // Advance cursor (like file managers)
+        self.navigate_down();
+    }
+
+    /// Select all visible selectable items, or clear if all already selected.
+    pub(super) fn select_all_visible(&mut self) {
+        let visible_ids: Vec<String> = self
+            .cache
+            .tree_items
+            .iter()
+            .filter(|item| item.node.is_selectable())
+            .map(|item| item.node.id().to_string())
+            .collect();
+
+        let all_selected = visible_ids
+            .iter()
+            .all(|id| self.ui.selected_ids.contains(id));
+
+        if all_selected {
+            self.ui.selected_ids.clear();
+        } else {
+            self.ui.selected_ids.extend(visible_ids);
+        }
+    }
+
+    /// Clear multi-selection.
+    pub(super) fn clear_selection(&mut self) {
+        self.ui.selected_ids.clear();
     }
 
     pub(super) fn toggle_related_panel(&mut self) {
@@ -268,6 +304,10 @@ impl App {
             &self.data.critiques,
             &self.ui.expanded_nodes,
         );
+        super::super::annotate_tree_with_actions(
+            &mut self.cache.tree_items,
+            &self.cache.next_actions,
+        );
         // Re-apply search filter if active
         if self.ui.search_filter.is_some() {
             self.apply_search_filter_to_tree();
@@ -301,6 +341,13 @@ impl App {
 
     pub fn context_hints(&self) -> String {
         use super::super::tree::TreeNode;
+
+        if !self.ui.selected_ids.is_empty() {
+            return format!(
+                "{} selected: [s]olve [d]ecline [A]ssign [m]ove [x]delete [Esc]clear",
+                self.ui.selected_ids.len()
+            );
+        }
 
         if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
             match &item.node {
@@ -406,6 +453,39 @@ impl App {
                 )),
                 _ => None,
             })
+    }
+
+    /// Returns entity IDs and types to act on.
+    /// If multi-selection is active, returns selected items.
+    /// Otherwise returns the single cursor item (if selectable).
+    pub(super) fn action_targets(&self) -> Vec<(String, super::super::next_actions::EntityType)> {
+        use super::super::tree::TreeNode;
+
+        if !self.ui.selected_ids.is_empty() {
+            self.cache
+                .tree_items
+                .iter()
+                .filter(|item| self.ui.selected_ids.contains(item.node.id()))
+                .filter_map(|item| match &item.node {
+                    TreeNode::Problem { id, .. } => {
+                        Some((id.clone(), super::super::next_actions::EntityType::Problem))
+                    }
+                    TreeNode::Solution { id, .. } => {
+                        Some((id.clone(), super::super::next_actions::EntityType::Solution))
+                    }
+                    TreeNode::Critique { id, .. } => {
+                        Some((id.clone(), super::super::next_actions::EntityType::Critique))
+                    }
+                    TreeNode::Milestone { id, .. } => Some((
+                        id.clone(),
+                        super::super::next_actions::EntityType::Milestone,
+                    )),
+                    _ => None,
+                })
+                .collect()
+        } else {
+            self.get_selected_entity().into_iter().collect()
+        }
     }
 
     pub(super) fn get_selected_entity_info(&self) -> Option<(String, String)> {
