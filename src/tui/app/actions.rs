@@ -788,11 +788,12 @@ impl App {
     }
 
     fn rebuild_cache(&mut self) {
-        self.cache.next_actions = super::super::build_next_actions(
+        self.cache.next_actions = super::super::next_actions::build_next_actions_ranked(
             &self.data.problems,
             &self.data.solutions,
             &self.data.critiques,
             &self.user,
+            &self.data.rankings,
         );
         self.rebuild_tree();
         // Annotate tree with action symbols

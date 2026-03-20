@@ -180,13 +180,10 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                 TreeNode::Problem {
                     title,
                     status,
-                    priority,
                     assignee,
                     rank,
                     ..
                 } => {
-                    let priority_sym = priority_prefix(priority);
-                    let dim = matches!(priority, Priority::Low);
                     let rank_prefix = rank.map(|r| format!("#{} ", r)).unwrap_or_default();
                     let assignee_suffix = assignee
                         .as_deref()
@@ -199,16 +196,15 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                         .unwrap_or_default();
                     (
                         format!(
-                            "{}{}{}{}{}{}",
+                            "{}{}{}{}{}",
                             indent,
-                            priority_sym,
                             action_sym,
                             rank_prefix,
                             title,
                             assignee_suffix
                         ),
                         status_color_problem(status),
-                        dim,
+                        false,
                     )
                 }
                 TreeNode::Solution {
