@@ -2,7 +2,8 @@ use crate::db::search::SimilarityResult;
 use crate::error::Result;
 use crate::jj::JjClient;
 use crate::models::{Critique, Milestone, Problem, Solution};
-use crate::ranking::glicko2::{self, WeightedComparison};
+use crate::ranking::borda;
+use crate::ranking::ordering;
 use crate::ranking::store as ranking_store;
 use crate::storage::MetadataStore;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
@@ -123,7 +124,7 @@ pub struct ProjectData {
     pub problems: Vec<Problem>,
     pub solutions: Vec<Solution>,
     pub critiques: Vec<Critique>,
-    /// milestone_id -> problem_id -> (rank_position, confidence_label)
+    /// milestone_id -> problem_id -> (rank_position, voter_count_str)
     pub rankings: HashMap<String, HashMap<String, (usize, String)>>,
 }
 
@@ -143,8 +144,8 @@ impl ProjectData {
         })
     }
 
-    /// Compute Glicko-2 rankings per milestone.
-    /// Returns milestone_id -> problem_id -> (rank_position, confidence).
+    /// Compute aggregated rankings per milestone using Borda count + QV.
+    /// Returns milestone_id -> problem_id -> (rank_position, voter_count_str).
     fn compute_rankings(
         store: &MetadataStore,
         milestones: &[Milestone],
@@ -153,47 +154,32 @@ impl ProjectData {
         let base = store.meta_path();
 
         for milestone in milestones {
-            let attributed = match ranking_store::load_attributed_comparisons(base, &milestone.id) {
-                Ok(a) => a,
+            let orderings = match ordering::load_all_orderings(base, &milestone.id) {
+                Ok(o) => o,
                 Err(_) => continue,
             };
-            if attributed.is_empty() {
+            if orderings.is_empty() {
                 continue;
             }
 
-            // Build weighted comparisons: milestone assignee gets 2x weight
-            let milestone_assignee = milestone
+            let owner_slug = milestone
                 .assignee
                 .as_deref()
                 .map(ranking_store::sanitize_user);
 
-            let weighted: Vec<WeightedComparison> = attributed
-                .iter()
-                .map(|(c, user_slug)| {
-                    let weight = if milestone_assignee
-                        .as_deref()
-                        .is_some_and(|owner| owner == user_slug)
-                    {
-                        2.0
-                    } else {
-                        1.0
-                    };
-                    WeightedComparison {
-                        winner: c.winner.clone(),
-                        loser: c.loser.clone(),
-                        weight,
-                    }
-                })
-                .collect();
+            let problem_count = orderings.values().map(|o| o.order.len()).max().unwrap_or(0);
 
-            let ratings = glicko2::compute_ratings(&weighted);
-            let sorted = glicko2::sorted_ranking(&ratings);
+            let aggregated = borda::aggregate_rankings(
+                &orderings,
+                owner_slug.as_deref(),
+                problem_count,
+            );
 
             let mut milestone_rankings = HashMap::new();
-            for (rank_pos, (problem_id, rating)) in sorted.iter().enumerate() {
+            for (problem_id, rank) in &aggregated {
                 milestone_rankings.insert(
                     problem_id.clone(),
-                    (rank_pos + 1, rating.confidence().to_string()),
+                    (rank.position, format!("{}", rank.voter_count)),
                 );
             }
             result.insert(milestone.id.clone(), milestone_rankings);
