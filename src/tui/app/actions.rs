@@ -1266,4 +1266,12 @@ impl App {
         Ok(())
     }
 
+
+    /// Toggle between personal and global ordering view.
+    pub(super) fn toggle_ordering_view(&mut self) {
+        self.ui.show_personal_ordering = !self.ui.show_personal_ordering;
+        self.refresh_data().ok();
+        let view = if self.ui.show_personal_ordering { "Personal" } else { "Global" };
+        self.show_flash(&format!("Showing {} ordering", view));
+    }
 }

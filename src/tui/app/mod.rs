@@ -451,6 +451,7 @@ impl App {
             KeyCode::Char('E') => self.open_in_editor()?,
             KeyCode::Char('x') => self.start_delete()?,
             KeyCode::Char('c') => self.cycle_confidence()?,
+            KeyCode::Char('r') => self.toggle_ordering_view(),
             KeyCode::Char('m') => self.start_move_to_milestone()?,
             KeyCode::Char('b') => self.page_detail_up(),
             KeyCode::Char('?') => self.toggle_help(),
