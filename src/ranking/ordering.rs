@@ -5,9 +5,27 @@ use std::fs;
 use std::path::Path;
 
 use crate::error::Result;
-use crate::ranking::store::sanitize_user;
 
 const RANKINGS_DIR: &str = "rankings";
+
+/// Normalize a user identity string (e.g., "Alice Smith <alice@test.com>") into
+/// a filesystem-safe slug (e.g., "alice-smith").
+pub fn sanitize_user(user: &str) -> String {
+    let name_part = if let Some(idx) = user.find('<') {
+        &user[..idx]
+    } else {
+        user
+    };
+
+    let slug: String = name_part
+        .trim()
+        .to_lowercase()
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '-' })
+        .collect();
+
+    slug.trim_matches('-').to_string()
+}
 
 /// A single user's ordering and vote allocations for a milestone.
 #[derive(Debug, Clone, Serialize, Deserialize)]

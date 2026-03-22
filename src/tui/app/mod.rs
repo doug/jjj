@@ -2,6 +2,8 @@ use crate::db::search::SimilarityResult;
 use crate::error::Result;
 use crate::jj::JjClient;
 use crate::models::{Critique, Milestone, Problem, Solution};
+use crate::ranking::borda;
+use crate::ranking::ordering;
 use crate::storage::MetadataStore;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{backend::Backend, Terminal};
@@ -109,6 +111,8 @@ pub struct ProjectData {
     pub problems: Vec<Problem>,
     pub solutions: Vec<Solution>,
     pub critiques: Vec<Critique>,
+    /// milestone_id -> problem_id -> (rank_position, voter_count_str)
+    pub rankings: HashMap<String, HashMap<String, (usize, String)>>,
 }
 
 impl ProjectData {
@@ -117,12 +121,58 @@ impl ProjectData {
         let problems = store.list_problems()?;
         let solutions = store.list_solutions()?;
         let critiques = store.list_critiques()?;
+        let rankings = Self::compute_rankings(store, &milestones);
         Ok(Self {
             milestones,
             problems,
             solutions,
             critiques,
+            rankings,
         })
+    }
+
+    /// Compute aggregated rankings per milestone using Borda count + QV.
+    /// Returns milestone_id -> problem_id -> (rank_position, voter_count_str).
+    fn compute_rankings(
+        store: &MetadataStore,
+        milestones: &[Milestone],
+    ) -> HashMap<String, HashMap<String, (usize, String)>> {
+        let mut result = HashMap::new();
+        let base = store.meta_path();
+
+        for milestone in milestones {
+            let orderings = match ordering::load_all_orderings(base, &milestone.id) {
+                Ok(o) => o,
+                Err(_) => continue,
+            };
+            if orderings.is_empty() {
+                continue;
+            }
+
+            let owner_slug = milestone
+                .assignee
+                .as_deref()
+                .map(ordering::sanitize_user);
+
+            let problem_count = orderings.values().map(|o| o.order.len()).max().unwrap_or(0);
+
+            let aggregated = borda::aggregate_rankings(
+                &orderings,
+                owner_slug.as_deref(),
+                problem_count,
+            );
+
+            let mut milestone_rankings = HashMap::new();
+            for (problem_id, rank) in &aggregated {
+                milestone_rankings.insert(
+                    problem_id.clone(),
+                    (rank.position, format!("{}", rank.voter_count)),
+                );
+            }
+            result.insert(milestone.id.clone(), milestone_rankings);
+        }
+
+        result
     }
 }
 
