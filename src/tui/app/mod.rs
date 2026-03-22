@@ -325,6 +325,7 @@ impl App {
             &data.rankings,
             &ui.personal_orderings,
             ui.show_personal_ordering,
+            &ui.tier_drill,
         );
 
         let mut cache = RenderCache {
@@ -434,6 +435,12 @@ impl App {
             KeyCode::Down if key.modifiers.contains(KeyModifiers::SHIFT) => {
                 self.move_problem_down()?;
             }
+            KeyCode::Left if key.modifiers.contains(KeyModifiers::SHIFT) => {
+                self.tier_drill_out();
+            }
+            KeyCode::Right if key.modifiers.contains(KeyModifiers::SHIFT) => {
+                self.tier_drill_in()?;
+            }
             KeyCode::Up | KeyCode::Char('k') => self.navigate_up(),
             KeyCode::Down | KeyCode::Char('j') => self.navigate_down(),
             KeyCode::Left | KeyCode::Char('h') => self.collapse_or_parent(),
@@ -464,6 +471,8 @@ impl App {
             KeyCode::Char('m') => self.start_move_to_milestone()?,
             KeyCode::Char('b') => self.page_detail_up(),
             KeyCode::Char('?') => self.toggle_help(),
+            KeyCode::Char('+') | KeyCode::Char('=') => self.add_vote()?,
+            KeyCode::Char('-') => self.remove_vote()?,
             KeyCode::Esc => self.clear_selection(),
             _ => {}
         }
