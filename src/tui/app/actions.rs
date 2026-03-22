@@ -1261,6 +1261,92 @@ impl App {
         self.show_flash(&format!("Showing {} ordering", view));
     }
 
+    /// Drill into the tier (top/mid/bottom third) containing the selected problem.
+    pub(super) fn tier_drill_in(&mut self) -> Result<()> {
+        let (milestone_id, problem_id) = match self.selected_milestone_problem() {
+            Some(x) => x,
+            None => return Ok(()),
+        };
+
+        let effective_order = self.get_effective_ordering(&milestone_id);
+        if effective_order.is_empty() {
+            return Ok(());
+        }
+
+        // Determine current visible range
+        let (start, end) = if let Some(last) = self.ui.tier_drill.last() {
+            if last.0 == milestone_id {
+                (last.1, last.2)
+            } else {
+                self.ui.tier_drill.clear();
+                (0, effective_order.len())
+            }
+        } else {
+            (0, effective_order.len())
+        };
+
+        let range_size = end - start;
+        if range_size <= 3 {
+            self.show_flash("Already at finest granularity");
+            return Ok(());
+        }
+
+        // Find which third the selected problem is in
+        let pos_in_order = effective_order.iter().position(|id| *id == problem_id).unwrap_or(0);
+
+        let third = range_size / 3;
+        let tier_label;
+        let (new_start, new_end) = if pos_in_order < start + third {
+            tier_label = "Top";
+            (start, start + third)
+        } else if pos_in_order < start + 2 * third {
+            tier_label = "Mid";
+            (start + third, start + 2 * third)
+        } else {
+            tier_label = "Bottom";
+            (start + 2 * third, end)
+        };
+
+        self.ui.tier_drill.push((milestone_id, new_start, new_end));
+        self.show_flash(&format!("Drilled into {} tier ({} items)", tier_label, new_end - new_start));
+        self.refresh_data()?;
+        Ok(())
+    }
+
+    /// Zoom out one tier level.
+    pub(super) fn tier_drill_out(&mut self) {
+        if self.ui.tier_drill.pop().is_some() {
+            self.show_flash("Zoomed out");
+            self.refresh_data().ok();
+        }
+    }
+
+    /// Get the effective ordering (personal or global) for a milestone as a Vec of problem IDs.
+    fn get_effective_ordering(&self, milestone_id: &str) -> Vec<String> {
+        if self.ui.show_personal_ordering {
+            self.ui.personal_orderings
+                .get(milestone_id)
+                .map(|o| o.order.clone())
+                .unwrap_or_else(|| {
+                    // Fall back to natural order
+                    self.data.problems
+                        .iter()
+                        .filter(|p| p.milestone_id.as_deref() == Some(milestone_id))
+                        .map(|p| p.id.clone())
+                        .collect()
+                })
+        } else {
+            self.data.rankings
+                .get(milestone_id)
+                .map(|m| {
+                    let mut items: Vec<_> = m.iter().collect();
+                    items.sort_by_key(|(_, (pos, _))| *pos);
+                    items.into_iter().map(|(id, _)| id.clone()).collect()
+                })
+                .unwrap_or_default()
+        }
+    }
+
     /// Get (milestone_id, problem_id) if the selected tree item is a problem under a milestone.
     fn selected_milestone_problem(&self) -> Option<(String, String)> {
         let item = self.cache.tree_items.get(self.ui.tree_index)?;
@@ -1618,6 +1704,100 @@ impl App {
             }
             _ => {}
         }
+        Ok(())
+    }
+
+    /// Add a quadratic vote to the selected problem.
+    pub(super) fn add_vote(&mut self) -> Result<()> {
+        use crate::ranking::{borda, ordering};
+
+        let (milestone_id, problem_id) = match self.selected_milestone_problem() {
+            Some(x) => x,
+            None => return Ok(()),
+        };
+
+        let problem_count = self.data.problems
+            .iter()
+            .filter(|p| p.milestone_id.as_deref() == Some(&milestone_id))
+            .count();
+        let budget = borda::qv_budget(problem_count);
+
+        // Ensure ordering exists
+        if !self.ui.personal_orderings.contains_key(&milestone_id) {
+            let default = self.default_ordering_for_milestone(&milestone_id);
+            self.ui.personal_orderings.insert(milestone_id.clone(), default);
+        }
+
+        let ord = self.ui.personal_orderings.get_mut(&milestone_id).unwrap();
+        let current_votes = *ord.votes.get(&problem_id).unwrap_or(&0);
+        let current_total_cost = borda::total_vote_cost(&ord.votes);
+        let marginal_cost = borda::vote_cost(current_votes + 1) - borda::vote_cost(current_votes);
+
+        if current_total_cost + marginal_cost > budget {
+            self.show_flash(&format!("No budget remaining ({}/{})", current_total_cost, budget));
+            return Ok(());
+        }
+
+        *ord.votes.entry(problem_id.clone()).or_insert(0) += 1;
+        ord.updated_at = chrono::Utc::now();
+
+        ordering::save_user_ordering(
+            self.store.meta_path(),
+            &milestone_id,
+            &self.user,
+            ord,
+        )?;
+
+        let new_votes = *ord.votes.get(&problem_id).unwrap_or(&0);
+        let new_total_cost = borda::total_vote_cost(&ord.votes);
+        self.show_flash(&format!("{}★ (budget {}/{})", new_votes, new_total_cost, budget));
+
+        self.refresh_data()?;
+        Ok(())
+    }
+
+    /// Remove a quadratic vote from the selected problem.
+    pub(super) fn remove_vote(&mut self) -> Result<()> {
+        use crate::ranking::{borda, ordering};
+
+        let (milestone_id, problem_id) = match self.selected_milestone_problem() {
+            Some(x) => x,
+            None => return Ok(()),
+        };
+
+        let ord = match self.ui.personal_orderings.get_mut(&milestone_id) {
+            Some(o) => o,
+            None => return Ok(()),
+        };
+
+        let current_votes = *ord.votes.get(&problem_id).unwrap_or(&0);
+        if current_votes == 0 {
+            return Ok(());
+        }
+
+        if current_votes == 1 {
+            ord.votes.remove(&problem_id);
+        } else {
+            *ord.votes.get_mut(&problem_id).unwrap() -= 1;
+        }
+        ord.updated_at = chrono::Utc::now();
+
+        ordering::save_user_ordering(
+            self.store.meta_path(),
+            &milestone_id,
+            &self.user,
+            ord,
+        )?;
+
+        let problem_count = self.data.problems
+            .iter()
+            .filter(|p| p.milestone_id.as_deref() == Some(&milestone_id))
+            .count();
+        let budget = borda::qv_budget(problem_count);
+        let new_total_cost = borda::total_vote_cost(&ord.votes);
+        self.show_flash(&format!("Vote removed (budget {}/{})", new_total_cost, budget));
+
+        self.refresh_data()?;
         Ok(())
     }
 }

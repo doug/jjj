@@ -337,6 +337,7 @@ impl App {
             &data.rankings,
             &ui.personal_orderings,
             ui.show_personal_ordering,
+            &ui.tier_drill,
         );
 
         let mut cache = RenderCache {
@@ -442,6 +443,12 @@ impl App {
             }
             KeyCode::Up => self.navigate_up(),
             KeyCode::Down => self.navigate_down(),
+            KeyCode::Left if key.modifiers.contains(KeyModifiers::SHIFT) => {
+                self.tier_drill_out();
+            }
+            KeyCode::Right if key.modifiers.contains(KeyModifiers::SHIFT) => {
+                self.tier_drill_in()?;
+            }
             KeyCode::Left => self.collapse_or_parent(),
             KeyCode::Right => self.expand_or_child(),
             KeyCode::Char('j') => self.scroll_detail_down(),
@@ -471,6 +478,8 @@ impl App {
             KeyCode::Char('r') => self.toggle_ordering_view(),
             KeyCode::Char('m') => self.start_move_to_milestone()?,
             KeyCode::Char('?') => self.toggle_help(),
+            KeyCode::Char('+') | KeyCode::Char('=') => self.add_vote()?,
+            KeyCode::Char('-') => self.remove_vote()?,
             KeyCode::Esc => self.clear_selection(),
             _ => {}
         }
