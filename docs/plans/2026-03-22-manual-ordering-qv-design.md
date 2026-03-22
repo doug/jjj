@@ -60,7 +60,7 @@ All operate in Normal input mode within the existing tree view:
 | `Shift+Left` | Zoom back out to parent tier level | While zoomed into a tier |
 | `+` / `=` | Add a quadratic vote to selected problem | On a problem under a milestone |
 | `-` | Remove a quadratic vote from selected problem | On a problem with votes > 0 |
-| `g` | Toggle between personal and global ordering view | Anywhere |
+| `r` | Toggle between personal and global ordering view | Anywhere |
 
 ### Recursive Tier Drilling
 
@@ -112,15 +112,28 @@ Milestone: v1.0  [Global | 3 voters]
 - In global view, show aggregated score
 - Problems not yet in any ordering appear at the bottom as "Unranked"
 
-### Auto-ordering of New Problems
+### Unranked Items
 
-When a new problem is added to a milestone (via `milestone_id` assignment):
-- It is appended to the end of every user's ordering who has an ordering file for that milestone
-- It appears as the last ranked item (lowest priority by default)
+Problems that exist in a milestone but aren't in any user's ordering are "unranked." They appear at the bottom of the milestone's problem list, after all ranked items, sorted by creation date. In both personal and global views, unranked items are visually separated (e.g., dimmed or marked with `?`).
 
-When a problem is removed from a milestone:
-- It is removed from all ordering files for that milestone
+### Problem Lifecycle Events
+
+**New problem added to milestone** (via `milestone_id` assignment):
+- Appended to end of all existing ordering files for that milestone
+- Appears as last ranked item by default
+
+**Problem moved between milestones** (from milestone A to B):
+- Removed from all users' orderings in milestone A
+- Any QV votes allocated to it in A are refunded
+- Appended to end of all existing ordering files in milestone B
+
+**Problem removed from milestone** (milestone_id set to None):
+- Removed from all ordering files for that milestone
 - Vote credits allocated to it are refunded
+
+**Problem deleted**:
+- Removed from all ordering files across all milestones
+- Vote credits refunded
 
 ### Storage Location
 
