@@ -449,6 +449,7 @@ impl App {
             KeyCode::Char('g') => self.goto_change()?,
             KeyCode::Char('E') => self.open_in_editor()?,
             KeyCode::Char('x') => self.start_delete()?,
+            KeyCode::Char('c') => self.cycle_confidence()?,
             KeyCode::Char('r') => self.start_ranking()?,
             KeyCode::Char('m') => self.start_move_to_milestone()?,
             KeyCode::Char('?') => self.toggle_help(),

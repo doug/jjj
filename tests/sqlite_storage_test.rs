@@ -8,7 +8,7 @@
 
 use chrono::Utc;
 use jjj::db::{self, Database};
-use jjj::models::{Priority, Problem, ProblemStatus, Solution, SolutionStatus};
+use jjj::models::{Confidence, Priority, Problem, ProblemStatus, Solution, SolutionStatus};
 
 /// Test a full sync cycle: insert entities, validate, and search.
 #[test]
@@ -21,6 +21,7 @@ fn test_full_sync_cycle() {
         title: "Test problem".to_string(),
         status: ProblemStatus::Open,
         priority: Priority::High,
+        confidence: Confidence::default(),
         parent_id: None,
         milestone_id: None,
         assignee: Some("alice".to_string()),
@@ -173,6 +174,7 @@ fn test_problem_roundtrip() {
         title: "Complex problem".to_string(),
         status: ProblemStatus::InProgress,
         priority: Priority::Critical,
+        confidence: Confidence::default(),
         parent_id: None,
         milestone_id: None,
         assignee: Some("bob".to_string()),

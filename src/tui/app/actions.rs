@@ -299,6 +299,33 @@ impl App {
         Ok(())
     }
 
+    pub(super) fn cycle_confidence(&mut self) -> Result<()> {
+        use super::super::tree::TreeNode;
+
+        if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
+            if let TreeNode::Problem { id, .. } = &item.node {
+                let id = id.clone();
+                match self
+                    .store
+                    .with_metadata(&format!("Cycle confidence on {}", id), || {
+                        let mut problem = self.store.load_problem(&id)?;
+                        problem.confidence = problem.confidence.next();
+                        self.store.save_problem(&problem)?;
+                        Ok(problem.confidence.clone())
+                    }) {
+                    Ok(new_conf) => {
+                        self.show_flash(&format!("Confidence: {}", new_conf));
+                        self.refresh_data()?;
+                    }
+                    Err(e) => {
+                        self.show_flash(&format!("Error: {}", e));
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     pub(super) fn handle_action_a(&mut self) -> Result<()> {
         if let Some((id, entity_type)) = self.get_selected_entity() {
             match entity_type {

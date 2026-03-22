@@ -469,7 +469,7 @@ impl MetadataStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{Priority, ProblemFrontmatter};
+    use crate::models::{Confidence, Priority, ProblemFrontmatter};
     use chrono::Utc;
 
     #[test]
@@ -525,6 +525,7 @@ This is the context.
             parent_id: None,
             status: ProblemStatus::Open,
             priority: Priority::default(),
+            confidence: Confidence::default(),
             solution_ids: vec![],
             child_ids: vec![],
             milestone_id: None,

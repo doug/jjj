@@ -125,6 +125,16 @@ pub(super) fn priority_color(priority: &Priority) -> Color {
     }
 }
 
+pub(super) fn confidence_color(confidence: &crate::models::Confidence) -> Color {
+    use crate::models::Confidence;
+    match confidence {
+        Confidence::Red => Color::Red,
+        Confidence::Amber => Color::Yellow,
+        Confidence::Green => Color::Green,
+        Confidence::Unknown => Color::DarkGray,
+    }
+}
+
 fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     use super::tree::TreeNode;
 
@@ -731,6 +741,7 @@ fn get_context_actions(app: &App) -> Vec<Line<'static>> {
     match entity_type {
         Some(EntityType::Problem) => {
             lines.push(Line::from("    n       New solution"));
+            lines.push(Line::from("    c       Cycle confidence (RAG)"));
             lines.push(Line::from("    s       Mark solved"));
             lines.push(Line::from("    d       Dissolve (with reason)"));
             lines.push(Line::from("    o       Reopen"));

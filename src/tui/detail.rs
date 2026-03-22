@@ -75,6 +75,13 @@ fn problem_lines(p: &Problem) -> Vec<Line<'static>> {
         &p.priority.to_string(),
         Some(super::ui::priority_color(&p.priority)),
     ));
+    if !matches!(p.confidence, crate::models::Confidence::Unknown) {
+        lines.push(meta_line(
+            "Confidence",
+            &p.confidence.to_string(),
+            Some(super::ui::confidence_color(&p.confidence)),
+        ));
+    }
     if let Some(assignee) = &p.assignee {
         let name = assignee.split('<').next().unwrap_or(assignee).trim();
         lines.push(meta_line("Assignee", name, None));

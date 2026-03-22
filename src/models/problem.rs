@@ -21,6 +21,10 @@ pub struct Problem {
     /// Priority level
     pub priority: Priority,
 
+    /// Confidence (RAG) indicator
+    #[serde(default, skip_serializing_if = "is_confidence_unknown")]
+    pub confidence: Confidence,
+
     /// Solution IDs attempting to address this problem
     #[serde(default)]
     pub solution_ids: Vec<String>,
@@ -60,6 +64,61 @@ pub struct Problem {
     /// Tags for flexible categorization (e.g., "backend", "size:L", "area:auth")
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
+}
+
+/// Confidence (RAG) indicator for problem health/progress.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Confidence {
+    #[default]
+    Unknown,
+    Red,
+    Amber,
+    Green,
+}
+
+impl std::fmt::Display for Confidence {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Confidence::Unknown => write!(f, "unknown"),
+            Confidence::Red => write!(f, "red"),
+            Confidence::Amber => write!(f, "amber"),
+            Confidence::Green => write!(f, "green"),
+        }
+    }
+}
+
+impl std::str::FromStr for Confidence {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "unknown" => Ok(Confidence::Unknown),
+            "red" => Ok(Confidence::Red),
+            "amber" | "yellow" => Ok(Confidence::Amber),
+            "green" => Ok(Confidence::Green),
+            _ => Err(format!(
+                "Invalid confidence: '{}'. Use unknown, red, amber, or green",
+                s
+            )),
+        }
+    }
+}
+
+impl Confidence {
+    /// Cycle to the next confidence value: Unknown → Red → Amber → Green → Unknown
+    pub fn next(&self) -> Self {
+        match self {
+            Confidence::Unknown => Confidence::Red,
+            Confidence::Red => Confidence::Amber,
+            Confidence::Amber => Confidence::Green,
+            Confidence::Green => Confidence::Unknown,
+        }
+    }
+}
+
+fn is_confidence_unknown(c: &Confidence) -> bool {
+    matches!(c, Confidence::Unknown)
 }
 
 /// Priority level for a problem
@@ -157,6 +216,7 @@ impl Problem {
             parent_id: None,
             status: ProblemStatus::Open,
             priority: Priority::default(),
+            confidence: Confidence::default(),
             solution_ids: Vec::new(),
             child_ids: Vec::new(),
             milestone_id: None,
@@ -309,6 +369,8 @@ pub struct ProblemFrontmatter {
     pub parent_id: Option<String>,
     pub status: ProblemStatus,
     pub priority: Priority,
+    #[serde(default, skip_serializing_if = "is_confidence_unknown")]
+    pub confidence: Confidence,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub solution_ids: Vec<String>,
     #[serde(skip)]
@@ -335,6 +397,7 @@ impl From<&Problem> for ProblemFrontmatter {
             parent_id: p.parent_id.clone(),
             status: p.status.clone(),
             priority: p.priority.clone(),
+            confidence: p.confidence.clone(),
             solution_ids: p.solution_ids.clone(),
             child_ids: p.child_ids.clone(),
             milestone_id: p.milestone_id.clone(),

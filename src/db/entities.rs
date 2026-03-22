@@ -14,7 +14,7 @@
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection, Result as SqliteResult};
 
-use crate::models::{Critique, Milestone, Priority, Problem, Solution};
+use crate::models::{Confidence, Critique, Milestone, Priority, Problem, Solution};
 
 // ============================================================================
 // Row parsing helpers
@@ -59,9 +59,9 @@ pub fn upsert_problem(conn: &Connection, problem: &Problem) -> SqliteResult<()> 
 
     conn.execute(
         "INSERT OR REPLACE INTO problems (
-            id, title, status, priority, parent_id, milestone_id, assignee,
+            id, title, status, priority, confidence, parent_id, milestone_id, assignee,
             created_at, updated_at, description, context, dissolved_reason, github_issue, tags
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
         params![
             problem.id,
             problem.title,
@@ -71,6 +71,12 @@ pub fn upsert_problem(conn: &Connection, problem: &Problem) -> SqliteResult<()> 
                 Priority::Medium => "medium",
                 Priority::High => "high",
                 Priority::Critical => "critical",
+            },
+            match problem.confidence {
+                Confidence::Unknown => "unknown",
+                Confidence::Red => "red",
+                Confidence::Amber => "amber",
+                Confidence::Green => "green",
             },
             problem.parent_id,
             problem.milestone_id,
@@ -90,7 +96,7 @@ pub fn upsert_problem(conn: &Connection, problem: &Problem) -> SqliteResult<()> 
 /// Load a problem by ID.
 pub fn load_problem(conn: &Connection, id: &str) -> SqliteResult<Option<Problem>> {
     let mut stmt = conn.prepare(
-        "SELECT id, title, status, priority, parent_id, milestone_id, assignee,
+        "SELECT id, title, status, priority, confidence, parent_id, milestone_id, assignee,
                 created_at, updated_at, description, context, dissolved_reason, github_issue, tags
          FROM problems WHERE id = ?1",
     )?;
@@ -107,7 +113,7 @@ pub fn load_problem(conn: &Connection, id: &str) -> SqliteResult<Option<Problem>
 /// List all problems.
 pub fn list_problems(conn: &Connection) -> SqliteResult<Vec<Problem>> {
     let mut stmt = conn.prepare(
-        "SELECT id, title, status, priority, parent_id, milestone_id, assignee,
+        "SELECT id, title, status, priority, confidence, parent_id, milestone_id, assignee,
                 created_at, updated_at, description, context, dissolved_reason, github_issue, tags
          FROM problems ORDER BY created_at DESC",
     )?;
@@ -124,12 +130,19 @@ pub fn delete_problem(conn: &Connection, id: &str) -> SqliteResult<bool> {
 }
 
 fn row_to_problem(row: &rusqlite::Row) -> SqliteResult<Problem> {
+    // Column order: id(0), title(1), status(2), priority(3), confidence(4),
+    //   parent_id(5), milestone_id(6), assignee(7),
+    //   created_at(8), updated_at(9), description(10), context(11),
+    //   dissolved_reason(12), github_issue(13), tags(14)
     let status_str: String = row.get(2)?;
     let priority_str: String = row.get(3)?;
-    let created_at_str: String = row.get(7)?;
-    let updated_at_str: String = row.get(8)?;
+    let confidence_str: String = row
+        .get::<_, Option<String>>(4)?
+        .unwrap_or_else(|| "unknown".to_string());
+    let created_at_str: String = row.get(8)?;
+    let updated_at_str: String = row.get(9)?;
     let tags_json: String = row
-        .get::<_, Option<String>>(13)?
+        .get::<_, Option<String>>(14)?
         .unwrap_or_else(|| "[]".to_string());
 
     Ok(Problem {
@@ -137,15 +150,16 @@ fn row_to_problem(row: &rusqlite::Row) -> SqliteResult<Problem> {
         title: row.get(1)?,
         status: parse_enum(&status_str, "problem status", "Open"),
         priority: parse_enum(&priority_str, "priority", "Medium"),
-        parent_id: row.get(4)?,
-        milestone_id: row.get(5)?,
-        assignee: row.get(6)?,
+        confidence: parse_enum(&confidence_str, "confidence", "Unknown"),
+        parent_id: row.get(5)?,
+        milestone_id: row.get(6)?,
+        assignee: row.get(7)?,
         created_at: parse_datetime(&created_at_str, "created_at", "problem"),
         updated_at: parse_datetime(&updated_at_str, "updated_at", "problem"),
-        description: row.get::<_, Option<String>>(9)?.unwrap_or_default(),
-        context: row.get::<_, Option<String>>(10)?.unwrap_or_default(),
-        dissolved_reason: row.get(11)?,
-        github_issue: row.get::<_, Option<i64>>(12)?.map(|n| n as u64),
+        description: row.get::<_, Option<String>>(10)?.unwrap_or_default(),
+        context: row.get::<_, Option<String>>(11)?.unwrap_or_default(),
+        dissolved_reason: row.get(12)?,
+        github_issue: row.get::<_, Option<i64>>(13)?.map(|n| n as u64),
         tags: parse_json_vec(&tags_json, "tags"),
         // Computed fields - leave empty, will be populated by relationships
         solution_ids: Vec::new(),
