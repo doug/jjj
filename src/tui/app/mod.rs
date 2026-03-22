@@ -216,6 +216,14 @@ pub struct UiState {
         String,
         std::sync::mpsc::Receiver<Vec<SimilarityResult>>,
     )>,
+    /// Whether to show personal ordering (true) or global aggregated view (false).
+    pub show_personal_ordering: bool,
+    /// The current user's personal orderings per milestone (loaded on startup).
+    /// milestone_id -> UserOrdering
+    pub personal_orderings: HashMap<String, crate::ranking::ordering::UserOrdering>,
+    /// Tier drilling state: stack of (milestone_id, start_index, end_index).
+    /// Empty = showing all items. Each entry narrows to a third of the parent range.
+    pub tier_drill: Vec<(String, usize, usize)>,
 }
 
 impl Default for UiState {
@@ -244,6 +252,9 @@ impl UiState {
             related_pending_load: None,
             related_cache: HashMap::new(),
             related_rx: None,
+            show_personal_ordering: true,
+            personal_orderings: HashMap::new(),
+            tier_drill: Vec::new(),
         }
     }
 }
@@ -286,6 +297,19 @@ impl App {
         }
 
         let user = store.jj_client.user_identity().unwrap_or_default();
+
+        // Load personal orderings for the current user
+        let mut personal_orderings = HashMap::new();
+        for milestone in &data.milestones {
+            if let Ok(Some(ord)) = ordering::load_user_ordering(
+                store.meta_path(),
+                &milestone.id,
+                &user,
+            ) {
+                personal_orderings.insert(milestone.id.clone(), ord);
+            }
+        }
+        ui.personal_orderings = personal_orderings;
         let next_actions = super::next_actions::build_next_actions(
             &data.problems,
             &data.solutions,
