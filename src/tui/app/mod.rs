@@ -316,12 +316,15 @@ impl App {
             &data.critiques,
             &user,
         );
-        let tree_items = super::tree::build_flat_tree(
+        let tree_items = super::tree::build_flat_tree_ranked(
             &data.milestones,
             &data.problems,
             &data.solutions,
             &data.critiques,
             &ui.expanded_nodes,
+            &data.rankings,
+            &ui.personal_orderings,
+            ui.show_personal_ordering,
         );
 
         let mut cache = RenderCache {
@@ -424,6 +427,12 @@ impl App {
             KeyCode::Char('q') => self.should_quit = true,
             KeyCode::Tab => {
                 self.ui.focused_pane = FocusedPane::Detail;
+            }
+            KeyCode::Up if key.modifiers.contains(KeyModifiers::SHIFT) => {
+                self.move_problem_up()?;
+            }
+            KeyCode::Down if key.modifiers.contains(KeyModifiers::SHIFT) => {
+                self.move_problem_down()?;
             }
             KeyCode::Up | KeyCode::Char('k') => self.navigate_up(),
             KeyCode::Down | KeyCode::Char('j') => self.navigate_down(),

@@ -116,6 +116,31 @@ pub fn build_flat_tree(
     critiques: &[Critique],
     expanded_nodes: &std::collections::HashSet<String>,
 ) -> Vec<FlatTreeItem> {
+    build_flat_tree_ranked(
+        milestones,
+        problems,
+        solutions,
+        critiques,
+        expanded_nodes,
+        &std::collections::HashMap::<String, std::collections::HashMap<String, (usize, String)>>::new(),
+        &std::collections::HashMap::new(),
+        false,
+    )
+}
+
+pub fn build_flat_tree_ranked(
+    milestones: &[Milestone],
+    problems: &[Problem],
+    solutions: &[Solution],
+    critiques: &[Critique],
+    expanded_nodes: &std::collections::HashSet<String>,
+    _rankings: &std::collections::HashMap<
+        String,
+        std::collections::HashMap<String, (usize, String)>,
+    >,
+    personal_orderings: &std::collections::HashMap<String, crate::ranking::ordering::UserOrdering>,
+    show_personal: bool,
+) -> Vec<FlatTreeItem> {
     let mut items = Vec::new();
 
     // ProjectRoot is selectable (for creating milestones) but not collapsible
@@ -147,6 +172,14 @@ pub fn build_flat_tree(
         });
 
         if expanded {
+            let mut milestone_problems = milestone_problems;
+            if show_personal {
+                if let Some(ordering) = personal_orderings.get(&milestone.id) {
+                    milestone_problems.sort_by_key(|p| {
+                        ordering.order.iter().position(|id| id == &p.id).unwrap_or(usize::MAX)
+                    });
+                }
+            }
             add_problems(
                 &mut items,
                 &milestone_problems,

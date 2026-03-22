@@ -1274,4 +1274,101 @@ impl App {
         let view = if self.ui.show_personal_ordering { "Personal" } else { "Global" };
         self.show_flash(&format!("Showing {} ordering", view));
     }
+
+    /// Get (milestone_id, problem_id) if the selected tree item is a problem under a milestone.
+    fn selected_milestone_problem(&self) -> Option<(String, String)> {
+        let item = self.cache.tree_items.get(self.ui.tree_index)?;
+        let problem_id = match &item.node {
+            crate::tui::tree::TreeNode::Problem { id, .. } => id.clone(),
+            _ => return None,
+        };
+        let problem = self.data.problems.iter().find(|p| p.id == problem_id)?;
+        let milestone_id = problem.milestone_id.clone()?;
+        Some((milestone_id, problem_id))
+    }
+
+    /// Create a default ordering for a milestone from current problem list.
+    fn default_ordering_for_milestone(&self, milestone_id: &str) -> crate::ranking::ordering::UserOrdering {
+        let order: Vec<String> = self.data.problems
+            .iter()
+            .filter(|p| p.milestone_id.as_deref() == Some(milestone_id))
+            .map(|p| p.id.clone())
+            .collect();
+        crate::ranking::ordering::UserOrdering {
+            order,
+            votes: std::collections::HashMap::new(),
+            updated_at: chrono::Utc::now(),
+        }
+    }
+
+    /// Move the selected problem up in the user's personal ordering.
+    pub(super) fn move_problem_up(&mut self) -> Result<()> {
+        let (milestone_id, problem_id) = match self.selected_milestone_problem() {
+            Some(x) => x,
+            None => return Ok(()),
+        };
+
+        // Ensure ordering exists
+        if !self.ui.personal_orderings.contains_key(&milestone_id) {
+            let default = self.default_ordering_for_milestone(&milestone_id);
+            self.ui.personal_orderings.insert(milestone_id.clone(), default);
+        }
+
+        let ordering = self.ui.personal_orderings.get_mut(&milestone_id).unwrap();
+
+        if let Some(pos) = ordering.order.iter().position(|id| *id == problem_id) {
+            if pos > 0 {
+                ordering.order.swap(pos, pos - 1);
+                ordering.updated_at = chrono::Utc::now();
+                crate::ranking::ordering::save_user_ordering(
+                    self.store.meta_path(),
+                    &milestone_id,
+                    &self.user,
+                    ordering,
+                )?;
+                self.refresh_data()?;
+                // Move cursor up too so it follows the item
+                if self.ui.tree_index > 0 {
+                    self.ui.tree_index -= 1;
+                }
+                self.update_selected_detail();
+            }
+        }
+        Ok(())
+    }
+
+    /// Move the selected problem down in the user's personal ordering.
+    pub(super) fn move_problem_down(&mut self) -> Result<()> {
+        let (milestone_id, problem_id) = match self.selected_milestone_problem() {
+            Some(x) => x,
+            None => return Ok(()),
+        };
+
+        if !self.ui.personal_orderings.contains_key(&milestone_id) {
+            let default = self.default_ordering_for_milestone(&milestone_id);
+            self.ui.personal_orderings.insert(milestone_id.clone(), default);
+        }
+
+        let ordering = self.ui.personal_orderings.get_mut(&milestone_id).unwrap();
+
+        if let Some(pos) = ordering.order.iter().position(|id| *id == problem_id) {
+            if pos + 1 < ordering.order.len() {
+                ordering.order.swap(pos, pos + 1);
+                ordering.updated_at = chrono::Utc::now();
+                crate::ranking::ordering::save_user_ordering(
+                    self.store.meta_path(),
+                    &milestone_id,
+                    &self.user,
+                    ordering,
+                )?;
+                self.refresh_data()?;
+                // Move cursor down to follow the item
+                if self.ui.tree_index + 1 < self.cache.tree_items.len() {
+                    self.ui.tree_index += 1;
+                }
+                self.update_selected_detail();
+            }
+        }
+        Ok(())
+    }
 }

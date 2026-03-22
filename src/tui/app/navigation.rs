@@ -309,12 +309,15 @@ impl App {
     }
 
     pub fn rebuild_tree(&mut self) {
-        self.cache.tree_items = super::super::tree::build_flat_tree(
+        self.cache.tree_items = super::super::tree::build_flat_tree_ranked(
             &self.data.milestones,
             &self.data.problems,
             &self.data.solutions,
             &self.data.critiques,
             &self.ui.expanded_nodes,
+            &self.data.rankings,
+            &self.ui.personal_orderings,
+            self.ui.show_personal_ordering,
         );
         super::super::annotate_tree_with_actions(
             &mut self.cache.tree_items,
