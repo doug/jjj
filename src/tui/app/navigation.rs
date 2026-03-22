@@ -304,6 +304,8 @@ impl App {
             &self.data.critiques,
             &self.ui.expanded_nodes,
             &self.data.rankings,
+            &self.ui.personal_orderings,
+            self.ui.show_personal_ordering,
         );
         super::super::annotate_tree_with_actions(
             &mut self.cache.tree_items,

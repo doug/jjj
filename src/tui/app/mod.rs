@@ -335,6 +335,8 @@ impl App {
             &data.critiques,
             &ui.expanded_nodes,
             &data.rankings,
+            &ui.personal_orderings,
+            ui.show_personal_ordering,
         );
 
         let mut cache = RenderCache {
@@ -432,6 +434,12 @@ impl App {
             KeyCode::Char('q') => self.should_quit = true,
             KeyCode::Tab => self.jump_to_next_action(false),
             KeyCode::BackTab => self.jump_to_next_action(true),
+            KeyCode::Up if key.modifiers.contains(KeyModifiers::SHIFT) => {
+                self.move_problem_up()?;
+            }
+            KeyCode::Down if key.modifiers.contains(KeyModifiers::SHIFT) => {
+                self.move_problem_down()?;
+            }
             KeyCode::Up => self.navigate_up(),
             KeyCode::Down => self.navigate_down(),
             KeyCode::Left => self.collapse_or_parent(),

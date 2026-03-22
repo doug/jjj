@@ -124,6 +124,8 @@ pub fn build_flat_tree(
         critiques,
         expanded_nodes,
         &std::collections::HashMap::<String, std::collections::HashMap<String, (usize, String)>>::new(),
+        &std::collections::HashMap::new(),
+        false,
     )
 }
 
@@ -134,6 +136,8 @@ pub fn build_flat_tree_ranked(
     critiques: &[Critique],
     expanded_nodes: &std::collections::HashSet<String>,
     rankings: &std::collections::HashMap<String, std::collections::HashMap<String, (usize, String)>>,
+    personal_orderings: &std::collections::HashMap<String, crate::ranking::ordering::UserOrdering>,
+    show_personal: bool,
 ) -> Vec<FlatTreeItem> {
     let empty_rankings = std::collections::HashMap::new();
     let mut items = Vec::new();
@@ -168,6 +172,14 @@ pub fn build_flat_tree_ranked(
 
         if expanded {
             let milestone_rankings = rankings.get(&milestone.id).unwrap_or(&empty_rankings);
+            let mut milestone_problems = milestone_problems;
+            if show_personal {
+                if let Some(ordering) = personal_orderings.get(&milestone.id) {
+                    milestone_problems.sort_by_key(|p| {
+                        ordering.order.iter().position(|id| id == &p.id).unwrap_or(usize::MAX)
+                    });
+                }
+            }
             add_problems(
                 &mut items,
                 &milestone_problems,
