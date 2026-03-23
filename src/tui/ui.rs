@@ -180,6 +180,7 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                     title,
                     status,
                     assignee,
+                    votes,
                     ..
                 } => {
                     let assignee_suffix = assignee
@@ -254,10 +255,20 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
             } else {
                 Style::default().fg(Color::Cyan)
             };
-            ListItem::new(Line::from(vec![
+            let mut spans = vec![
                 Span::styled(gutter, gutter_style),
                 Span::styled(label, style),
-            ]))
+            ];
+            // Add vote stars for problems with votes
+            if let TreeNode::Problem { votes, .. } = &item.node {
+                if *votes > 0 {
+                    spans.push(Span::styled(
+                        format!(" {}", "★".repeat(*votes as usize)),
+                        Style::default().fg(Color::Yellow),
+                    ));
+                }
+            }
+            ListItem::new(Line::from(spans))
         })
         .collect();
 
@@ -481,7 +492,7 @@ fn draw_help_overlay(f: &mut Frame, app: &App) {
     let area = f.area();
 
     // Calculate centered popup, clamped to terminal size
-    let popup_width = 40u16.min(area.width);
+    let popup_width = 46u16.min(area.width);
     let popup_height = 30u16.min(area.height);
     let popup_x = area.width.saturating_sub(popup_width) / 2;
     let popup_y = area.height.saturating_sub(popup_height) / 2;
@@ -499,6 +510,10 @@ fn draw_help_overlay(f: &mut Frame, app: &App) {
         Line::from("    Tab     Switch to detail pane"),
         Line::from("    /       Search/filter tree"),
         Line::from("    f       Toggle filter (full/actions)"),
+        Line::from("    S+\u{2191}/\u{2193}   Reorder problem"),
+        Line::from("    S+\u{2190}/\u{2192}   Tier drill in/out"),
+        Line::from("    +/-     Add/remove vote"),
+        Line::from("    r       Toggle personal/global"),
         Line::from("    R       Toggle related"),
         Line::from(""),
         Line::from(Span::styled(
