@@ -6,9 +6,22 @@ use ratatui::{
     text::{Line, Span},
 };
 
+
+/// Rank and vote metadata for a problem, sourced from milestone rankings.
+pub struct ProblemRankInfo {
+    /// 1-indexed rank position within the milestone (1 = highest priority).
+    pub rank: Option<usize>,
+    /// Number of voters who ranked this problem.
+    pub votes: u32,
+    /// QV budget spent by the current user on this problem.
+    pub budget_used: u32,
+    /// Total QV budget for the milestone.
+    pub budget_total: u32,
+}
+
 pub enum DetailContent {
     None,
-    Problem(Problem),
+    Problem(Problem, Option<ProblemRankInfo>),
     Solution(Solution),
     Critique(Critique),
     Milestone(Milestone),
@@ -19,7 +32,7 @@ impl DetailContent {
     pub fn border_color(&self) -> Color {
         match self {
             DetailContent::None => Color::DarkGray,
-            DetailContent::Problem(p) => super::ui::status_color_problem(&p.status),
+            DetailContent::Problem(p, _) => super::ui::status_color_problem(&p.status),
             DetailContent::Solution(s) => super::ui::status_color_solution(&s.status),
             DetailContent::Critique(c) => super::ui::status_color_critique(&c.status),
             DetailContent::Milestone(m) => super::ui::status_color_milestone(&m.status),
@@ -30,7 +43,7 @@ impl DetailContent {
     pub fn block_title(&self) -> &'static str {
         match self {
             DetailContent::None => "Detail",
-            DetailContent::Problem(_) => " Problem ",
+            DetailContent::Problem(..) => " Problem ",
             DetailContent::Solution(_) => " Solution ",
             DetailContent::Critique(_) => " Critique ",
             DetailContent::Milestone(_) => " Milestone ",
@@ -43,7 +56,7 @@ impl DetailContent {
                 "Select an item to see details",
                 Style::default().fg(Color::DarkGray),
             ))],
-            DetailContent::Problem(p) => problem_lines(p),
+            DetailContent::Problem(p, rank_info) => problem_lines(p, rank_info.as_ref()),
             DetailContent::Solution(s) => solution_lines(s),
             DetailContent::Critique(c) => critique_lines(c),
             DetailContent::Milestone(m) => milestone_lines(m),
@@ -51,7 +64,7 @@ impl DetailContent {
     }
 }
 
-fn problem_lines(p: &Problem) -> Vec<Line<'static>> {
+fn problem_lines(p: &Problem, rank_info: Option<&ProblemRankInfo>) -> Vec<Line<'static>> {
     let status_color = super::ui::status_color_problem(&p.status);
     let priority_sym = super::ui::priority_prefix(&p.priority);
 
@@ -92,6 +105,22 @@ fn problem_lines(p: &Problem) -> Vec<Line<'static>> {
     }
     if !p.tags.is_empty() {
         lines.push(tags_line(&p.tags));
+    }
+    if let Some(ri) = rank_info {
+        if let Some(rank) = ri.rank {
+            lines.push(meta_line("Rank", &format!("#{}", rank), Some(Color::Yellow)));
+        }
+        if ri.votes > 0 {
+            let vote_str = if ri.budget_total > 0 {
+                format!(
+                    "{}\u{2605} (budget {}/{})",
+                    ri.votes, ri.budget_used, ri.budget_total
+                )
+            } else {
+                format!("{}\u{2605}", ri.votes)
+            };
+            lines.push(meta_line("Votes", &vote_str, Some(Color::Yellow)));
+        }
     }
     lines.push(Line::from(""));
     lines.push(divider_line());

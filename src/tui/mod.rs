@@ -5,7 +5,7 @@ mod tree;
 mod ui;
 
 pub use app::App;
-pub use detail::DetailContent;
+pub use detail::{DetailContent, ProblemRankInfo};
 pub use next_actions::{build_next_actions, EntityType, NextAction};
 pub use tree::{
     annotate_tree_with_actions, build_flat_tree, filter_tree_to_actions, FlatTreeItem, TreeNode,
