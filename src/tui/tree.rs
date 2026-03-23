@@ -27,6 +27,7 @@ pub enum TreeNode {
         assignee: Option<String>,
         expanded: bool,
         rank: Option<usize>,
+        votes: u32,
     },
     Solution {
         id: String,
@@ -211,6 +212,8 @@ pub fn build_flat_tree_ranked(
                 expanded_nodes,
                 1,
                 milestone_rankings,
+                personal_orderings,
+                Some(&milestone.id),
             );
         }
     }
@@ -240,6 +243,8 @@ pub fn build_flat_tree_ranked(
             expanded_nodes,
             1,
             &empty_rankings,
+            personal_orderings,
+            None,
         );
     }
 
@@ -254,6 +259,8 @@ fn add_problems(
     expanded_nodes: &std::collections::HashSet<String>,
     depth: usize,
     rankings: &std::collections::HashMap<String, (usize, String)>,
+    personal_orderings: &std::collections::HashMap<String, crate::ranking::ordering::UserOrdering>,
+    milestone_id: Option<&str>,
 ) {
     for problem in problems {
         let problem_solutions: Vec<_> = solutions
@@ -263,6 +270,11 @@ fn add_problems(
 
         let expanded = expanded_nodes.contains(&problem.id);
         let rank = rankings.get(&problem.id).map(|(pos, _)| *pos);
+        let votes = milestone_id
+            .and_then(|mid| personal_orderings.get(mid))
+            .and_then(|ord| ord.votes.get(&problem.id))
+            .copied()
+            .unwrap_or(0);
         items.push(FlatTreeItem {
             node: TreeNode::Problem {
                 id: problem.id.clone(),
@@ -272,6 +284,7 @@ fn add_problems(
                 assignee: problem.assignee.clone(),
                 expanded,
                 rank,
+                votes,
             },
             depth,
             has_children: !problem_solutions.is_empty(),
@@ -916,6 +929,7 @@ mod tests {
             assignee: None,
             expanded: false,
             rank: None,
+            votes: 0,
         };
         assert!(!node.is_expanded());
         node.set_expanded(true);

@@ -192,7 +192,6 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                     status,
                     assignee,
                     rank,
-                    votes,
                     ..
                 } => {
                     let rank_prefix = rank.map(|r| format!("#{} ", r)).unwrap_or_default();
