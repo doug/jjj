@@ -409,7 +409,7 @@ impl App {
                     .iter()
                     .find(|p| p.id == *id)
                     .cloned()
-                    .map(super::super::DetailContent::Problem)
+                    .map(|p| super::super::DetailContent::Problem(p, None))
                     .unwrap_or(super::super::DetailContent::None),
                 TreeNode::Solution { id, .. } => self
                     .data

@@ -7,11 +7,13 @@ use serde::Serialize;
 use crate::cli::RankAction;
 use crate::context::CommandContext;
 use crate::error::Result;
-use crate::ranking::glicko2::{compute_ratings, sorted_ranking, Comparison, WeightedComparison};
+use crate::ranking::glicko2::{compute_ratings, Comparison, WeightedComparison};
 use crate::ranking::matchups::suggest_matchups;
 use crate::ranking::store::{
     append_comparison, load_attributed_comparisons, load_comparisons, sanitize_user,
 };
+use crate::ranking::borda::{aggregate_rankings, qv_budget, total_vote_cost};
+use crate::ranking::ordering::load_all_orderings;
 use crate::utils::truncate;
 
 /// Dispatch a `jjj rank` subcommand.
@@ -329,9 +331,24 @@ struct RankEntry {
     rank: usize,
     problem_id: String,
     title: String,
-    rating: f64,
-    confidence: String,
-    comparisons: usize,
+    score: f64,
+    voters: usize,
+}
+
+#[derive(Serialize)]
+struct UserOrderingEntry {
+    rank: usize,
+    problem_id: String,
+    title: String,
+    votes: u32,
+}
+
+#[derive(Serialize)]
+struct UserBreakdown {
+    is_owner: bool,
+    budget: u32,
+    budget_used: u32,
+    ordering: Vec<UserOrderingEntry>,
 }
 
 /// Display computed rankings for a milestone.
@@ -340,10 +357,9 @@ fn show(ctx: &CommandContext, milestone: Option<String>, by_user: bool, json: bo
     let ms = ctx.store.load_milestone(&milestone_id)?;
     let (problem_ids, titles) = open_problems_in_milestone(ctx, &milestone_id)?;
 
-    let comparisons = load_comparisons(ctx.store.meta_path(), &milestone_id)?;
-    let attributed = load_attributed_comparisons(ctx.store.meta_path(), &milestone_id)?;
+    let orderings = load_all_orderings(ctx.store.meta_path(), &milestone_id)?;
 
-    if comparisons.is_empty() {
+    if orderings.is_empty() {
         if json {
             println!("[]");
         } else {
@@ -356,43 +372,32 @@ fn show(ctx: &CommandContext, milestone: Option<String>, by_user: bool, json: bo
     }
 
     let owner = ms.assignee.as_deref();
+    let owner_slug = owner.map(|o| sanitize_user(o));
 
     if by_user {
         show_by_user(
-            ctx,
-            &milestone_id,
-            &attributed,
+            &orderings,
             &problem_ids,
             &titles,
-            owner,
+            owner_slug.as_deref(),
             json,
         )?;
     } else {
-        let weighted = build_weighted(&comparisons, &attributed, owner);
-        let ratings = compute_ratings(&weighted);
-        let ranked = sorted_ranking(&ratings);
-
-        // Count comparisons per problem.
-        let mut cmp_counts: HashMap<String, usize> = HashMap::new();
-        for c in &comparisons {
-            *cmp_counts.entry(c.winner.clone()).or_default() += 1;
-            *cmp_counts.entry(c.loser.clone()).or_default() += 1;
-        }
+        let ranked = aggregate_rankings(&orderings, owner_slug.as_deref(), problem_ids.len());
 
         // Build entries (only for problems still in the milestone).
         let entries: Vec<RankEntry> = ranked
             .iter()
             .filter(|(id, _)| problem_ids.contains(id))
             .enumerate()
-            .map(|(i, (id, rating))| {
+            .map(|(i, (id, agg))| {
                 let title = titles.get(id).cloned().unwrap_or_default();
                 RankEntry {
                     rank: i + 1,
                     problem_id: id.clone(),
                     title,
-                    rating: (rating.mu * 10.0).round() / 10.0,
-                    confidence: rating.confidence().to_string(),
-                    comparisons: *cmp_counts.get(id).unwrap_or(&0),
+                    score: (agg.score * 10.0).round() / 10.0,
+                    voters: agg.voter_count,
                 }
             })
             .collect();
@@ -402,18 +407,17 @@ fn show(ctx: &CommandContext, milestone: Option<String>, by_user: bool, json: bo
         } else {
             println!("Rankings for milestone: {}\n", ms.title);
             println!(
-                "  {:<5} {:<45} {:>7} {:>10} {:>5}",
-                "Rank", "Problem", "Rating", "Confidence", "Cmps"
+                "  {:<5} {:<45} {:>7} {:>7}",
+                "Rank", "Problem", "Score", "Voters"
             );
-            println!("  {}", "-".repeat(75));
+            println!("  {}", "-".repeat(66));
             for e in &entries {
                 println!(
-                    "  {:<5} {:<45} {:>7.1} {:>10} {:>5}",
+                    "  {:<5} {:<45} {:>7.1} {:>7}",
                     e.rank,
                     truncate(&e.title, 44),
-                    e.rating,
-                    e.confidence,
-                    e.comparisons,
+                    e.score,
+                    e.voters,
                 );
             }
         }
@@ -424,105 +428,86 @@ fn show(ctx: &CommandContext, milestone: Option<String>, by_user: bool, json: bo
 
 /// Show rankings broken down by individual user.
 fn show_by_user(
-    _ctx: &CommandContext,
-    _milestone_id: &str,
-    attributed: &[(Comparison, String)],
+    orderings: &HashMap<String, crate::ranking::ordering::UserOrdering>,
     problem_ids: &[String],
     titles: &HashMap<String, String>,
-    owner: Option<&str>,
+    owner_slug: Option<&str>,
     json: bool,
 ) -> Result<()> {
-    // Group comparisons by user.
-    let mut by_user: HashMap<String, Vec<&Comparison>> = HashMap::new();
-    for (cmp, user) in attributed {
-        by_user.entry(user.clone()).or_default().push(cmp);
-    }
-
-    let mut users: Vec<&String> = by_user.keys().collect();
+    let mut users: Vec<&String> = orderings.keys().collect();
     users.sort();
 
+    let budget = qv_budget(problem_ids.len());
+
     if json {
-        let mut all_data: HashMap<&str, Vec<RankEntry>> = HashMap::new();
+        let mut all_data: HashMap<&str, UserBreakdown> = HashMap::new();
 
         for user in &users {
-            let user_cmps: Vec<WeightedComparison> = by_user[*user]
-                .iter()
-                .map(|c| {
-                    let w = match owner {
-                        Some(o) if user_matches_owner(user, o) => 2.0,
-                        _ => 1.0,
-                    };
-                    WeightedComparison {
-                        winner: c.winner.clone(),
-                        loser: c.loser.clone(),
-                        weight: w,
-                    }
-                })
-                .collect();
+            let ordering = &orderings[*user];
+            let is_owner = owner_slug == Some(user.as_str());
+            let budget_used = total_vote_cost(&ordering.votes);
 
-            let ratings = compute_ratings(&user_cmps);
-            let ranked = sorted_ranking(&ratings);
-
-            let entries: Vec<RankEntry> = ranked
+            let entries: Vec<UserOrderingEntry> = ordering
+                .order
                 .iter()
-                .filter(|(id, _)| problem_ids.contains(id))
+                .filter(|id| problem_ids.contains(id))
                 .enumerate()
-                .map(|(i, (id, rating))| RankEntry {
+                .map(|(i, id)| UserOrderingEntry {
                     rank: i + 1,
                     problem_id: id.clone(),
                     title: titles.get(id).cloned().unwrap_or_default(),
-                    rating: (rating.mu * 10.0).round() / 10.0,
-                    confidence: rating.confidence().to_string(),
-                    comparisons: by_user[*user]
-                        .iter()
-                        .filter(|c| c.winner == *id || c.loser == *id)
-                        .count(),
+                    votes: ordering.votes.get(id).copied().unwrap_or(0),
                 })
                 .collect();
 
-            all_data.insert(user.as_str(), entries);
+            all_data.insert(
+                user.as_str(),
+                UserBreakdown {
+                    is_owner,
+                    budget,
+                    budget_used,
+                    ordering: entries,
+                },
+            );
         }
 
         println!("{}", serde_json::to_string_pretty(&all_data)?);
     } else {
         for user in &users {
-            let is_owner = owner.is_some_and(|o| user_matches_owner(user, o));
+            let ordering = &orderings[*user];
+            let is_owner = owner_slug == Some(user.as_str());
             let label = if is_owner {
                 format!("{} (owner, 2x weight)", user)
             } else {
                 user.to_string()
             };
-            println!("\n--- {} ---\n", label);
-
-            let user_cmps: Vec<WeightedComparison> = by_user[*user]
-                .iter()
-                .map(|c| WeightedComparison {
-                    winner: c.winner.clone(),
-                    loser: c.loser.clone(),
-                    weight: 1.0,
-                })
-                .collect();
-
-            let ratings = compute_ratings(&user_cmps);
-            let ranked = sorted_ranking(&ratings);
+            let budget_used = total_vote_cost(&ordering.votes);
+            println!("\n--- {} ---", label);
+            println!("  QV budget: {}/{} used\n", budget_used, budget);
 
             println!(
-                "  {:<5} {:<45} {:>7} {:>10}",
-                "Rank", "Problem", "Rating", "Confidence"
+                "  {:<5} {:<45} {:>5}",
+                "Rank", "Problem", "Votes"
             );
-            println!("  {}", "-".repeat(70));
-            for (i, (id, rating)) in ranked
+            println!("  {}", "-".repeat(57));
+            for (i, id) in ordering
+                .order
                 .iter()
-                .filter(|(id, _)| problem_ids.contains(id))
+                .filter(|id| problem_ids.contains(id))
                 .enumerate()
             {
                 let title = titles.get(id).cloned().unwrap_or_default();
+                let votes = ordering.votes.get(id).copied().unwrap_or(0);
+                let votes_str = if votes > 0 {
+                    format!("+{}", votes)
+                } else {
+                    String::new()
+                };
                 println!(
-                    "  {:<5} {:<45} {:>7.1} {:>10}",
+                    "  {:<5} {:<45} {:>5}",
                     i + 1,
                     truncate(&title, 44),
-                    (rating.mu * 10.0).round() / 10.0,
-                    rating.confidence(),
+                    votes_str,
                 );
             }
         }
