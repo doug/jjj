@@ -306,6 +306,7 @@ impl App {
             &self.data.rankings,
             &self.ui.personal_orderings,
             self.ui.show_personal_ordering,
+            &self.ui.tier_drill,
         );
         super::super::annotate_tree_with_actions(
             &mut self.cache.tree_items,

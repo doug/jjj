@@ -126,6 +126,7 @@ pub fn build_flat_tree(
         &std::collections::HashMap::<String, std::collections::HashMap<String, (usize, String)>>::new(),
         &std::collections::HashMap::new(),
         false,
+        &[],
     )
 }
 
@@ -138,6 +139,7 @@ pub fn build_flat_tree_ranked(
     rankings: &std::collections::HashMap<String, std::collections::HashMap<String, (usize, String)>>,
     personal_orderings: &std::collections::HashMap<String, crate::ranking::ordering::UserOrdering>,
     show_personal: bool,
+    tier_drill: &[(String, usize, usize)],
 ) -> Vec<FlatTreeItem> {
     let empty_rankings = std::collections::HashMap::new();
     let mut items = Vec::new();
@@ -178,6 +180,27 @@ pub fn build_flat_tree_ranked(
                     milestone_problems.sort_by_key(|p| {
                         ordering.order.iter().position(|id| id == &p.id).unwrap_or(usize::MAX)
                     });
+                }
+            }
+            // Apply tier drill filter
+            if let Some((drill_ms, drill_start, drill_end)) = tier_drill.last() {
+                if *drill_ms == milestone.id {
+                    let ordered_ids: Vec<String> = if show_personal {
+                        personal_orderings.get(&milestone.id)
+                            .map(|o| o.order.clone())
+                            .unwrap_or_else(|| milestone_problems.iter().map(|p| p.id.clone()).collect())
+                    } else {
+                        milestone_problems.iter().map(|p| p.id.clone()).collect()
+                    };
+
+                    let visible_ids: std::collections::HashSet<String> = ordered_ids
+                        .iter()
+                        .skip(*drill_start)
+                        .take(drill_end - drill_start)
+                        .cloned()
+                        .collect();
+
+                    milestone_problems.retain(|p| visible_ids.contains(&p.id));
                 }
             }
             add_problems(
