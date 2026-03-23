@@ -257,6 +257,13 @@ pub enum Commands {
         json: bool,
     },
 
+    /// View problem rankings for a milestone
+    #[command(display_order = 34)]
+    Rank {
+        #[command(subcommand)]
+        action: RankAction,
+    },
+
     // ── Setup & utilities ──────────────────────────────────────────────────
     /// Initialize jjj metadata in the current jj repository
     #[command(display_order = 50)]
@@ -1017,4 +1024,25 @@ pub enum GitHubSyncAction {
     /// Push local state back to GitHub: refresh PR bodies and sync issue open/closed state
     #[command(display_order = 6)]
     Push,
+}
+
+// =============================================================================
+// Rank Commands
+// =============================================================================
+
+#[derive(Subcommand, Debug)]
+pub enum RankAction {
+    /// Show computed rankings for a milestone
+    Show {
+        /// Milestone reference (ID prefix or title); defaults to first active
+        milestone: Option<String>,
+
+        /// Show per-user breakdown instead of aggregate
+        #[arg(long)]
+        by_user: bool,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
 }

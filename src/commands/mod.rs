@@ -10,6 +10,7 @@ pub mod next;
 pub mod overlaps;
 pub mod problem;
 pub mod push;
+pub mod rank;
 pub mod search;
 pub mod solution;
 pub mod status;
@@ -122,6 +123,9 @@ fn execute_with_context(ctx: &CommandContext, command: Commands) -> Result<()> {
 
         // Tags
         Commands::Tags { json } => tags::execute(ctx, json),
+
+        // Rank
+        Commands::Rank { action } => rank::execute(ctx, action),
 
         // Search
         Commands::Search {
