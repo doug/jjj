@@ -131,13 +131,17 @@ pub fn build_flat_tree(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn build_flat_tree_ranked(
     milestones: &[Milestone],
     problems: &[Problem],
     solutions: &[Solution],
     critiques: &[Critique],
     expanded_nodes: &std::collections::HashSet<String>,
-    rankings: &std::collections::HashMap<String, std::collections::HashMap<String, (usize, String)>>,
+    rankings: &std::collections::HashMap<
+        String,
+        std::collections::HashMap<String, (usize, String)>,
+    >,
     personal_orderings: &std::collections::HashMap<String, crate::ranking::ordering::UserOrdering>,
     show_personal: bool,
     tier_drill: &[(String, usize, usize)],
@@ -179,7 +183,11 @@ pub fn build_flat_tree_ranked(
             if show_personal {
                 if let Some(ordering) = personal_orderings.get(&milestone.id) {
                     milestone_problems.sort_by_key(|p| {
-                        ordering.order.iter().position(|id| id == &p.id).unwrap_or(usize::MAX)
+                        ordering
+                            .order
+                            .iter()
+                            .position(|id| id == &p.id)
+                            .unwrap_or(usize::MAX)
                     });
                 }
             }
@@ -187,9 +195,12 @@ pub fn build_flat_tree_ranked(
             if let Some((drill_ms, drill_start, drill_end)) = tier_drill.last() {
                 if *drill_ms == milestone.id {
                     let ordered_ids: Vec<String> = if show_personal {
-                        personal_orderings.get(&milestone.id)
+                        personal_orderings
+                            .get(&milestone.id)
                             .map(|o| o.order.clone())
-                            .unwrap_or_else(|| milestone_problems.iter().map(|p| p.id.clone()).collect())
+                            .unwrap_or_else(|| {
+                                milestone_problems.iter().map(|p| p.id.clone()).collect()
+                            })
                     } else {
                         milestone_problems.iter().map(|p| p.id.clone()).collect()
                     };
@@ -251,6 +262,7 @@ pub fn build_flat_tree_ranked(
     items
 }
 
+#[allow(clippy::too_many_arguments)]
 fn add_problems(
     items: &mut Vec<FlatTreeItem>,
     problems: &[&Problem],

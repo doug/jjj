@@ -166,21 +166,11 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
             let action_sym = item.action_symbol.as_deref().unwrap_or("");
 
             let (label, color, dim) = match &item.node {
-                TreeNode::ProjectRoot { .. } => (
-                    format!("{}Root", indent),
-                    Color::White,
-                    false,
-                ),
-                TreeNode::Milestone { title, .. } => (
-                    format!("{}{}", indent, title),
-                    Color::Magenta,
-                    false,
-                ),
-                TreeNode::Backlog { .. } => (
-                    format!("{}Backlog", indent),
-                    Color::DarkGray,
-                    false,
-                ),
+                TreeNode::ProjectRoot { .. } => (format!("{}Root", indent), Color::White, false),
+                TreeNode::Milestone { title, .. } => {
+                    (format!("{}{}", indent, title), Color::Magenta, false)
+                }
+                TreeNode::Backlog { .. } => (format!("{}Backlog", indent), Color::DarkGray, false),
                 TreeNode::Problem {
                     title,
                     status,
@@ -201,11 +191,7 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                     (
                         format!(
                             "{}{}{}{}{}",
-                            indent,
-                            action_sym,
-                            rank_prefix,
-                            title,
-                            assignee_suffix
+                            indent, action_sym, rank_prefix, title, assignee_suffix
                         ),
                         status_color_problem(status),
                         false,
@@ -226,13 +212,7 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                         })
                         .unwrap_or_default();
                     (
-                        format!(
-                            "{}{}{}{}",
-                            indent,
-                            action_sym,
-                            title,
-                            assignee_suffix
-                        ),
+                        format!("{}{}{}{}", indent, action_sym, title, assignee_suffix),
                         status_color_solution(status),
                         false,
                     )
@@ -243,13 +223,7 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                     severity,
                     ..
                 } => (
-                    format!(
-                        "{}{}{} [{}]",
-                        indent,
-                        action_sym,
-                        title,
-                        severity
-                    ),
+                    format!("{}{}{} [{}]", indent, action_sym, title, severity),
                     status_color_critique(status),
                     false,
                 ),
@@ -271,7 +245,9 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
             // Gutter: cursor gets "> ", selected gets "> " (persistent), else "  "
             let gutter = if is_cursor || is_selected { "> " } else { "  " };
             let gutter_style = if is_cursor {
-                Style::default().fg(Color::White).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(Color::Cyan)
             };

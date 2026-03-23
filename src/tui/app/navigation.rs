@@ -404,8 +404,7 @@ impl App {
                     super::super::DetailContent::None
                 }
                 TreeNode::Problem { id, .. } => {
-                    if let Some(problem) =
-                        self.data.problems.iter().find(|p| p.id == *id).cloned()
+                    if let Some(problem) = self.data.problems.iter().find(|p| p.id == *id).cloned()
                     {
                         let rank_info = self.build_problem_rank_info(&problem);
                         super::super::DetailContent::Problem(problem, rank_info)

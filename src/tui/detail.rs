@@ -5,7 +5,6 @@ use ratatui::{
     text::{Line, Span},
 };
 
-
 /// Rank and vote metadata for a problem, sourced from milestone rankings.
 pub struct ProblemRankInfo {
     /// 1-indexed rank position within the milestone (1 = highest priority).
@@ -111,7 +110,11 @@ fn problem_lines(p: &Problem, rank_info: Option<&ProblemRankInfo>) -> Vec<Line<'
     }
     if let Some(ri) = rank_info {
         if let Some(rank) = ri.rank {
-            lines.push(meta_line("Rank", &format!("#{}", rank), Some(Color::Yellow)));
+            lines.push(meta_line(
+                "Rank",
+                &format!("#{}", rank),
+                Some(Color::Yellow),
+            ));
         }
         if ri.votes > 0 {
             let vote_str = if ri.budget_total > 0 {

@@ -171,8 +171,13 @@ mod tests {
             updated_at: Utc::now(),
         };
 
-        save_user_ordering(base, "milestone-1", "Alice Smith <alice@test.com>", &ordering)
-            .unwrap();
+        save_user_ordering(
+            base,
+            "milestone-1",
+            "Alice Smith <alice@test.com>",
+            &ordering,
+        )
+        .unwrap();
 
         let loaded = load_user_ordering(base, "milestone-1", "Alice Smith <alice@test.com>")
             .unwrap()

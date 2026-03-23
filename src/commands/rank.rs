@@ -133,7 +133,7 @@ fn show(ctx: &CommandContext, milestone: Option<String>, by_user: bool, json: bo
     }
 
     let owner = ms.assignee.as_deref();
-    let owner_slug = owner.map(|o| sanitize_user(o));
+    let owner_slug = owner.map(sanitize_user);
 
     if by_user {
         show_by_user(
@@ -246,10 +246,7 @@ fn show_by_user(
             println!("\n--- {} ---", label);
             println!("  QV budget: {}/{} used\n", budget_used, budget);
 
-            println!(
-                "  {:<5} {:<45} {:>5}",
-                "Rank", "Problem", "Votes"
-            );
+            println!("  {:<5} {:<45} {:>5}", "Rank", "Problem", "Votes");
             println!("  {}", "-".repeat(57));
             for (i, id) in ordering
                 .order
@@ -289,10 +286,7 @@ fn history(ctx: &CommandContext, milestone: Option<String>, limit: usize) -> Res
     let mut attributed = load_attributed_comparisons(ctx.store.meta_path(), &milestone_id)?;
 
     if attributed.is_empty() {
-        println!(
-            "No comparison history for milestone '{}'.",
-            ms.title,
-        );
+        println!("No comparison history for milestone '{}'.", ms.title,);
         return Ok(());
     }
 

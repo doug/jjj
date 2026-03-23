@@ -149,11 +149,8 @@ impl ProjectData {
 
             let problem_count = orderings.values().map(|o| o.order.len()).max().unwrap_or(0);
 
-            let aggregated = borda::aggregate_rankings(
-                &orderings,
-                owner_slug.as_deref(),
-                problem_count,
-            );
+            let aggregated =
+                borda::aggregate_rankings(&orderings, owner_slug.as_deref(), problem_count);
 
             let mut milestone_rankings = HashMap::new();
             for (problem_id, rank) in &aggregated {
@@ -292,11 +289,9 @@ impl App {
         // Load personal orderings for the current user
         let mut personal_orderings = HashMap::new();
         for milestone in &data.milestones {
-            if let Ok(Some(ord)) = ordering::load_user_ordering(
-                store.meta_path(),
-                &milestone.id,
-                &user,
-            ) {
+            if let Ok(Some(ord)) =
+                ordering::load_user_ordering(store.meta_path(), &milestone.id, &user)
+            {
                 personal_orderings.insert(milestone.id.clone(), ord);
             }
         }

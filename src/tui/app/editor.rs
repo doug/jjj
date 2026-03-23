@@ -30,7 +30,13 @@ pub(crate) fn parse_editor_content(
 
     // Fields where inline comments should be stripped (enum/date fields only).
     // Freeform fields like title and tags are left as-is to preserve # in text.
-    const COMMENT_FIELDS: &[&str] = &["status", "priority", "confidence", "severity", "target_date"];
+    const COMMENT_FIELDS: &[&str] = &[
+        "status",
+        "priority",
+        "confidence",
+        "severity",
+        "target_date",
+    ];
 
     // Parse all frontmatter fields into a map
     let mut fields = std::collections::HashMap::new();
