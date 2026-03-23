@@ -1,25 +1,18 @@
 use std::collections::HashMap;
-use std::io::Write;
 
-use chrono::Utc;
 use serde::Serialize;
 
 use crate::cli::RankAction;
 use crate::context::CommandContext;
 use crate::error::Result;
-use crate::ranking::glicko2::{compute_ratings, Comparison, WeightedComparison};
-use crate::ranking::matchups::suggest_matchups;
-use crate::ranking::store::{
-    append_comparison, load_attributed_comparisons, load_comparisons, sanitize_user,
-};
 use crate::ranking::borda::{aggregate_rankings, qv_budget, total_vote_cost};
 use crate::ranking::ordering::load_all_orderings;
+use crate::ranking::store::{load_attributed_comparisons, sanitize_user};
 use crate::utils::truncate;
 
 /// Dispatch a `jjj rank` subcommand.
 pub fn execute(ctx: &CommandContext, action: RankAction) -> Result<()> {
     match action {
-        RankAction::Session { milestone, count } => session(ctx, milestone, count),
         RankAction::Show {
             milestone,
             by_user,
@@ -55,55 +48,6 @@ fn resolve_milestone_for_rank(ctx: &CommandContext, input: Option<String>) -> Re
     ))
 }
 
-/// Check whether `user_slug` matches the milestone owner identity.
-fn user_matches_owner(user_slug: &str, owner: &str) -> bool {
-    sanitize_user(owner) == user_slug
-}
-
-/// Build weighted comparisons from raw comparisons.
-///
-/// Comparisons made by the milestone owner get 2x weight; everyone else gets 1x.
-fn build_weighted(
-    comparisons: &[Comparison],
-    attributed: &[(Comparison, String)],
-    owner: Option<&str>,
-) -> Vec<WeightedComparison> {
-    // Build a lookup from (winner, loser, ts) -> user_slug for attribution.
-    let attr_map: HashMap<(String, String, i64), &str> = attributed
-        .iter()
-        .map(|(c, user)| {
-            (
-                (
-                    c.winner.clone(),
-                    c.loser.clone(),
-                    c.ts.timestamp_nanos_opt().unwrap_or(0),
-                ),
-                user.as_str(),
-            )
-        })
-        .collect();
-
-    comparisons
-        .iter()
-        .map(|c| {
-            let key = (
-                c.winner.clone(),
-                c.loser.clone(),
-                c.ts.timestamp_nanos_opt().unwrap_or(0),
-            );
-            let weight = match (owner, attr_map.get(&key)) {
-                (Some(owner_id), Some(user_slug)) if user_matches_owner(user_slug, owner_id) => 2.0,
-                _ => 1.0,
-            };
-            WeightedComparison {
-                winner: c.winner.clone(),
-                loser: c.loser.clone(),
-                weight,
-            }
-        })
-        .collect()
-}
-
 /// Collect the set of open problem IDs belonging to a milestone, along with a
 /// lookup table of problem ID -> title.
 fn open_problems_in_milestone(
@@ -137,189 +81,6 @@ fn open_problems_in_milestone(
     }
 
     Ok((ids, titles))
-}
-
-// ---------------------------------------------------------------------------
-// jjj rank session
-// ---------------------------------------------------------------------------
-
-/// Interactive guided ranking session.
-fn session(ctx: &CommandContext, milestone: Option<String>, count: usize) -> Result<()> {
-    let milestone_id = resolve_milestone_for_rank(ctx, milestone)?;
-    let ms = ctx.store.load_milestone(&milestone_id)?;
-    let (problem_ids, titles) = open_problems_in_milestone(ctx, &milestone_id)?;
-
-    if problem_ids.len() < 2 {
-        println!(
-            "Need at least 2 open problems in milestone '{}' to rank.",
-            ms.title
-        );
-        return Ok(());
-    }
-
-    let user = ctx.jj().user_identity()?;
-    let user_slug = sanitize_user(&user);
-
-    // Load existing data to seed ratings for matchup selection.
-    let comparisons = load_comparisons(ctx.store.meta_path(), &milestone_id)?;
-    let attributed = load_attributed_comparisons(ctx.store.meta_path(), &milestone_id)?;
-    let owner = ms.assignee.as_deref();
-    let weighted = build_weighted(&comparisons, &attributed, owner);
-
-    let mut ratings = compute_ratings(&weighted);
-    // Ensure every open problem has a rating entry.
-    for pid in &problem_ids {
-        ratings.entry(pid.clone()).or_default();
-    }
-    // Remove any ratings for problems no longer in scope.
-    ratings.retain(|k, _| problem_ids.contains(k));
-
-    // Build recent pairs from this user to avoid re-asking the same question.
-    let recent_pairs: Vec<(String, String)> = attributed
-        .iter()
-        .filter(|(_, u)| u == &user_slug)
-        .map(|(c, _)| (c.winner.clone(), c.loser.clone()))
-        .collect();
-
-    let matchups = suggest_matchups(&ratings, &recent_pairs, count);
-
-    if matchups.is_empty() {
-        println!("No new matchups available — you have compared every pair.");
-        return Ok(());
-    }
-
-    println!("Ranking problems in milestone: {}\n", ms.title);
-    println!("For each pair, press:  [A] first wins  [B] second wins  [S] skip  [Q] quit\n");
-
-    let mut completed = 0usize;
-    let mut skipped = 0usize;
-
-    // Enter raw mode for single-keypress input.
-    crossterm::terminal::enable_raw_mode()?;
-
-    let result = run_session_loop(
-        ctx,
-        &milestone_id,
-        &user,
-        &matchups,
-        &titles,
-        &mut completed,
-        &mut skipped,
-    );
-
-    // Always restore terminal state.
-    crossterm::terminal::disable_raw_mode()?;
-
-    // Propagate any error from the session loop.
-    result?;
-
-    println!(
-        "\nSession complete: {} comparison{} recorded, {} skipped.",
-        completed,
-        if completed == 1 { "" } else { "s" },
-        skipped,
-    );
-
-    Ok(())
-}
-
-/// Inner loop for the ranking session, separated so we can always disable raw
-/// mode in the caller even if this returns an error.
-fn run_session_loop(
-    ctx: &CommandContext,
-    milestone_id: &str,
-    user: &str,
-    matchups: &[(String, String)],
-    titles: &HashMap<String, String>,
-    completed: &mut usize,
-    skipped: &mut usize,
-) -> Result<()> {
-    let mut stdout = std::io::stdout();
-
-    for (i, (a, b)) in matchups.iter().enumerate() {
-        let title_a = titles
-            .get(a)
-            .map(|t| truncate(t, 60))
-            .unwrap_or_else(|| a[..8.min(a.len())].to_string());
-        let title_b = titles
-            .get(b)
-            .map(|t| truncate(t, 60))
-            .unwrap_or_else(|| b[..8.min(b.len())].to_string());
-
-        write!(
-            stdout,
-            "[{}/{}]  [A] {}  vs  [B] {}  ? ",
-            i + 1,
-            matchups.len(),
-            title_a,
-            title_b,
-        )?;
-        stdout.flush()?;
-
-        loop {
-            if let crossterm::event::Event::Key(crossterm::event::KeyEvent {
-                code,
-                kind: crossterm::event::KeyEventKind::Press,
-                ..
-            }) = crossterm::event::read()?
-            {
-                match code {
-                    crossterm::event::KeyCode::Char('a' | 'A') => {
-                        write!(stdout, "A\r\n")?;
-                        stdout.flush()?;
-                        let comparison = Comparison {
-                            winner: a.clone(),
-                            loser: b.clone(),
-                            ts: Utc::now(),
-                        };
-                        let msg =
-                            format!("rank: {} > {}", &a[..8.min(a.len())], &b[..8.min(b.len())]);
-                        let base = ctx.store.meta_path().to_path_buf();
-                        let ms_id = milestone_id.to_string();
-                        let usr = user.to_string();
-                        ctx.store.with_metadata(&msg, || {
-                            append_comparison(&base, &ms_id, &usr, &comparison)
-                        })?;
-                        *completed += 1;
-                        break;
-                    }
-                    crossterm::event::KeyCode::Char('b' | 'B') => {
-                        write!(stdout, "B\r\n")?;
-                        stdout.flush()?;
-                        let comparison = Comparison {
-                            winner: b.clone(),
-                            loser: a.clone(),
-                            ts: Utc::now(),
-                        };
-                        let msg =
-                            format!("rank: {} > {}", &b[..8.min(b.len())], &a[..8.min(a.len())]);
-                        let base = ctx.store.meta_path().to_path_buf();
-                        let ms_id = milestone_id.to_string();
-                        let usr = user.to_string();
-                        ctx.store.with_metadata(&msg, || {
-                            append_comparison(&base, &ms_id, &usr, &comparison)
-                        })?;
-                        *completed += 1;
-                        break;
-                    }
-                    crossterm::event::KeyCode::Char('s' | 'S') => {
-                        write!(stdout, "skip\r\n")?;
-                        stdout.flush()?;
-                        *skipped += 1;
-                        break;
-                    }
-                    crossterm::event::KeyCode::Char('q' | 'Q') | crossterm::event::KeyCode::Esc => {
-                        write!(stdout, "quit\r\n")?;
-                        stdout.flush()?;
-                        return Ok(());
-                    }
-                    _ => {}
-                }
-            }
-        }
-    }
-
-    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -364,7 +125,7 @@ fn show(ctx: &CommandContext, milestone: Option<String>, by_user: bool, json: bo
             println!("[]");
         } else {
             println!(
-                "No rankings yet for milestone '{}'. Start with `jjj rank session`.",
+                "No rankings yet for milestone '{}'. Use the TUI to create personal orderings.",
                 ms.title,
             );
         }
@@ -529,7 +290,7 @@ fn history(ctx: &CommandContext, milestone: Option<String>, limit: usize) -> Res
 
     if attributed.is_empty() {
         println!(
-            "No comparison history for milestone '{}'. Start with `jjj rank session`.",
+            "No comparison history for milestone '{}'.",
             ms.title,
         );
         return Ok(());

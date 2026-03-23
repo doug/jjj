@@ -2,8 +2,18 @@ use std::fs::{self, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
 
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+
 use crate::error::Result;
-use crate::ranking::glicko2::Comparison;
+
+/// A recorded pairwise comparison (legacy format, kept for history).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Comparison {
+    pub winner: String,
+    pub loser: String,
+    pub ts: DateTime<Utc>,
+}
 
 const RANKINGS_DIR: &str = "rankings";
 

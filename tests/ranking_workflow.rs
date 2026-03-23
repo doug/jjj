@@ -1,13 +1,11 @@
 use chrono::Utc;
-use jjj::ranking::glicko2::{compute_ratings, Comparison, WeightedComparison};
-use jjj::ranking::matchups::suggest_matchups;
 use jjj::ranking::store::{
-    append_comparison, load_attributed_comparisons, load_comparisons, sanitize_user,
+    append_comparison, load_attributed_comparisons, load_comparisons, sanitize_user, Comparison,
 };
 use tempfile::TempDir;
 
 #[test]
-fn test_full_ranking_workflow() {
+fn test_comparison_store_workflow() {
     let dir = TempDir::new().unwrap();
     let milestone_id = "m-test";
 
@@ -45,36 +43,13 @@ fn test_full_ranking_workflow() {
     let attributed = load_attributed_comparisons(dir.path(), milestone_id).unwrap();
     assert_eq!(attributed.len(), 4);
 
-    // 3. Compute ratings (Alice is owner, weight=2)
+    // 3. Verify user attribution
     let alice_slug = sanitize_user("Alice <alice@test.com>");
-    let weighted: Vec<WeightedComparison> = attributed
-        .iter()
-        .map(|(c, user)| WeightedComparison {
-            winner: c.winner.clone(),
-            loser: c.loser.clone(),
-            weight: if *user == alice_slug { 2.0 } else { 1.0 },
-        })
-        .collect();
-    let ratings = compute_ratings(&weighted);
-
-    // P-1 should be highest (Alice ranked it first with 2x weight)
-    assert!(ratings["P-1"].mu > ratings["P-3"].mu);
-
-    // 4. Suggest next matchups for Bob
-    let recent: Vec<(String, String)> = attributed
-        .iter()
-        .filter(|(_, u)| *u == sanitize_user("Bob <bob@test.com>"))
-        .map(|(c, _)| (c.winner.clone(), c.loser.clone()))
-        .collect();
-    let matchups = suggest_matchups(&ratings, &recent, 3);
-    assert!(!matchups.is_empty());
-
-    // Bob only compared P-3 vs P-1, so P-2 should appear in suggestions
-    let has_p2 = matchups.iter().any(|(a, b)| a == "P-2" || b == "P-2");
-    assert!(
-        has_p2,
-        "Should suggest matchups involving the least-compared item"
-    );
+    let bob_slug = sanitize_user("Bob <bob@test.com>");
+    let alice_count = attributed.iter().filter(|(_, u)| *u == alice_slug).count();
+    let bob_count = attributed.iter().filter(|(_, u)| *u == bob_slug).count();
+    assert_eq!(alice_count, 3);
+    assert_eq!(bob_count, 1);
 }
 
 #[test]

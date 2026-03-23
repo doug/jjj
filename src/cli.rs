@@ -104,7 +104,7 @@ pub enum Commands {
         action: MilestoneAction,
     },
 
-    /// Rank problems by importance using pairwise comparisons (Glicko-2)
+    /// Rank problems by importance using personal orderings (Borda count + QV)
     #[command(display_order = 14)]
     Rank {
         #[command(subcommand)]
@@ -970,17 +970,8 @@ pub enum MilestoneAction {
 
 #[derive(Subcommand)]
 pub enum RankAction {
-    /// Start a guided ranking session — compare problems in pairs
-    #[command(display_order = 0)]
-    Session {
-        /// Milestone to rank problems for (ID, prefix, or title)
-        milestone: Option<String>,
-        /// Number of matchups to present (default: 7)
-        #[arg(long, default_value = "7")]
-        count: usize,
-    },
     /// Show the computed ranking for a milestone
-    #[command(display_order = 1)]
+    #[command(display_order = 0)]
     Show {
         /// Milestone ID, prefix, or title
         milestone: Option<String>,

@@ -18,18 +18,6 @@ mod editor;
 mod navigation;
 mod related;
 
-/// Cached problem data for the ranking overlay so it can render without re-querying.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct RankingProblem {
-    pub id: String,
-    pub title: String,
-    pub description: String,
-    pub priority: crate::models::Priority,
-    pub tags: Vec<String>,
-    pub assignee: Option<String>,
-    pub status: crate::models::ProblemStatus,
-}
-
 /// Controls how keyboard input is interpreted by the event loop.
 ///
 /// - `Normal` — standard navigation and action keys.
@@ -45,14 +33,6 @@ pub enum InputMode {
         buffer: String,
         action: InputAction,
         cursor_pos: usize,
-    },
-    Ranking {
-        milestone_id: String,
-        matchups: Vec<(String, String)>,
-        current: usize,
-        completed: usize,
-        problem_a: Box<RankingProblem>,
-        problem_b: Box<RankingProblem>,
     },
 }
 
@@ -419,9 +399,6 @@ impl App {
             }
             InputMode::Input { .. } => {
                 self.handle_input_key(key.code)?;
-            }
-            InputMode::Ranking { .. } => {
-                self.handle_ranking_key(key.code)?;
             }
             InputMode::Normal => {
                 self.handle_normal_key(key)?;
