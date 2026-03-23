@@ -403,14 +403,16 @@ impl App {
                 TreeNode::ProjectRoot { .. } | TreeNode::Backlog { .. } => {
                     super::super::DetailContent::None
                 }
-                TreeNode::Problem { id, .. } => self
-                    .data
-                    .problems
-                    .iter()
-                    .find(|p| p.id == *id)
-                    .cloned()
-                    .map(|p| super::super::DetailContent::Problem(p, None))
-                    .unwrap_or(super::super::DetailContent::None),
+                TreeNode::Problem { id, .. } => {
+                    if let Some(problem) =
+                        self.data.problems.iter().find(|p| p.id == *id).cloned()
+                    {
+                        let rank_info = self.build_problem_rank_info(&problem);
+                        super::super::DetailContent::Problem(problem, rank_info)
+                    } else {
+                        super::super::DetailContent::None
+                    }
+                }
                 TreeNode::Solution { id, .. } => self
                     .data
                     .solutions
@@ -431,6 +433,36 @@ impl App {
         }
         self.ui.detail_scroll = 0; // Reset scroll on new selection
         self.load_related_for_selected(); // Load related items for new selection
+    }
+
+    /// Build rank/vote info for a problem from milestone rankings and personal orderings.
+    fn build_problem_rank_info(
+        &self,
+        problem: &crate::models::Problem,
+    ) -> Option<super::super::ProblemRankInfo> {
+        let milestone_id = problem.milestone_id.as_ref()?;
+        let milestone_rankings = self.data.rankings.get(milestone_id)?;
+        let (rank_pos, voter_count_str) = milestone_rankings.get(&problem.id)?;
+
+        let votes: u32 = voter_count_str.parse().unwrap_or(0);
+
+        // Look up current user's QV vote allocation for this problem
+        let (budget_used, budget_total) =
+            if let Some(ordering) = self.ui.personal_orderings.get(milestone_id) {
+                let used = ordering.votes.get(&problem.id).copied().unwrap_or(0);
+                let problem_count = ordering.order.len();
+                let total = crate::ranking::borda::qv_budget(problem_count);
+                (used, total)
+            } else {
+                (0, 0)
+            };
+
+        Some(super::super::ProblemRankInfo {
+            rank: Some(*rank_pos),
+            votes,
+            budget_used,
+            budget_total,
+        })
     }
 
     pub(super) fn get_selected_entity(
