@@ -416,21 +416,27 @@ impl MetadataStore {
 
         // The meta workspace may be stale from a previous bookmark set in the
         // main workspace (bookmark set advances the shared op log). Bring it
-        // current before running jj new, which needs a non-stale working copy
-        // to snapshot the metadata files we just wrote to disk.
+        // current so the following describe + new see the files we just wrote.
         let _ = self.meta_client.execute(&["workspace", "update-stale"]);
 
-        // Create a new change in the metadata workspace, snapshotting the
-        // metadata files written above into the commit.
-        self.meta_client.new_empty_change(&full_message)?;
+        // Describe the *current* change — jj will snapshot the working copy
+        // first, so the metadata files written above land in THIS commit
+        // (not a child). Then `jj new` creates an empty child as the new
+        // working copy for the next operation.
+        self.meta_client.describe(&full_message)?;
+        self.meta_client.execute(&["new"])?;
 
-        // Update the bookmark to point to the new change.
-        // --ignore-working-copy: jj new above advanced the shared op log, so
-        // the main workspace's working copy is now stale. bookmark set doesn't
-        // touch the working copy at all, so skipping the stale check is safe.
-        // --allow-backwards: after fetch the bookmark may track a remote and
-        // moving to our new local commit would otherwise be rejected.
-        let meta_change = self.meta_client.current_change_id()?;
+        // The bookmark should point at the described commit (parent of @),
+        // not the empty working-copy change we just created.
+        let described_change = self.meta_client.execute(&[
+            "log",
+            "--no-graph",
+            "-r",
+            "@-",
+            "-T",
+            "change_id",
+        ])?;
+        let meta_change = described_change.trim().to_string();
         self.jj_client.execute(&[
             "--ignore-working-copy",
             "bookmark",
