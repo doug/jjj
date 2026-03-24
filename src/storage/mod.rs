@@ -416,21 +416,25 @@ impl MetadataStore {
 
         // The meta workspace may be stale from a previous bookmark set in the
         // main workspace (bookmark set advances the shared op log). Bring it
-        // current before running jj new, which needs a non-stale working copy
+        // current before describing, which needs a non-stale working copy
         // to snapshot the metadata files we just wrote to disk.
         let _ = self.meta_client.execute(&["workspace", "update-stale"]);
 
-        // Create a new change in the metadata workspace, snapshotting the
-        // metadata files written above into the commit.
-        self.meta_client.new_empty_change(&full_message)?;
+        // Describe FIRST so jj snapshots the working-copy files into the
+        // current change and attaches our message. Then `jj new` creates an
+        // empty child, leaving the described change as @- with all content.
+        // (The old order — new then describe — caused content to land in the
+        // parent while the description went to an empty child: issue #4.)
+        self.meta_client.describe(&full_message)?;
+        self.meta_client.execute(&["new"])?;
 
-        // Update the bookmark to point to the new change.
-        // --ignore-working-copy: jj new above advanced the shared op log, so
-        // the main workspace's working copy is now stale. bookmark set doesn't
-        // touch the working copy at all, so skipping the stale check is safe.
-        // --allow-backwards: after fetch the bookmark may track a remote and
-        // moving to our new local commit would otherwise be rejected.
-        let meta_change = self.meta_client.current_change_id()?;
+        // The commit we care about is now @- (the parent of the fresh empty
+        // change). Read its change-id for the bookmark update.
+        let meta_change = self
+            .meta_client
+            .execute(&["log", "--no-graph", "-r", "@-", "-T", "change_id"])?
+            .trim()
+            .to_string();
         self.jj_client.execute(&[
             "--ignore-working-copy",
             "bookmark",
