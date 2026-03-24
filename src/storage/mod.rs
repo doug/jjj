@@ -211,16 +211,30 @@ impl MetadataStore {
             ));
         }
 
-        // Create an empty orphan root descending from root()
-        let change_id = self
-            .jj_client
-            .new_orphan_change("Initialize jjj metadata")?;
+        // Create the meta workspace directly at root() so we never touch the
+        // user's main working copy (fixes #3: init clobbers working copy).
+        let meta_path_str = self
+            .meta_path
+            .to_str()
+            .ok_or_else(|| JjjError::PathError(self.meta_path.clone()))?;
+        self.jj_client
+            .execute(&["workspace", "add", meta_path_str, "-r", "root()"])?;
 
-        // Create the bookmark
-        self.jj_client.create_bookmark(META_BOOKMARK, &change_id)?;
+        // Describe the new workspace's change from inside the meta workspace
+        // so all operations stay in that workspace.
+        self.meta_client.describe("Initialize jjj metadata")?;
+        let change_id = self.meta_client.current_change_id()?;
 
-        // Checkout the meta bookmark to create the directory structure
-        self.ensure_meta_checkout()?;
+        // Create the bookmark from the main workspace using --ignore-working-copy
+        // to avoid stale-workspace errors from the workspace add above.
+        self.jj_client.execute(&[
+            "--ignore-working-copy",
+            "bookmark",
+            "create",
+            META_BOOKMARK,
+            "-r",
+            &change_id,
+        ])?;
 
         // Create initial structure
         fs::create_dir_all(self.meta_path.join(PROBLEMS_DIR))?;
@@ -247,19 +261,31 @@ impl MetadataStore {
     /// without requiring an explicit `jjj init`.
     pub(super) fn ensure_meta_checkout(&self) -> Result<()> {
         if !self.meta_path.exists() {
-            // Auto-initialize if the jjj bookmark has never been created.
-            if !self.jj_client.bookmark_exists(META_BOOKMARK)? {
-                let change_id = self
-                    .jj_client
-                    .new_orphan_change("Initialize jjj metadata")?;
-                self.jj_client.create_bookmark(META_BOOKMARK, &change_id)?;
-            }
             let meta_path_str = self
                 .meta_path
                 .to_str()
                 .ok_or_else(|| JjjError::PathError(self.meta_path.clone()))?;
-            self.jj_client
-                .execute(&["workspace", "add", meta_path_str, "-r", META_BOOKMARK])?;
+
+            // Auto-initialize if the jjj bookmark has never been created.
+            // Create workspace at root() so we never touch the user's main
+            // working copy.
+            if !self.jj_client.bookmark_exists(META_BOOKMARK)? {
+                self.jj_client
+                    .execute(&["workspace", "add", meta_path_str, "-r", "root()"])?;
+                self.meta_client.describe("Initialize jjj metadata")?;
+                let change_id = self.meta_client.current_change_id()?;
+                self.jj_client.execute(&[
+                    "--ignore-working-copy",
+                    "bookmark",
+                    "create",
+                    META_BOOKMARK,
+                    "-r",
+                    &change_id,
+                ])?;
+            } else {
+                self.jj_client
+                    .execute(&["workspace", "add", meta_path_str, "-r", META_BOOKMARK])?;
+            }
             // Create required subdirectories inside the newly-checked-out workspace.
             fs::create_dir_all(self.meta_path.join(PROBLEMS_DIR))?;
             fs::create_dir_all(self.meta_path.join(SOLUTIONS_DIR))?;
