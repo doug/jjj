@@ -202,7 +202,11 @@ impl MetadataStore {
         &self.meta_path
     }
 
-    /// Initialize the metadata store (create jjj bookmark)
+    /// Initialize the metadata store (create jjj bookmark).
+    ///
+    /// Creates a separate jj workspace for metadata at `.jj/jjj-meta/` without
+    /// affecting the user's main working copy. All orphan changes are created
+    /// inside the metadata workspace so the user's checkout is never modified.
     pub fn init(&self) -> Result<()> {
         // Check if already initialized
         if self.jj_client.bookmark_exists(META_BOOKMARK)? {
@@ -211,16 +215,29 @@ impl MetadataStore {
             ));
         }
 
-        // Create an empty orphan root descending from root()
-        let change_id = self
-            .jj_client
-            .new_orphan_change("Initialize jjj metadata")?;
+        // Create the metadata workspace at root() — this does NOT affect the
+        // main working copy. The workspace gets its own working-copy change
+        // whose parent is root(), which is exactly the orphan lineage we want.
+        let meta_path_str = self
+            .meta_path
+            .to_str()
+            .ok_or_else(|| JjjError::PathError(self.meta_path.clone()))?;
+        self.jj_client
+            .execute(&["workspace", "add", meta_path_str, "-r", "root()"])?;
 
-        // Create the bookmark
-        self.jj_client.create_bookmark(META_BOOKMARK, &change_id)?;
+        // Describe the meta workspace's working-copy change (the orphan root).
+        self.meta_client.describe("Initialize jjj metadata")?;
 
-        // Checkout the meta bookmark to create the directory structure
-        self.ensure_meta_checkout()?;
+        // Create the bookmark pointing at this orphan change.
+        let change_id = self.meta_client.current_change_id()?;
+        self.jj_client.execute(&[
+            "--ignore-working-copy",
+            "bookmark",
+            "create",
+            META_BOOKMARK,
+            "-r",
+            &change_id,
+        ])?;
 
         // Create initial structure
         fs::create_dir_all(self.meta_path.join(PROBLEMS_DIR))?;
@@ -247,19 +264,32 @@ impl MetadataStore {
     /// without requiring an explicit `jjj init`.
     pub(super) fn ensure_meta_checkout(&self) -> Result<()> {
         if !self.meta_path.exists() {
-            // Auto-initialize if the jjj bookmark has never been created.
-            if !self.jj_client.bookmark_exists(META_BOOKMARK)? {
-                let change_id = self
-                    .jj_client
-                    .new_orphan_change("Initialize jjj metadata")?;
-                self.jj_client.create_bookmark(META_BOOKMARK, &change_id)?;
-            }
             let meta_path_str = self
                 .meta_path
                 .to_str()
                 .ok_or_else(|| JjjError::PathError(self.meta_path.clone()))?;
-            self.jj_client
-                .execute(&["workspace", "add", meta_path_str, "-r", META_BOOKMARK])?;
+
+            // Auto-initialize if the jjj bookmark has never been created.
+            // Create the workspace at root() so the main working copy is
+            // never affected, then set up the bookmark from inside the
+            // metadata workspace.
+            if !self.jj_client.bookmark_exists(META_BOOKMARK)? {
+                self.jj_client
+                    .execute(&["workspace", "add", meta_path_str, "-r", "root()"])?;
+                self.meta_client.describe("Initialize jjj metadata")?;
+                let change_id = self.meta_client.current_change_id()?;
+                self.jj_client.execute(&[
+                    "--ignore-working-copy",
+                    "bookmark",
+                    "create",
+                    META_BOOKMARK,
+                    "-r",
+                    &change_id,
+                ])?;
+            } else {
+                self.jj_client
+                    .execute(&["workspace", "add", meta_path_str, "-r", META_BOOKMARK])?;
+            }
             // Create required subdirectories inside the newly-checked-out workspace.
             fs::create_dir_all(self.meta_path.join(PROBLEMS_DIR))?;
             fs::create_dir_all(self.meta_path.join(SOLUTIONS_DIR))?;
