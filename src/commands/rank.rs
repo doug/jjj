@@ -4,10 +4,9 @@ use serde::Serialize;
 
 use crate::cli::RankAction;
 use crate::context::CommandContext;
-use crate::display::short_id;
 use crate::error::Result;
 use crate::ranking::borda::{aggregate_rankings, qv_budget, total_vote_cost};
-use crate::ranking::ordering::{load_all_orderings, sanitize_user};
+use crate::ranking::ordering::load_all_orderings;
 use crate::utils::truncate;
 
 /// Dispatch a `jjj rank` subcommand.
@@ -100,12 +99,11 @@ struct UserOrderingEntry {
     rank: usize,
     problem_id: String,
     title: String,
-    votes: u32,
+    votes: i32,
 }
 
 #[derive(Serialize)]
 struct UserBreakdown {
-    is_owner: bool,
     budget: u32,
     budget_used: u32,
     ordering: Vec<UserOrderingEntry>,
@@ -131,19 +129,10 @@ fn show(ctx: &CommandContext, milestone: Option<String>, by_user: bool, json: bo
         return Ok(());
     }
 
-    let owner = ms.assignee.as_deref();
-    let owner_slug = owner.map(|o| sanitize_user(o));
-
     if by_user {
-        show_by_user(
-            &orderings,
-            &problem_ids,
-            &titles,
-            owner_slug.as_deref(),
-            json,
-        )?;
+        show_by_user(&orderings, &problem_ids, &titles, json)?;
     } else {
-        let ranked = aggregate_rankings(&orderings, owner_slug.as_deref(), problem_ids.len());
+        let ranked = aggregate_rankings(&orderings, problem_ids.len());
 
         // Build entries (only for problems still in the milestone).
         let entries: Vec<RankEntry> = ranked
@@ -191,7 +180,6 @@ fn show_by_user(
     orderings: &HashMap<String, crate::ranking::ordering::UserOrdering>,
     problem_ids: &[String],
     titles: &HashMap<String, String>,
-    owner_slug: Option<&str>,
     json: bool,
 ) -> Result<()> {
     let mut users: Vec<&String> = orderings.keys().collect();
@@ -204,7 +192,6 @@ fn show_by_user(
 
         for user in &users {
             let ordering = &orderings[*user];
-            let is_owner = owner_slug == Some(user.as_str());
             let budget_used = total_vote_cost(&ordering.votes);
 
             let entries: Vec<UserOrderingEntry> = ordering
@@ -223,7 +210,6 @@ fn show_by_user(
             all_data.insert(
                 user.as_str(),
                 UserBreakdown {
-                    is_owner,
                     budget,
                     budget_used,
                     ordering: entries,
@@ -235,14 +221,8 @@ fn show_by_user(
     } else {
         for user in &users {
             let ordering = &orderings[*user];
-            let is_owner = owner_slug == Some(user.as_str());
-            let label = if is_owner {
-                format!("{} (owner, 2x weight)", user)
-            } else {
-                user.to_string()
-            };
             let budget_used = total_vote_cost(&ordering.votes);
-            println!("\n--- {} ---", label);
+            println!("\n--- {} ---", user);
             println!("  QV budget: {}/{} used\n", budget_used, budget);
 
             println!(
@@ -260,6 +240,8 @@ fn show_by_user(
                 let votes = ordering.votes.get(id).copied().unwrap_or(0);
                 let votes_str = if votes > 0 {
                     format!("+{}", votes)
+                } else if votes < 0 {
+                    format!("{}", votes)
                 } else {
                     String::new()
                 };

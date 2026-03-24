@@ -456,12 +456,13 @@ impl App {
         let milestone_rankings = self.data.rankings.get(milestone_id)?;
         let (rank_pos, voter_count_str) = milestone_rankings.get(&problem.id)?;
 
-        let votes: u32 = voter_count_str.parse().unwrap_or(0);
+        let votes: i32 = voter_count_str.parse().unwrap_or(0);
 
         // Look up current user's QV vote allocation for this problem
         let (budget_used, budget_total) =
             if let Some(ordering) = self.ui.personal_orderings.get(milestone_id) {
-                let used = ordering.votes.get(&problem.id).copied().unwrap_or(0);
+                let v = ordering.votes.get(&problem.id).copied().unwrap_or(0);
+                let used = crate::ranking::borda::vote_cost(v);
                 let problem_count = ordering.order.len();
                 let total = crate::ranking::borda::qv_budget(problem_count);
                 (used, total)

@@ -1388,11 +1388,20 @@ impl App {
     }
 
     /// Move the selected problem up in the user's personal ordering.
+    /// Cursor stays at the same position so the user can triage the next item.
     pub(super) fn move_problem_up(&mut self) -> Result<()> {
         let (milestone_id, problem_id) = match self.selected_milestone_problem() {
             Some(x) => x,
-            None => return Ok(()),
+            None => {
+                self.show_flash("Select a milestone problem to reorder");
+                return Ok(());
+            }
         };
+
+        // Auto-switch to personal ordering view so the reorder is visible
+        if !self.ui.show_personal_ordering {
+            self.ui.show_personal_ordering = true;
+        }
 
         // Ensure ordering exists
         if !self.ui.personal_orderings.contains_key(&milestone_id) {
@@ -1413,22 +1422,30 @@ impl App {
                     ordering,
                 )?;
                 self.refresh_data()?;
-                // Move cursor up too so it follows the item
-                if self.ui.tree_index > 0 {
-                    self.ui.tree_index -= 1;
-                }
+                // Cursor stays — the swapped-down item is now at this position
                 self.update_selected_detail();
+            } else {
+                self.show_flash("Already at top");
             }
         }
         Ok(())
     }
 
     /// Move the selected problem down in the user's personal ordering.
+    /// Cursor stays at the same position so the user can triage the next item.
     pub(super) fn move_problem_down(&mut self) -> Result<()> {
         let (milestone_id, problem_id) = match self.selected_milestone_problem() {
             Some(x) => x,
-            None => return Ok(()),
+            None => {
+                self.show_flash("Select a milestone problem to reorder");
+                return Ok(());
+            }
         };
+
+        // Auto-switch to personal ordering view so the reorder is visible
+        if !self.ui.show_personal_ordering {
+            self.ui.show_personal_ordering = true;
+        }
 
         if !self.ui.personal_orderings.contains_key(&milestone_id) {
             let default = self.default_ordering_for_milestone(&milestone_id);
@@ -1448,17 +1465,16 @@ impl App {
                     ordering,
                 )?;
                 self.refresh_data()?;
-                // Move cursor down to follow the item
-                if self.ui.tree_index + 1 < self.cache.tree_items.len() {
-                    self.ui.tree_index += 1;
-                }
+                // Cursor stays — the swapped-up item is now at this position
                 self.update_selected_detail();
+            } else {
+                self.show_flash("Already at bottom");
             }
         }
         Ok(())
     }
 
-    /// Add a quadratic vote to the selected problem.
+    /// Add a quadratic vote to the selected problem (increment: can go from negative to positive).
     pub(super) fn add_vote(&mut self) -> Result<()> {
         use crate::ranking::{borda, ordering};
 
@@ -1482,14 +1498,23 @@ impl App {
         let ord = self.ui.personal_orderings.get_mut(&milestone_id).unwrap();
         let current_votes = *ord.votes.get(&problem_id).unwrap_or(&0);
         let current_total_cost = borda::total_vote_cost(&ord.votes);
-        let marginal_cost = borda::vote_cost(current_votes + 1) - borda::vote_cost(current_votes);
+        let new_cost = borda::vote_cost(current_votes + 1);
+        let old_cost = borda::vote_cost(current_votes);
+        let marginal_cost = new_cost.saturating_sub(old_cost);
 
-        if current_total_cost + marginal_cost > budget {
+        // When going from negative toward zero, cost decreases — always allowed.
+        // When going positive, check budget.
+        if new_cost > old_cost && current_total_cost + marginal_cost > budget {
             self.show_flash(&format!("No budget remaining ({}/{})", current_total_cost, budget));
             return Ok(());
         }
 
-        *ord.votes.entry(problem_id.clone()).or_insert(0) += 1;
+        let new_val = current_votes + 1;
+        if new_val == 0 {
+            ord.votes.remove(&problem_id);
+        } else {
+            *ord.votes.entry(problem_id.clone()).or_insert(0) = new_val;
+        }
         ord.updated_at = chrono::Utc::now();
 
         ordering::save_user_ordering(
@@ -1499,15 +1524,20 @@ impl App {
             ord,
         )?;
 
-        let new_votes = *ord.votes.get(&problem_id).unwrap_or(&0);
         let new_total_cost = borda::total_vote_cost(&ord.votes);
-        self.show_flash(&format!("{}★ (budget {}/{})", new_votes, new_total_cost, budget));
+        if new_val > 0 {
+            self.show_flash(&format!("+{}▲ (budget {}/{})", new_val, new_total_cost, budget));
+        } else if new_val < 0 {
+            self.show_flash(&format!("{}▼ (budget {}/{})", new_val, new_total_cost, budget));
+        } else {
+            self.show_flash(&format!("Vote cleared (budget {}/{})", new_total_cost, budget));
+        }
 
         self.refresh_data()?;
         Ok(())
     }
 
-    /// Remove a quadratic vote from the selected problem.
+    /// Remove a quadratic vote from the selected problem (decrement: can go negative).
     pub(super) fn remove_vote(&mut self) -> Result<()> {
         use crate::ranking::{borda, ordering};
 
@@ -1516,37 +1546,55 @@ impl App {
             None => return Ok(()),
         };
 
-        let ord = match self.ui.personal_orderings.get_mut(&milestone_id) {
-            Some(o) => o,
-            None => return Ok(()),
-        };
-
-        let current_votes = *ord.votes.get(&problem_id).unwrap_or(&0);
-        if current_votes == 0 {
-            return Ok(());
-        }
-
-        if current_votes == 1 {
-            ord.votes.remove(&problem_id);
-        } else {
-            *ord.votes.get_mut(&problem_id).unwrap() -= 1;
-        }
-        ord.updated_at = chrono::Utc::now();
-
-        ordering::save_user_ordering(
-            self.store.meta_path(),
-            &milestone_id,
-            &self.user,
-            ord,
-        )?;
-
         let problem_count = self.data.problems
             .iter()
             .filter(|p| p.milestone_id.as_deref() == Some(&milestone_id))
             .count();
         let budget = borda::qv_budget(problem_count);
+
+        // Ensure ordering exists
+        if !self.ui.personal_orderings.contains_key(&milestone_id) {
+            let default = self.default_ordering_for_milestone(&milestone_id);
+            self.ui
+                .personal_orderings
+                .insert(milestone_id.clone(), default);
+        }
+
+        let ord = self.ui.personal_orderings.get_mut(&milestone_id).unwrap();
+        let current_votes = *ord.votes.get(&problem_id).unwrap_or(&0);
+        let current_total_cost = borda::total_vote_cost(&ord.votes);
+        let new_cost = borda::vote_cost(current_votes - 1);
+        let old_cost = borda::vote_cost(current_votes);
+        let marginal_cost = new_cost.saturating_sub(old_cost);
+
+        // When going from positive toward zero, cost decreases — always allowed.
+        // When going negative, check budget.
+        if new_cost > old_cost && current_total_cost + marginal_cost > budget {
+            self.show_flash(&format!(
+                "No budget remaining ({}/{})",
+                current_total_cost, budget
+            ));
+            return Ok(());
+        }
+
+        let new_val = current_votes - 1;
+        if new_val == 0 {
+            ord.votes.remove(&problem_id);
+        } else {
+            *ord.votes.entry(problem_id.clone()).or_insert(0) = new_val;
+        }
+        ord.updated_at = chrono::Utc::now();
+
+        ordering::save_user_ordering(self.store.meta_path(), &milestone_id, &self.user, ord)?;
+
         let new_total_cost = borda::total_vote_cost(&ord.votes);
-        self.show_flash(&format!("Vote removed (budget {}/{})", new_total_cost, budget));
+        if new_val > 0 {
+            self.show_flash(&format!("+{}▲ (budget {}/{})", new_val, new_total_cost, budget));
+        } else if new_val < 0 {
+            self.show_flash(&format!("{}▼ (budget {}/{})", new_val, new_total_cost, budget));
+        } else {
+            self.show_flash(&format!("Vote cleared (budget {}/{})", new_total_cost, budget));
+        }
 
         self.refresh_data()?;
         Ok(())

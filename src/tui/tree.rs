@@ -26,7 +26,10 @@ pub enum TreeNode {
         priority: Priority,
         assignee: Option<String>,
         expanded: bool,
-        votes: u32,
+        rank: Option<usize>,
+        votes: i32,
+        /// Total ranked problems in milestone (for tier computation).
+        problem_count: usize,
     },
     Solution {
         id: String,
@@ -259,7 +262,8 @@ fn add_problems(
     personal_orderings: &std::collections::HashMap<String, crate::ranking::ordering::UserOrdering>,
     milestone_id: Option<&str>,
 ) {
-    for problem in problems {
+    let problem_count = problems.len();
+    for (idx, problem) in problems.iter().enumerate() {
         let problem_solutions: Vec<_> = solutions
             .iter()
             .filter(|s| s.problem_id == problem.id)
@@ -271,6 +275,12 @@ fn add_problems(
             .and_then(|ord| ord.votes.get(&problem.id))
             .copied()
             .unwrap_or(0);
+        // Rank is 1-indexed position within the milestone (only for milestone problems)
+        let rank = if milestone_id.is_some() {
+            Some(idx + 1)
+        } else {
+            None
+        };
         items.push(FlatTreeItem {
             node: TreeNode::Problem {
                 id: problem.id.clone(),
@@ -279,7 +289,9 @@ fn add_problems(
                 priority: problem.priority.clone(),
                 assignee: problem.assignee.clone(),
                 expanded,
+                rank,
                 votes,
+                problem_count,
             },
             depth,
             has_children: !problem_solutions.is_empty(),
@@ -923,7 +935,9 @@ mod tests {
             priority: Priority::Medium,
             assignee: None,
             expanded: false,
+            rank: None,
             votes: 0,
+            problem_count: 0,
         };
         assert!(!node.is_expanded());
         node.set_expanded(true);

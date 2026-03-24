@@ -32,10 +32,11 @@ pub fn sanitize_user(user: &str) -> String {
 pub struct UserOrdering {
     /// Problem IDs in priority order (index 0 = highest priority).
     pub order: Vec<String>,
-    /// Quadratic vote allocations: problem_id -> number of votes.
-    /// Cost of K votes = K^2. Budget = max(100, 2*N) where N = problems in milestone.
+    /// Quadratic vote allocations: problem_id -> signed vote count.
+    /// Positive = support, negative = opposition. Cost of v votes = |v|^2.
+    /// Budget = max(100, 2*N) where N = problems in milestone.
     #[serde(default)]
-    pub votes: HashMap<String, u32>,
+    pub votes: HashMap<String, i32>,
     pub updated_at: DateTime<Utc>,
 }
 
@@ -139,8 +140,8 @@ mod tests {
     #[test]
     fn test_user_ordering_roundtrip() {
         let mut votes = HashMap::new();
-        votes.insert("problem-1".to_string(), 3);
-        votes.insert("problem-2".to_string(), 1);
+        votes.insert("problem-1".to_string(), 3i32);
+        votes.insert("problem-2".to_string(), -1i32);
 
         let ordering = UserOrdering {
             order: vec!["problem-1".to_string(), "problem-2".to_string()],
@@ -154,7 +155,7 @@ mod tests {
         assert_eq!(deserialized.order, ordering.order);
         assert_eq!(deserialized.votes.len(), 2);
         assert_eq!(deserialized.votes["problem-1"], 3);
-        assert_eq!(deserialized.votes["problem-2"], 1);
+        assert_eq!(deserialized.votes["problem-2"], -1);
     }
 
     #[test]

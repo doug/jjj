@@ -103,6 +103,21 @@ pub(super) fn severity_color(severity: &crate::models::CritiqueSeverity) -> Colo
     }
 }
 
+/// Color a rank number by tier: top third green, middle yellow, bottom red.
+pub(super) fn tier_color_for_rank(rank: usize, total: usize) -> Color {
+    if total == 0 {
+        return Color::DarkGray;
+    }
+    let third = total.div_ceil(3);
+    if rank <= third {
+        Color::Green
+    } else if rank <= third * 2 {
+        Color::Yellow
+    } else {
+        Color::Red
+    }
+}
+
 pub(super) fn priority_prefix(priority: &Priority) -> &'static str {
     match priority {
         Priority::Critical => "🔴 ",
@@ -134,11 +149,25 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     use super::tree::TreeNode;
 
     // Apply filter if enabled
-    let display_items: Vec<_> = if app.ui.filter_actions_only {
+    let mut display_items: Vec<_> = if app.ui.filter_actions_only {
         super::filter_tree_to_actions(&app.cache.tree_items)
     } else {
         app.cache.tree_items.clone()
     };
+
+    // When tier drill is active, hide other milestones and structural nodes
+    if let Some((drill_ms, _, _)) = app.ui.tier_drill.last() {
+        display_items.retain(|item| match &item.node {
+            // Keep the drilled milestone and its children
+            TreeNode::Milestone { id, .. } => id == drill_ms,
+            // Keep problems/solutions/critiques (already filtered by tree builder)
+            TreeNode::Problem { .. } | TreeNode::Solution { .. } | TreeNode::Critique { .. } => {
+                true
+            }
+            // Hide ProjectRoot and Backlog during drill
+            TreeNode::ProjectRoot { .. } | TreeNode::Backlog { .. } => false,
+        });
+    }
 
     let border_color = if app.ui.focused_pane == super::app::FocusedPane::Tree {
         Color::Cyan
@@ -147,11 +176,20 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     };
     let border_style = Style::default().fg(border_color);
 
-    // Update title based on filter mode
-    let title = if app.ui.filter_actions_only {
-        "Project Tree [Actions]"
+    // Build title with tier breadcrumbs when drilling
+    let title: String = if !app.ui.tier_drill.is_empty() {
+        let (_, start, end) = app.ui.tier_drill.last().unwrap();
+        let depth = app.ui.tier_drill.len();
+        format!(
+            "Tier Drill [{} deep] items {}-{} [S+\u{2190} to zoom out]",
+            depth,
+            start + 1,
+            end
+        )
+    } else if app.ui.filter_actions_only {
+        "Project Tree [Actions]".to_string()
     } else {
-        "Project Tree"
+        "Project Tree".to_string()
     };
 
     let cursor_id = app
@@ -180,7 +218,6 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                     title,
                     status,
                     assignee,
-                    votes,
                     ..
                 } => {
                     let assignee_suffix = assignee
@@ -192,6 +229,7 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                             format!(" @{}", name)
                         })
                         .unwrap_or_default();
+                    // Build label without rank prefix (rank is rendered as a colored span)
                     (
                         format!(
                             "{}{}{}{}",
@@ -255,16 +293,32 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
             } else {
                 Style::default().fg(Color::Cyan)
             };
-            let mut spans = vec![
-                Span::styled(gutter, gutter_style),
-                Span::styled(label, style),
-            ];
-            // Add vote stars for problems with votes
+            let mut spans = vec![Span::styled(gutter, gutter_style)];
+            // Add colored rank prefix for problems
+            if let TreeNode::Problem {
+                rank: Some(r),
+                problem_count,
+                ..
+            } = &item.node
+            {
+                let tier_color = tier_color_for_rank(*r, *problem_count);
+                spans.push(Span::styled(
+                    format!("#{} ", r),
+                    Style::default().fg(tier_color),
+                ));
+            }
+            spans.push(Span::styled(label, style));
+            // Add vote arrows for problems with votes
             if let TreeNode::Problem { votes, .. } = &item.node {
                 if *votes > 0 {
                     spans.push(Span::styled(
-                        format!(" {}", "★".repeat(*votes as usize)),
-                        Style::default().fg(Color::Yellow),
+                        format!(" {}", "▲".repeat(*votes as usize)),
+                        Style::default().fg(Color::Green),
+                    ));
+                } else if *votes < 0 {
+                    spans.push(Span::styled(
+                        format!(" {}", "▼".repeat(votes.unsigned_abs() as usize)),
+                        Style::default().fg(Color::Red),
                     ));
                 }
             }

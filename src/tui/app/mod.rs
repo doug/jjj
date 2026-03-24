@@ -131,7 +131,7 @@ impl ProjectData {
         })
     }
 
-    /// Compute aggregated rankings per milestone using Borda count + QV.
+    /// Compute aggregated rankings per milestone using harmonic rank + squared votes.
     /// Returns milestone_id -> problem_id -> (rank_position, voter_count_str).
     fn compute_rankings(
         store: &MetadataStore,
@@ -149,18 +149,9 @@ impl ProjectData {
                 continue;
             }
 
-            let owner_slug = milestone
-                .assignee
-                .as_deref()
-                .map(ordering::sanitize_user);
-
             let problem_count = orderings.values().map(|o| o.order.len()).max().unwrap_or(0);
 
-            let aggregated = borda::aggregate_rankings(
-                &orderings,
-                owner_slug.as_deref(),
-                problem_count,
-            );
+            let aggregated = borda::aggregate_rankings(&orderings, problem_count);
 
             let mut milestone_rankings = HashMap::new();
             for (problem_id, rank) in &aggregated {
