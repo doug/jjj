@@ -1,5 +1,6 @@
 use crate::context::CommandContext;
 use crate::db::{self, search, Database};
+use crate::display::short_id;
 use crate::embeddings::EmbeddingClient;
 use crate::error::Result;
 use crate::local_config::LocalConfig;
@@ -76,14 +77,16 @@ fn execute_similarity_search(
         println!(
             "Entities similar to {}/{}:\n",
             type_char,
-            &full_id[..6.min(full_id.len())]
+            short_id(&full_id)
         );
         for result in results {
-            let short_id = &result.entity_id[..6.min(result.entity_id.len())];
             let result_type_char = result.entity_type.chars().next().unwrap_or('?');
             println!(
                 "  {}/{}  [{:.2}]  \"{}\"",
-                result_type_char, short_id, result.similarity, result.title
+                result_type_char,
+                short_id(&result.entity_id),
+                result.similarity,
+                result.title
             );
         }
     }

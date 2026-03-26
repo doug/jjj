@@ -22,6 +22,7 @@ pub mod ui;
 use crate::cli::{Cli, Commands};
 use crate::context::CommandContext;
 use crate::db::{search as db_search, Database};
+use crate::display::short_id;
 use crate::error::Result;
 
 /// Entry point for CLI command dispatch.
@@ -183,12 +184,11 @@ pub(crate) fn show_related_items(
     println!("\n{}", "─".repeat(50));
     println!("\nRelated:");
     for result in results {
-        let short_id = &result.entity_id[..6.min(result.entity_id.len())];
         let type_prefix = result.entity_type.chars().next().unwrap_or('?');
         println!(
             "  {}/{}  [{:.2}]  \"{}\"",
             type_prefix,
-            short_id,
+            short_id(&result.entity_id),
             result.similarity,
             truncate_title(&result.title, 50)
         );

@@ -1,4 +1,5 @@
 use super::app::{App, InputMode};
+use crate::display::short_id;
 use crate::models::Priority;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -172,21 +173,11 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
             let action_sym = item.action_symbol.as_deref().unwrap_or("");
 
             let (label, color, dim) = match &item.node {
-                TreeNode::ProjectRoot { .. } => (
-                    format!("{}Root", indent),
-                    Color::White,
-                    false,
-                ),
-                TreeNode::Milestone { title, .. } => (
-                    format!("{}{}", indent, title),
-                    Color::Magenta,
-                    false,
-                ),
-                TreeNode::Backlog { .. } => (
-                    format!("{}Backlog", indent),
-                    Color::DarkGray,
-                    false,
-                ),
+                TreeNode::ProjectRoot { .. } => (format!("{}Root", indent), Color::White, false),
+                TreeNode::Milestone { title, .. } => {
+                    (format!("{}{}", indent, title), Color::Magenta, false)
+                }
+                TreeNode::Backlog { .. } => (format!("{}Backlog", indent), Color::DarkGray, false),
                 TreeNode::Problem {
                     title,
                     status,
@@ -207,11 +198,7 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                     (
                         format!(
                             "{}{}{}{}{}",
-                            indent,
-                            action_sym,
-                            rank_prefix,
-                            title,
-                            assignee_suffix
+                            indent, action_sym, rank_prefix, title, assignee_suffix
                         ),
                         status_color_problem(status),
                         false,
@@ -232,13 +219,7 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                         })
                         .unwrap_or_default();
                     (
-                        format!(
-                            "{}{}{}{}",
-                            indent,
-                            action_sym,
-                            title,
-                            assignee_suffix
-                        ),
+                        format!("{}{}{}{}", indent, action_sym, title, assignee_suffix),
                         status_color_solution(status),
                         false,
                     )
@@ -249,13 +230,7 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                     severity,
                     ..
                 } => (
-                    format!(
-                        "{}{}{} [{}]",
-                        indent,
-                        action_sym,
-                        title,
-                        severity
-                    ),
+                    format!("{}{}{} [{}]", indent, action_sym, title, severity),
                     status_color_critique(status),
                     false,
                 ),
@@ -277,7 +252,9 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
             // Gutter: cursor gets "> ", selected gets "> " (persistent), else "  "
             let gutter = if is_cursor || is_selected { "> " } else { "  " };
             let gutter_style = if is_cursor {
-                Style::default().fg(Color::White).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(Color::Cyan)
             };
@@ -381,12 +358,14 @@ fn draw_related_panel(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                 } else {
                     Style::default()
                 };
-                let short_id = &r.entity_id[..6.min(r.entity_id.len())];
                 let type_char = r.entity_type.chars().next().unwrap_or('?');
                 ListItem::new(Line::from(Span::styled(
                     format!(
                         "{}/{}  [{:.2}]  {}",
-                        type_char, short_id, r.similarity, r.title
+                        type_char,
+                        short_id(&r.entity_id),
+                        r.similarity,
+                        r.title
                     ),
                     style,
                 )))
@@ -602,9 +581,8 @@ fn draw_ranking_overlay(f: &mut Frame, app: &App) {
     render_problem_column(f, problem_b, "B", columns[1]);
 
     // Footer with flash message or key hints
-    let footer_lines =
-        if let Some((msg, _)) = &app.ui.flash_message {
-            vec![
+    let footer_lines = if let Some((msg, _)) = &app.ui.flash_message {
+        vec![
             Line::from(Span::styled(msg.as_str(), Style::default().fg(Color::Green))),
             Line::from(Span::styled(
                 "  [\u{2190}/1] left wins    [Space] skip    [\u{2192}/2] right wins    [q/Esc] quit",
@@ -612,43 +590,43 @@ fn draw_ranking_overlay(f: &mut Frame, app: &App) {
             )),
             Line::from(""),
         ]
-        } else {
-            vec![
-                Line::from(vec![
-                    Span::styled(
-                        "  [\u{2190}/1] ",
-                        Style::default()
-                            .fg(Color::Cyan)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                    Span::styled("\u{2190} left wins", Style::default().fg(Color::White)),
-                    Span::styled(
-                        "    [Space] ",
-                        Style::default()
-                            .fg(Color::Cyan)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                    Span::styled("skip", Style::default().fg(Color::White)),
-                    Span::styled(
-                        "    [\u{2192}/2] ",
-                        Style::default()
-                            .fg(Color::Cyan)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                    Span::styled("right wins \u{2192}", Style::default().fg(Color::White)),
-                ]),
-                Line::from(vec![
-                    Span::styled(
-                        "  [q/Esc] ",
-                        Style::default()
-                            .fg(Color::Cyan)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                    Span::styled("quit ranking", Style::default().fg(Color::White)),
-                ]),
-                Line::from(""),
-            ]
-        };
+    } else {
+        vec![
+            Line::from(vec![
+                Span::styled(
+                    "  [\u{2190}/1] ",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled("\u{2190} left wins", Style::default().fg(Color::White)),
+                Span::styled(
+                    "    [Space] ",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled("skip", Style::default().fg(Color::White)),
+                Span::styled(
+                    "    [\u{2192}/2] ",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled("right wins \u{2192}", Style::default().fg(Color::White)),
+            ]),
+            Line::from(vec![
+                Span::styled(
+                    "  [q/Esc] ",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled("quit ranking", Style::default().fg(Color::White)),
+            ]),
+            Line::from(""),
+        ]
+    };
     let footer = Paragraph::new(footer_lines).block(
         Block::default()
             .borders(Borders::TOP)
@@ -745,7 +723,9 @@ fn get_context_actions(app: &App) -> Vec<Line<'static>> {
             lines.push(Line::from("    s       Mark solved"));
             lines.push(Line::from("    d       Dissolve (with reason)"));
             lines.push(Line::from("    o       Reopen"));
-            lines.push(Line::from("    r       Rank problems (\u{2190}/\u{2192}/Space/q)"));
+            lines.push(Line::from(
+                "    r       Rank problems (\u{2190}/\u{2192}/Space/q)",
+            ));
             lines.push(Line::from("    A       Assign to me"));
             lines.push(Line::from("    m       Move to milestone"));
             lines.push(Line::from("    e       Edit title"));
@@ -778,7 +758,9 @@ fn get_context_actions(app: &App) -> Vec<Line<'static>> {
             lines.push(Line::from("    s       Mark completed"));
             lines.push(Line::from("    d       Cancel"));
             lines.push(Line::from("    o       Activate"));
-            lines.push(Line::from("    r       Rank problems (\u{2190}/\u{2192}/Space/q)"));
+            lines.push(Line::from(
+                "    r       Rank problems (\u{2190}/\u{2192}/Space/q)",
+            ));
             lines.push(Line::from("    A       Assign to me"));
             lines.push(Line::from("    e       Edit title"));
             lines.push(Line::from("    E       Edit in $EDITOR"));

@@ -2,7 +2,7 @@ use crate::cli::ProblemAction;
 use crate::commands::show_related_items;
 use crate::context::CommandContext;
 use crate::db::{search, Database};
-use crate::display::truncated_prefixes;
+use crate::display::{short_id, truncated_prefixes};
 use crate::embeddings::EmbeddingClient;
 use crate::error::Result;
 use crate::local_config::LocalConfig;
@@ -103,7 +103,7 @@ fn new_problem(
             eprintln!(
                 "Warning: A problem with a similar title already exists: '{}' ({})",
                 dup.title,
-                &dup.id[..8.min(dup.id.len())]
+                short_id(&dup.id)
             );
             eprintln!("Use --force to create anyway.");
             return Err(crate::error::JjjError::Validation(
@@ -120,8 +120,7 @@ fn new_problem(
                     if !results.is_empty() {
                         eprintln!("Warning: similar problems already exist:");
                         for r in &results {
-                            let short_id = &r.entity_id[..6.min(r.entity_id.len())];
-                            eprintln!("  p/{} — \"{}\"", short_id, r.title);
+                            eprintln!("  p/{} — \"{}\"", short_id(&r.entity_id), r.title);
                         }
                         eprintln!("\nUse --force to create anyway.");
                         return Err(crate::error::JjjError::Validation(
@@ -990,10 +989,11 @@ fn prompt_create_anyway(similar: &[search::SimilarityResult]) -> Result<bool> {
 
     println!("\nSimilar existing problems found:\n");
     for result in similar {
-        let short_id = &result.entity_id[..6.min(result.entity_id.len())];
         println!(
             "  p/{}  [{:.2}]  \"{}\"",
-            short_id, result.similarity, result.title
+            short_id(&result.entity_id),
+            result.similarity,
+            result.title
         );
     }
     println!();

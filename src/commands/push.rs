@@ -1,8 +1,7 @@
 use crate::context::CommandContext;
 use crate::db::{self, Database};
 use crate::error::Result;
-use crate::models::{CritiqueStatus, ProblemStatus};
-use crate::storage::MetadataStore;
+use crate::models::CritiqueStatus;
 use std::io::{self, Write};
 
 fn prompt_yes_no(message: &str) -> bool {
@@ -128,13 +127,15 @@ pub fn execute(
 
     // 3. Smart prompts (unless --no-prompt)
     if !no_prompt {
-        check_and_prompt_approve_solve(store)?;
+        check_and_prompt_approve_solve(ctx)?;
     }
 
     Ok(())
 }
 
-fn check_and_prompt_approve_solve(store: &MetadataStore) -> Result<()> {
+fn check_and_prompt_approve_solve(ctx: &CommandContext) -> Result<()> {
+    let store = &ctx.store;
+
     // Find user's active solutions
     let solutions = store.list_solutions()?;
     let user = store.jj_client.user_name().unwrap_or_default();
@@ -156,38 +157,9 @@ fn check_and_prompt_approve_solve(store: &MetadataStore) -> Result<()> {
                 "All critiques on {} \"{}\" resolved. Approve solution?",
                 solution.id, solution.title
             )) {
-                let mut solution = store.load_solution(&solution.id)?;
-                solution.approve();
-                store.save_solution(&solution)?;
+                // Use finalize_solution for proper validation (critique checks, events, auto-solve)
+                crate::commands::solution::finalize_solution(ctx, &solution.id, false, None)?;
                 println!("  Solution {} approved.", solution.id);
-
-                // Check if problem can be solved
-                let problem = store.load_problem(&solution.problem_id)?;
-                if problem.status == ProblemStatus::Open
-                    || problem.status == ProblemStatus::InProgress
-                {
-                    // Check for other active solutions
-                    let other_active: Vec<_> = solutions
-                        .iter()
-                        .filter(|s| {
-                            s.problem_id == solution.problem_id
-                                && s.is_active()
-                                && s.id != solution.id
-                        })
-                        .collect();
-
-                    if other_active.is_empty()
-                        && prompt_yes_no(&format!(
-                            "Problem {} \"{}\" has no other active solutions. Mark solved?",
-                            problem.id, problem.title
-                        ))
-                    {
-                        let mut problem = store.load_problem(&solution.problem_id)?;
-                        problem.set_status(ProblemStatus::Solved);
-                        store.save_problem(&problem)?;
-                        println!("  Problem {} solved.", problem.id);
-                    }
-                }
             }
         }
     }

@@ -1,5 +1,6 @@
 use super::super::next_actions::EntityType;
 use super::{App, InputAction, InputMode};
+use crate::display::short_id;
 use crate::error::Result;
 use crate::models::{CritiqueStatus, Event, EventExtra, EventType, ProblemStatus};
 
@@ -399,10 +400,7 @@ impl App {
                                     },
                                 ) {
                                     Ok(_) => {
-                                        self.show_flash(&format!(
-                                            "{} cancelled",
-                                            &id[..8.min(id.len())]
-                                        ));
+                                        self.show_flash(&format!("{} cancelled", short_id(id)));
                                         self.refresh_data()?;
                                     }
                                     Err(e) => self.show_flash(&format!("Error: {}", e)),
@@ -435,7 +433,10 @@ impl App {
                         }
                         EntityType::Solution => {
                             if let Ok(mut solution) = self.store.load_solution(id) {
-                                solution.withdraw();
+                                if let Err(e) = solution.withdraw() {
+                                    eprintln!("Warning: {}", e);
+                                    continue;
+                                }
                                 if self.store.save_solution(&solution).is_ok() {
                                     withdrawn += 1;
                                 }
@@ -509,11 +510,13 @@ impl App {
                         EntityType::Problem => {
                             match (|| -> crate::error::Result<()> {
                                 let mut problem = self.store.load_problem(id)?;
-                                problem.set_status(ProblemStatus::Solved);
+                                problem
+                                    .try_set_status(ProblemStatus::Solved)
+                                    .map_err(crate::error::JjjError::Validation)?;
                                 self.store.save_problem(&problem)
                             })() {
                                 Ok(_) => solved += 1,
-                                Err(e) => errors.push(format!("{}: {}", &id[..8.min(id.len())], e)),
+                                Err(e) => errors.push(format!("{}: {}", short_id(id), e)),
                             }
                         }
                         EntityType::Milestone => {
@@ -523,7 +526,7 @@ impl App {
                                 self.store.save_milestone(&milestone)
                             })() {
                                 Ok(_) => completed += 1,
-                                Err(e) => errors.push(format!("{}: {}", &id[..8.min(id.len())], e)),
+                                Err(e) => errors.push(format!("{}: {}", short_id(id), e)),
                             }
                         }
                         _ => {}
@@ -659,7 +662,9 @@ impl App {
                 );
                 self.store.set_pending_event(event.clone());
                 let mut solution = self.store.load_solution(solution_id)?;
-                solution.approve();
+                solution
+                    .approve()
+                    .map_err(crate::error::JjjError::Validation)?;
                 self.store.save_solution(&solution)?;
                 // Auto-solve problem
                 let (can_solve, _) = self.store.can_solve_problem(&solution.problem_id)?;
@@ -692,7 +697,9 @@ impl App {
             .store
             .with_metadata(&format!("Withdraw solution {}", solution_id), || {
                 let mut solution = self.store.load_solution(solution_id)?;
-                solution.withdraw();
+                solution
+                    .withdraw()
+                    .map_err(crate::error::JjjError::Validation)?;
                 self.store.save_solution(&solution)?;
                 Ok(())
             }) {
@@ -717,7 +724,9 @@ impl App {
             &format!("Submit solution {} for review", solution_id),
             || {
                 let mut solution = self.store.load_solution(solution_id)?;
-                solution.submit();
+                solution
+                    .submit()
+                    .map_err(crate::error::JjjError::Validation)?;
                 self.store.save_solution(&solution)?;
                 let event = Event::new(
                     EventType::SolutionSubmitted,

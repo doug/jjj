@@ -1,4 +1,5 @@
 use crate::context::CommandContext;
+use crate::display::short_id;
 use crate::error::Result;
 use crate::models::Solution;
 use std::collections::HashMap;
@@ -87,8 +88,7 @@ pub fn execute(ctx: &CommandContext, json: bool) -> Result<()> {
     for overlap in &overlaps {
         println!("  {}", overlap.file.display());
         for (id, title) in &overlap.solutions {
-            let short_id = &id[..6.min(id.len())];
-            println!("    s/{} \"{}\"", short_id, title);
+            println!("    s/{} \"{}\"", short_id(id), title);
         }
         println!();
     }

@@ -3,6 +3,11 @@
 /// Minimum prefix length for truncated display.
 const MIN_PREFIX_LEN: usize = 6;
 
+/// Return a short prefix of an entity ID for display (first 6 hex chars).
+pub(crate) fn short_id(id: &str) -> &str {
+    &id[..MIN_PREFIX_LEN.min(id.len())]
+}
+
 /// Calculate unambiguous prefixes for a list of UUIDs.
 ///
 /// Returns a Vec of (uuid, prefix) pairs where each prefix is the shortest

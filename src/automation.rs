@@ -51,13 +51,19 @@ fn matching_rules<'a>(
         .collect()
 }
 
+/// Shell-escape a value by wrapping in single quotes and escaping internal quotes.
+fn shell_escape(s: &str) -> String {
+    format!("'{}'", s.replace('\'', "'\\''"))
+}
+
 /// Replace `{{var}}` placeholders in a template string.
 ///
+/// Values are shell-escaped to prevent injection when the result is passed to `sh -c`.
 /// Unknown variables are left as-is.
 fn expand_template(template: &str, vars: &HashMap<String, String>) -> String {
     let mut result = template.to_string();
     for (key, value) in vars {
-        result = result.replace(&format!("{{{{{}}}}}", key), value);
+        result = result.replace(&format!("{{{{{}}}}}", key), &shell_escape(value));
     }
     result
 }
@@ -102,7 +108,10 @@ fn execute_shell(rule: &AutomationRule, auto_ctx: &AutomationContext) -> Automat
 pub fn run(ctx: &CommandContext, event: &Event, entity_id: &str) {
     let config = match ctx.store.load_config() {
         Ok(c) => c,
-        Err(_) => return,
+        Err(e) => {
+            eprintln!("Warning: automation disabled (config error: {})", e);
+            return;
+        }
     };
 
     if config.automation.is_empty() {
@@ -145,43 +154,57 @@ fn populate_entity_vars(
     entity_id: &str,
     auto_ctx: &mut AutomationContext,
 ) {
-    let event_str = event_type.to_string();
-    if event_str.starts_with("problem_") {
-        if let Ok(problem) = ctx.store.load_problem(entity_id) {
-            auto_ctx.set("title", &problem.title);
-            auto_ctx.set("type", "problem");
-            if let Some(n) = problem.github_issue {
-                auto_ctx.set("issue_number", &n.to_string());
-            }
-        }
-    } else if event_str.starts_with("solution_") {
-        if let Ok(solution) = ctx.store.load_solution(entity_id) {
-            auto_ctx.set("title", &solution.title);
-            auto_ctx.set("type", "solution");
-            if let Some(n) = solution.github_pr {
-                auto_ctx.set("pr_number", &n.to_string());
-            }
-            if let Ok(problem) = ctx.store.load_problem(&solution.problem_id) {
-                auto_ctx.set("problem.title", &problem.title);
+    match event_type {
+        EventType::ProblemCreated
+        | EventType::ProblemSolved
+        | EventType::ProblemDissolved
+        | EventType::ProblemReopened => {
+            if let Ok(problem) = ctx.store.load_problem(entity_id) {
+                auto_ctx.set("title", &problem.title);
+                auto_ctx.set("type", "problem");
                 if let Some(n) = problem.github_issue {
                     auto_ctx.set("issue_number", &n.to_string());
                 }
             }
         }
-    } else if event_str.starts_with("critique_") {
-        if let Ok(critique) = ctx.store.load_critique(entity_id) {
-            auto_ctx.set("title", &critique.title);
-            auto_ctx.set("type", "critique");
-            if let Ok(solution) = ctx.store.load_solution(&critique.solution_id) {
-                auto_ctx.set("solution.title", &solution.title);
+        EventType::SolutionCreated
+        | EventType::SolutionSubmitted
+        | EventType::SolutionApproved
+        | EventType::SolutionWithdrawn => {
+            if let Ok(solution) = ctx.store.load_solution(entity_id) {
+                auto_ctx.set("title", &solution.title);
+                auto_ctx.set("type", "solution");
                 if let Some(n) = solution.github_pr {
                     auto_ctx.set("pr_number", &n.to_string());
                 }
                 if let Ok(problem) = ctx.store.load_problem(&solution.problem_id) {
                     auto_ctx.set("problem.title", &problem.title);
+                    if let Some(n) = problem.github_issue {
+                        auto_ctx.set("issue_number", &n.to_string());
+                    }
                 }
             }
         }
+        EventType::CritiqueRaised
+        | EventType::CritiqueAddressed
+        | EventType::CritiqueDismissed
+        | EventType::CritiqueValidated
+        | EventType::CritiqueReplied => {
+            if let Ok(critique) = ctx.store.load_critique(entity_id) {
+                auto_ctx.set("title", &critique.title);
+                auto_ctx.set("type", "critique");
+                if let Ok(solution) = ctx.store.load_solution(&critique.solution_id) {
+                    auto_ctx.set("solution.title", &solution.title);
+                    if let Some(n) = solution.github_pr {
+                        auto_ctx.set("pr_number", &n.to_string());
+                    }
+                    if let Ok(problem) = ctx.store.load_problem(&solution.problem_id) {
+                        auto_ctx.set("problem.title", &problem.title);
+                    }
+                }
+            }
+        }
+        _ => {}
     }
 }
 
@@ -313,7 +336,7 @@ mod tests {
         vars.insert("id".to_string(), "abc123".to_string());
         vars.insert("title".to_string(), "Fix auth bug".to_string());
         let result = expand_template("New: {{title}} ({{id}})", &vars);
-        assert_eq!(result, "New: Fix auth bug (abc123)");
+        assert_eq!(result, "New: 'Fix auth bug' ('abc123')");
     }
 
     #[test]
@@ -335,7 +358,23 @@ mod tests {
         let mut vars = HashMap::new();
         vars.insert("problem.title".to_string(), "Auth bug".to_string());
         let result = expand_template("On: {{problem.title}}", &vars);
-        assert_eq!(result, "On: Auth bug");
+        assert_eq!(result, "On: 'Auth bug'");
+    }
+
+    #[test]
+    fn test_shell_escape_basic() {
+        assert_eq!(shell_escape("hello"), "'hello'");
+    }
+
+    #[test]
+    fn test_shell_escape_single_quotes() {
+        assert_eq!(shell_escape("it's here"), "'it'\\''s here'");
+    }
+
+    #[test]
+    fn test_shell_escape_injection() {
+        // A malicious title should be safely escaped
+        assert_eq!(shell_escape("'; rm -rf / #"), "''\\''; rm -rf / #'");
     }
 
     // ── execute_rule ──

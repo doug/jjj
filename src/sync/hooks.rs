@@ -7,6 +7,7 @@
 //! Network failures print warnings but never block local operations.
 
 use crate::context::CommandContext;
+use crate::display::short_id;
 use crate::models::{Problem, Solution};
 use crate::sync::github::GitHubProvider;
 use crate::sync::SyncProvider;
@@ -62,8 +63,8 @@ pub fn do_create_or_update_pr(
         return Ok(());
     }
 
-    let short_id = &solution.id[..8.min(solution.id.len())];
-    let branch = format!("jjj/s-{}", short_id);
+    let sid = short_id(&solution.id);
+    let branch = format!("jjj/s-{}", sid);
 
     let pr_number = provider.create_pr(solution, &problem, &branch)?;
     solution.github_pr = Some(pr_number);

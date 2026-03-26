@@ -222,7 +222,8 @@ impl JjClient {
     pub fn change_exists(&self, change_id: &str) -> Result<bool> {
         match self.execute(&["log", "--no-graph", "-r", change_id, "-T", "change_id"]) {
             Ok(_) => Ok(true),
-            Err(_) => Ok(false),
+            Err(crate::error::JjjError::JjCommandFailed { .. }) => Ok(false),
+            Err(e) => Err(e),
         }
     }
 

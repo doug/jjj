@@ -291,8 +291,8 @@ impl Problem {
         self.updated_at = Utc::now();
     }
 
-    /// Update status.
-    pub fn set_status(&mut self, status: ProblemStatus) {
+    /// Update status (unchecked). Prefer `try_set_status()` for validated transitions.
+    pub(crate) fn set_status(&mut self, status: ProblemStatus) {
         self.status = status;
         self.updated_at = Utc::now();
     }

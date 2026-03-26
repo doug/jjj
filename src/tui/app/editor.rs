@@ -1,4 +1,5 @@
 use super::App;
+use crate::display::short_id;
 use crate::error::Result;
 use ratatui::backend::Backend;
 use ratatui::Terminal;
@@ -30,7 +31,13 @@ pub(crate) fn parse_editor_content(
 
     // Fields where inline comments should be stripped (enum/date fields only).
     // Freeform fields like title and tags are left as-is to preserve # in text.
-    const COMMENT_FIELDS: &[&str] = &["status", "priority", "confidence", "severity", "target_date"];
+    const COMMENT_FIELDS: &[&str] = &[
+        "status",
+        "priority",
+        "confidence",
+        "severity",
+        "target_date",
+    ];
 
     // Parse all frontmatter fields into a map
     let mut fields = std::collections::HashMap::new();
@@ -110,10 +117,7 @@ impl App {
             };
 
         // Serialize entity to temp file
-        let temp_path = std::env::temp_dir().join(format!(
-            "jjj-edit-{}.md",
-            &entity_id[..8.min(entity_id.len())]
-        ));
+        let temp_path = std::env::temp_dir().join(format!("jjj-edit-{}.md", short_id(&entity_id)));
         let original_content = match self.serialize_entity_for_edit(&entity_type, &entity_id) {
             Ok(content) => content,
             Err(e) => {
@@ -328,7 +332,9 @@ impl App {
                             problem.confidence = c;
                         }
                         if let Some(s) = status {
-                            problem.set_status(s);
+                            problem
+                                .try_set_status(s)
+                                .map_err(crate::error::JjjError::Validation)?;
                         }
                         self.store.save_problem(&problem)
                     })?;
@@ -345,7 +351,9 @@ impl App {
                         solution.approach = parsed.description.clone();
                         solution.tags = parsed.tags.clone();
                         if let Some(s) = status {
-                            solution.status = s;
+                            solution
+                                .try_set_status(s)
+                                .map_err(crate::error::JjjError::Validation)?;
                         }
                         self.store.save_solution(&solution)
                     })?;

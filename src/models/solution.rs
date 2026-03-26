@@ -177,8 +177,8 @@ impl Solution {
         }
     }
 
-    /// Update status
-    pub fn set_status(&mut self, status: SolutionStatus) {
+    /// Update status (unchecked). Prefer `try_set_status()` for validated transitions.
+    pub(crate) fn set_status(&mut self, status: SolutionStatus) {
         self.status = status;
         self.updated_at = Utc::now();
     }
@@ -244,19 +244,19 @@ impl Solution {
         self.status == SolutionStatus::Withdrawn
     }
 
-    /// Submit solution for review
-    pub fn submit(&mut self) {
-        self.set_status(SolutionStatus::Submitted);
+    /// Submit solution for review. Returns error if transition is invalid.
+    pub fn submit(&mut self) -> Result<(), String> {
+        self.try_set_status(SolutionStatus::Submitted)
     }
 
-    /// Approve the solution (survived critique)
-    pub fn approve(&mut self) {
-        self.set_status(SolutionStatus::Approved);
+    /// Approve the solution (survived critique). Returns error if transition is invalid.
+    pub fn approve(&mut self) -> Result<(), String> {
+        self.try_set_status(SolutionStatus::Approved)
     }
 
-    /// Withdraw the solution
-    pub fn withdraw(&mut self) {
-        self.set_status(SolutionStatus::Withdrawn);
+    /// Withdraw the solution. Returns error if transition is invalid.
+    pub fn withdraw(&mut self) -> Result<(), String> {
+        self.try_set_status(SolutionStatus::Withdrawn)
     }
 }
 
@@ -334,11 +334,11 @@ mod tests {
         assert_eq!(solution.status, SolutionStatus::Proposed);
         assert!(solution.is_active());
 
-        solution.submit();
+        solution.submit().unwrap();
         assert_eq!(solution.status, SolutionStatus::Submitted);
         assert!(solution.is_active());
 
-        solution.approve();
+        solution.approve().unwrap();
         assert_eq!(solution.status, SolutionStatus::Approved);
         assert!(solution.is_finalized());
     }
@@ -347,8 +347,8 @@ mod tests {
     fn test_withdrawal() {
         let mut solution = Solution::new("S-1".to_string(), "Test".to_string(), "P-1".to_string());
 
-        solution.submit();
-        solution.withdraw();
+        solution.submit().unwrap();
+        solution.withdraw().unwrap();
 
         assert_eq!(solution.status, SolutionStatus::Withdrawn);
         assert!(solution.is_finalized());

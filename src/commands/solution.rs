@@ -1,7 +1,7 @@
 use crate::cli::SolutionAction;
 use crate::context::CommandContext;
 use crate::db::{search, Database};
-use crate::display::truncated_prefixes;
+use crate::display::{short_id, truncated_prefixes};
 use crate::embeddings::EmbeddingClient;
 use crate::error::Result;
 use crate::local_config::LocalConfig;
@@ -119,8 +119,7 @@ fn new_solution(
                     if !results.is_empty() {
                         eprintln!("Warning: similar solutions already exist:");
                         for r in &results {
-                            let short_id = &r.entity_id[..6.min(r.entity_id.len())];
-                            eprintln!("  s/{} — \"{}\"", short_id, r.title);
+                            eprintln!("  s/{} — \"{}\"", short_id(&r.entity_id), r.title);
                         }
                         eprintln!("\nUse --force to create anyway.");
                         return Err(crate::error::JjjError::Validation(
@@ -654,7 +653,9 @@ fn submit_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
         &format!("Submit solution {} for review", solution_id),
         || {
             let mut solution = store.load_solution(&solution_id)?;
-            solution.submit();
+            solution
+                .submit()
+                .map_err(crate::error::JjjError::Validation)?;
             store.save_solution(&solution)?;
 
             let event = Event::new(
@@ -838,7 +839,7 @@ pub(crate) fn finalize_solution(
         if force {
             sol.force_approved = true;
         }
-        sol.approve();
+        sol.approve().map_err(crate::error::JjjError::Validation)?;
         store.save_solution(&sol)?;
 
         // Auto-solve the parent problem
@@ -902,7 +903,9 @@ fn withdraw_solution(
         store.set_pending_event(event.clone());
 
         let mut solution = store.load_solution(&solution_id)?;
-        solution.withdraw();
+        solution
+            .withdraw()
+            .map_err(crate::error::JjjError::Validation)?;
         store.save_solution(&solution)?;
         println!("Solution {} withdrawn", solution_id);
         Ok(())
@@ -956,7 +959,9 @@ fn resume_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
 
             let mut solution = store.load_solution(&solution_id)?;
             solution.attach_change(change_id);
-            solution.submit();
+            solution
+                .submit()
+                .map_err(crate::error::JjjError::Validation)?;
             store.save_solution(&solution)?;
 
             // Update problem status
@@ -1224,10 +1229,11 @@ fn check_for_similar_solutions(
 fn prompt_create_solution_anyway(similar: &[search::SimilarityResult]) -> Result<bool> {
     println!("\nSimilar existing solutions found:\n");
     for result in similar {
-        let short_id = &result.entity_id[..6.min(result.entity_id.len())];
         println!(
             "  s/{}  [{:.2}]  \"{}\"",
-            short_id, result.similarity, result.title
+            short_id(&result.entity_id),
+            result.similarity,
+            result.title
         );
     }
     println!();

@@ -72,7 +72,7 @@ fn new_critique(
     // Warn if solution is already finalized
     if solution.is_finalized() {
         println!(
-            "Warning: Solution {} is already {:?}. Creating critique anyway.",
+            "Warning: Solution {} is already {}. Creating critique anyway.",
             solution_id, solution.status
         );
     }

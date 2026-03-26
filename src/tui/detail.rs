@@ -1,3 +1,4 @@
+use crate::display::short_id;
 use crate::models::{Critique, Milestone, Problem, Solution};
 use pulldown_cmark::{Event, Options as ParseOptions, Parser, Tag, TagEnd};
 use ratatui::{
@@ -87,11 +88,7 @@ fn problem_lines(p: &Problem) -> Vec<Line<'static>> {
         lines.push(meta_line("Assignee", name, None));
     }
     if let Some(milestone) = &p.milestone_id {
-        lines.push(meta_line(
-            "Milestone",
-            &milestone[..8.min(milestone.len())],
-            None,
-        ));
+        lines.push(meta_line("Milestone", short_id(milestone), None));
     }
     if !p.tags.is_empty() {
         lines.push(tags_line(&p.tags));
@@ -134,11 +131,7 @@ fn solution_lines(s: &Solution) -> Vec<Line<'static>> {
         &s.status.to_string(),
         Some(status_color),
     ));
-    lines.push(meta_line(
-        "Problem",
-        &s.problem_id[..8.min(s.problem_id.len())],
-        None,
-    ));
+    lines.push(meta_line("Problem", short_id(&s.problem_id), None));
     if let Some(assignee) = &s.assignee {
         let name = assignee.split('<').next().unwrap_or(assignee).trim();
         lines.push(meta_line("Assignee", name, None));
@@ -192,11 +185,7 @@ fn critique_lines(c: &Critique) -> Vec<Line<'static>> {
         &c.severity.to_string(),
         Some(sev_color),
     ));
-    lines.push(meta_line(
-        "Solution",
-        &c.solution_id[..8.min(c.solution_id.len())],
-        None,
-    ));
+    lines.push(meta_line("Solution", short_id(&c.solution_id), None));
     if let Some(file) = &c.file_path {
         let loc = format!("{}:{}", file, c.line_start.unwrap_or(0));
         lines.push(meta_line("Location", &loc, None));

@@ -39,29 +39,9 @@ pub enum EventType {
 
 impl std::fmt::Display for EventType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            EventType::ProblemCreated => write!(f, "problem_created"),
-            EventType::ProblemSolved => write!(f, "problem_solved"),
-            EventType::ProblemDissolved => write!(f, "problem_dissolved"),
-            EventType::ProblemReopened => write!(f, "problem_reopened"),
-            EventType::SolutionCreated => write!(f, "solution_created"),
-            EventType::SolutionSubmitted => write!(f, "solution_submitted"),
-            EventType::SolutionApproved => write!(f, "solution_approved"),
-            EventType::SolutionWithdrawn => write!(f, "solution_withdrawn"),
-            EventType::CritiqueRaised => write!(f, "critique_raised"),
-            EventType::CritiqueAddressed => write!(f, "critique_addressed"),
-            EventType::CritiqueDismissed => write!(f, "critique_dismissed"),
-            EventType::CritiqueValidated => write!(f, "critique_validated"),
-            EventType::CritiqueReplied => write!(f, "critique_replied"),
-            EventType::MilestoneCreated => write!(f, "milestone_created"),
-            EventType::MilestoneCompleted => write!(f, "milestone_completed"),
-            EventType::GithubIssueCreated => write!(f, "github_issue_created"),
-            EventType::GithubIssueImported => write!(f, "github_issue_imported"),
-            EventType::GithubIssueClosed => write!(f, "github_issue_closed"),
-            EventType::GithubPrCreated => write!(f, "github_pr_created"),
-            EventType::GithubPrMerged => write!(f, "github_pr_merged"),
-            EventType::GithubReviewImported => write!(f, "github_review_imported"),
-        }
+        // Leverage serde's rename_all = "snake_case" to avoid manual duplication
+        let s = serde_json::to_string(self).unwrap_or_default();
+        write!(f, "{}", s.trim_matches('"'))
     }
 }
 

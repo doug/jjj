@@ -1,4 +1,5 @@
 use crate::context::CommandContext;
+use crate::display::short_id;
 use crate::error::Result;
 use crate::models::EventType;
 use std::collections::HashMap;
@@ -193,8 +194,8 @@ pub fn execute(ctx: &CommandContext, json: bool) -> Result<()> {
             }).collect::<Vec<_>>(),
             "most_active_problems": active_problems.iter().map(|(id, count)| {
                 let title = problem_titles.get(id).unwrap_or(&"(unknown)");
-                let short_id = &id[..6.min(id.len())];
-                serde_json::json!({ "id": short_id, "title": title, "events": count })
+                let sid = short_id(id);
+                serde_json::json!({ "id": sid, "title": title, "events": count })
             }).collect::<Vec<_>>(),
         });
         println!("{}", serde_json::to_string_pretty(&output)?);
@@ -254,8 +255,8 @@ pub fn execute(ctx: &CommandContext, json: bool) -> Result<()> {
         println!("\nMost active problems:");
         for (id, count) in &active_problems {
             let title = problem_titles.get(id).unwrap_or(&"(unknown)");
-            let short_id = &id[..6.min(id.len())];
-            println!("  p/{} \"{}\" ({} events)", short_id, title, count);
+            let sid = short_id(id);
+            println!("  p/{} \"{}\" ({} events)", sid, title, count);
         }
     }
 

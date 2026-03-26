@@ -111,11 +111,11 @@ fn test_solution_status_transitions() {
     assert!(solution.is_proposed());
 
     // When: I submit for review
-    solution.submit();
+    solution.submit().unwrap();
     assert!(solution.is_submitted());
 
     // When: I approve the solution
-    solution.approve();
+    solution.approve().unwrap();
     assert!(solution.is_approved());
 }
 
@@ -127,10 +127,10 @@ fn test_solution_refute() {
         "Test solution".to_string(),
         "p1".to_string(),
     );
-    solution.submit();
+    solution.submit().unwrap();
 
     // When: I withdraw it
-    solution.withdraw();
+    solution.withdraw().unwrap();
 
     // Then: It should be withdrawn
     assert!(solution.is_withdrawn());
@@ -160,11 +160,15 @@ fn test_problem_status_transitions() {
     assert!(problem.is_open());
 
     // When: I set to in progress
-    problem.set_status(jjj::models::ProblemStatus::InProgress);
+    problem
+        .try_set_status(jjj::models::ProblemStatus::InProgress)
+        .unwrap();
     assert!(problem.is_in_progress());
 
     // When: I solve it
-    problem.set_status(jjj::models::ProblemStatus::Solved);
+    problem
+        .try_set_status(jjj::models::ProblemStatus::Solved)
+        .unwrap();
     assert!(problem.is_resolved());
 }
 
@@ -174,7 +178,9 @@ fn test_problem_dissolve() {
     let mut problem = Problem::new("p1".to_string(), "Test problem".to_string());
 
     // When: I dissolve it (realize it was based on false premises)
-    problem.set_status(jjj::models::ProblemStatus::Dissolved);
+    problem
+        .try_set_status(jjj::models::ProblemStatus::Dissolved)
+        .unwrap();
 
     // Then: It should be resolved (dissolved is a type of resolution)
     assert!(problem.is_resolved());

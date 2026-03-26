@@ -105,7 +105,12 @@ impl MetadataStore {
         let critique = self.load_critique(critique_id)?;
         if let Ok(mut solution) = self.load_solution(&critique.solution_id) {
             solution.remove_critique(critique_id);
-            let _ = self.save_solution(&solution);
+            if let Err(e) = self.save_solution(&solution) {
+                eprintln!(
+                    "Warning: failed to update solution {}: {}",
+                    critique.solution_id, e
+                );
+            }
         }
 
         fs::remove_file(critique_path)?;

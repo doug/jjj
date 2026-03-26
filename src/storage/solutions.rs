@@ -110,18 +110,25 @@ impl MetadataStore {
         // Delete associated critiques
         if let Ok(critiques) = self.list_critiques_for_solution(solution_id) {
             for critique in critiques {
-                let _ = fs::remove_file(
+                if let Err(e) = fs::remove_file(
                     self.meta_path
                         .join(CRITIQUES_DIR)
                         .join(format!("{}.md", critique.id)),
-                );
+                ) {
+                    eprintln!("Warning: failed to delete critique {}: {}", critique.id, e);
+                }
             }
         }
 
         // Remove from parent problem's solution_ids
         if let Ok(mut problem) = self.load_problem(&solution.problem_id) {
             problem.remove_solution(solution_id);
-            let _ = self.save_problem(&problem);
+            if let Err(e) = self.save_problem(&problem) {
+                eprintln!(
+                    "Warning: failed to update problem {}: {}",
+                    solution.problem_id, e
+                );
+            }
         }
 
         fs::remove_file(solution_path)?;

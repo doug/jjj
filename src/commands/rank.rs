@@ -6,6 +6,7 @@ use serde::Serialize;
 
 use crate::cli::RankAction;
 use crate::context::CommandContext;
+use crate::display::short_id;
 use crate::error::Result;
 use crate::ranking::glicko2::{compute_ratings, sorted_ranking, Comparison, WeightedComparison};
 use crate::ranking::matchups::suggest_matchups;
@@ -238,11 +239,11 @@ fn run_session_loop(
         let title_a = titles
             .get(a)
             .map(|t| truncate(t, 60))
-            .unwrap_or_else(|| a[..8.min(a.len())].to_string());
+            .unwrap_or_else(|| short_id(a).to_string());
         let title_b = titles
             .get(b)
             .map(|t| truncate(t, 60))
-            .unwrap_or_else(|| b[..8.min(b.len())].to_string());
+            .unwrap_or_else(|| short_id(b).to_string());
 
         write!(
             stdout,
@@ -270,8 +271,7 @@ fn run_session_loop(
                             loser: b.clone(),
                             ts: Utc::now(),
                         };
-                        let msg =
-                            format!("rank: {} > {}", &a[..8.min(a.len())], &b[..8.min(b.len())]);
+                        let msg = format!("rank: {} > {}", short_id(a), short_id(b));
                         let base = ctx.store.meta_path().to_path_buf();
                         let ms_id = milestone_id.to_string();
                         let usr = user.to_string();
@@ -289,8 +289,7 @@ fn run_session_loop(
                             loser: a.clone(),
                             ts: Utc::now(),
                         };
-                        let msg =
-                            format!("rank: {} > {}", &b[..8.min(b.len())], &a[..8.min(a.len())]);
+                        let msg = format!("rank: {} > {}", short_id(b), short_id(a));
                         let base = ctx.store.meta_path().to_path_buf();
                         let ms_id = milestone_id.to_string();
                         let usr = user.to_string();
@@ -573,11 +572,11 @@ fn history(ctx: &CommandContext, milestone: Option<String>, limit: usize) -> Res
         let winner_title = titles
             .get(&cmp.winner)
             .map(|t| truncate(t, 28))
-            .unwrap_or_else(|| cmp.winner[..8.min(cmp.winner.len())].to_string());
+            .unwrap_or_else(|| short_id(&cmp.winner).to_string());
         let loser_title = titles
             .get(&cmp.loser)
             .map(|t| truncate(t, 28))
-            .unwrap_or_else(|| cmp.loser[..8.min(cmp.loser.len())].to_string());
+            .unwrap_or_else(|| short_id(&cmp.loser).to_string());
 
         println!(
             "  {:<22} {:<16} {:<30} {:<30}",

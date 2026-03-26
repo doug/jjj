@@ -283,8 +283,13 @@ impl MetadataStore {
                     &change_id,
                 ])?;
             } else {
-                self.jj_client
-                    .execute(&["workspace", "add", meta_path_str, "-r", META_BOOKMARK])?;
+                self.jj_client.execute(&[
+                    "workspace",
+                    "add",
+                    meta_path_str,
+                    "-r",
+                    META_BOOKMARK,
+                ])?;
             }
             // Create required subdirectories inside the newly-checked-out workspace.
             fs::create_dir_all(self.meta_path.join(PROBLEMS_DIR))?;

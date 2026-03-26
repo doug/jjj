@@ -133,7 +133,10 @@ pub fn build_flat_tree_ranked(
     solutions: &[Solution],
     critiques: &[Critique],
     expanded_nodes: &std::collections::HashSet<String>,
-    rankings: &std::collections::HashMap<String, std::collections::HashMap<String, (usize, String)>>,
+    rankings: &std::collections::HashMap<
+        String,
+        std::collections::HashMap<String, (usize, String)>,
+    >,
 ) -> Vec<FlatTreeItem> {
     let empty_rankings = std::collections::HashMap::new();
     let mut items = Vec::new();

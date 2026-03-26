@@ -2,6 +2,7 @@
 
 use crate::cli::GitHubSyncAction;
 use crate::context::CommandContext;
+use crate::display::short_id;
 use crate::error::{JjjError, Result};
 use crate::models::{Event, EventExtra, EventType};
 use crate::sync::github::GitHubProvider;
@@ -136,7 +137,7 @@ fn sync_pull(ctx: &CommandContext, provider: &GitHubProvider, dry_run: bool) -> 
                                 let msg = format!(
                                     "    Imported review from @{} as critique {}",
                                     review.author,
-                                    &critique.id[..6.min(critique.id.len())]
+                                    short_id(&critique.id)
                                 );
                                 new_critiques.push((critique, event, msg));
                             }
@@ -192,7 +193,7 @@ fn sync_pull(ctx: &CommandContext, provider: &GitHubProvider, dry_run: bool) -> 
                                     "    Imported inline comment from @{} at {} as critique {}",
                                     thread.author,
                                     loc,
-                                    &critique.id[..6.min(critique.id.len())]
+                                    short_id(&critique.id)
                                 );
                                 new_critiques.push((critique, event, msg));
                             }
@@ -335,14 +336,14 @@ fn import_single_issue(ctx: &CommandContext, provider: &GitHubProvider, number: 
         println!(
             "Issue #{} is already linked to problem {} ({})",
             number,
-            &existing.id[..6.min(existing.id.len())],
+            short_id(&existing.id),
             existing.title
         );
         return Ok(());
     }
 
     let problem = provider.import_issue(number)?;
-    let short_id = problem.id[..6.min(problem.id.len())].to_string();
+    let sid = short_id(&problem.id).to_string();
 
     ctx.store.with_metadata("GitHub sync", || {
         let event = Event::new(
@@ -361,7 +362,7 @@ fn import_single_issue(ctx: &CommandContext, provider: &GitHubProvider, number: 
 
     println!(
         "Imported issue #{} as problem {} ({})",
-        number, short_id, problem.title
+        number, sid, problem.title
     );
     Ok(())
 }
@@ -403,8 +404,8 @@ fn sync_pr(
     let problem = ctx.store.load_problem(&solution.problem_id)?;
 
     // Generate branch name
-    let short_id = &sol_id[..8.min(sol_id.len())];
-    let branch = format!("jjj/s-{}", short_id);
+    let sid = short_id(&sol_id);
+    let branch = format!("jjj/s-{}", sid);
 
     if let Some(pr_number) = solution.github_pr {
         // PR already exists — update by pushing branch
@@ -524,10 +525,9 @@ fn sync_status(ctx: &CommandContext, provider: &GitHubProvider) -> Result<()> {
     if !linked_problems.is_empty() {
         println!("\nLinked problems:");
         for p in &linked_problems {
-            let short_id = &p.id[..6.min(p.id.len())];
             println!(
                 "  p/{} — #{} — {} [{}]",
-                short_id,
+                short_id(&p.id),
                 p.github_issue.unwrap(),
                 p.title,
                 p.status
@@ -542,10 +542,9 @@ fn sync_status(ctx: &CommandContext, provider: &GitHubProvider) -> Result<()> {
     if !linked_solutions.is_empty() {
         println!("\nLinked solutions:");
         for s in &linked_solutions {
-            let short_id = &s.id[..6.min(s.id.len())];
             println!(
                 "  s/{} — PR #{} — {} [{}]",
-                short_id,
+                short_id(&s.id),
                 s.github_pr.unwrap(),
                 s.title,
                 s.status
