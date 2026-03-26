@@ -204,7 +204,16 @@ fn populate_entity_vars(
                 }
             }
         }
-        _ => {}
+        // Milestone and GitHub sync events: no entity-specific vars yet.
+        // Listed explicitly so adding a new EventType variant produces a compile error.
+        EventType::MilestoneCreated
+        | EventType::MilestoneCompleted
+        | EventType::GithubIssueCreated
+        | EventType::GithubIssueImported
+        | EventType::GithubIssueClosed
+        | EventType::GithubPrCreated
+        | EventType::GithubPrMerged
+        | EventType::GithubReviewImported => {}
     }
 }
 

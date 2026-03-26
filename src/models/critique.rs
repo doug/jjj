@@ -213,8 +213,8 @@ impl Critique {
         }
     }
 
-    /// Update status
-    pub fn set_status(&mut self, status: CritiqueStatus) {
+    /// Update status (unchecked). Prefer `try_set_status()` for validated transitions.
+    pub(crate) fn set_status(&mut self, status: CritiqueStatus) {
         self.status = status;
         self.updated_at = Utc::now();
     }
@@ -230,6 +230,18 @@ impl Critique {
                 | (CritiqueStatus::Addressed, CritiqueStatus::Valid)
                 | (CritiqueStatus::Addressed, CritiqueStatus::Dismissed)
         )
+    }
+
+    /// Validate a status transition and apply it. Returns an error string if the transition is invalid.
+    pub fn try_set_status(&mut self, status: CritiqueStatus) -> Result<(), String> {
+        if !self.can_transition_to(&status) {
+            return Err(format!(
+                "Invalid status transition: {} -> {}",
+                self.status, status
+            ));
+        }
+        self.set_status(status);
+        Ok(())
     }
 
     /// Set severity

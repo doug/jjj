@@ -376,7 +376,9 @@ impl App {
                             critique.severity = sev;
                         }
                         if let Some(s) = status {
-                            critique.status = s;
+                            critique
+                                .try_set_status(s)
+                                .map_err(crate::error::JjjError::Validation)?;
                         }
                         self.store.save_critique(&critique)
                     })?;

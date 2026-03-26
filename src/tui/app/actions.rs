@@ -567,7 +567,9 @@ impl App {
                         .store
                         .with_metadata(&format!("Reopen problem {}", id), || {
                             let mut problem = self.store.load_problem(&id)?;
-                            problem.set_status(ProblemStatus::Open);
+                            problem
+                                .try_set_status(ProblemStatus::Open)
+                                .map_err(crate::error::JjjError::Validation)?;
                             self.store.save_problem(&problem)
                         }) {
                         Ok(_) => {
@@ -671,7 +673,9 @@ impl App {
                 if can_solve {
                     let mut problem = self.store.load_problem(&solution.problem_id)?;
                     if problem.status != ProblemStatus::Solved {
-                        problem.set_status(ProblemStatus::Solved);
+                        problem
+                            .try_set_status(ProblemStatus::Solved)
+                            .map_err(crate::error::JjjError::Validation)?;
                         self.store.save_problem(&problem)?;
                         let solve_event =
                             Event::new(EventType::ProblemSolved, problem.id.clone(), user.clone());
@@ -741,7 +745,9 @@ impl App {
                 // Auto-set problem to InProgress if it's Open
                 let mut problem = self.store.load_problem(&solution.problem_id)?;
                 if problem.status == ProblemStatus::Open {
-                    problem.set_status(ProblemStatus::InProgress);
+                    problem
+                        .try_set_status(ProblemStatus::InProgress)
+                        .map_err(crate::error::JjjError::Validation)?;
                     self.store.save_problem(&problem)?;
                 }
                 Ok(())

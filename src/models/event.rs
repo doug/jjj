@@ -37,11 +37,38 @@ pub enum EventType {
     GithubReviewImported,
 }
 
+impl EventType {
+    /// Return the snake_case string for this variant (zero-allocation).
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::ProblemCreated => "problem_created",
+            Self::ProblemSolved => "problem_solved",
+            Self::ProblemDissolved => "problem_dissolved",
+            Self::ProblemReopened => "problem_reopened",
+            Self::SolutionCreated => "solution_created",
+            Self::SolutionSubmitted => "solution_submitted",
+            Self::SolutionApproved => "solution_approved",
+            Self::SolutionWithdrawn => "solution_withdrawn",
+            Self::CritiqueRaised => "critique_raised",
+            Self::CritiqueAddressed => "critique_addressed",
+            Self::CritiqueDismissed => "critique_dismissed",
+            Self::CritiqueValidated => "critique_validated",
+            Self::CritiqueReplied => "critique_replied",
+            Self::MilestoneCreated => "milestone_created",
+            Self::MilestoneCompleted => "milestone_completed",
+            Self::GithubIssueCreated => "github_issue_created",
+            Self::GithubIssueImported => "github_issue_imported",
+            Self::GithubIssueClosed => "github_issue_closed",
+            Self::GithubPrCreated => "github_pr_created",
+            Self::GithubPrMerged => "github_pr_merged",
+            Self::GithubReviewImported => "github_review_imported",
+        }
+    }
+}
+
 impl std::fmt::Display for EventType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // Leverage serde's rename_all = "snake_case" to avoid manual duplication
-        let s = serde_json::to_string(self).unwrap_or_default();
-        write!(f, "{}", s.trim_matches('"'))
+        f.write_str(self.as_str())
     }
 }
 

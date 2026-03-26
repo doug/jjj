@@ -142,7 +142,7 @@ fn check_and_prompt_approve_solve(ctx: &CommandContext) -> Result<()> {
 
     for solution in solutions
         .iter()
-        .filter(|s| s.is_active() && s.assignee.as_deref() == Some(&user))
+        .filter(|s| s.is_submitted() && s.assignee.as_deref() == Some(&user))
     {
         // Check if all critiques are resolved
         let critiques = store.list_critiques_for_solution(&solution.id)?;
