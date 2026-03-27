@@ -6,10 +6,9 @@ mod ui;
 
 pub use app::App;
 pub use detail::DetailContent;
-pub use next_actions::{build_next_actions, build_next_actions_ranked, EntityType, NextAction};
+pub use next_actions::{build_next_actions, EntityType, NextAction};
 pub use tree::{
-    annotate_tree_with_actions, build_flat_tree, build_flat_tree_ranked, filter_tree_to_actions,
-    FlatTreeItem, TreeNode,
+    annotate_tree_with_actions, build_flat_tree, filter_tree_to_actions, FlatTreeItem, TreeNode,
 };
 
 use crate::error::Result;

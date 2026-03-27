@@ -2,8 +2,6 @@ use crate::db::search::SimilarityResult;
 use crate::error::Result;
 use crate::jj::JjClient;
 use crate::models::{Critique, Milestone, Problem, Solution};
-use crate::ranking::glicko2::{self, WeightedComparison};
-use crate::ranking::store as ranking_store;
 use crate::storage::MetadataStore;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{backend::Backend, Terminal};
@@ -17,16 +15,12 @@ mod editor;
 mod navigation;
 mod related;
 
-/// Cached problem data for the ranking overlay so it can render without re-querying.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct RankingProblem {
-    pub id: String,
-    pub title: String,
-    pub description: String,
-    pub priority: crate::models::Priority,
-    pub tags: Vec<String>,
-    pub assignee: Option<String>,
-    pub status: crate::models::ProblemStatus,
+/// Which pane currently has keyboard focus.
+#[derive(Default, Clone, Copy, PartialEq, Eq)]
+pub enum FocusedPane {
+    #[default]
+    Tree,
+    Detail,
 }
 
 /// Controls how keyboard input is interpreted by the event loop.
@@ -44,14 +38,6 @@ pub enum InputMode {
         buffer: String,
         action: InputAction,
         cursor_pos: usize,
-    },
-    Ranking {
-        milestone_id: String,
-        matchups: Vec<(String, String)>,
-        current: usize,
-        completed: usize,
-        problem_a: Box<RankingProblem>,
-        problem_b: Box<RankingProblem>,
     },
 }
 
@@ -123,8 +109,6 @@ pub struct ProjectData {
     pub problems: Vec<Problem>,
     pub solutions: Vec<Solution>,
     pub critiques: Vec<Critique>,
-    /// milestone_id -> problem_id -> (rank_position, confidence_label)
-    pub rankings: HashMap<String, HashMap<String, (usize, String)>>,
 }
 
 impl ProjectData {
@@ -133,73 +117,12 @@ impl ProjectData {
         let problems = store.list_problems()?;
         let solutions = store.list_solutions()?;
         let critiques = store.list_critiques()?;
-        let rankings = Self::compute_rankings(store, &milestones);
         Ok(Self {
             milestones,
             problems,
             solutions,
             critiques,
-            rankings,
         })
-    }
-
-    /// Compute Glicko-2 rankings per milestone.
-    /// Returns milestone_id -> problem_id -> (rank_position, confidence).
-    fn compute_rankings(
-        store: &MetadataStore,
-        milestones: &[Milestone],
-    ) -> HashMap<String, HashMap<String, (usize, String)>> {
-        let mut result = HashMap::new();
-        let base = store.meta_path();
-
-        for milestone in milestones {
-            let attributed = match ranking_store::load_attributed_comparisons(base, &milestone.id) {
-                Ok(a) => a,
-                Err(_) => continue,
-            };
-            if attributed.is_empty() {
-                continue;
-            }
-
-            // Build weighted comparisons: milestone assignee gets 2x weight
-            let milestone_assignee = milestone
-                .assignee
-                .as_deref()
-                .map(ranking_store::sanitize_user);
-
-            let weighted: Vec<WeightedComparison> = attributed
-                .iter()
-                .map(|(c, user_slug)| {
-                    let weight = if milestone_assignee
-                        .as_deref()
-                        .is_some_and(|owner| owner == user_slug)
-                    {
-                        2.0
-                    } else {
-                        1.0
-                    };
-                    WeightedComparison {
-                        winner: c.winner.clone(),
-                        loser: c.loser.clone(),
-                        weight,
-                    }
-                })
-                .collect();
-
-            let ratings = glicko2::compute_ratings(&weighted);
-            let sorted = glicko2::sorted_ranking(&ratings);
-
-            let mut milestone_rankings = HashMap::new();
-            for (rank_pos, (problem_id, rating)) in sorted.iter().enumerate() {
-                milestone_rankings.insert(
-                    problem_id.clone(),
-                    (rank_pos + 1, rating.confidence().to_string()),
-                );
-            }
-            result.insert(milestone.id.clone(), milestone_rankings);
-        }
-
-        result
     }
 }
 
@@ -216,6 +139,7 @@ impl ProjectData {
 /// 3. Each tick, `check_pending_related_load()` polls the receiver and populates
 ///    `related_items` and `related_cache` when the result arrives.
 pub struct UiState {
+    pub focused_pane: FocusedPane,
     pub tree_index: usize,
     pub expanded_nodes: HashSet<String>,
     pub detail_scroll: u16,
@@ -255,6 +179,7 @@ impl UiState {
         let mut expanded_nodes = HashSet::new();
         expanded_nodes.insert("backlog".to_string());
         Self {
+            focused_pane: FocusedPane::Tree,
             tree_index: 0,
             expanded_nodes,
             detail_scroll: 0,
@@ -311,20 +236,18 @@ impl App {
         }
 
         let user = store.jj_client.user_identity().unwrap_or_default();
-        let next_actions = super::next_actions::build_next_actions_ranked(
+        let next_actions = super::next_actions::build_next_actions(
             &data.problems,
             &data.solutions,
             &data.critiques,
             &user,
-            &data.rankings,
         );
-        let tree_items = super::tree::build_flat_tree_ranked(
+        let tree_items = super::tree::build_flat_tree(
             &data.milestones,
             &data.problems,
             &data.solutions,
             &data.critiques,
             &ui.expanded_nodes,
-            &data.rankings,
         );
 
         let mut cache = RenderCache {
@@ -407,9 +330,6 @@ impl App {
             InputMode::Input { .. } => {
                 self.handle_input_key(key.code)?;
             }
-            InputMode::Ranking { .. } => {
-                self.handle_ranking_key(key.code)?;
-            }
             InputMode::Normal => {
                 self.handle_normal_key(key)?;
             }
@@ -418,18 +338,24 @@ impl App {
     }
 
     fn handle_normal_key(&mut self, key: KeyEvent) -> Result<()> {
+        match self.ui.focused_pane {
+            FocusedPane::Tree => self.handle_tree_key(key)?,
+            FocusedPane::Detail => self.handle_detail_key(key)?,
+        }
+        Ok(())
+    }
+
+    fn handle_tree_key(&mut self, key: KeyEvent) -> Result<()> {
         match key.code {
             KeyCode::Char('q') => self.should_quit = true,
-            KeyCode::Tab => self.jump_to_next_action(false),
-            KeyCode::BackTab => self.jump_to_next_action(true),
-            KeyCode::Up => self.navigate_up(),
-            KeyCode::Down => self.navigate_down(),
-            KeyCode::Left => self.collapse_or_parent(),
-            KeyCode::Right => self.expand_or_child(),
-            KeyCode::Char('j') => self.scroll_detail_down(),
-            KeyCode::Char('k') => self.scroll_detail_up(),
+            KeyCode::Tab => {
+                self.ui.focused_pane = FocusedPane::Detail;
+            }
+            KeyCode::Up | KeyCode::Char('k') => self.navigate_up(),
+            KeyCode::Down | KeyCode::Char('j') => self.navigate_down(),
+            KeyCode::Left | KeyCode::Char('h') => self.collapse_or_parent(),
+            KeyCode::Right | KeyCode::Char('l') => self.expand_or_child(),
             KeyCode::Char(' ') => self.toggle_selection(),
-            KeyCode::Char('b') => self.page_detail_up(),
             KeyCode::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.select_all_visible();
             }
@@ -447,13 +373,32 @@ impl App {
             KeyCode::Char('/') => self.start_search(),
             KeyCode::Char('R') => self.toggle_related_panel(),
             KeyCode::Char('g') => self.goto_change()?,
+            KeyCode::Char('G') => self.jump_to_next_action(false),
             KeyCode::Char('E') => self.open_in_editor()?,
             KeyCode::Char('x') => self.start_delete()?,
             KeyCode::Char('c') => self.cycle_confidence()?,
-            KeyCode::Char('r') => self.start_ranking()?,
             KeyCode::Char('m') => self.start_move_to_milestone()?,
+            KeyCode::Char('b') => self.page_detail_up(),
             KeyCode::Char('?') => self.toggle_help(),
             KeyCode::Esc => self.clear_selection(),
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn handle_detail_key(&mut self, key: KeyEvent) -> Result<()> {
+        match key.code {
+            KeyCode::Char('q') => self.should_quit = true,
+            KeyCode::Tab | KeyCode::Esc => {
+                self.ui.focused_pane = FocusedPane::Tree;
+            }
+            KeyCode::Down | KeyCode::Char('j') => self.scroll_detail_down(),
+            KeyCode::Up | KeyCode::Char('k') => self.scroll_detail_up(),
+            KeyCode::Char('b') => self.page_detail_up(),
+            KeyCode::Char(' ') => self.page_detail_down(),
+            KeyCode::Char('g') => self.detail_scroll_to_top(),
+            KeyCode::Char('G') => self.detail_scroll_to_bottom(),
+            KeyCode::Char('?') => self.toggle_help(),
             _ => {}
         }
         Ok(())

@@ -22,7 +22,6 @@ pub mod jj;
 pub mod local_config;
 pub mod models;
 pub mod picker;
-pub mod ranking;
 pub mod resolve;
 pub mod storage;
 pub mod sync;

@@ -104,13 +104,6 @@ pub enum Commands {
         action: MilestoneAction,
     },
 
-    /// Rank problems by importance using pairwise comparisons (Glicko-2)
-    #[command(display_order = 14)]
-    Rank {
-        #[command(subcommand)]
-        action: RankAction,
-    },
-
     // ── Discover ───────────────────────────────────────────────────────────
     /// Search problems, solutions, and critiques by text or semantic similarity
     #[command(display_order = 30)]
@@ -961,44 +954,6 @@ pub enum MilestoneAction {
         /// Output as JSON
         #[arg(long)]
         json: bool,
-    },
-}
-
-// =============================================================================
-// Rank Commands
-// =============================================================================
-
-#[derive(Subcommand)]
-pub enum RankAction {
-    /// Start a guided ranking session — compare problems in pairs
-    #[command(display_order = 0)]
-    Session {
-        /// Milestone to rank problems for (ID, prefix, or title)
-        milestone: Option<String>,
-        /// Number of matchups to present (default: 7)
-        #[arg(long, default_value = "7")]
-        count: usize,
-    },
-    /// Show the computed ranking for a milestone
-    #[command(display_order = 1)]
-    Show {
-        /// Milestone ID, prefix, or title
-        milestone: Option<String>,
-        /// Show per-user ranking breakdown
-        #[arg(long)]
-        by_user: bool,
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-    },
-    /// Show comparison history for a milestone
-    #[command(display_order = 2)]
-    History {
-        /// Milestone ID, prefix, or title
-        milestone: Option<String>,
-        /// Maximum entries to show (default: 20)
-        #[arg(long, default_value = "20")]
-        limit: usize,
     },
 }
 

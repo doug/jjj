@@ -189,6 +189,18 @@ impl App {
         self.ui.detail_scroll = self.ui.detail_scroll.saturating_sub(10);
     }
 
+    pub(super) fn page_detail_down(&mut self) {
+        self.ui.detail_scroll = self.ui.detail_scroll.saturating_add(10);
+    }
+
+    pub(super) fn detail_scroll_to_top(&mut self) {
+        self.ui.detail_scroll = 0;
+    }
+
+    pub(super) fn detail_scroll_to_bottom(&mut self) {
+        self.ui.detail_scroll = u16::MAX;
+    }
+
     /// Toggle multi-select on the current tree item and advance cursor.
     pub(super) fn toggle_selection(&mut self) {
         if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
@@ -297,13 +309,12 @@ impl App {
     }
 
     pub fn rebuild_tree(&mut self) {
-        self.cache.tree_items = super::super::tree::build_flat_tree_ranked(
+        self.cache.tree_items = super::super::tree::build_flat_tree(
             &self.data.milestones,
             &self.data.problems,
             &self.data.solutions,
             &self.data.critiques,
             &self.ui.expanded_nodes,
-            &self.data.rankings,
         );
         super::super::annotate_tree_with_actions(
             &mut self.cache.tree_items,
@@ -362,7 +373,7 @@ impl App {
                 TreeNode::Backlog { .. } => "[n]ew problem".to_string(),
                 TreeNode::Problem { id, .. } => {
                     format!(
-                        "{}: [n]ew solution [s]olve [d]issolve [o] reopen [r]ank [A]ssign [m]ove [e]dit [t]ags [E]ditor [x] delete",
+                        "{}: [n]ew solution [s]olve [d]issolve [o] reopen [A]ssign [m]ove [e]dit [t]ags [E]ditor [x] delete",
                         id
                     )
                 }

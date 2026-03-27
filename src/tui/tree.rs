@@ -26,7 +26,6 @@ pub enum TreeNode {
         priority: Priority,
         assignee: Option<String>,
         expanded: bool,
-        rank: Option<usize>,
     },
     Solution {
         id: String,
@@ -117,28 +116,6 @@ pub fn build_flat_tree(
     critiques: &[Critique],
     expanded_nodes: &std::collections::HashSet<String>,
 ) -> Vec<FlatTreeItem> {
-    build_flat_tree_ranked(
-        milestones,
-        problems,
-        solutions,
-        critiques,
-        expanded_nodes,
-        &std::collections::HashMap::<String, std::collections::HashMap<String, (usize, String)>>::new(),
-    )
-}
-
-pub fn build_flat_tree_ranked(
-    milestones: &[Milestone],
-    problems: &[Problem],
-    solutions: &[Solution],
-    critiques: &[Critique],
-    expanded_nodes: &std::collections::HashSet<String>,
-    rankings: &std::collections::HashMap<
-        String,
-        std::collections::HashMap<String, (usize, String)>,
-    >,
-) -> Vec<FlatTreeItem> {
-    let empty_rankings = std::collections::HashMap::new();
     let mut items = Vec::new();
 
     // ProjectRoot is selectable (for creating milestones) but not collapsible
@@ -170,7 +147,6 @@ pub fn build_flat_tree_ranked(
         });
 
         if expanded {
-            let milestone_rankings = rankings.get(&milestone.id).unwrap_or(&empty_rankings);
             add_problems(
                 &mut items,
                 &milestone_problems,
@@ -178,12 +154,11 @@ pub fn build_flat_tree_ranked(
                 critiques,
                 expanded_nodes,
                 1,
-                milestone_rankings,
             );
         }
     }
 
-    // Add backlog (problems without milestone) — no rankings for backlog
+    // Add backlog (problems without milestone)
     let backlog_problems: Vec<_> = problems
         .iter()
         .filter(|p| p.milestone_id.is_none())
@@ -207,7 +182,6 @@ pub fn build_flat_tree_ranked(
             critiques,
             expanded_nodes,
             1,
-            &empty_rankings,
         );
     }
 
@@ -221,7 +195,6 @@ fn add_problems(
     critiques: &[Critique],
     expanded_nodes: &std::collections::HashSet<String>,
     depth: usize,
-    rankings: &std::collections::HashMap<String, (usize, String)>,
 ) {
     for problem in problems {
         let problem_solutions: Vec<_> = solutions
@@ -230,7 +203,6 @@ fn add_problems(
             .collect();
 
         let expanded = expanded_nodes.contains(&problem.id);
-        let rank = rankings.get(&problem.id).map(|(pos, _)| *pos);
         items.push(FlatTreeItem {
             node: TreeNode::Problem {
                 id: problem.id.clone(),
@@ -239,7 +211,6 @@ fn add_problems(
                 priority: problem.priority.clone(),
                 assignee: problem.assignee.clone(),
                 expanded,
-                rank,
             },
             depth,
             has_children: !problem_solutions.is_empty(),
@@ -883,7 +854,6 @@ mod tests {
             priority: Priority::Medium,
             assignee: None,
             expanded: false,
-            rank: None,
         };
         assert!(!node.is_expanded());
         node.set_expanded(true);

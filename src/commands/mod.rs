@@ -10,7 +10,6 @@ pub mod next;
 pub mod overlaps;
 pub mod problem;
 pub mod push;
-pub mod rank;
 pub mod search;
 pub mod solution;
 pub mod status;
@@ -56,8 +55,6 @@ fn execute_with_context(ctx: &CommandContext, command: Commands) -> Result<()> {
         Commands::Solution { action } => solution::execute(ctx, action),
         Commands::Critique { action } => critique::execute(ctx, action),
         Commands::Milestone { action } => milestone::execute(ctx, action),
-        Commands::Rank { action } => rank::execute(ctx, action),
-
         // Status (replaces dashboard + next)
         Commands::Status {
             all,
