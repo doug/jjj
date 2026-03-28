@@ -331,10 +331,12 @@ impl App {
                         if let Some(c) = confidence {
                             problem.confidence = c;
                         }
-                        if let Some(s) = status {
-                            problem
-                                .try_set_status(s)
-                                .map_err(crate::error::JjjError::Validation)?;
+                        if let Some(s) = &status {
+                            if *s != problem.status {
+                                problem
+                                    .try_set_status(s.clone())
+                                    .map_err(crate::error::JjjError::Validation)?;
+                            }
                         }
                         self.store.save_problem(&problem)
                     })?;
@@ -350,10 +352,12 @@ impl App {
                         solution.title = parsed.title.clone();
                         solution.approach = parsed.description.clone();
                         solution.tags = parsed.tags.clone();
-                        if let Some(s) = status {
-                            solution
-                                .try_set_status(s)
-                                .map_err(crate::error::JjjError::Validation)?;
+                        if let Some(s) = &status {
+                            if *s != solution.status {
+                                solution
+                                    .try_set_status(s.clone())
+                                    .map_err(crate::error::JjjError::Validation)?;
+                            }
                         }
                         self.store.save_solution(&solution)
                     })?;
@@ -375,10 +379,12 @@ impl App {
                         if let Some(sev) = severity {
                             critique.severity = sev;
                         }
-                        if let Some(s) = status {
-                            critique
-                                .try_set_status(s)
-                                .map_err(crate::error::JjjError::Validation)?;
+                        if let Some(s) = &status {
+                            if *s != critique.status {
+                                critique
+                                    .try_set_status(s.clone())
+                                    .map_err(crate::error::JjjError::Validation)?;
+                            }
                         }
                         self.store.save_critique(&critique)
                     })?;
