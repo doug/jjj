@@ -520,5 +520,4 @@ mod tests {
         assert_eq!(blocked.details.len(), 1);
         assert_eq!(blocked.details[0].severity, Some("critical".to_string()));
     }
-
 }

@@ -1266,12 +1266,15 @@ impl App {
         Ok(())
     }
 
-
     /// Toggle between personal and global ordering view.
     pub(super) fn toggle_ordering_view(&mut self) {
         self.ui.show_personal_ordering = !self.ui.show_personal_ordering;
         self.refresh_data().ok();
-        let view = if self.ui.show_personal_ordering { "Personal" } else { "Global" };
+        let view = if self.ui.show_personal_ordering {
+            "Personal"
+        } else {
+            "Global"
+        };
         self.show_flash(&format!("Showing {} ordering", view));
     }
 
@@ -1306,7 +1309,10 @@ impl App {
         }
 
         // Find which third the selected problem is in
-        let pos_in_order = effective_order.iter().position(|id| *id == problem_id).unwrap_or(0);
+        let pos_in_order = effective_order
+            .iter()
+            .position(|id| *id == problem_id)
+            .unwrap_or(0);
 
         let third = range_size / 3;
         let tier_label;
@@ -1322,7 +1328,11 @@ impl App {
         };
 
         self.ui.tier_drill.push((milestone_id, new_start, new_end));
-        self.show_flash(&format!("Drilled into {} tier ({} items)", tier_label, new_end - new_start));
+        self.show_flash(&format!(
+            "Drilled into {} tier ({} items)",
+            tier_label,
+            new_end - new_start
+        ));
         self.refresh_data()?;
         Ok(())
     }
@@ -1338,19 +1348,22 @@ impl App {
     /// Get the effective ordering (personal or global) for a milestone as a Vec of problem IDs.
     fn get_effective_ordering(&self, milestone_id: &str) -> Vec<String> {
         if self.ui.show_personal_ordering {
-            self.ui.personal_orderings
+            self.ui
+                .personal_orderings
                 .get(milestone_id)
                 .map(|o| o.order.clone())
                 .unwrap_or_else(|| {
                     // Fall back to natural order
-                    self.data.problems
+                    self.data
+                        .problems
                         .iter()
                         .filter(|p| p.milestone_id.as_deref() == Some(milestone_id))
                         .map(|p| p.id.clone())
                         .collect()
                 })
         } else {
-            self.data.rankings
+            self.data
+                .rankings
                 .get(milestone_id)
                 .map(|m| {
                     let mut items: Vec<_> = m.iter().collect();
@@ -1374,8 +1387,13 @@ impl App {
     }
 
     /// Create a default ordering for a milestone from current problem list.
-    fn default_ordering_for_milestone(&self, milestone_id: &str) -> crate::ranking::ordering::UserOrdering {
-        let order: Vec<String> = self.data.problems
+    fn default_ordering_for_milestone(
+        &self,
+        milestone_id: &str,
+    ) -> crate::ranking::ordering::UserOrdering {
+        let order: Vec<String> = self
+            .data
+            .problems
             .iter()
             .filter(|p| p.milestone_id.as_deref() == Some(milestone_id))
             .map(|p| p.id.clone())
@@ -1406,7 +1424,9 @@ impl App {
         // Ensure ordering exists
         if !self.ui.personal_orderings.contains_key(&milestone_id) {
             let default = self.default_ordering_for_milestone(&milestone_id);
-            self.ui.personal_orderings.insert(milestone_id.clone(), default);
+            self.ui
+                .personal_orderings
+                .insert(milestone_id.clone(), default);
         }
 
         let ordering = self.ui.personal_orderings.get_mut(&milestone_id).unwrap();
@@ -1449,7 +1469,9 @@ impl App {
 
         if !self.ui.personal_orderings.contains_key(&milestone_id) {
             let default = self.default_ordering_for_milestone(&milestone_id);
-            self.ui.personal_orderings.insert(milestone_id.clone(), default);
+            self.ui
+                .personal_orderings
+                .insert(milestone_id.clone(), default);
         }
 
         let ordering = self.ui.personal_orderings.get_mut(&milestone_id).unwrap();
@@ -1483,7 +1505,9 @@ impl App {
             None => return Ok(()),
         };
 
-        let problem_count = self.data.problems
+        let problem_count = self
+            .data
+            .problems
             .iter()
             .filter(|p| p.milestone_id.as_deref() == Some(&milestone_id))
             .count();
@@ -1492,7 +1516,9 @@ impl App {
         // Ensure ordering exists
         if !self.ui.personal_orderings.contains_key(&milestone_id) {
             let default = self.default_ordering_for_milestone(&milestone_id);
-            self.ui.personal_orderings.insert(milestone_id.clone(), default);
+            self.ui
+                .personal_orderings
+                .insert(milestone_id.clone(), default);
         }
 
         let ord = self.ui.personal_orderings.get_mut(&milestone_id).unwrap();
@@ -1505,7 +1531,10 @@ impl App {
         // When going from negative toward zero, cost decreases — always allowed.
         // When going positive, check budget.
         if new_cost > old_cost && current_total_cost + marginal_cost > budget {
-            self.show_flash(&format!("No budget remaining ({}/{})", current_total_cost, budget));
+            self.show_flash(&format!(
+                "No budget remaining ({}/{})",
+                current_total_cost, budget
+            ));
             return Ok(());
         }
 
@@ -1517,20 +1546,24 @@ impl App {
         }
         ord.updated_at = chrono::Utc::now();
 
-        ordering::save_user_ordering(
-            self.store.meta_path(),
-            &milestone_id,
-            &self.user,
-            ord,
-        )?;
+        ordering::save_user_ordering(self.store.meta_path(), &milestone_id, &self.user, ord)?;
 
         let new_total_cost = borda::total_vote_cost(&ord.votes);
         if new_val > 0 {
-            self.show_flash(&format!("+{}▲ (budget {}/{})", new_val, new_total_cost, budget));
+            self.show_flash(&format!(
+                "+{}▲ (budget {}/{})",
+                new_val, new_total_cost, budget
+            ));
         } else if new_val < 0 {
-            self.show_flash(&format!("{}▼ (budget {}/{})", new_val, new_total_cost, budget));
+            self.show_flash(&format!(
+                "{}▼ (budget {}/{})",
+                new_val, new_total_cost, budget
+            ));
         } else {
-            self.show_flash(&format!("Vote cleared (budget {}/{})", new_total_cost, budget));
+            self.show_flash(&format!(
+                "Vote cleared (budget {}/{})",
+                new_total_cost, budget
+            ));
         }
 
         self.refresh_data()?;
@@ -1546,7 +1579,9 @@ impl App {
             None => return Ok(()),
         };
 
-        let problem_count = self.data.problems
+        let problem_count = self
+            .data
+            .problems
             .iter()
             .filter(|p| p.milestone_id.as_deref() == Some(&milestone_id))
             .count();
@@ -1589,11 +1624,20 @@ impl App {
 
         let new_total_cost = borda::total_vote_cost(&ord.votes);
         if new_val > 0 {
-            self.show_flash(&format!("+{}▲ (budget {}/{})", new_val, new_total_cost, budget));
+            self.show_flash(&format!(
+                "+{}▲ (budget {}/{})",
+                new_val, new_total_cost, budget
+            ));
         } else if new_val < 0 {
-            self.show_flash(&format!("{}▼ (budget {}/{})", new_val, new_total_cost, budget));
+            self.show_flash(&format!(
+                "{}▼ (budget {}/{})",
+                new_val, new_total_cost, budget
+            ));
         } else {
-            self.show_flash(&format!("Vote cleared (budget {}/{})", new_total_cost, budget));
+            self.show_flash(&format!(
+                "Vote cleared (budget {}/{})",
+                new_total_cost, budget
+            ));
         }
 
         self.refresh_data()?;

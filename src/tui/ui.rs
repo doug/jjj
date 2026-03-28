@@ -231,10 +231,7 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                         .unwrap_or_default();
                     // Build label without rank prefix (rank is rendered as a colored span)
                     (
-                        format!(
-                            "{}{}{}{}",
-                            indent, action_sym, title, assignee_suffix
-                        ),
+                        format!("{}{}{}{}", indent, action_sym, title, assignee_suffix),
                         status_color_problem(status),
                         false,
                     )

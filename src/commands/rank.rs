@@ -225,10 +225,7 @@ fn show_by_user(
             println!("\n--- {} ---", user);
             println!("  QV budget: {}/{} used\n", budget_used, budget);
 
-            println!(
-                "  {:<5} {:<45} {:>5}",
-                "Rank", "Problem", "Votes"
-            );
+            println!("  {:<5} {:<45} {:>5}", "Rank", "Problem", "Votes");
             println!("  {}", "-".repeat(57));
             for (i, id) in ordering
                 .order

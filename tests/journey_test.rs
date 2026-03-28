@@ -145,12 +145,7 @@ fn get_modified_path(dir: &Path) -> Option<String> {
     }
 }
 
-fn run_jjj_block(
-    jjj: &Path,
-    dir: &Path,
-    command: &str,
-    env_path: Option<&str>,
-) -> (bool, String) {
+fn run_jjj_block(jjj: &Path, dir: &Path, command: &str, env_path: Option<&str>) -> (bool, String) {
     let args = split_shell_args(command);
     let mut cmd = Command::new(jjj);
     cmd.args(&args).current_dir(dir);
@@ -251,14 +246,8 @@ fn run_journey(path: &Path) -> Vec<String> {
     let dir = setup_journey_repo();
     let jjj = test_helpers::jjj_binary();
     let mut vars: HashMap<String, String> = HashMap::new();
-    vars.insert(
-        "REPO".to_string(),
-        dir.path().to_string_lossy().to_string(),
-    );
-    vars.insert(
-        "JJJ".to_string(),
-        jjj.to_string_lossy().to_string(),
-    );
+    vars.insert("REPO".to_string(), dir.path().to_string_lossy().to_string());
+    vars.insert("JJJ".to_string(), jjj.to_string_lossy().to_string());
 
     let rel_path = path.file_name().unwrap().to_string_lossy();
 
@@ -279,8 +268,7 @@ fn run_journey(path: &Path) -> Vec<String> {
         };
 
         // Check exit code expectation
-        let expect_success =
-            !matches!(&block.lang, BlockType::JjjFail | BlockType::ShellFail);
+        let expect_success = !matches!(&block.lang, BlockType::JjjFail | BlockType::ShellFail);
         let exit_ok = success == expect_success;
 
         if !exit_ok {
@@ -355,8 +343,7 @@ fn run_journey(path: &Path) -> Vec<String> {
                     match Regex::new(&expanded) {
                         Ok(re) => {
                             if let Some(caps) = re.captures(&output) {
-                                let val =
-                                    caps.get(1).unwrap_or_else(|| caps.get(0).unwrap());
+                                let val = caps.get(1).unwrap_or_else(|| caps.get(0).unwrap());
                                 vars.insert(var.clone(), val.as_str().to_string());
                             } else {
                                 failures.push(format!(
@@ -377,7 +364,7 @@ fn run_journey(path: &Path) -> Vec<String> {
                             ));
                         }
                     }
-                },
+                }
             }
         }
     }

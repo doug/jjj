@@ -108,10 +108,7 @@ mod tests {
     fn make_ordering(order: Vec<&str>, votes: Vec<(&str, i32)>) -> UserOrdering {
         UserOrdering {
             order: order.into_iter().map(String::from).collect(),
-            votes: votes
-                .into_iter()
-                .map(|(k, v)| (k.to_string(), v))
-                .collect(),
+            votes: votes.into_iter().map(|(k, v)| (k.to_string(), v)).collect(),
             updated_at: Utc::now(),
         }
     }
@@ -275,14 +272,8 @@ mod tests {
     fn test_voter_count() {
         // Alice orders p1, p2; Bob orders p2, p3
         let mut orderings = HashMap::new();
-        orderings.insert(
-            "alice".to_string(),
-            make_ordering(vec!["p1", "p2"], vec![]),
-        );
-        orderings.insert(
-            "bob".to_string(),
-            make_ordering(vec!["p2", "p3"], vec![]),
-        );
+        orderings.insert("alice".to_string(), make_ordering(vec!["p1", "p2"], vec![]));
+        orderings.insert("bob".to_string(), make_ordering(vec!["p2", "p3"], vec![]));
 
         let result = aggregate_rankings(&orderings, 3);
 
