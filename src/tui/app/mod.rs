@@ -292,11 +292,9 @@ impl App {
         // Load personal orderings for the current user
         let mut personal_orderings = HashMap::new();
         for milestone in &data.milestones {
-            if let Ok(Some(ord)) = ordering::load_user_ordering(
-                store.meta_path(),
-                &milestone.id,
-                &user,
-            ) {
+            if let Ok(Some(ord)) =
+                ordering::load_user_ordering(store.meta_path(), &milestone.id, &user)
+            {
                 personal_orderings.insert(milestone.id.clone(), ord);
             }
         }
@@ -307,14 +305,16 @@ impl App {
             &data.critiques,
             &user,
         );
+        let tree_ctx = super::tree::TreeBuildContext {
+            solutions: &data.solutions,
+            critiques: &data.critiques,
+            expanded_nodes: &ui.expanded_nodes,
+            personal_orderings: &ui.personal_orderings,
+        };
         let tree_items = super::tree::build_flat_tree_ranked(
             &data.milestones,
             &data.problems,
-            &data.solutions,
-            &data.critiques,
-            &ui.expanded_nodes,
-            &data.rankings,
-            &ui.personal_orderings,
+            &tree_ctx,
             ui.show_personal_ordering,
             &ui.tier_drill,
         );

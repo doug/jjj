@@ -5,6 +5,16 @@ use crate::models::{
 
 use super::next_actions::{Category, NextAction};
 
+/// Shared context for tree-building functions, bundling read-only references
+/// to avoid passing many individual parameters.
+pub struct TreeBuildContext<'a> {
+    pub solutions: &'a [Solution],
+    pub critiques: &'a [Critique],
+    pub expanded_nodes: &'a std::collections::HashSet<String>,
+    pub personal_orderings:
+        &'a std::collections::HashMap<String, crate::ranking::ordering::UserOrdering>,
+}
+
 #[derive(Debug, Clone)]
 pub enum TreeNode {
     ProjectRoot {
@@ -120,30 +130,19 @@ pub fn build_flat_tree(
     critiques: &[Critique],
     expanded_nodes: &std::collections::HashSet<String>,
 ) -> Vec<FlatTreeItem> {
-    build_flat_tree_ranked(
-        milestones,
-        problems,
+    let ctx = TreeBuildContext {
         solutions,
         critiques,
         expanded_nodes,
-        &std::collections::HashMap::<String, std::collections::HashMap<String, (usize, String)>>::new(),
-        &std::collections::HashMap::new(),
-        false,
-        &[],
-    )
+        personal_orderings: &std::collections::HashMap::new(),
+    };
+    build_flat_tree_ranked(milestones, problems, &ctx, false, &[])
 }
 
 pub fn build_flat_tree_ranked(
     milestones: &[Milestone],
     problems: &[Problem],
-    solutions: &[Solution],
-    critiques: &[Critique],
-    expanded_nodes: &std::collections::HashSet<String>,
-    _rankings: &std::collections::HashMap<
-        String,
-        std::collections::HashMap<String, (usize, String)>,
-    >,
-    personal_orderings: &std::collections::HashMap<String, crate::ranking::ordering::UserOrdering>,
+    ctx: &TreeBuildContext,
     show_personal: bool,
     tier_drill: &[(String, usize, usize)],
 ) -> Vec<FlatTreeItem> {
@@ -164,7 +163,7 @@ pub fn build_flat_tree_ranked(
             .filter(|p| p.milestone_id.as_ref() == Some(&milestone.id))
             .collect();
 
-        let expanded = expanded_nodes.contains(&milestone.id);
+        let expanded = ctx.expanded_nodes.contains(&milestone.id);
         items.push(FlatTreeItem {
             node: TreeNode::Milestone {
                 id: milestone.id.clone(),
@@ -180,9 +179,13 @@ pub fn build_flat_tree_ranked(
         if expanded {
             let mut milestone_problems = milestone_problems;
             if show_personal {
-                if let Some(ordering) = personal_orderings.get(&milestone.id) {
+                if let Some(ordering) = ctx.personal_orderings.get(&milestone.id) {
                     milestone_problems.sort_by_key(|p| {
-                        ordering.order.iter().position(|id| id == &p.id).unwrap_or(usize::MAX)
+                        ordering
+                            .order
+                            .iter()
+                            .position(|id| id == &p.id)
+                            .unwrap_or(usize::MAX)
                     });
                 }
             }
@@ -190,9 +193,12 @@ pub fn build_flat_tree_ranked(
             if let Some((drill_ms, drill_start, drill_end)) = tier_drill.last() {
                 if *drill_ms == milestone.id {
                     let ordered_ids: Vec<String> = if show_personal {
-                        personal_orderings.get(&milestone.id)
+                        ctx.personal_orderings
+                            .get(&milestone.id)
                             .map(|o| o.order.clone())
-                            .unwrap_or_else(|| milestone_problems.iter().map(|p| p.id.clone()).collect())
+                            .unwrap_or_else(|| {
+                                milestone_problems.iter().map(|p| p.id.clone()).collect()
+                            })
                     } else {
                         milestone_problems.iter().map(|p| p.id.clone()).collect()
                     };
@@ -207,16 +213,7 @@ pub fn build_flat_tree_ranked(
                     milestone_problems.retain(|p| visible_ids.contains(&p.id));
                 }
             }
-            add_problems(
-                &mut items,
-                &milestone_problems,
-                solutions,
-                critiques,
-                expanded_nodes,
-                1,
-                personal_orderings,
-                Some(&milestone.id),
-            );
+            add_problems(&mut items, &milestone_problems, ctx, 1, Some(&milestone.id));
         }
     }
 
@@ -226,7 +223,7 @@ pub fn build_flat_tree_ranked(
         .filter(|p| p.milestone_id.is_none())
         .collect();
 
-    let backlog_expanded = expanded_nodes.contains("backlog");
+    let backlog_expanded = ctx.expanded_nodes.contains("backlog");
     items.push(FlatTreeItem {
         node: TreeNode::Backlog {
             expanded: backlog_expanded,
@@ -237,16 +234,7 @@ pub fn build_flat_tree_ranked(
     });
 
     if backlog_expanded {
-        add_problems(
-            &mut items,
-            &backlog_problems,
-            solutions,
-            critiques,
-            expanded_nodes,
-            1,
-            personal_orderings,
-            None,
-        );
+        add_problems(&mut items, &backlog_problems, ctx, 1, None);
     }
 
     items
@@ -255,23 +243,21 @@ pub fn build_flat_tree_ranked(
 fn add_problems(
     items: &mut Vec<FlatTreeItem>,
     problems: &[&Problem],
-    solutions: &[Solution],
-    critiques: &[Critique],
-    expanded_nodes: &std::collections::HashSet<String>,
+    ctx: &TreeBuildContext,
     depth: usize,
-    personal_orderings: &std::collections::HashMap<String, crate::ranking::ordering::UserOrdering>,
     milestone_id: Option<&str>,
 ) {
     let problem_count = problems.len();
     for (idx, problem) in problems.iter().enumerate() {
-        let problem_solutions: Vec<_> = solutions
+        let problem_solutions: Vec<_> = ctx
+            .solutions
             .iter()
             .filter(|s| s.problem_id == problem.id)
             .collect();
 
-        let expanded = expanded_nodes.contains(&problem.id);
+        let expanded = ctx.expanded_nodes.contains(&problem.id);
         let votes = milestone_id
-            .and_then(|mid| personal_orderings.get(mid))
+            .and_then(|mid| ctx.personal_orderings.get(mid))
             .and_then(|ord| ord.votes.get(&problem.id))
             .copied()
             .unwrap_or(0);
@@ -300,12 +286,13 @@ fn add_problems(
 
         if expanded {
             for solution in problem_solutions {
-                let solution_critiques: Vec<_> = critiques
+                let solution_critiques: Vec<_> = ctx
+                    .critiques
                     .iter()
                     .filter(|c| c.solution_id == solution.id)
                     .collect();
 
-                let sol_expanded = expanded_nodes.contains(&solution.id);
+                let sol_expanded = ctx.expanded_nodes.contains(&solution.id);
                 items.push(FlatTreeItem {
                     node: TreeNode::Solution {
                         id: solution.id.clone(),

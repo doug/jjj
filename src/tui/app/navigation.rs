@@ -309,14 +309,16 @@ impl App {
     }
 
     pub fn rebuild_tree(&mut self) {
+        let tree_ctx = super::super::tree::TreeBuildContext {
+            solutions: &self.data.solutions,
+            critiques: &self.data.critiques,
+            expanded_nodes: &self.ui.expanded_nodes,
+            personal_orderings: &self.ui.personal_orderings,
+        };
         self.cache.tree_items = super::super::tree::build_flat_tree_ranked(
             &self.data.milestones,
             &self.data.problems,
-            &self.data.solutions,
-            &self.data.critiques,
-            &self.ui.expanded_nodes,
-            &self.data.rankings,
-            &self.ui.personal_orderings,
+            &tree_ctx,
             self.ui.show_personal_ordering,
             &self.ui.tier_drill,
         );
@@ -416,8 +418,7 @@ impl App {
                     super::super::DetailContent::None
                 }
                 TreeNode::Problem { id, .. } => {
-                    if let Some(problem) =
-                        self.data.problems.iter().find(|p| p.id == *id).cloned()
+                    if let Some(problem) = self.data.problems.iter().find(|p| p.id == *id).cloned()
                     {
                         let rank_info = self.build_problem_rank_info(&problem);
                         super::super::DetailContent::Problem(problem, rank_info)
