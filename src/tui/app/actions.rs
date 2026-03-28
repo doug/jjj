@@ -4,6 +4,12 @@ use crate::display::short_id;
 use crate::error::Result;
 use crate::models::{CritiqueStatus, Event, EventExtra, EventType, ProblemStatus};
 
+/// Target tier for tertiary sort assignment.
+enum Tier {
+    Top,
+    Bottom,
+}
+
 impl App {
     pub(super) fn create_problem(
         &mut self,
@@ -1405,55 +1411,24 @@ impl App {
         }
     }
 
-    /// Move the selected problem up in the user's personal ordering.
-    /// Cursor stays at the same position so the user can triage the next item.
-    pub(super) fn move_problem_up(&mut self) -> Result<()> {
-        let (milestone_id, problem_id) = match self.selected_milestone_problem() {
-            Some(x) => x,
-            None => {
-                self.show_flash("Select a milestone problem to reorder");
-                return Ok(());
-            }
-        };
-
-        // Auto-switch to personal ordering view so the reorder is visible
-        if !self.ui.show_personal_ordering {
-            self.ui.show_personal_ordering = true;
-        }
-
-        // Ensure ordering exists
-        if !self.ui.personal_orderings.contains_key(&milestone_id) {
-            let default = self.default_ordering_for_milestone(&milestone_id);
-            self.ui
-                .personal_orderings
-                .insert(milestone_id.clone(), default);
-        }
-
-        let ordering = self.ui.personal_orderings.get_mut(&milestone_id).unwrap();
-
-        if let Some(pos) = ordering.order.iter().position(|id| *id == problem_id) {
-            if pos > 0 {
-                ordering.order.swap(pos, pos - 1);
-                ordering.updated_at = chrono::Utc::now();
-                crate::ranking::ordering::save_user_ordering(
-                    self.store.meta_path(),
-                    &milestone_id,
-                    &self.user,
-                    ordering,
-                )?;
-                self.refresh_data()?;
-                // Cursor stays — the swapped-down item is now at this position
-                self.update_selected_detail();
-            } else {
-                self.show_flash("Already at top");
-            }
-        }
-        Ok(())
+    /// Assign the selected problem to the Top tier of the current drill view.
+    ///
+    /// Moves the item to the end of the top third of the visible range in the
+    /// user's personal ordering. If already in the top third, moves to position 0.
+    pub(super) fn assign_top_tier(&mut self) -> Result<()> {
+        self.assign_tier(Tier::Top)
     }
 
-    /// Move the selected problem down in the user's personal ordering.
-    /// Cursor stays at the same position so the user can triage the next item.
-    pub(super) fn move_problem_down(&mut self) -> Result<()> {
+    /// Assign the selected problem to the Bottom tier of the current drill view.
+    ///
+    /// Moves the item to the start of the bottom third of the visible range.
+    /// If already in the bottom third, moves to the last position.
+    pub(super) fn assign_bottom_tier(&mut self) -> Result<()> {
+        self.assign_tier(Tier::Bottom)
+    }
+
+    /// Move the selected problem into the specified tier of the current drill view.
+    fn assign_tier(&mut self, tier: Tier) -> Result<()> {
         let (milestone_id, problem_id) = match self.selected_milestone_problem() {
             Some(x) => x,
             None => {
@@ -1462,7 +1437,6 @@ impl App {
             }
         };
 
-        // Auto-switch to personal ordering view so the reorder is visible
         if !self.ui.show_personal_ordering {
             self.ui.show_personal_ordering = true;
         }
@@ -1476,23 +1450,90 @@ impl App {
 
         let ordering = self.ui.personal_orderings.get_mut(&milestone_id).unwrap();
 
-        if let Some(pos) = ordering.order.iter().position(|id| *id == problem_id) {
-            if pos + 1 < ordering.order.len() {
-                ordering.order.swap(pos, pos + 1);
-                ordering.updated_at = chrono::Utc::now();
-                crate::ranking::ordering::save_user_ordering(
-                    self.store.meta_path(),
-                    &milestone_id,
-                    &self.user,
-                    ordering,
-                )?;
-                self.refresh_data()?;
-                // Cursor stays — the swapped-up item is now at this position
-                self.update_selected_detail();
+        // Determine the visible range from the drill state
+        let (view_start, view_end) = if let Some((drill_ms, start, end)) = self.ui.tier_drill.last()
+        {
+            if *drill_ms == milestone_id {
+                (*start, *end)
             } else {
-                self.show_flash("Already at bottom");
+                (0, ordering.order.len())
             }
+        } else {
+            (0, ordering.order.len())
+        };
+
+        let view_size = view_end - view_start;
+        if view_size == 0 {
+            return Ok(());
         }
+
+        // Find the item's current position in the full ordering
+        let current_pos = match ordering.order.iter().position(|id| *id == problem_id) {
+            Some(p) => p,
+            None => return Ok(()),
+        };
+
+        // Calculate tier boundaries within the view
+        let third = view_size.div_ceil(3);
+        let top_end = view_start + third;
+        let bottom_start = view_end - third;
+
+        // Determine target position
+        let target_pos = match tier {
+            Tier::Top => {
+                if current_pos < top_end {
+                    // Already in top tier — move to very top of view
+                    view_start
+                } else {
+                    // Move to end of top third (just before middle)
+                    top_end.saturating_sub(1)
+                }
+            }
+            Tier::Bottom => {
+                if current_pos >= bottom_start {
+                    // Already in bottom tier — move to very bottom of view
+                    view_end - 1
+                } else {
+                    // Move to start of bottom third
+                    bottom_start
+                }
+            }
+        };
+
+        if target_pos == current_pos {
+            let label = match tier {
+                Tier::Top => "top",
+                Tier::Bottom => "bottom",
+            };
+            self.show_flash(&format!("Already at {} of tier", label));
+            return Ok(());
+        }
+
+        // Remove from current position and insert at target
+        let id = ordering.order.remove(current_pos);
+        // Adjust target if removal shifted indices
+        let adjusted_target = if current_pos < target_pos {
+            target_pos - 1
+        } else {
+            target_pos
+        };
+        ordering.order.insert(adjusted_target, id);
+        ordering.updated_at = chrono::Utc::now();
+
+        crate::ranking::ordering::save_user_ordering(
+            self.store.meta_path(),
+            &milestone_id,
+            &self.user,
+            ordering,
+        )?;
+
+        let label = match tier {
+            Tier::Top => "Top",
+            Tier::Bottom => "Bottom",
+        };
+        self.show_flash(&format!("→ {} tier", label));
+        self.refresh_data()?;
+        self.update_selected_detail();
         Ok(())
     }
 
