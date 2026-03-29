@@ -1411,6 +1411,17 @@ impl App {
         }
     }
 
+    /// Ensure a personal ordering exists for the given milestone, creating a
+    /// default from current problem order if needed.
+    fn ensure_ordering(&mut self, milestone_id: &str) {
+        if !self.ui.personal_orderings.contains_key(milestone_id) {
+            let default = self.default_ordering_for_milestone(milestone_id);
+            self.ui
+                .personal_orderings
+                .insert(milestone_id.to_string(), default);
+        }
+    }
+
     /// Assign the selected problem to the Top tier of the current drill view.
     ///
     /// Moves the item to the end of the top third of the visible range in the
@@ -1441,13 +1452,7 @@ impl App {
             self.ui.show_personal_ordering = true;
         }
 
-        if !self.ui.personal_orderings.contains_key(&milestone_id) {
-            let default = self.default_ordering_for_milestone(&milestone_id);
-            self.ui
-                .personal_orderings
-                .insert(milestone_id.clone(), default);
-        }
-
+        self.ensure_ordering(&milestone_id);
         let ordering = self.ui.personal_orderings.get_mut(&milestone_id).unwrap();
 
         // Determine the visible range from the drill state
@@ -1463,7 +1468,10 @@ impl App {
         };
 
         let view_size = view_end.saturating_sub(view_start);
-        if view_size == 0 {
+
+        // Need at least 3 items for meaningful tier assignment
+        if view_size < 3 {
+            self.show_flash("Too few items for tier sort (need 3+)");
             return Ok(());
         }
 
@@ -1475,6 +1483,7 @@ impl App {
 
         // Guard: item must be within the current drill view
         if current_pos < view_start || current_pos >= view_end {
+            self.show_flash("Item is outside the current drill view");
             return Ok(());
         }
 
@@ -1547,14 +1556,7 @@ impl App {
             .count();
         let budget = borda::qv_budget(problem_count);
 
-        // Ensure ordering exists
-        if !self.ui.personal_orderings.contains_key(&milestone_id) {
-            let default = self.default_ordering_for_milestone(&milestone_id);
-            self.ui
-                .personal_orderings
-                .insert(milestone_id.clone(), default);
-        }
-
+        self.ensure_ordering(&milestone_id);
         let ord = self.ui.personal_orderings.get_mut(&milestone_id).unwrap();
         let current_votes = *ord.votes.get(&problem_id).unwrap_or(&0);
         let current_total_cost = borda::total_vote_cost(&ord.votes);
@@ -1621,14 +1623,7 @@ impl App {
             .count();
         let budget = borda::qv_budget(problem_count);
 
-        // Ensure ordering exists
-        if !self.ui.personal_orderings.contains_key(&milestone_id) {
-            let default = self.default_ordering_for_milestone(&milestone_id);
-            self.ui
-                .personal_orderings
-                .insert(milestone_id.clone(), default);
-        }
-
+        self.ensure_ordering(&milestone_id);
         let ord = self.ui.personal_orderings.get_mut(&milestone_id).unwrap();
         let current_votes = *ord.votes.get(&problem_id).unwrap_or(&0);
         let current_total_cost = borda::total_vote_cost(&ord.votes);

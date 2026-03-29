@@ -3,15 +3,17 @@ use crate::error::Result;
 
 impl App {
     pub(super) fn navigate_up(&mut self) {
-        let mut target = self.ui.tree_index;
-        while target > 0 {
+        if self.ui.tree_index == 0 {
+            return;
+        }
+        let mut target = self.ui.tree_index - 1;
+        // Skip past tier separators, but don't go below 0
+        while self.is_tier_separator(target) && target > 0 {
             target -= 1;
-            if !matches!(
-                self.cache.tree_items.get(target).map(|i| &i.node),
-                Some(super::super::tree::TreeNode::TierSeparator { .. })
-            ) {
-                break;
-            }
+        }
+        // If we landed on a separator at index 0, stay where we were
+        if self.is_tier_separator(target) {
+            return;
         }
         self.ui.tree_index = target;
         self.update_selected_detail();
@@ -19,18 +21,27 @@ impl App {
 
     pub(super) fn navigate_down(&mut self) {
         let max = self.cache.tree_items.len().saturating_sub(1);
-        let mut target = self.ui.tree_index;
-        while target < max {
+        if self.ui.tree_index >= max {
+            return;
+        }
+        let mut target = self.ui.tree_index + 1;
+        // Skip past tier separators, but don't exceed max
+        while self.is_tier_separator(target) && target < max {
             target += 1;
-            if !matches!(
-                self.cache.tree_items.get(target).map(|i| &i.node),
-                Some(super::super::tree::TreeNode::TierSeparator { .. })
-            ) {
-                break;
-            }
+        }
+        // If we landed on a separator at the end, stay where we were
+        if self.is_tier_separator(target) {
+            return;
         }
         self.ui.tree_index = target;
         self.update_selected_detail();
+    }
+
+    fn is_tier_separator(&self, index: usize) -> bool {
+        matches!(
+            self.cache.tree_items.get(index).map(|i| &i.node),
+            Some(super::super::tree::TreeNode::TierSeparator { .. })
+        )
     }
 
     /// Jump to the next (or previous) tree item that has an action symbol.

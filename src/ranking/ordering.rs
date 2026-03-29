@@ -252,4 +252,60 @@ mod tests {
         assert_eq!(all["bob"].order, vec!["p2", "p1"]);
         assert_eq!(all["bob"].votes["p2"], 3);
     }
+
+    /// Simulate the assign_tier remove/insert logic to verify index math.
+    fn simulate_assign(order: &mut Vec<&str>, current_pos: usize, target_pos: usize) {
+        let id = order.remove(current_pos);
+        let adjusted = if current_pos < target_pos {
+            target_pos - 1
+        } else {
+            target_pos
+        };
+        order.insert(adjusted, id);
+    }
+
+    #[test]
+    fn test_assign_to_top_from_middle() {
+        // 9 items, third=3. Top=[0,3), Mid=[3,6), Bottom=[6,9)
+        let mut order: Vec<&str> = vec!["a", "b", "c", "d", "e", "f", "g", "h", "i"];
+        // Move "e" (pos 4, middle) to top tier end (pos 3)
+        simulate_assign(&mut order, 4, 3);
+        assert_eq!(order, vec!["a", "b", "c", "e", "d", "f", "g", "h", "i"]);
+    }
+
+    #[test]
+    fn test_assign_to_top_from_bottom() {
+        let mut order: Vec<&str> = vec!["a", "b", "c", "d", "e", "f", "g", "h", "i"];
+        // Move "h" (pos 7, bottom) to top tier end (pos 3)
+        simulate_assign(&mut order, 7, 3);
+        assert_eq!(order, vec!["a", "b", "c", "h", "d", "e", "f", "g", "i"]);
+    }
+
+    #[test]
+    fn test_assign_to_bottom_from_top() {
+        let mut order: Vec<&str> = vec!["a", "b", "c", "d", "e", "f", "g", "h", "i"];
+        // Move "b" (pos 1, top) to bottom tier start (pos 6)
+        simulate_assign(&mut order, 1, 6);
+        // After removing pos 1, target 6 becomes 5
+        assert_eq!(order, vec!["a", "c", "d", "e", "f", "b", "g", "h", "i"]);
+    }
+
+    #[test]
+    fn test_assign_to_bottom_from_middle() {
+        let mut order: Vec<&str> = vec!["a", "b", "c", "d", "e", "f", "g", "h", "i"];
+        // Move "e" (pos 4, middle) to bottom tier start (pos 6)
+        simulate_assign(&mut order, 4, 6);
+        assert_eq!(order, vec!["a", "b", "c", "d", "f", "e", "g", "h", "i"]);
+    }
+
+    #[test]
+    fn test_assign_with_drill_offset() {
+        // Simulate a drilled view: view_start=3, view_end=6 (the middle tier)
+        // Items at positions 3,4,5 are visible. third=1, top=[3,4), mid=[4,5), bot=[5,6)
+        let mut order: Vec<&str> = vec!["a", "b", "c", "d", "e", "f", "g", "h", "i"];
+        // Move "f" (pos 5, bottom of drill view) to top of drill view (pos 4)
+        // view_start=3, third=1, top_end=4
+        simulate_assign(&mut order, 5, 4);
+        assert_eq!(order, vec!["a", "b", "c", "d", "f", "e", "g", "h", "i"]);
+    }
 }

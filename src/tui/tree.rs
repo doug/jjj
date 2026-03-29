@@ -988,4 +988,129 @@ mod tests {
         node.set_expanded(true);
         assert!(!node.is_expanded()); // Still false, critiques don't expand
     }
+
+    #[test]
+    fn test_tier_separator_not_selectable() {
+        let node = TreeNode::TierSeparator {
+            label: "── Top ──".to_string(),
+        };
+        assert!(!node.is_selectable());
+        assert!(!node.can_expand());
+        assert!(!node.is_expanded());
+        assert_eq!(node.id(), "tier-separator");
+    }
+
+    #[test]
+    fn test_tier_separators_inserted_for_3_plus_milestone_problems() {
+        let milestone = Milestone {
+            id: "m1".into(),
+            title: "Sprint 1".into(),
+            status: MilestoneStatus::Active,
+            target_date: None,
+            problem_ids: vec![],
+            assignee: None,
+            goals: String::new(),
+            success_criteria: String::new(),
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        };
+        let problems: Vec<Problem> = (0..6)
+            .map(|i| {
+                let mut p = Problem::new(format!("p{}", i), format!("Problem {}", i));
+                p.milestone_id = Some("m1".into());
+                p
+            })
+            .collect();
+        let mut expanded = std::collections::HashSet::new();
+        expanded.insert("m1".to_string());
+
+        let items = build_flat_tree(&[milestone], &problems, &[], &[], &expanded);
+
+        // Count tier separators
+        let separators: Vec<_> = items
+            .iter()
+            .filter(|i| matches!(i.node, TreeNode::TierSeparator { .. }))
+            .collect();
+        assert_eq!(separators.len(), 3, "Should have Top/Mid/Bottom separators");
+
+        // Verify labels
+        let labels: Vec<&str> = separators.iter().map(|i| i.node.title()).collect();
+        assert_eq!(labels, vec!["── Top ──", "── Mid ──", "── Bottom ──"]);
+    }
+
+    #[test]
+    fn test_no_tier_separators_for_fewer_than_3_problems() {
+        let milestone = Milestone {
+            id: "m1".into(),
+            title: "Sprint 1".into(),
+            status: MilestoneStatus::Active,
+            target_date: None,
+            problem_ids: vec![],
+            assignee: None,
+            goals: String::new(),
+            success_criteria: String::new(),
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        };
+        let problems: Vec<Problem> = (0..2)
+            .map(|i| {
+                let mut p = Problem::new(format!("p{}", i), format!("Problem {}", i));
+                p.milestone_id = Some("m1".into());
+                p
+            })
+            .collect();
+        let mut expanded = std::collections::HashSet::new();
+        expanded.insert("m1".to_string());
+
+        let items = build_flat_tree(&[milestone], &problems, &[], &[], &expanded);
+
+        let separators = items
+            .iter()
+            .filter(|i| matches!(i.node, TreeNode::TierSeparator { .. }))
+            .count();
+        assert_eq!(separators, 0, "No separators for < 3 problems");
+    }
+
+    #[test]
+    fn test_no_tier_separators_for_backlog() {
+        let problems: Vec<Problem> = (0..6)
+            .map(|i| Problem::new(format!("p{}", i), format!("Problem {}", i)))
+            .collect();
+        let mut expanded = std::collections::HashSet::new();
+        expanded.insert("backlog".to_string());
+
+        let items = build_flat_tree(&[], &problems, &[], &[], &expanded);
+
+        let separators = items
+            .iter()
+            .filter(|i| matches!(i.node, TreeNode::TierSeparator { .. }))
+            .count();
+        assert_eq!(separators, 0, "No separators for backlog problems");
+    }
+
+    #[test]
+    fn test_tier_boundaries_consistent_with_floor_division() {
+        // With 10 items: third=3, top=[0,3), mid=[3,6), bottom=[6,10)
+        let n = 10;
+        let third = n / 3;
+        assert_eq!(third, 3);
+        let top_end = third;
+        let bottom_start = 2 * third;
+        assert_eq!(top_end, 3);
+        assert_eq!(bottom_start, 6);
+        // Bottom gets remainder: 10-6 = 4 items
+
+        // With 7 items: third=2, top=[0,2), mid=[2,4), bottom=[4,7)
+        let n = 7;
+        let third = n / 3;
+        assert_eq!(third, 2);
+        assert_eq!(2 * third, 4); // bottom starts at 4
+                                  // Bottom gets remainder: 7-4 = 3 items
+
+        // With 3 items: third=1, all tiers have 1 item
+        let n = 3;
+        let third = n / 3;
+        assert_eq!(third, 1);
+        assert_eq!(2 * third, 2);
+    }
 }
