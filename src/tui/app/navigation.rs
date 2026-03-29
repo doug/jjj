@@ -3,16 +3,33 @@ use crate::error::Result;
 
 impl App {
     pub(super) fn navigate_up(&mut self) {
-        if self.ui.tree_index > 0 {
-            self.ui.tree_index -= 1;
+        let mut target = self.ui.tree_index;
+        while target > 0 {
+            target -= 1;
+            if !matches!(
+                self.cache.tree_items.get(target).map(|i| &i.node),
+                Some(super::super::tree::TreeNode::TierSeparator { .. })
+            ) {
+                break;
+            }
         }
+        self.ui.tree_index = target;
         self.update_selected_detail();
     }
 
     pub(super) fn navigate_down(&mut self) {
-        if self.ui.tree_index < self.cache.tree_items.len().saturating_sub(1) {
-            self.ui.tree_index += 1;
+        let max = self.cache.tree_items.len().saturating_sub(1);
+        let mut target = self.ui.tree_index;
+        while target < max {
+            target += 1;
+            if !matches!(
+                self.cache.tree_items.get(target).map(|i| &i.node),
+                Some(super::super::tree::TreeNode::TierSeparator { .. })
+            ) {
+                break;
+            }
         }
+        self.ui.tree_index = target;
         self.update_selected_detail();
     }
 
@@ -395,6 +412,7 @@ impl App {
                         id
                     )
                 }
+                TreeNode::TierSeparator { .. } => String::new(),
             }
         } else {
             "No selection".to_string()
@@ -414,9 +432,9 @@ impl App {
                     .cloned()
                     .map(super::super::DetailContent::Milestone)
                     .unwrap_or(super::super::DetailContent::None),
-                TreeNode::ProjectRoot { .. } | TreeNode::Backlog { .. } => {
-                    super::super::DetailContent::None
-                }
+                TreeNode::ProjectRoot { .. }
+                | TreeNode::Backlog { .. }
+                | TreeNode::TierSeparator { .. } => super::super::DetailContent::None,
                 TreeNode::Problem { id, .. } => {
                     if let Some(problem) = self.data.problems.iter().find(|p| p.id == *id).cloned()
                     {
@@ -549,7 +567,9 @@ impl App {
                 TreeNode::Solution { id, .. } => Some(("solution".to_string(), id.clone())),
                 TreeNode::Critique { id, .. } => Some(("critique".to_string(), id.clone())),
                 TreeNode::Milestone { id, .. } => Some(("milestone".to_string(), id.clone())),
-                TreeNode::ProjectRoot { .. } | TreeNode::Backlog { .. } => None,
+                TreeNode::ProjectRoot { .. }
+                | TreeNode::Backlog { .. }
+                | TreeNode::TierSeparator { .. } => None,
             })
     }
 }

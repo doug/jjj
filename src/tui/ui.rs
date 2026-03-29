@@ -160,10 +160,11 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
         display_items.retain(|item| match &item.node {
             // Keep the drilled milestone and its children
             TreeNode::Milestone { id, .. } => id == drill_ms,
-            // Keep problems/solutions/critiques (already filtered by tree builder)
-            TreeNode::Problem { .. } | TreeNode::Solution { .. } | TreeNode::Critique { .. } => {
-                true
-            }
+            // Keep problems/solutions/critiques/separators (already filtered by tree builder)
+            TreeNode::Problem { .. }
+            | TreeNode::Solution { .. }
+            | TreeNode::Critique { .. }
+            | TreeNode::TierSeparator { .. } => true,
             // Hide ProjectRoot and Backlog during drill
             TreeNode::ProjectRoot { .. } | TreeNode::Backlog { .. } => false,
         });
@@ -266,6 +267,9 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                     status_color_critique(status),
                     false,
                 ),
+                TreeNode::TierSeparator { label } => {
+                    (format!("{}{}", indent, label), Color::DarkGray, true)
+                }
             };
 
             let style = if dim {
@@ -630,7 +634,9 @@ fn get_context_actions(app: &App) -> Vec<Line<'static>> {
             TreeNode::Solution { .. } => Some(EntityType::Solution),
             TreeNode::Critique { .. } => Some(EntityType::Critique),
             TreeNode::Milestone { .. } => Some(EntityType::Milestone),
-            TreeNode::ProjectRoot { .. } | TreeNode::Backlog { .. } => None,
+            TreeNode::ProjectRoot { .. }
+            | TreeNode::Backlog { .. }
+            | TreeNode::TierSeparator { .. } => None,
         });
 
     match entity_type {

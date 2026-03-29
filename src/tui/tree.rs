@@ -54,6 +54,10 @@ pub enum TreeNode {
         status: CritiqueStatus,
         severity: String,
     },
+    /// Visual separator between tier groups (Top/Mid/Bottom).
+    TierSeparator {
+        label: String,
+    },
 }
 
 impl TreeNode {
@@ -65,6 +69,7 @@ impl TreeNode {
             TreeNode::Problem { id, .. } => id,
             TreeNode::Solution { id, .. } => id,
             TreeNode::Critique { id, .. } => id,
+            TreeNode::TierSeparator { .. } => "tier-separator",
         }
     }
 
@@ -76,6 +81,7 @@ impl TreeNode {
             TreeNode::Problem { title, .. } => title,
             TreeNode::Solution { title, .. } => title,
             TreeNode::Critique { title, .. } => title,
+            TreeNode::TierSeparator { label } => label,
         }
     }
 
@@ -86,7 +92,7 @@ impl TreeNode {
             TreeNode::Backlog { expanded } => *expanded,
             TreeNode::Problem { expanded, .. } => *expanded,
             TreeNode::Solution { expanded, .. } => *expanded,
-            TreeNode::Critique { .. } => false, // Critiques don't expand
+            TreeNode::Critique { .. } | TreeNode::TierSeparator { .. } => false,
         }
     }
 
@@ -97,20 +103,25 @@ impl TreeNode {
             TreeNode::Backlog { expanded } => *expanded = value,
             TreeNode::Problem { expanded, .. } => *expanded = value,
             TreeNode::Solution { expanded, .. } => *expanded = value,
-            TreeNode::Critique { .. } => {}
+            TreeNode::Critique { .. } | TreeNode::TierSeparator { .. } => {}
         }
     }
 
     pub fn can_expand(&self) -> bool {
-        !matches!(self, TreeNode::Critique { .. })
+        !matches!(
+            self,
+            TreeNode::Critique { .. } | TreeNode::TierSeparator { .. }
+        )
     }
 
     /// Whether this node type can be multi-selected.
-    /// ProjectRoot and Backlog are structural nodes, not selectable.
+    /// ProjectRoot, Backlog, and TierSeparator are structural nodes, not selectable.
     pub fn is_selectable(&self) -> bool {
         !matches!(
             self,
-            TreeNode::ProjectRoot { .. } | TreeNode::Backlog { .. }
+            TreeNode::ProjectRoot { .. }
+                | TreeNode::Backlog { .. }
+                | TreeNode::TierSeparator { .. }
         )
     }
 }
@@ -248,7 +259,40 @@ fn add_problems(
     milestone_id: Option<&str>,
 ) {
     let problem_count = problems.len();
+
+    // Compute tier boundaries for visual separators (only for milestone problems with 3+).
+    // Uses floor division, same formula as tier_drill_in and assign_tier:
+    // Top = [0, third), Mid = [third, 2*third), Bottom = [2*third, count)
+    let tier_boundaries: Option<(usize, usize)> = if milestone_id.is_some() && problem_count >= 3 {
+        let third = problem_count / 3;
+        Some((third, 2 * third))
+    } else {
+        None
+    };
+
     for (idx, problem) in problems.iter().enumerate() {
+        // Insert tier separator labels at tier boundaries
+        if let Some((top_end, bottom_start)) = tier_boundaries {
+            let label = if idx == 0 {
+                Some("── Top ──")
+            } else if idx == top_end {
+                Some("── Mid ──")
+            } else if idx == bottom_start {
+                Some("── Bottom ──")
+            } else {
+                None
+            };
+            if let Some(label) = label {
+                items.push(FlatTreeItem {
+                    node: TreeNode::TierSeparator {
+                        label: label.to_string(),
+                    },
+                    depth,
+                    has_children: false,
+                    action_symbol: None,
+                });
+            }
+        }
         let problem_solutions: Vec<_> = ctx
             .solutions
             .iter()

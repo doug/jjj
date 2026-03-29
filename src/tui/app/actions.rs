@@ -151,7 +151,7 @@ impl App {
                         solution_id: id.clone(),
                     },
                 ),
-                TreeNode::Critique { .. } => return Ok(()),
+                TreeNode::Critique { .. } | TreeNode::TierSeparator { .. } => return Ok(()),
             }
         } else {
             return Ok(());
@@ -1454,7 +1454,7 @@ impl App {
         let (view_start, view_end) = if let Some((drill_ms, start, end)) = self.ui.tier_drill.last()
         {
             if *drill_ms == milestone_id {
-                (*start, *end)
+                (*start, (*end).min(ordering.order.len()))
             } else {
                 (0, ordering.order.len())
             }
@@ -1462,7 +1462,7 @@ impl App {
             (0, ordering.order.len())
         };
 
-        let view_size = view_end - view_start;
+        let view_size = view_end.saturating_sub(view_start);
         if view_size == 0 {
             return Ok(());
         }
@@ -1473,41 +1473,38 @@ impl App {
             None => return Ok(()),
         };
 
-        // Calculate tier boundaries within the view
-        let third = view_size.div_ceil(3);
+        // Guard: item must be within the current drill view
+        if current_pos < view_start || current_pos >= view_end {
+            return Ok(());
+        }
+
+        // Calculate tier boundaries — floor division, same formula as tier_drill_in.
+        // Top = [view_start, view_start + third)
+        // Mid = [view_start + third, view_start + 2*third)
+        // Bottom = [view_start + 2*third, view_end)
+        let third = view_size / 3;
         let top_end = view_start + third;
-        let bottom_start = view_end - third;
+        let bottom_start = view_start + 2 * third;
 
         // Determine target position
-        let target_pos = match tier {
+        let (target_pos, label) = match tier {
             Tier::Top => {
                 if current_pos < top_end {
-                    // Already in top tier — move to very top of view
-                    view_start
-                } else {
-                    // Move to end of top third (just before middle)
-                    top_end.saturating_sub(1)
+                    self.show_flash("Already in top tier");
+                    return Ok(());
                 }
+                // Insert at end of top section (just before middle starts)
+                (top_end, "Top")
             }
             Tier::Bottom => {
                 if current_pos >= bottom_start {
-                    // Already in bottom tier — move to very bottom of view
-                    view_end - 1
-                } else {
-                    // Move to start of bottom third
-                    bottom_start
+                    self.show_flash("Already in bottom tier");
+                    return Ok(());
                 }
+                // Insert at start of bottom section
+                (bottom_start, "Bottom")
             }
         };
-
-        if target_pos == current_pos {
-            let label = match tier {
-                Tier::Top => "top",
-                Tier::Bottom => "bottom",
-            };
-            self.show_flash(&format!("Already at {} of tier", label));
-            return Ok(());
-        }
 
         // Remove from current position and insert at target
         let id = ordering.order.remove(current_pos);
@@ -1527,10 +1524,6 @@ impl App {
             ordering,
         )?;
 
-        let label = match tier {
-            Tier::Top => "Top",
-            Tier::Bottom => "Bottom",
-        };
         self.show_flash(&format!("→ {} tier", label));
         self.refresh_data()?;
         self.update_selected_detail();
