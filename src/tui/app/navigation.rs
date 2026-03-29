@@ -7,13 +7,12 @@ impl App {
             return;
         }
         let mut target = self.ui.tree_index - 1;
-        // Skip past tier separators, but don't go below 0
-        while self.is_tier_separator(target) && target > 0 {
+        // Skip past non-selectable nodes (separators, structural)
+        while !self.is_navigable(target) && target > 0 {
             target -= 1;
         }
-        // If we landed on a separator at index 0, stay where we were
-        if self.is_tier_separator(target) {
-            return;
+        if !self.is_navigable(target) {
+            return; // Nothing navigable above; stay put
         }
         self.ui.tree_index = target;
         self.update_selected_detail();
@@ -25,23 +24,24 @@ impl App {
             return;
         }
         let mut target = self.ui.tree_index + 1;
-        // Skip past tier separators, but don't exceed max
-        while self.is_tier_separator(target) && target < max {
+        // Skip past non-selectable nodes (separators, structural)
+        while !self.is_navigable(target) && target < max {
             target += 1;
         }
-        // If we landed on a separator at the end, stay where we were
-        if self.is_tier_separator(target) {
-            return;
+        if !self.is_navigable(target) {
+            return; // Nothing navigable below; stay put
         }
         self.ui.tree_index = target;
         self.update_selected_detail();
     }
 
-    fn is_tier_separator(&self, index: usize) -> bool {
-        matches!(
-            self.cache.tree_items.get(index).map(|i| &i.node),
-            Some(super::super::tree::TreeNode::TierSeparator { .. })
-        )
+    /// Whether a tree item at the given index is a valid navigation target.
+    fn is_navigable(&self, index: usize) -> bool {
+        self.cache
+            .tree_items
+            .get(index)
+            .map(|i| i.node.is_selectable())
+            .unwrap_or(false)
     }
 
     /// Jump to the next (or previous) tree item that has an action symbol.

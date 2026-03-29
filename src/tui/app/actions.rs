@@ -824,6 +824,17 @@ impl App {
         if self.ui.tree_index > max_index {
             self.ui.tree_index = max_index;
         }
+        // Skip past non-selectable nodes (tier separators, structural)
+        while self.ui.tree_index > 0
+            && !self
+                .cache
+                .tree_items
+                .get(self.ui.tree_index)
+                .map(|i| i.node.is_selectable())
+                .unwrap_or(false)
+        {
+            self.ui.tree_index -= 1;
+        }
         // Prune selected_ids that no longer exist in the tree
         let valid_ids: HashSet<String> = self
             .cache

@@ -224,7 +224,20 @@ pub fn build_flat_tree_ranked(
                     milestone_problems.retain(|p| visible_ids.contains(&p.id));
                 }
             }
-            add_problems(&mut items, &milestone_problems, ctx, 1, Some(&milestone.id));
+            // When drilling, pass the drill start offset so ranks reflect global position
+            let rank_offset = tier_drill
+                .last()
+                .filter(|(ms, _, _)| *ms == milestone.id)
+                .map(|(_, start, _)| *start)
+                .unwrap_or(0);
+            add_problems(
+                &mut items,
+                &milestone_problems,
+                ctx,
+                1,
+                Some(&milestone.id),
+                rank_offset,
+            );
         }
     }
 
@@ -245,7 +258,7 @@ pub fn build_flat_tree_ranked(
     });
 
     if backlog_expanded {
-        add_problems(&mut items, &backlog_problems, ctx, 1, None);
+        add_problems(&mut items, &backlog_problems, ctx, 1, None, 0);
     }
 
     items
@@ -257,6 +270,7 @@ fn add_problems(
     ctx: &TreeBuildContext,
     depth: usize,
     milestone_id: Option<&str>,
+    rank_offset: usize,
 ) {
     let problem_count = problems.len();
 
@@ -305,9 +319,11 @@ fn add_problems(
             .and_then(|ord| ord.votes.get(&problem.id))
             .copied()
             .unwrap_or(0);
-        // Rank is 1-indexed position within the milestone (only for milestone problems)
+        // Rank is 1-indexed global position within the milestone.
+        // rank_offset adjusts for drill views (e.g., drilling into mid tier
+        // starting at position 3 means first visible item is rank 4).
         let rank = if milestone_id.is_some() {
-            Some(idx + 1)
+            Some(rank_offset + idx + 1)
         } else {
             None
         };
