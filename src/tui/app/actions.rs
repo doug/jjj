@@ -1490,6 +1490,7 @@ impl App {
         }
 
         self.ensure_ordering(&milestone_id);
+        self.push_ordering_undo(&milestone_id);
         let ordering = self.ui.personal_orderings.get_mut(&milestone_id).unwrap();
 
         // Determine the visible range from the drill state
@@ -1590,6 +1591,7 @@ impl App {
         let budget = borda::qv_budget(problem_count);
 
         self.ensure_ordering(&milestone_id);
+        self.push_ordering_undo(&milestone_id);
         let ord = self.ui.personal_orderings.get_mut(&milestone_id).unwrap();
         let current_votes = *ord.votes.get(&problem_id).unwrap_or(&0);
         let current_total_cost = borda::total_vote_cost(&ord.votes);
@@ -1664,6 +1666,7 @@ impl App {
         let budget = borda::qv_budget(problem_count);
 
         self.ensure_ordering(&milestone_id);
+        self.push_ordering_undo(&milestone_id);
         let ord = self.ui.personal_orderings.get_mut(&milestone_id).unwrap();
         let current_votes = *ord.votes.get(&problem_id).unwrap_or(&0);
         let current_total_cost = borda::total_vote_cost(&ord.votes);
@@ -1735,6 +1738,46 @@ impl App {
         });
         ord.order = scored.into_iter().map(|(_, id)| id.clone()).collect();
         let _ = n; // suppress unused warning
+    }
+
+    /// Save the current ordering for a milestone onto the undo stack.
+    fn push_ordering_undo(&mut self, milestone_id: &str) {
+        if let Some(ordering) = self.ui.personal_orderings.get(milestone_id) {
+            self.ui
+                .ordering_undo
+                .push((milestone_id.to_string(), ordering.clone()));
+            // Cap stack at 50 entries
+            if self.ui.ordering_undo.len() > 50 {
+                self.ui.ordering_undo.remove(0);
+            }
+        }
+    }
+
+    /// Undo the last ordering operation.
+    pub(super) fn undo_ordering(&mut self) -> Result<()> {
+        let (milestone_id, previous) = match self.ui.ordering_undo.pop() {
+            Some(entry) => entry,
+            None => {
+                self.show_flash("Nothing to undo");
+                return Ok(());
+            }
+        };
+
+        self.ui
+            .personal_orderings
+            .insert(milestone_id.clone(), previous.clone());
+
+        crate::ranking::ordering::save_user_ordering(
+            self.store.meta_path(),
+            &milestone_id,
+            &self.user,
+            &previous,
+        )?;
+
+        self.show_flash("Undone");
+        self.refresh_data()?;
+        self.update_selected_detail();
+        Ok(())
     }
 
     /// Move the cursor to the tree item matching the given problem ID.

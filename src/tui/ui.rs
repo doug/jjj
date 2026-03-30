@@ -618,6 +618,7 @@ fn draw_help_overlay(f: &mut Frame, app: &App) {
         Line::from("    S+H/\u{2190}   Drill out"),
         Line::from("    +/-     Add/remove vote"),
         Line::from("    r       Toggle personal/global"),
+        Line::from("    C-z     Undo tier/vote change"),
         Line::from("    R       Toggle related"),
         Line::from(""),
         Line::from(Span::styled(

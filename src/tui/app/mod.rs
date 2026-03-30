@@ -215,6 +215,8 @@ pub struct UiState {
     /// Tier drilling state: stack of (milestone_id, start_index, end_index).
     /// Empty = showing all items. Each entry narrows to a third of the parent range.
     pub tier_drill: Vec<(String, usize, usize)>,
+    /// Undo stack for ordering operations: (milestone_id, previous_ordering).
+    pub ordering_undo: Vec<(String, crate::ranking::ordering::UserOrdering)>,
 }
 
 impl Default for UiState {
@@ -246,6 +248,7 @@ impl UiState {
             show_personal_ordering: true,
             personal_orderings: HashMap::new(),
             tier_drill: Vec::new(),
+            ordering_undo: Vec::new(),
         }
     }
 }
@@ -455,6 +458,9 @@ impl App {
             KeyCode::Left | KeyCode::Char('h') => self.collapse_or_parent(),
             KeyCode::Right | KeyCode::Char('l') => self.expand_or_child(),
             KeyCode::Char(' ') => self.toggle_selection(),
+            KeyCode::Char('z') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.undo_ordering()?;
+            }
             KeyCode::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.select_all_visible();
             }
