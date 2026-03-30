@@ -1561,6 +1561,13 @@ impl App {
 
         self.show_flash(&format!("→ {} tier", label));
         self.refresh_data()?;
+        // When promoting to top, the item leaves its position and items between
+        // [target, cursor) shift down by 1. The cursor stays at the same index,
+        // which now shows the item that was ABOVE. Advance by 1 so the cursor
+        // lands on the next untriaged item (the one that was below).
+        if matches!(tier, Tier::Top) {
+            self.navigate_down();
+        }
         self.update_selected_detail();
         Ok(())
     }
