@@ -309,14 +309,24 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                 style
             };
 
-            // Gutter: cursor gets "> ", selected gets "> " (persistent), else "  "
-            let gutter = if is_cursor || is_selected { "> " } else { "  " };
+            // Gutter: cursor "> ", selected "● ", both ">●", else "  "
+            let gutter = if is_cursor && is_selected {
+                ">●"
+            } else if is_cursor {
+                "> "
+            } else if is_selected {
+                " ●"
+            } else {
+                "  "
+            };
             let gutter_style = if is_cursor {
                 Style::default()
                     .fg(Color::White)
                     .add_modifier(Modifier::BOLD)
+            } else if is_selected {
+                Style::default().fg(Color::Yellow)
             } else {
-                Style::default().fg(Color::Cyan)
+                Style::default()
             };
             let mut spans = vec![Span::styled(gutter, gutter_style)];
             // Add colored rank prefix for problems

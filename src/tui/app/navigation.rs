@@ -239,8 +239,6 @@ impl App {
                 }
             }
         }
-        // Advance cursor (like file managers)
-        self.navigate_down();
     }
 
     /// Select all visible selectable items, or clear if all already selected.
