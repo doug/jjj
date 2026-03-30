@@ -1505,10 +1505,7 @@ impl App {
         };
 
         let view_size = view_end.saturating_sub(view_start);
-
-        // Need at least 3 items for meaningful tier assignment
-        if view_size < 3 {
-            self.show_flash("Too few items for tier sort (need 3+)");
+        if view_size < 2 {
             return Ok(());
         }
 
@@ -1524,37 +1521,29 @@ impl App {
             return Ok(());
         }
 
-        // Calculate tier boundaries — floor division, same formula as tier_drill_in.
-        // Top = [view_start, view_start + third)
-        // Mid = [view_start + third, view_start + 2*third)
-        // Bottom = [view_start + 2*third, view_end)
-        let third = view_size / 3;
-        let top_end = view_start + third;
-        let bottom_start = view_start + 2 * third;
-
-        // Determine target position
+        // Shift+K: move item to the top of the visible range.
+        // Shift+J: move item to the bottom of the visible range.
+        // Items you don't act on stay in the middle — this is the tertiary sort.
         let (target_pos, label) = match tier {
             Tier::Top => {
-                if current_pos < top_end {
-                    self.show_flash("Already in top tier");
+                if current_pos == view_start {
+                    self.show_flash("Already at top");
                     return Ok(());
                 }
-                // Insert at end of top section (just before middle starts)
-                (top_end, "Top")
+                (view_start, "Top")
             }
             Tier::Bottom => {
-                if current_pos >= bottom_start {
-                    self.show_flash("Already in bottom tier");
+                if current_pos == view_end - 1 {
+                    self.show_flash("Already at bottom");
                     return Ok(());
                 }
-                // Insert at start of bottom section
-                (bottom_start, "Bottom")
+                (view_end - 1, "Bottom")
             }
         };
 
-        // Remove from current position and insert at target
+        // Remove from current position and insert at target.
+        // When removing from before the target, the target shifts down by 1.
         let id = ordering.order.remove(current_pos);
-        // Adjust target if removal shifted indices
         let adjusted_target = if current_pos < target_pos {
             target_pos - 1
         } else {

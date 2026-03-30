@@ -266,46 +266,79 @@ mod tests {
 
     #[test]
     fn test_assign_to_top_from_middle() {
-        // 9 items, third=3. Top=[0,3), Mid=[3,6), Bottom=[6,9)
+        // 9 items, view_start=0, view_end=9
         let mut order: Vec<&str> = vec!["a", "b", "c", "d", "e", "f", "g", "h", "i"];
-        // Move "e" (pos 4, middle) to top tier end (pos 3)
-        simulate_assign(&mut order, 4, 3);
-        assert_eq!(order, vec!["a", "b", "c", "e", "d", "f", "g", "h", "i"]);
+        // Shift+K on "e" (pos 4) → move to view_start (pos 0)
+        simulate_assign(&mut order, 4, 0);
+        assert_eq!(order, vec!["e", "a", "b", "c", "d", "f", "g", "h", "i"]);
     }
 
     #[test]
     fn test_assign_to_top_from_bottom() {
         let mut order: Vec<&str> = vec!["a", "b", "c", "d", "e", "f", "g", "h", "i"];
-        // Move "h" (pos 7, bottom) to top tier end (pos 3)
-        simulate_assign(&mut order, 7, 3);
-        assert_eq!(order, vec!["a", "b", "c", "h", "d", "e", "f", "g", "i"]);
+        // Shift+K on "h" (pos 7) → move to view_start (pos 0)
+        simulate_assign(&mut order, 7, 0);
+        assert_eq!(order, vec!["h", "a", "b", "c", "d", "e", "f", "g", "i"]);
     }
 
     #[test]
     fn test_assign_to_bottom_from_top() {
         let mut order: Vec<&str> = vec!["a", "b", "c", "d", "e", "f", "g", "h", "i"];
-        // Move "b" (pos 1, top) to bottom tier start (pos 6)
-        simulate_assign(&mut order, 1, 6);
-        // After removing pos 1, target 6 becomes 5
-        assert_eq!(order, vec!["a", "c", "d", "e", "f", "b", "g", "h", "i"]);
+        // Shift+J on "b" (pos 1) → move to view_end-1 (pos 8)
+        simulate_assign(&mut order, 1, 8);
+        // After removing pos 1, target 8 becomes 7
+        assert_eq!(order, vec!["a", "c", "d", "e", "f", "g", "h", "b", "i"]);
+        // "b" at pos 7, "i" at pos 8 (items stack from bottom)
     }
 
     #[test]
     fn test_assign_to_bottom_from_middle() {
         let mut order: Vec<&str> = vec!["a", "b", "c", "d", "e", "f", "g", "h", "i"];
-        // Move "e" (pos 4, middle) to bottom tier start (pos 6)
-        simulate_assign(&mut order, 4, 6);
-        assert_eq!(order, vec!["a", "b", "c", "d", "f", "e", "g", "h", "i"]);
+        // Shift+J on "e" (pos 4) → move to view_end-1 (pos 8)
+        simulate_assign(&mut order, 4, 8);
+        assert_eq!(order, vec!["a", "b", "c", "d", "f", "g", "h", "e", "i"]);
     }
 
     #[test]
     fn test_assign_with_drill_offset() {
-        // Simulate a drilled view: view_start=3, view_end=6 (the middle tier)
-        // Items at positions 3,4,5 are visible. third=1, top=[3,4), mid=[4,5), bot=[5,6)
+        // Drilled view: view_start=3, view_end=6 (the middle tier of 9)
         let mut order: Vec<&str> = vec!["a", "b", "c", "d", "e", "f", "g", "h", "i"];
-        // Move "f" (pos 5, bottom of drill view) to top of drill view (pos 4)
-        // view_start=3, third=1, top_end=4
-        simulate_assign(&mut order, 5, 4);
-        assert_eq!(order, vec!["a", "b", "c", "d", "f", "e", "g", "h", "i"]);
+        // Shift+K on "f" (pos 5) → move to view_start (pos 3)
+        simulate_assign(&mut order, 5, 3);
+        assert_eq!(order, vec!["a", "b", "c", "f", "d", "e", "g", "h", "i"]);
+    }
+
+    #[test]
+    fn test_assign_to_bottom_with_drill_offset() {
+        // Drilled view: view_start=3, view_end=6
+        let mut order: Vec<&str> = vec!["a", "b", "c", "d", "e", "f", "g", "h", "i"];
+        // Shift+J on "d" (pos 3) → move to view_end-1 (pos 5)
+        simulate_assign(&mut order, 3, 5);
+        // After removing pos 3, target 5 becomes 4
+        assert_eq!(order, vec!["a", "b", "c", "e", "d", "f", "g", "h", "i"]);
+    }
+
+    #[test]
+    fn test_multiple_assigns_stack_at_top() {
+        let mut order: Vec<&str> = vec!["a", "b", "c", "d", "e", "f"];
+        // Shift+K on "d" (pos 3) → moves to 0
+        simulate_assign(&mut order, 3, 0);
+        assert_eq!(order, vec!["d", "a", "b", "c", "e", "f"]);
+        // Shift+K on "f" (pos 5) → moves to 0
+        simulate_assign(&mut order, 5, 0);
+        assert_eq!(order, vec!["f", "d", "a", "b", "c", "e"]);
+        // Top two are the promoted items, in reverse order of promotion
+    }
+
+    #[test]
+    fn test_multiple_assigns_stack_at_bottom() {
+        let mut order: Vec<&str> = vec!["a", "b", "c", "d", "e", "f"];
+        // Shift+J on "b" (pos 1) → moves to 5
+        simulate_assign(&mut order, 1, 5);
+        assert_eq!(order, vec!["a", "c", "d", "e", "b", "f"]);
+        // Shift+J on "c" (now pos 1) → moves to 5
+        simulate_assign(&mut order, 1, 5);
+        assert_eq!(order, vec!["a", "d", "e", "b", "c", "f"]);
+        // Bottom items stack: f (original), c, b (most recently demoted closest to bottom)
     }
 }
