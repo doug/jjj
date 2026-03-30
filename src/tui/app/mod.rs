@@ -391,6 +391,12 @@ impl App {
     }
 
     fn handle_key(&mut self, key: KeyEvent) -> Result<()> {
+        // Ctrl+C always exits, regardless of mode
+        if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
+            self.should_quit = true;
+            return Ok(());
+        }
+
         match &self.ui.input_mode {
             InputMode::Help => {
                 // Any key exits help
