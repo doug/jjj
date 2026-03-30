@@ -1615,6 +1615,11 @@ impl App {
         }
         ord.updated_at = chrono::Utc::now();
 
+        // Re-sort ordering so votes affect list position.
+        // Score = base_position_score - votes (lower = higher rank).
+        // Stable sort preserves tier assignment order among equal scores.
+        Self::reorder_by_votes(ord);
+
         ordering::save_user_ordering(self.store.meta_path(), &milestone_id, &self.user, ord)?;
 
         let new_total_cost = borda::total_vote_cost(&ord.votes);
@@ -1636,6 +1641,8 @@ impl App {
         }
 
         self.refresh_data()?;
+        // Follow the item to its new position
+        self.move_cursor_to_problem(&problem_id);
         Ok(())
     }
 
@@ -1682,6 +1689,8 @@ impl App {
         }
         ord.updated_at = chrono::Utc::now();
 
+        Self::reorder_by_votes(ord);
+
         ordering::save_user_ordering(self.store.meta_path(), &milestone_id, &self.user, ord)?;
 
         let new_total_cost = borda::total_vote_cost(&ord.votes);
@@ -1703,6 +1712,41 @@ impl App {
         }
 
         self.refresh_data()?;
+        self.move_cursor_to_problem(&problem_id);
         Ok(())
+    }
+
+    /// Re-sort an ordering so that votes affect list position.
+    /// Items with more positive votes move up, negative votes move down.
+    /// Uses stable sort so tier assignment order is preserved among equal scores.
+    fn reorder_by_votes(ord: &mut crate::ranking::ordering::UserOrdering) {
+        let votes = &ord.votes;
+        // Score per item: base position minus votes. Lower score = higher rank.
+        // Position i gets base score i. Votes subtract from it (positive votes
+        // decrease score = move up, negative votes increase score = move down).
+        let n = ord.order.len();
+        let mut scored: Vec<(usize, &String)> = ord.order.iter().enumerate().collect();
+        scored.sort_by(|(i, id_a), (j, id_b)| {
+            let score_a = *i as f64 - *votes.get(*id_a).unwrap_or(&0) as f64;
+            let score_b = *j as f64 - *votes.get(*id_b).unwrap_or(&0) as f64;
+            score_a
+                .partial_cmp(&score_b)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        ord.order = scored.into_iter().map(|(_, id)| id.clone()).collect();
+        let _ = n; // suppress unused warning
+    }
+
+    /// Move the cursor to the tree item matching the given problem ID.
+    fn move_cursor_to_problem(&mut self, problem_id: &str) {
+        if let Some(idx) = self
+            .cache
+            .tree_items
+            .iter()
+            .position(|item| item.node.id() == problem_id)
+        {
+            self.ui.tree_index = idx;
+            self.update_selected_detail();
+        }
     }
 }
