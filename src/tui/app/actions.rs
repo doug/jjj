@@ -1573,83 +1573,16 @@ impl App {
         Ok(())
     }
 
-    /// Add a quadratic vote to the selected problem (increment: can go from negative to positive).
+    /// Adjust the vote count on the selected problem by `delta` (+1 or -1).
     pub(super) fn add_vote(&mut self) -> Result<()> {
-        use crate::ranking::{borda, ordering};
-
-        let (milestone_id, problem_id) = match self.selected_milestone_problem() {
-            Some(x) => x,
-            None => return Ok(()),
-        };
-
-        let problem_count = self
-            .data
-            .problems
-            .iter()
-            .filter(|p| p.milestone_id.as_deref() == Some(&milestone_id))
-            .count();
-        let budget = borda::qv_budget(problem_count);
-
-        self.ensure_ordering(&milestone_id);
-        self.push_ordering_undo(&milestone_id);
-        let ord = self.ui.personal_orderings.get_mut(&milestone_id).unwrap();
-        let current_votes = *ord.votes.get(&problem_id).unwrap_or(&0);
-        let current_total_cost = borda::total_vote_cost(&ord.votes);
-        let new_cost = borda::vote_cost(current_votes + 1);
-        let old_cost = borda::vote_cost(current_votes);
-        let marginal_cost = new_cost.saturating_sub(old_cost);
-
-        // When going from negative toward zero, cost decreases — always allowed.
-        // When going positive, check budget.
-        if new_cost > old_cost && current_total_cost + marginal_cost > budget {
-            self.show_flash(&format!(
-                "No budget remaining ({}/{})",
-                current_total_cost, budget
-            ));
-            return Ok(());
-        }
-
-        let new_val = current_votes + 1;
-        if new_val == 0 {
-            ord.votes.remove(&problem_id);
-        } else {
-            *ord.votes.entry(problem_id.clone()).or_insert(0) = new_val;
-        }
-        ord.updated_at = chrono::Utc::now();
-
-        // Re-sort ordering so votes affect list position.
-        // Score = base_position_score - votes (lower = higher rank).
-        // Stable sort preserves tier assignment order among equal scores.
-        Self::reorder_by_votes(ord);
-
-        ordering::save_user_ordering(self.store.meta_path(), &milestone_id, &self.user, ord)?;
-
-        let new_total_cost = borda::total_vote_cost(&ord.votes);
-        if new_val > 0 {
-            self.show_flash(&format!(
-                "+{}▲ (budget {}/{})",
-                new_val, new_total_cost, budget
-            ));
-        } else if new_val < 0 {
-            self.show_flash(&format!(
-                "{}▼ (budget {}/{})",
-                new_val, new_total_cost, budget
-            ));
-        } else {
-            self.show_flash(&format!(
-                "Vote cleared (budget {}/{})",
-                new_total_cost, budget
-            ));
-        }
-
-        self.refresh_data()?;
-        // Follow the item to its new position
-        self.move_cursor_to_problem(&problem_id);
-        Ok(())
+        self.adjust_vote(1)
     }
 
-    /// Remove a quadratic vote from the selected problem (decrement: can go negative).
     pub(super) fn remove_vote(&mut self) -> Result<()> {
+        self.adjust_vote(-1)
+    }
+
+    fn adjust_vote(&mut self, delta: i32) -> Result<()> {
         use crate::ranking::{borda, ordering};
 
         let (milestone_id, problem_id) = match self.selected_milestone_problem() {
@@ -1666,25 +1599,33 @@ impl App {
         let budget = borda::qv_budget(problem_count);
 
         self.ensure_ordering(&milestone_id);
-        self.push_ordering_undo(&milestone_id);
-        let ord = self.ui.personal_orderings.get_mut(&milestone_id).unwrap();
-        let current_votes = *ord.votes.get(&problem_id).unwrap_or(&0);
-        let current_total_cost = borda::total_vote_cost(&ord.votes);
-        let new_cost = borda::vote_cost(current_votes - 1);
-        let old_cost = borda::vote_cost(current_votes);
-        let marginal_cost = new_cost.saturating_sub(old_cost);
 
-        // When going from positive toward zero, cost decreases — always allowed.
-        // When going negative, check budget.
-        if new_cost > old_cost && current_total_cost + marginal_cost > budget {
-            self.show_flash(&format!(
-                "No budget remaining ({}/{})",
-                current_total_cost, budget
-            ));
-            return Ok(());
+        // Budget check (immutable borrow, released before undo push)
+        let current_votes;
+        let new_val;
+        {
+            let ord = self.ui.personal_orderings.get(&milestone_id).unwrap();
+            current_votes = *ord.votes.get(&problem_id).unwrap_or(&0);
+            new_val = current_votes + delta;
+            let new_cost = borda::vote_cost(new_val);
+            let old_cost = borda::vote_cost(current_votes);
+            if new_cost > old_cost {
+                let current_total = borda::total_vote_cost(&ord.votes);
+                let marginal = new_cost.saturating_sub(old_cost);
+                if current_total + marginal > budget {
+                    self.show_flash(&format!(
+                        "No budget remaining ({}/{})",
+                        current_total, budget
+                    ));
+                    return Ok(());
+                }
+            }
         }
 
-        let new_val = current_votes - 1;
+        // Budget OK — snapshot for undo, then mutate
+        self.push_ordering_undo(&milestone_id);
+        let ord = self.ui.personal_orderings.get_mut(&milestone_id).unwrap();
+
         if new_val == 0 {
             ord.votes.remove(&problem_id);
         } else {
@@ -1692,26 +1633,19 @@ impl App {
         }
         ord.updated_at = chrono::Utc::now();
 
+        // Re-sort: stable sort by -votes so tier assignment is the tiebreaker.
+        // Only vote values matter — position is NOT fed back into the score.
         Self::reorder_by_votes(ord);
 
         ordering::save_user_ordering(self.store.meta_path(), &milestone_id, &self.user, ord)?;
 
-        let new_total_cost = borda::total_vote_cost(&ord.votes);
+        let new_total = borda::total_vote_cost(&ord.votes);
         if new_val > 0 {
-            self.show_flash(&format!(
-                "+{}▲ (budget {}/{})",
-                new_val, new_total_cost, budget
-            ));
+            self.show_flash(&format!("+{}▲ (budget {}/{})", new_val, new_total, budget));
         } else if new_val < 0 {
-            self.show_flash(&format!(
-                "{}▼ (budget {}/{})",
-                new_val, new_total_cost, budget
-            ));
+            self.show_flash(&format!("{}▼ (budget {}/{})", new_val, new_total, budget));
         } else {
-            self.show_flash(&format!(
-                "Vote cleared (budget {}/{})",
-                new_total_cost, budget
-            ));
+            self.show_flash(&format!("Vote cleared (budget {}/{})", new_total, budget));
         }
 
         self.refresh_data()?;
@@ -1720,24 +1654,16 @@ impl App {
     }
 
     /// Re-sort an ordering so that votes affect list position.
-    /// Items with more positive votes move up, negative votes move down.
-    /// Uses stable sort so tier assignment order is preserved among equal scores.
+    /// Stable sort by descending vote count — items with more positive votes
+    /// move up, negative votes move down. Items with equal votes keep their
+    /// relative tier assignment order (the stable sort tiebreaker).
     fn reorder_by_votes(ord: &mut crate::ranking::ordering::UserOrdering) {
         let votes = &ord.votes;
-        // Score per item: base position minus votes. Lower score = higher rank.
-        // Position i gets base score i. Votes subtract from it (positive votes
-        // decrease score = move up, negative votes increase score = move down).
-        let n = ord.order.len();
-        let mut scored: Vec<(usize, &String)> = ord.order.iter().enumerate().collect();
-        scored.sort_by(|(i, id_a), (j, id_b)| {
-            let score_a = *i as f64 - *votes.get(*id_a).unwrap_or(&0) as f64;
-            let score_b = *j as f64 - *votes.get(*id_b).unwrap_or(&0) as f64;
-            score_a
-                .partial_cmp(&score_b)
-                .unwrap_or(std::cmp::Ordering::Equal)
+        ord.order.sort_by(|a, b| {
+            let va = *votes.get(a).unwrap_or(&0);
+            let vb = *votes.get(b).unwrap_or(&0);
+            vb.cmp(&va) // descending: more votes = higher rank
         });
-        ord.order = scored.into_iter().map(|(_, id)| id.clone()).collect();
-        let _ = n; // suppress unused warning
     }
 
     /// Save the current ordering for a milestone onto the undo stack.

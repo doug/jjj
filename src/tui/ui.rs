@@ -236,7 +236,7 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
             let (label, color, dim) = match &item.node {
                 TreeNode::ProjectRoot { .. } => (format!("{}Root", indent), Color::White, false),
                 TreeNode::Milestone { title, .. } => {
-                    (format!("{}{}", indent, title), Color::Magenta, false)
+                    (format!("{}{}", indent, title), Color::White, false)
                 }
                 TreeNode::Backlog { .. } => (format!("{}Backlog", indent), Color::DarkGray, false),
                 TreeNode::Problem {
@@ -370,7 +370,20 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                     ));
                 }
             }
-            ListItem::new(Line::from(spans))
+            // Section headers (milestones, backlog) get a separator rule above
+            let is_section_header = matches!(
+                &item.node,
+                TreeNode::Milestone { .. } | TreeNode::Backlog { .. }
+            );
+            if is_section_header {
+                let rule = Line::from(Span::styled(
+                    "─".repeat(80),
+                    Style::default().fg(Color::DarkGray),
+                ));
+                ListItem::new(vec![rule, Line::from(spans)])
+            } else {
+                ListItem::new(Line::from(spans))
+            }
         })
         .collect();
 
