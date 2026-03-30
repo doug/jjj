@@ -481,26 +481,33 @@ impl App {
         problem: &crate::models::Problem,
     ) -> Option<super::super::ProblemRankInfo> {
         let milestone_id = problem.milestone_id.as_ref()?;
-        let milestone_rankings = self.data.rankings.get(milestone_id)?;
-        let (rank_pos, voter_count_str) = milestone_rankings.get(&problem.id)?;
 
-        let votes: i32 = voter_count_str.parse().unwrap_or(0);
+        // Use personal ordering rank when in personal view, global when in global view
+        let (rank_pos, _voter_count) = if self.ui.show_personal_ordering {
+            let ordering = self.ui.personal_orderings.get(milestone_id)?;
+            let pos = ordering.order.iter().position(|id| id == &problem.id)?;
+            (pos + 1, 1usize)
+        } else {
+            let milestone_rankings = self.data.rankings.get(milestone_id)?;
+            let (pos, voter_str) = milestone_rankings.get(&problem.id)?;
+            (*pos, voter_str.parse().unwrap_or(0))
+        };
 
         // Look up current user's QV vote allocation for this problem
-        let (budget_used, budget_total) =
+        let (my_votes, budget_used, budget_total) =
             if let Some(ordering) = self.ui.personal_orderings.get(milestone_id) {
                 let v = ordering.votes.get(&problem.id).copied().unwrap_or(0);
                 let used = crate::ranking::borda::vote_cost(v);
                 let problem_count = ordering.order.len();
                 let total = crate::ranking::borda::qv_budget(problem_count);
-                (used, total)
+                (v, used, total)
             } else {
-                (0, 0)
+                (0, 0, 0)
             };
 
         Some(super::super::ProblemRankInfo {
-            rank: Some(*rank_pos),
-            votes,
+            rank: Some(rank_pos),
+            votes: my_votes,
             budget_used,
             budget_total,
         })
