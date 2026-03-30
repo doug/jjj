@@ -155,17 +155,41 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
         app.cache.tree_items.clone()
     };
 
-    // When tier drill is active, hide other milestones and structural nodes
+    // When tier drill is active, only show the drilled milestone and its children.
+    // Problems from other milestones and the backlog are hidden.
     if let Some((drill_ms, _, _)) = app.ui.tier_drill.last() {
+        // Collect problem IDs belonging to the drilled milestone
+        let drilled_problem_ids: std::collections::HashSet<&str> = app
+            .data
+            .problems
+            .iter()
+            .filter(|p| p.milestone_id.as_deref() == Some(drill_ms.as_str()))
+            .map(|p| p.id.as_str())
+            .collect();
+
         display_items.retain(|item| match &item.node {
-            // Keep the drilled milestone and its children
             TreeNode::Milestone { id, .. } => id == drill_ms,
-            // Keep problems/solutions/critiques/separators (already filtered by tree builder)
-            TreeNode::Problem { .. }
-            | TreeNode::Solution { .. }
-            | TreeNode::Critique { .. }
-            | TreeNode::TierSeparator { .. } => true,
-            // Hide ProjectRoot and Backlog during drill
+            TreeNode::Problem { id, .. } => drilled_problem_ids.contains(id.as_str()),
+            TreeNode::Solution { id, .. } => {
+                // Keep solutions whose parent problem is in the drilled milestone
+                app.data
+                    .solutions
+                    .iter()
+                    .find(|s| s.id == *id)
+                    .map(|s| drilled_problem_ids.contains(s.problem_id.as_str()))
+                    .unwrap_or(false)
+            }
+            TreeNode::Critique { id, .. } => {
+                // Keep critiques whose parent solution's problem is in the drilled milestone
+                app.data
+                    .critiques
+                    .iter()
+                    .find(|c| c.id == *id)
+                    .and_then(|c| app.data.solutions.iter().find(|s| s.id == c.solution_id))
+                    .map(|s| drilled_problem_ids.contains(s.problem_id.as_str()))
+                    .unwrap_or(false)
+            }
+            TreeNode::TierSeparator { .. } => true, // separators already scoped by tree builder
             TreeNode::ProjectRoot { .. } | TreeNode::Backlog { .. } => false,
         });
     }

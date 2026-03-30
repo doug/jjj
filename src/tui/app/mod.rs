@@ -420,16 +420,28 @@ impl App {
             KeyCode::Tab => {
                 self.ui.focused_pane = FocusedPane::Detail;
             }
-            KeyCode::Up | KeyCode::Char('K') if key.modifiers.contains(KeyModifiers::SHIFT) => {
+            KeyCode::Up if key.modifiers.contains(KeyModifiers::SHIFT) => {
                 self.assign_top_tier()?;
             }
-            KeyCode::Down | KeyCode::Char('J') if key.modifiers.contains(KeyModifiers::SHIFT) => {
+            KeyCode::Char('K') => {
+                self.assign_top_tier()?;
+            }
+            KeyCode::Down if key.modifiers.contains(KeyModifiers::SHIFT) => {
                 self.assign_bottom_tier()?;
             }
-            KeyCode::Left | KeyCode::Char('H') if key.modifiers.contains(KeyModifiers::SHIFT) => {
+            KeyCode::Char('J') => {
+                self.assign_bottom_tier()?;
+            }
+            KeyCode::Left if key.modifiers.contains(KeyModifiers::SHIFT) => {
                 self.tier_drill_out();
             }
-            KeyCode::Right | KeyCode::Char('L') if key.modifiers.contains(KeyModifiers::SHIFT) => {
+            KeyCode::Char('H') => {
+                self.tier_drill_out();
+            }
+            KeyCode::Right if key.modifiers.contains(KeyModifiers::SHIFT) => {
+                self.tier_drill_in()?;
+            }
+            KeyCode::Char('L') => {
                 self.tier_drill_in()?;
             }
             KeyCode::Up | KeyCode::Char('k') => self.navigate_up(),

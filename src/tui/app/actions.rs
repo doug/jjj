@@ -1423,13 +1423,39 @@ impl App {
     }
 
     /// Ensure a personal ordering exists for the given milestone, creating a
-    /// default from current problem order if needed.
+    /// default from current problem order if needed. Also syncs the ordering
+    /// with the current problem list — any problems added since the ordering
+    /// was created are appended to the end; any removed are pruned.
     fn ensure_ordering(&mut self, milestone_id: &str) {
         if !self.ui.personal_orderings.contains_key(milestone_id) {
             let default = self.default_ordering_for_milestone(milestone_id);
             self.ui
                 .personal_orderings
                 .insert(milestone_id.to_string(), default);
+        } else {
+            // Sync: add any new problems not yet in the ordering, remove stale ones
+            let current_ids: Vec<String> = self
+                .data
+                .problems
+                .iter()
+                .filter(|p| p.milestone_id.as_deref() == Some(milestone_id))
+                .map(|p| p.id.clone())
+                .collect();
+            let ordering = self.ui.personal_orderings.get_mut(milestone_id).unwrap();
+            let existing: std::collections::HashSet<String> =
+                ordering.order.iter().cloned().collect();
+            // Append new problems
+            for id in &current_ids {
+                if !existing.contains(id) {
+                    ordering.order.push(id.clone());
+                }
+            }
+            // Remove problems no longer in the milestone
+            let current_set: std::collections::HashSet<&str> =
+                current_ids.iter().map(|s| s.as_str()).collect();
+            ordering
+                .order
+                .retain(|id| current_set.contains(id.as_str()));
         }
     }
 
