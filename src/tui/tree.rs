@@ -114,8 +114,8 @@ impl TreeNode {
         )
     }
 
-    /// Whether this node type can be multi-selected.
-    /// ProjectRoot, Backlog, and TierSeparator are structural nodes, not selectable.
+    /// Whether this node type can be multi-selected (spacebar).
+    /// Structural nodes can't be batch-selected but can still receive the cursor.
     pub fn is_selectable(&self) -> bool {
         !matches!(
             self,
@@ -123,6 +123,13 @@ impl TreeNode {
                 | TreeNode::Backlog { .. }
                 | TreeNode::TierSeparator { .. }
         )
+    }
+
+    /// Whether the cursor can land on this node.
+    /// Only TierSeparator is skipped — all other nodes (including ProjectRoot
+    /// and Backlog) are valid cursor targets for actions like [n]ew.
+    pub fn is_navigable(&self) -> bool {
+        !matches!(self, TreeNode::TierSeparator { .. })
     }
 }
 

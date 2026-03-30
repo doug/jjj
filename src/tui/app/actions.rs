@@ -824,13 +824,13 @@ impl App {
         if self.ui.tree_index > max_index {
             self.ui.tree_index = max_index;
         }
-        // Skip past non-selectable nodes (tier separators, structural)
+        // Skip past non-navigable nodes (tier separators)
         while self.ui.tree_index > 0
             && !self
                 .cache
                 .tree_items
                 .get(self.ui.tree_index)
-                .map(|i| i.node.is_selectable())
+                .map(|i| i.node.is_navigable())
                 .unwrap_or(false)
         {
             self.ui.tree_index -= 1;

@@ -40,7 +40,7 @@ impl App {
         self.cache
             .tree_items
             .get(index)
-            .map(|i| i.node.is_selectable())
+            .map(|i| i.node.is_navigable())
             .unwrap_or(false)
     }
 
