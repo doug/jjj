@@ -1001,8 +1001,7 @@ mod tests {
             target_date: None,
             problem_ids: vec![],
             assignee: None,
-            goals: String::new(),
-            success_criteria: String::new(),
+            description: String::new(),
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
         };

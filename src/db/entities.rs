@@ -451,15 +451,7 @@ pub fn upsert_milestone(conn: &Connection, milestone: &Milestone) -> SqliteResul
             milestone.assignee,
             milestone.created_at.to_rfc3339(),
             milestone.updated_at.to_rfc3339(),
-            // Combine goals and success_criteria into description
-            if milestone.success_criteria.is_empty() {
-                milestone.goals.clone()
-            } else {
-                format!(
-                    "{}\n\n## Success Criteria\n\n{}",
-                    milestone.goals, milestone.success_criteria
-                )
-            },
+            milestone.description.clone(),
             problem_ids_json,
         ],
     )?;
@@ -512,17 +504,6 @@ fn row_to_milestone(row: &rusqlite::Row) -> SqliteResult<Milestone> {
         .get::<_, Option<String>>(8)?
         .unwrap_or_else(|| "[]".to_string());
 
-    // Parse description back into goals and success_criteria
-    const CRITERIA_SEPARATOR: &str = "\n\n## Success Criteria\n\n";
-    let (goals, success_criteria) = if let Some(idx) = description.find(CRITERIA_SEPARATOR) {
-        (
-            description[..idx].to_string(),
-            description[idx + CRITERIA_SEPARATOR.len()..].to_string(),
-        )
-    } else {
-        (description, String::new())
-    };
-
     Ok(Milestone {
         id: row.get(0)?,
         title: row.get(1)?,
@@ -535,8 +516,7 @@ fn row_to_milestone(row: &rusqlite::Row) -> SqliteResult<Milestone> {
         assignee: row.get(4)?,
         created_at: parse_datetime(&created_at_str, "created_at", "milestone"),
         updated_at: parse_datetime(&updated_at_str, "updated_at", "milestone"),
-        goals,
-        success_criteria,
+        description,
         problem_ids: parse_json_vec(&problem_ids_json, "problem_ids"),
     })
 }
@@ -847,8 +827,7 @@ mod tests {
 
         // Create
         let mut milestone = Milestone::new("m1".to_string(), "v1.0 Release".to_string());
-        milestone.goals = "Ship the product".to_string();
-        milestone.success_criteria = "All tests pass".to_string();
+        milestone.description = "Ship the product. All tests pass.".to_string();
         milestone.assignee = Some("eve".to_string());
         milestone.target_date = Some(Utc::now());
         milestone.problem_ids = vec!["p1".to_string(), "p2".to_string()];
@@ -862,8 +841,7 @@ mod tests {
 
         assert_eq!(loaded.id, "m1");
         assert_eq!(loaded.title, "v1.0 Release");
-        assert_eq!(loaded.goals, "Ship the product");
-        assert_eq!(loaded.success_criteria, "All tests pass");
+        assert_eq!(loaded.description, "Ship the product. All tests pass.");
         assert_eq!(loaded.assignee, Some("eve".to_string()));
         assert!(loaded.target_date.is_some());
         assert_eq!(loaded.problem_ids, vec!["p1".to_string(), "p2".to_string()]);

@@ -195,14 +195,8 @@ fn show_milestone(ctx: &CommandContext, milestone_input: String, json: bool) -> 
         println!("Assignee: {}", assignee);
     }
 
-    // Show goals
-    if !milestone.goals.is_empty() {
-        println!("\n## Goals\n{}", milestone.goals);
-    }
-
-    // Show success criteria
-    if !milestone.success_criteria.is_empty() {
-        println!("\n## Success Criteria\n{}", milestone.success_criteria);
+    if !milestone.description.is_empty() {
+        println!("\n{}", milestone.description);
     }
 
     // Show problems and their solutions

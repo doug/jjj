@@ -157,8 +157,6 @@ fn normalize_section_header(header: &str) -> String {
         "trade-offs" | "tradeoffs" | "trade offs" => "Trade-offs".to_string(),
         "argument" => "Argument".to_string(),
         "evidence" => "Evidence".to_string(),
-        "goals" => "Goals".to_string(),
-        "success criteria" => "Success Criteria".to_string(),
         _ => {
             // Generic title case: capitalize first char
             let mut chars = header.chars();

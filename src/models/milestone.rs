@@ -30,13 +30,9 @@ pub struct Milestone {
     /// Last update timestamp
     pub updated_at: DateTime<Utc>,
 
-    /// Goals - what we hope to achieve (markdown body)
+    /// Free-form description (markdown body)
     #[serde(default)]
-    pub goals: String,
-
-    /// Success criteria - how we'll know it's complete
-    #[serde(default)]
-    pub success_criteria: String,
+    pub description: String,
 }
 
 /// Status of a milestone
@@ -95,8 +91,7 @@ impl Milestone {
             assignee: None,
             created_at: now,
             updated_at: now,
-            goals: String::new(),
-            success_criteria: String::new(),
+            description: String::new(),
         }
     }
 

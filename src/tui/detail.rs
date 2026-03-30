@@ -305,15 +305,9 @@ fn milestone_lines(m: &Milestone) -> Vec<Line<'static>> {
     lines.push(Line::from(""));
     lines.push(divider_line());
 
-    if !m.goals.is_empty() {
+    if !m.description.is_empty() {
         lines.push(Line::from(""));
-        lines.push(section_header("Goals"));
-        lines.extend(render_md_body(&m.goals));
-    }
-    if !m.success_criteria.is_empty() {
-        lines.push(Line::from(""));
-        lines.push(section_header("Success Criteria"));
-        lines.extend(render_md_body(&m.success_criteria));
+        lines.extend(render_md_body(&m.description));
     }
 
     lines.push(Line::from(""));

@@ -14,7 +14,6 @@ pub(crate) struct ParsedEditorContent {
     pub tags: Vec<String>,
     pub description: String,
     pub fields: std::collections::HashMap<String, String>,
-    pub body: String,
 }
 
 /// Parse a `---\nfrontmatter\n---\nbody` document into structured fields.
@@ -81,7 +80,6 @@ pub(crate) fn parse_editor_content(
         tags,
         description,
         fields,
-        body,
     })
 }
 
@@ -205,12 +203,11 @@ impl App {
                     None => "target_date:  # YYYY-MM-DD\n".to_string(),
                 };
                 Ok(format!(
-                    "---\ntitle: {}\nstatus: {} # planning, active, completed, cancelled\n{}---\n\n## Goals\n\n{}\n\n## Success Criteria\n\n{}\n",
+                    "---\ntitle: {}\nstatus: {} # planning, active, completed, cancelled\n{}---\n\n{}\n",
                     milestone.title,
                     milestone.status,
                     target_date_line,
-                    if milestone.goals.is_empty() { "" } else { &milestone.goals },
-                    if milestone.success_criteria.is_empty() { "" } else { &milestone.success_criteria },
+                    milestone.description,
                 ))
             }
         }
@@ -375,19 +372,6 @@ impl App {
                     })?;
             }
             EntityType::Milestone => {
-                let goals = parsed
-                    .body
-                    .split("## Goals")
-                    .nth(1)
-                    .and_then(|s| s.split("## Success Criteria").next())
-                    .map(|s| s.trim().to_string())
-                    .unwrap_or_default();
-                let success_criteria = parsed
-                    .body
-                    .split("## Success Criteria")
-                    .nth(1)
-                    .map(|s| s.trim().to_string())
-                    .unwrap_or_default();
                 let status = parsed
                     .fields
                     .get("status")
@@ -407,8 +391,7 @@ impl App {
                     .with_metadata(&format!("Edit milestone {}", entity_id), || {
                         let mut milestone = self.store.load_milestone(entity_id)?;
                         milestone.title = parsed.title.clone();
-                        milestone.goals = goals.clone();
-                        milestone.success_criteria = success_criteria.clone();
+                        milestone.description = parsed.description.clone();
                         if let Some(s) = status {
                             milestone.set_status(s);
                         }
@@ -496,10 +479,11 @@ mod tests {
 
     #[test]
     fn test_parse_milestone_with_date() {
-        let content = "---\ntitle: v1.0 Release\nstatus: Active\ntarget_date: 2026-06-01\n---\n\n## Goals\n\nShip it.\n\n## Success Criteria\n\nAll tests pass.\n";
+        let content = "---\ntitle: v1.0 Release\nstatus: Active\ntarget_date: 2026-06-01\n---\n\nShip it and make sure all tests pass.\n";
         let parsed = parse_editor_content(content).unwrap();
         assert_eq!(parsed.title, "v1.0 Release");
         assert_eq!(parsed.fields.get("target_date").unwrap(), "2026-06-01");
+        assert_eq!(parsed.description, "Ship it and make sure all tests pass.");
         let status = parsed
             .fields
             .get("status")
@@ -507,24 +491,6 @@ mod tests {
             .parse::<crate::models::MilestoneStatus>()
             .unwrap();
         assert_eq!(status, crate::models::MilestoneStatus::Active);
-
-        // Verify body section parsing
-        let goals = parsed
-            .body
-            .split("## Goals")
-            .nth(1)
-            .and_then(|s| s.split("## Success Criteria").next())
-            .map(|s| s.trim().to_string())
-            .unwrap_or_default();
-        assert_eq!(goals, "Ship it.");
-
-        let success_criteria = parsed
-            .body
-            .split("## Success Criteria")
-            .nth(1)
-            .map(|s| s.trim().to_string())
-            .unwrap_or_default();
-        assert_eq!(success_criteria, "All tests pass.");
     }
 
     #[test]
@@ -590,8 +556,8 @@ mod tests {
         assert_eq!(parsed.fields.get("status").unwrap(), "Open");
         assert_eq!(parsed.fields.get("severity").unwrap(), "high");
 
-        // Milestone still uses ## sections for goals/criteria
-        let content = "---\ntitle: v2.0\nstatus: Planning # planning, active, completed, cancelled\ntarget_date: 2026-12-01 # YYYY-MM-DD\n---\n\n## Goals\n\n\n\n## Success Criteria\n\n\n";
+        // Milestone with comments
+        let content = "---\ntitle: v2.0\nstatus: Planning # planning, active, completed, cancelled\ntarget_date: 2026-12-01 # YYYY-MM-DD\n---\n\n\n";
         let parsed = parse_editor_content(content).unwrap();
         assert_eq!(parsed.fields.get("status").unwrap(), "Planning");
         assert_eq!(parsed.fields.get("target_date").unwrap(), "2026-12-01");

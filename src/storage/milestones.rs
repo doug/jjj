@@ -1,6 +1,5 @@
 use super::{
-    add_frontmatter_context, build_body, parse_body_sections, parse_frontmatter, to_markdown,
-    MetadataStore, MILESTONES_DIR,
+    add_frontmatter_context, parse_frontmatter, to_markdown, MetadataStore, MILESTONES_DIR,
 };
 use crate::error::{JjjError, Result};
 use crate::models::{Milestone, MilestoneFrontmatter};
@@ -24,8 +23,6 @@ impl MetadataStore {
         let (frontmatter, body): (MilestoneFrontmatter, String) = parse_frontmatter(&content)
             .map_err(|e| add_frontmatter_context(e, "milestone", milestone_id))?;
 
-        let sections = parse_body_sections(&body);
-
         let milestone = Milestone {
             id: frontmatter.id,
             title: frontmatter.title,
@@ -35,11 +32,7 @@ impl MetadataStore {
             assignee: frontmatter.assignee,
             created_at: frontmatter.created_at,
             updated_at: frontmatter.updated_at,
-            goals: sections.get("Goals").cloned().unwrap_or_default(),
-            success_criteria: sections
-                .get("Success Criteria")
-                .cloned()
-                .unwrap_or_default(),
+            description: body,
         };
 
         Ok(milestone)
@@ -53,10 +46,11 @@ impl MetadataStore {
         fs::create_dir_all(&milestones_dir)?;
 
         let frontmatter = MilestoneFrontmatter::from(milestone);
-        let body = build_body(&[
-            ("Goals", &milestone.goals),
-            ("Success Criteria", &milestone.success_criteria),
-        ]);
+        let body = if milestone.description.is_empty() {
+            String::new()
+        } else {
+            format!("{}\n", milestone.description)
+        };
 
         let content = to_markdown(&frontmatter, &body)?;
         let milestone_path = milestones_dir.join(format!("{}.md", milestone.id));

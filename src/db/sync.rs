@@ -155,7 +155,7 @@ pub fn rebuild_fts(db: &Database) -> Result<()> {
     // Index milestones
     let milestones = list_milestones(conn)?;
     for milestone in &milestones {
-        let body = format!("{}\n{}", milestone.goals, milestone.success_criteria);
+        let body = milestone.description.clone();
         conn.execute(
             "INSERT INTO fts (entity_type, entity_id, title, body) VALUES (?1, ?2, ?3, ?4)",
             params!["milestone", &milestone.id, &milestone.title, &body],
@@ -251,11 +251,7 @@ pub fn rebuild_embeddings(
     // Process milestones
     let milestones = list_milestones(conn)?;
     for milestone in &milestones {
-        let text = prepare_milestone_text(
-            &milestone.title,
-            &milestone.goals,
-            &milestone.success_criteria,
-        );
+        let text = prepare_milestone_text(&milestone.title, &milestone.description);
         if let Ok(embedding) = client.embed(&text) {
             upsert_embedding(conn, "milestone", &milestone.id, model, &embedding)?;
         }

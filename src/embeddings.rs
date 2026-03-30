@@ -290,10 +290,8 @@ pub fn prepare_critique_text(title: &str, argument: &str, evidence: &str) -> Str
 }
 
 /// Prepare text for embedding from a milestone.
-pub fn prepare_milestone_text(title: &str, goals: &str, success_criteria: &str) -> String {
-    format!("{}\n\n{}\n\n{}", title, goals, success_criteria)
-        .trim()
-        .to_string()
+pub fn prepare_milestone_text(title: &str, description: &str) -> String {
+    format!("{}\n\n{}", title, description).trim().to_string()
 }
 
 #[cfg(test)]
@@ -360,8 +358,8 @@ mod tests {
 
     #[test]
     fn test_prepare_milestone_text() {
-        let text = prepare_milestone_text("Title", "Goals", "Criteria");
-        assert_eq!(text, "Title\n\nGoals\n\nCriteria");
+        let text = prepare_milestone_text("Title", "Description");
+        assert_eq!(text, "Title\n\nDescription");
     }
 
     #[test]
