@@ -73,11 +73,8 @@ pub(crate) fn parse_editor_content(
         })
         .unwrap_or_default();
 
-    // Extract description from body (after ## Description header)
-    let description = body
-        .strip_prefix("## Description")
-        .map(|s| s.trim().to_string())
-        .unwrap_or_default();
+    // Body after frontmatter is the description (no ## header needed)
+    let description = body.clone();
 
     Ok(ParsedEditorContent {
         title,
@@ -167,17 +164,13 @@ impl App {
                     format!("tags: {}\n", problem.tags.join(", "))
                 };
                 Ok(format!(
-                    "---\ntitle: {}\nstatus: {} # open, in_progress, solved, dissolved\npriority: {} # critical, high, medium, low\nconfidence: {} # unknown, red, amber, green\n{}---\n\n## Description\n\n{}\n",
+                    "---\ntitle: {}\nstatus: {} # open, in_progress, solved, dissolved\npriority: {} # critical, high, medium, low\nconfidence: {} # unknown, red, amber, green\n{}---\n\n{}\n",
                     problem.title,
                     problem.status,
                     problem.priority,
                     problem.confidence,
                     tags_line,
-                    if problem.description.is_empty() {
-                        ""
-                    } else {
-                        &problem.description
-                    }
+                    problem.description,
                 ))
             }
             EntityType::Solution => {
@@ -188,29 +181,21 @@ impl App {
                     format!("tags: {}\n", solution.tags.join(", "))
                 };
                 Ok(format!(
-                    "---\ntitle: {}\nstatus: {} # proposed, submitted, approved, withdrawn\n{}---\n\n## Description\n\n{}\n",
+                    "---\ntitle: {}\nstatus: {} # proposed, submitted, approved, withdrawn\n{}---\n\n{}\n",
                     solution.title,
                     solution.status,
                     tags_line,
-                    if solution.approach.is_empty() {
-                        ""
-                    } else {
-                        &solution.approach
-                    }
+                    solution.approach,
                 ))
             }
             EntityType::Critique => {
                 let critique = self.store.load_critique(entity_id)?;
                 Ok(format!(
-                    "---\ntitle: {}\nstatus: {} # open, addressed, valid, dismissed\nseverity: {} # critical, high, medium, low\n---\n\n## Description\n\n{}\n",
+                    "---\ntitle: {}\nstatus: {} # open, addressed, valid, dismissed\nseverity: {} # critical, high, medium, low\n---\n\n{}\n",
                     critique.title,
                     critique.status,
                     critique.severity,
-                    if critique.argument.is_empty() {
-                        ""
-                    } else {
-                        &critique.argument
-                    }
+                    critique.argument,
                 ))
             }
             EntityType::Milestone => {
@@ -446,7 +431,7 @@ mod tests {
 
     #[test]
     fn test_parse_problem_with_priority() {
-        let content = "---\ntitle: Fix auth bug\nstatus: Open\npriority: high\ntags: auth, security\n---\n\n## Description\n\nThe login form breaks.\n";
+        let content = "---\ntitle: Fix auth bug\nstatus: Open\npriority: high\ntags: auth, security\n---\n\nThe login form breaks.\n";
         let parsed = parse_editor_content(content).unwrap();
         assert_eq!(parsed.title, "Fix auth bug");
         assert_eq!(parsed.fields.get("status").unwrap(), "Open");
@@ -467,7 +452,7 @@ mod tests {
     #[test]
     fn test_parse_priority_change() {
         let content =
-            "---\ntitle: Fix auth bug\nstatus: Open\npriority: critical\ntags: \n---\n\n## Description\n\n\n";
+            "---\ntitle: Fix auth bug\nstatus: Open\npriority: critical\ntags: \n---\n\n\n";
         let parsed = parse_editor_content(content).unwrap();
         let priority = parsed
             .fields
@@ -481,9 +466,10 @@ mod tests {
     #[test]
     fn test_parse_solution_with_status() {
         let content =
-            "---\ntitle: Use JWT tokens\nstatus: Submitted\ntags: \n---\n\n## Description\n\nSwitch to JWT.\n";
+            "---\ntitle: Use JWT tokens\nstatus: Submitted\ntags: \n---\n\nSwitch to JWT.\n";
         let parsed = parse_editor_content(content).unwrap();
         assert_eq!(parsed.title, "Use JWT tokens");
+        assert_eq!(parsed.description, "Switch to JWT.");
         let status = parsed
             .fields
             .get("status")
@@ -496,8 +482,9 @@ mod tests {
     #[test]
     fn test_parse_critique_with_severity() {
         let content =
-            "---\ntitle: Missing input validation\nstatus: Open\nseverity: critical\n---\n\n## Description\n\nNo sanitization.\n";
+            "---\ntitle: Missing input validation\nstatus: Open\nseverity: critical\n---\n\nNo sanitization.\n";
         let parsed = parse_editor_content(content).unwrap();
+        assert_eq!(parsed.description, "No sanitization.");
         let severity = parsed
             .fields
             .get("severity")
@@ -542,8 +529,7 @@ mod tests {
 
     #[test]
     fn test_parse_empty_tags() {
-        let content =
-            "---\ntitle: Test\nstatus: Open\npriority: medium\ntags: \n---\n\n## Description\n\n\n";
+        let content = "---\ntitle: Test\nstatus: Open\npriority: medium\ntags: \n---\n\n\n";
         let parsed = parse_editor_content(content).unwrap();
         assert!(parsed.tags.is_empty());
     }
@@ -556,10 +542,8 @@ mod tests {
 
     #[test]
     fn test_parse_invalid_priority_ignored() {
-        let content =
-            "---\ntitle: Test\nstatus: Open\npriority: bogus\ntags: \n---\n\n## Description\n\n\n";
+        let content = "---\ntitle: Test\nstatus: Open\npriority: bogus\ntags: \n---\n\n\n";
         let parsed = parse_editor_content(content).unwrap();
-        // Field is present but won't parse - apply_edited_content skips it gracefully
         assert_eq!(parsed.fields.get("priority").unwrap(), "bogus");
         assert!(parsed
             .fields
@@ -571,14 +555,13 @@ mod tests {
 
     #[test]
     fn test_parse_strips_inline_comments() {
-        // This is the format serialize_entity_for_edit produces
-        let content = "---\ntitle: Fix auth bug\nstatus: Open # open, in_progress, solved, dissolved\npriority: high # critical, high, medium, low\ntags: auth, security\n---\n\n## Description\n\nThe login form breaks.\n";
+        let content = "---\ntitle: Fix auth bug\nstatus: Open # open, in_progress, solved, dissolved\npriority: high # critical, high, medium, low\ntags: auth, security\n---\n\nThe login form breaks.\n";
         let parsed = parse_editor_content(content).unwrap();
         assert_eq!(parsed.fields.get("status").unwrap(), "Open");
         assert_eq!(parsed.fields.get("priority").unwrap(), "high");
         assert_eq!(parsed.tags, vec!["auth", "security"]);
+        assert_eq!(parsed.description, "The login form breaks.");
 
-        // Verify they still parse correctly after stripping
         let priority = parsed
             .fields
             .get("priority")
@@ -598,18 +581,16 @@ mod tests {
 
     #[test]
     fn test_parse_strips_comments_on_all_entity_types() {
-        // Solution with comment
-        let content = "---\ntitle: Use JWT\nstatus: Proposed # proposed, submitted, approved, withdrawn\ntags: \n---\n\n## Description\n\n\n";
+        let content = "---\ntitle: Use JWT\nstatus: Proposed # proposed, submitted, approved, withdrawn\ntags: \n---\n\n\n";
         let parsed = parse_editor_content(content).unwrap();
         assert_eq!(parsed.fields.get("status").unwrap(), "Proposed");
 
-        // Critique with comments
-        let content = "---\ntitle: Bad input\nstatus: Open # open, addressed, valid, dismissed\nseverity: high # critical, high, medium, low\n---\n\n## Description\n\n\n";
+        let content = "---\ntitle: Bad input\nstatus: Open # open, addressed, valid, dismissed\nseverity: high # critical, high, medium, low\n---\n\n\n";
         let parsed = parse_editor_content(content).unwrap();
         assert_eq!(parsed.fields.get("status").unwrap(), "Open");
         assert_eq!(parsed.fields.get("severity").unwrap(), "high");
 
-        // Milestone with comments
+        // Milestone still uses ## sections for goals/criteria
         let content = "---\ntitle: v2.0\nstatus: Planning # planning, active, completed, cancelled\ntarget_date: 2026-12-01 # YYYY-MM-DD\n---\n\n## Goals\n\n\n\n## Success Criteria\n\n\n";
         let parsed = parse_editor_content(content).unwrap();
         assert_eq!(parsed.fields.get("status").unwrap(), "Planning");
@@ -618,10 +599,19 @@ mod tests {
 
     #[test]
     fn test_parse_preserves_hash_in_title() {
-        // Title with # is preserved because comment stripping only applies to enum fields
-        let content =
-            "---\ntitle: Fix issue #42\nstatus: Open\npriority: medium\n---\n\n## Description\n\n\n";
+        let content = "---\ntitle: Fix issue #42\nstatus: Open\npriority: medium\n---\n\n\n";
         let parsed = parse_editor_content(content).unwrap();
         assert_eq!(parsed.title, "Fix issue #42");
+    }
+
+    #[test]
+    fn test_parse_body_is_description() {
+        // Body after frontmatter is the description — no ## header needed
+        let content = "---\ntitle: Test\nstatus: Open\n---\n\nThis is **markdown** with\nmultiple lines.\n\n## A heading\n\nMore text.\n";
+        let parsed = parse_editor_content(content).unwrap();
+        assert_eq!(
+            parsed.description,
+            "This is **markdown** with\nmultiple lines.\n\n## A heading\n\nMore text."
+        );
     }
 }
