@@ -274,39 +274,7 @@ fn add_problems(
 ) {
     let problem_count = problems.len();
 
-    // Compute tier boundaries for visual separators (only for milestone problems with 3+).
-    // Uses floor division, same formula as tier_drill_in and assign_tier:
-    // Top = [0, third), Mid = [third, 2*third), Bottom = [2*third, count)
-    let tier_boundaries: Option<(usize, usize)> = if milestone_id.is_some() && problem_count >= 3 {
-        let third = problem_count / 3;
-        Some((third, 2 * third))
-    } else {
-        None
-    };
-
     for (idx, problem) in problems.iter().enumerate() {
-        // Insert tier separator labels at tier boundaries
-        if let Some((top_end, bottom_start)) = tier_boundaries {
-            let label = if idx == 0 {
-                Some("── Top ──")
-            } else if idx == top_end {
-                Some("── Mid ──")
-            } else if idx == bottom_start {
-                Some("── Bottom ──")
-            } else {
-                None
-            };
-            if let Some(label) = label {
-                items.push(FlatTreeItem {
-                    node: TreeNode::TierSeparator {
-                        label: label.to_string(),
-                    },
-                    depth,
-                    has_children: false,
-                    action_symbol: None,
-                });
-            }
-        }
         let problem_solutions: Vec<_> = ctx
             .solutions
             .iter()
@@ -1017,7 +985,8 @@ mod tests {
     }
 
     #[test]
-    fn test_tier_separators_inserted_for_3_plus_milestone_problems() {
+    fn test_no_tier_separators_in_tree() {
+        // Tier indication is via rank number color (green/amber/red), not separator nodes
         let milestone = Milestone {
             id: "m1".into(),
             title: "Sprint 1".into(),
@@ -1042,66 +1011,11 @@ mod tests {
 
         let items = build_flat_tree(&[milestone], &problems, &[], &[], &expanded);
 
-        // Count tier separators
-        let separators: Vec<_> = items
-            .iter()
-            .filter(|i| matches!(i.node, TreeNode::TierSeparator { .. }))
-            .collect();
-        assert_eq!(separators.len(), 3, "Should have Top/Mid/Bottom separators");
-
-        // Verify labels
-        let labels: Vec<&str> = separators.iter().map(|i| i.node.title()).collect();
-        assert_eq!(labels, vec!["── Top ──", "── Mid ──", "── Bottom ──"]);
-    }
-
-    #[test]
-    fn test_no_tier_separators_for_fewer_than_3_problems() {
-        let milestone = Milestone {
-            id: "m1".into(),
-            title: "Sprint 1".into(),
-            status: MilestoneStatus::Active,
-            target_date: None,
-            problem_ids: vec![],
-            assignee: None,
-            goals: String::new(),
-            success_criteria: String::new(),
-            created_at: chrono::Utc::now(),
-            updated_at: chrono::Utc::now(),
-        };
-        let problems: Vec<Problem> = (0..2)
-            .map(|i| {
-                let mut p = Problem::new(format!("p{}", i), format!("Problem {}", i));
-                p.milestone_id = Some("m1".into());
-                p
-            })
-            .collect();
-        let mut expanded = std::collections::HashSet::new();
-        expanded.insert("m1".to_string());
-
-        let items = build_flat_tree(&[milestone], &problems, &[], &[], &expanded);
-
         let separators = items
             .iter()
             .filter(|i| matches!(i.node, TreeNode::TierSeparator { .. }))
             .count();
-        assert_eq!(separators, 0, "No separators for < 3 problems");
-    }
-
-    #[test]
-    fn test_no_tier_separators_for_backlog() {
-        let problems: Vec<Problem> = (0..6)
-            .map(|i| Problem::new(format!("p{}", i), format!("Problem {}", i)))
-            .collect();
-        let mut expanded = std::collections::HashSet::new();
-        expanded.insert("backlog".to_string());
-
-        let items = build_flat_tree(&[], &problems, &[], &[], &expanded);
-
-        let separators = items
-            .iter()
-            .filter(|i| matches!(i.node, TreeNode::TierSeparator { .. }))
-            .count();
-        assert_eq!(separators, 0, "No separators for backlog problems");
+        assert_eq!(separators, 0);
     }
 
     #[test]
