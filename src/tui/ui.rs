@@ -309,13 +309,13 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                 style
             };
 
-            // Gutter: cursor "> ", selected "● ", both ">●", else "  "
+            // Gutter: cursor "> ", selected "✓ ", both ">✓", else "  "
             let gutter = if is_cursor && is_selected {
-                ">●"
+                ">✓"
             } else if is_cursor {
                 "> "
             } else if is_selected {
-                " ●"
+                " ✓"
             } else {
                 "  "
             };
@@ -343,8 +343,21 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                 ));
             }
             spans.push(Span::styled(label, style));
-            // Add vote arrows for problems with votes
-            if let TreeNode::Problem { votes, .. } = &item.node {
+            if let TreeNode::Problem {
+                votes, confidence, ..
+            } = &item.node
+            {
+                // RAG confidence dot
+                let rag_color = match confidence {
+                    crate::models::Confidence::Red => Some(Color::Red),
+                    crate::models::Confidence::Amber => Some(Color::Yellow),
+                    crate::models::Confidence::Green => Some(Color::Green),
+                    crate::models::Confidence::Unknown => None,
+                };
+                if let Some(c) = rag_color {
+                    spans.push(Span::styled(" ●", Style::default().fg(c)));
+                }
+                // Vote arrows
                 if *votes > 0 {
                     spans.push(Span::styled(
                         format!(" {}", "▲".repeat(*votes as usize)),
