@@ -429,6 +429,18 @@ impl App {
             KeyCode::Tab => {
                 self.ui.focused_pane = FocusedPane::Detail;
             }
+            KeyCode::Up if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.bubble_up()?;
+            }
+            KeyCode::Char('k') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.bubble_up()?;
+            }
+            KeyCode::Down if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.bubble_down()?;
+            }
+            KeyCode::Char('j') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.bubble_down()?;
+            }
             KeyCode::Up if key.modifiers.contains(KeyModifiers::SHIFT) => {
                 self.assign_top_tier()?;
             }

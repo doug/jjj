@@ -342,18 +342,123 @@ mod tests {
         // Bottom items stack: f (original), c, b (most recently demoted closest to bottom)
     }
 
+    /// Replicate the three-zone reorder logic for testing.
+    fn reorder_by_votes(ord: &mut UserOrdering) {
+        let votes = &ord.votes;
+        let mut positive: Vec<String> = Vec::new();
+        let mut neutral: Vec<String> = Vec::new();
+        let mut negative: Vec<String> = Vec::new();
+
+        for id in &ord.order {
+            match votes.get(id).copied().unwrap_or(0) {
+                v if v > 0 => positive.push(id.clone()),
+                v if v < 0 => negative.push(id.clone()),
+                _ => neutral.push(id.clone()),
+            }
+        }
+
+        positive.sort_by(|a, b| {
+            let va = votes.get(a).copied().unwrap_or(0);
+            let vb = votes.get(b).copied().unwrap_or(0);
+            vb.cmp(&va)
+        });
+
+        negative.sort_by(|a, b| {
+            let va = votes.get(a).copied().unwrap_or(0);
+            let vb = votes.get(b).copied().unwrap_or(0);
+            va.cmp(&vb)
+        });
+
+        ord.order.clear();
+        ord.order.extend(positive);
+        ord.order.extend(neutral);
+        ord.order.extend(negative);
+    }
+
     #[test]
-    fn test_votes_do_not_reorder_personal_list() {
-        // Votes are decorations for the personal list. Tier assignment (Shift+K/J)
-        // is the only thing that reorders. Votes contribute to global aggregation.
+    fn test_three_zone_positive_votes_at_top() {
         let mut ord = UserOrdering {
             order: vec!["a".into(), "b".into(), "c".into(), "d".into()],
-            votes: HashMap::from([("d".into(), 5), ("a".into(), -2)]),
+            votes: HashMap::from([("c".into(), 2)]),
             updated_at: Utc::now(),
         };
-        // Adding votes should not change the order
-        let order_before = ord.order.clone();
-        // (no reorder function called — that's the point)
-        assert_eq!(ord.order, order_before);
+        reorder_by_votes(&mut ord);
+        // c (voted +2) moves to top, rest stay in tier order
+        assert_eq!(ord.order, vec!["c", "a", "b", "d"]);
+    }
+
+    #[test]
+    fn test_three_zone_negative_votes_at_bottom() {
+        let mut ord = UserOrdering {
+            order: vec!["a".into(), "b".into(), "c".into(), "d".into()],
+            votes: HashMap::from([("a".into(), -1)]),
+            updated_at: Utc::now(),
+        };
+        reorder_by_votes(&mut ord);
+        // a (voted -1) moves to bottom, rest keep tier order
+        assert_eq!(ord.order, vec!["b", "c", "d", "a"]);
+    }
+
+    #[test]
+    fn test_three_zone_mixed() {
+        let mut ord = UserOrdering {
+            order: vec!["a".into(), "b".into(), "c".into(), "d".into(), "e".into()],
+            votes: HashMap::from([("d".into(), 3), ("b".into(), 1), ("a".into(), -2)]),
+            updated_at: Utc::now(),
+        };
+        reorder_by_votes(&mut ord);
+        // Positive zone: d(3), b(1) sorted descending
+        // Neutral zone: c, e in original tier order
+        // Negative zone: a(-2)
+        assert_eq!(ord.order, vec!["d", "b", "c", "e", "a"]);
+    }
+
+    #[test]
+    fn test_three_zone_equal_positive_votes_keep_tier_order() {
+        let mut ord = UserOrdering {
+            order: vec!["a".into(), "b".into(), "c".into(), "d".into()],
+            votes: HashMap::from([("c".into(), 2), ("a".into(), 2)]),
+            updated_at: Utc::now(),
+        };
+        reorder_by_votes(&mut ord);
+        // a and c both +2, stable sort keeps original relative order (a before c)
+        assert_eq!(ord.order, vec!["a", "c", "b", "d"]);
+    }
+
+    #[test]
+    fn test_three_zone_no_votes_preserves_order() {
+        let mut ord = UserOrdering {
+            order: vec!["a".into(), "b".into(), "c".into()],
+            votes: HashMap::new(),
+            updated_at: Utc::now(),
+        };
+        reorder_by_votes(&mut ord);
+        assert_eq!(ord.order, vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn test_three_zone_idempotent() {
+        let mut ord = UserOrdering {
+            order: vec!["a".into(), "b".into(), "c".into()],
+            votes: HashMap::from([("c".into(), 1), ("a".into(), -1)]),
+            updated_at: Utc::now(),
+        };
+        reorder_by_votes(&mut ord);
+        assert_eq!(ord.order, vec!["c", "b", "a"]);
+        reorder_by_votes(&mut ord);
+        assert_eq!(ord.order, vec!["c", "b", "a"]); // no drift
+    }
+
+    #[test]
+    fn test_three_zone_magnitude_ordering() {
+        // Item with 10 votes should always be above item with 4 votes
+        let mut ord = UserOrdering {
+            order: vec!["a".into(), "b".into(), "c".into(), "d".into()],
+            votes: HashMap::from([("c".into(), 10), ("a".into(), 4)]),
+            updated_at: Utc::now(),
+        };
+        reorder_by_votes(&mut ord);
+        assert_eq!(ord.order[0], "c"); // 10 votes first
+        assert_eq!(ord.order[1], "a"); // 4 votes second
     }
 }

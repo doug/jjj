@@ -1630,9 +1630,9 @@ impl App {
         }
         ord.updated_at = chrono::Utc::now();
 
-        // Votes don't reorder the personal list — tier assignment (Shift+K/J) is
-        // the only thing that moves items. Votes are displayed as decorations and
-        // contribute to the global aggregated ranking via Borda+QV.
+        // Re-sort into three zones:
+        // [positive votes descending] [unvoted in tier order] [negative votes ascending]
+        Self::reorder_by_votes(ord);
         ordering::save_user_ordering(self.store.meta_path(), &milestone_id, &self.user, ord)?;
 
         let new_total = borda::total_vote_cost(&ord.votes);
@@ -1643,6 +1643,117 @@ impl App {
         } else {
             self.show_flash(&format!("Vote cleared (budget {}/{})", new_total, budget));
         }
+
+        self.refresh_data()?;
+        self.move_cursor_to_problem(&problem_id);
+        Ok(())
+    }
+
+    /// Re-sort an ordering into three zones based on votes:
+    /// 1. Positive-voted items sorted by vote count descending (most votes first)
+    /// 2. Unvoted items in their current (tier-assigned) order
+    /// 3. Negative-voted items sorted by vote count ascending (most negative last)
+    ///
+    /// Within each zone, items with equal vote counts keep their relative order
+    /// (stable sort). This means tier assignment controls position among unvoted
+    /// items, and votes pin specific items to the top or bottom with magnitude.
+    fn reorder_by_votes(ord: &mut crate::ranking::ordering::UserOrdering) {
+        let votes = &ord.votes;
+        let mut positive: Vec<String> = Vec::new();
+        let mut neutral: Vec<String> = Vec::new();
+        let mut negative: Vec<String> = Vec::new();
+
+        for id in &ord.order {
+            match votes.get(id).copied().unwrap_or(0) {
+                v if v > 0 => positive.push(id.clone()),
+                v if v < 0 => negative.push(id.clone()),
+                _ => neutral.push(id.clone()),
+            }
+        }
+
+        // Sort positive descending by vote count (stable: equal votes keep tier order)
+        positive.sort_by(|a, b| {
+            let va = votes.get(a).copied().unwrap_or(0);
+            let vb = votes.get(b).copied().unwrap_or(0);
+            vb.cmp(&va)
+        });
+
+        // Sort negative ascending by vote count (most negative last)
+        negative.sort_by(|a, b| {
+            let va = votes.get(a).copied().unwrap_or(0);
+            let vb = votes.get(b).copied().unwrap_or(0);
+            va.cmp(&vb)
+        });
+
+        ord.order.clear();
+        ord.order.extend(positive);
+        ord.order.extend(neutral);
+        ord.order.extend(negative);
+    }
+
+    /// Swap the selected problem one position up in the ordering.
+    pub(super) fn bubble_up(&mut self) -> Result<()> {
+        let (milestone_id, problem_id) = match self.selected_milestone_problem() {
+            Some(x) => x,
+            None => return Ok(()),
+        };
+
+        self.ensure_ordering(&milestone_id);
+        let ordering = self.ui.personal_orderings.get(&milestone_id).unwrap();
+        let pos = match ordering.order.iter().position(|id| *id == problem_id) {
+            Some(p) if p > 0 => p,
+            _ => {
+                self.show_flash("Already at top");
+                return Ok(());
+            }
+        };
+
+        self.push_ordering_undo(&milestone_id);
+        let ordering = self.ui.personal_orderings.get_mut(&milestone_id).unwrap();
+        ordering.order.swap(pos, pos - 1);
+        ordering.updated_at = chrono::Utc::now();
+
+        crate::ranking::ordering::save_user_ordering(
+            self.store.meta_path(),
+            &milestone_id,
+            &self.user,
+            ordering,
+        )?;
+
+        self.refresh_data()?;
+        self.move_cursor_to_problem(&problem_id);
+        Ok(())
+    }
+
+    /// Swap the selected problem one position down in the ordering.
+    pub(super) fn bubble_down(&mut self) -> Result<()> {
+        let (milestone_id, problem_id) = match self.selected_milestone_problem() {
+            Some(x) => x,
+            None => return Ok(()),
+        };
+
+        self.ensure_ordering(&milestone_id);
+        let ordering = self.ui.personal_orderings.get(&milestone_id).unwrap();
+        let len = ordering.order.len();
+        let pos = match ordering.order.iter().position(|id| *id == problem_id) {
+            Some(p) if p + 1 < len => p,
+            _ => {
+                self.show_flash("Already at bottom");
+                return Ok(());
+            }
+        };
+
+        self.push_ordering_undo(&milestone_id);
+        let ordering = self.ui.personal_orderings.get_mut(&milestone_id).unwrap();
+        ordering.order.swap(pos, pos + 1);
+        ordering.updated_at = chrono::Utc::now();
+
+        crate::ranking::ordering::save_user_ordering(
+            self.store.meta_path(),
+            &milestone_id,
+            &self.user,
+            ordering,
+        )?;
 
         self.refresh_data()?;
         self.move_cursor_to_problem(&problem_id);
