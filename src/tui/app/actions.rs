@@ -1459,18 +1459,12 @@ impl App {
         }
     }
 
-    /// Assign the selected problem to the Top tier of the current drill view.
-    ///
-    /// Moves the item to the end of the top third of the visible range in the
-    /// user's personal ordering. If already in the top third, moves to position 0.
+    /// Assign the selected problem to the top of the current drill view.
     pub(super) fn assign_top_tier(&mut self) -> Result<()> {
         self.assign_tier(Tier::Top)
     }
 
-    /// Assign the selected problem to the Bottom tier of the current drill view.
-    ///
-    /// Moves the item to the start of the bottom third of the visible range.
-    /// If already in the bottom third, moves to the last position.
+    /// Assign the selected problem to the bottom of the current drill view.
     pub(super) fn assign_bottom_tier(&mut self) -> Result<()> {
         self.assign_tier(Tier::Bottom)
     }
@@ -1490,57 +1484,60 @@ impl App {
         }
 
         self.ensure_ordering(&milestone_id);
+
+        // All guards use immutable borrows, checked before undo snapshot
+        let (current_pos, target_pos, label) = {
+            let ordering = self.ui.personal_orderings.get(&milestone_id).unwrap();
+
+            let (view_start, view_end) =
+                if let Some((drill_ms, start, end)) = self.ui.tier_drill.last() {
+                    if *drill_ms == milestone_id {
+                        (*start, (*end).min(ordering.order.len()))
+                    } else {
+                        (0, ordering.order.len())
+                    }
+                } else {
+                    (0, ordering.order.len())
+                };
+
+            let view_size = view_end.saturating_sub(view_start);
+            if view_size < 2 {
+                return Ok(());
+            }
+
+            let current_pos = match ordering.order.iter().position(|id| *id == problem_id) {
+                Some(p) => p,
+                None => return Ok(()),
+            };
+
+            if current_pos < view_start || current_pos >= view_end {
+                self.show_flash("Item is outside the current drill view");
+                return Ok(());
+            }
+
+            let (target_pos, label) = match tier {
+                Tier::Top => {
+                    if current_pos == view_start {
+                        self.show_flash("Already at top");
+                        return Ok(());
+                    }
+                    (view_start, "Top")
+                }
+                Tier::Bottom => {
+                    if current_pos == view_end - 1 {
+                        self.show_flash("Already at bottom");
+                        return Ok(());
+                    }
+                    (view_end - 1, "Bottom")
+                }
+            };
+
+            (current_pos, target_pos, label)
+        };
+
+        // All guards passed — snapshot for undo, then mutate
         self.push_ordering_undo(&milestone_id);
         let ordering = self.ui.personal_orderings.get_mut(&milestone_id).unwrap();
-
-        // Determine the visible range from the drill state
-        let (view_start, view_end) = if let Some((drill_ms, start, end)) = self.ui.tier_drill.last()
-        {
-            if *drill_ms == milestone_id {
-                (*start, (*end).min(ordering.order.len()))
-            } else {
-                (0, ordering.order.len())
-            }
-        } else {
-            (0, ordering.order.len())
-        };
-
-        let view_size = view_end.saturating_sub(view_start);
-        if view_size < 2 {
-            return Ok(());
-        }
-
-        // Find the item's current position in the full ordering
-        let current_pos = match ordering.order.iter().position(|id| *id == problem_id) {
-            Some(p) => p,
-            None => return Ok(()),
-        };
-
-        // Guard: item must be within the current drill view
-        if current_pos < view_start || current_pos >= view_end {
-            self.show_flash("Item is outside the current drill view");
-            return Ok(());
-        }
-
-        // Shift+K: move item to the top of the visible range.
-        // Shift+J: move item to the bottom of the visible range.
-        // Items you don't act on stay in the middle — this is the tertiary sort.
-        let (target_pos, label) = match tier {
-            Tier::Top => {
-                if current_pos == view_start {
-                    self.show_flash("Already at top");
-                    return Ok(());
-                }
-                (view_start, "Top")
-            }
-            Tier::Bottom => {
-                if current_pos == view_end - 1 {
-                    self.show_flash("Already at bottom");
-                    return Ok(());
-                }
-                (view_end - 1, "Bottom")
-            }
-        };
 
         // Remove from current position and insert at target.
         // When removing from before the target, the target shifts down by 1.
@@ -1633,10 +1630,9 @@ impl App {
         }
         ord.updated_at = chrono::Utc::now();
 
-        // Re-sort: stable sort by -votes so tier assignment is the tiebreaker.
-        // Only vote values matter — position is NOT fed back into the score.
-        Self::reorder_by_votes(ord);
-
+        // Votes don't reorder the personal list — tier assignment (Shift+K/J) is
+        // the only thing that moves items. Votes are displayed as decorations and
+        // contribute to the global aggregated ranking via Borda+QV.
         ordering::save_user_ordering(self.store.meta_path(), &milestone_id, &self.user, ord)?;
 
         let new_total = borda::total_vote_cost(&ord.votes);
@@ -1653,35 +1649,21 @@ impl App {
         Ok(())
     }
 
-    /// Re-sort an ordering so that votes affect list position.
-    /// Stable sort by descending vote count — items with more positive votes
-    /// move up, negative votes move down. Items with equal votes keep their
-    /// relative tier assignment order (the stable sort tiebreaker).
-    fn reorder_by_votes(ord: &mut crate::ranking::ordering::UserOrdering) {
-        let votes = &ord.votes;
-        ord.order.sort_by(|a, b| {
-            let va = *votes.get(a).unwrap_or(&0);
-            let vb = *votes.get(b).unwrap_or(&0);
-            vb.cmp(&va) // descending: more votes = higher rank
-        });
-    }
-
     /// Save the current ordering for a milestone onto the undo stack.
     fn push_ordering_undo(&mut self, milestone_id: &str) {
         if let Some(ordering) = self.ui.personal_orderings.get(milestone_id) {
+            if self.ui.ordering_undo.len() >= 50 {
+                self.ui.ordering_undo.pop_front();
+            }
             self.ui
                 .ordering_undo
-                .push((milestone_id.to_string(), ordering.clone()));
-            // Cap stack at 50 entries
-            if self.ui.ordering_undo.len() > 50 {
-                self.ui.ordering_undo.remove(0);
-            }
+                .push_back((milestone_id.to_string(), ordering.clone()));
         }
     }
 
     /// Undo the last ordering operation.
     pub(super) fn undo_ordering(&mut self) -> Result<()> {
-        let (milestone_id, previous) = match self.ui.ordering_undo.pop() {
+        let (milestone_id, previous) = match self.ui.ordering_undo.pop_back() {
             Some(entry) => entry,
             None => {
                 self.show_flash("Nothing to undo");
@@ -1689,16 +1671,14 @@ impl App {
             }
         };
 
-        self.ui
-            .personal_orderings
-            .insert(milestone_id.clone(), previous.clone());
-
         crate::ranking::ordering::save_user_ordering(
             self.store.meta_path(),
             &milestone_id,
             &self.user,
             &previous,
         )?;
+
+        self.ui.personal_orderings.insert(milestone_id, previous);
 
         self.show_flash("Undone");
         self.refresh_data()?;

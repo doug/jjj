@@ -342,94 +342,18 @@ mod tests {
         // Bottom items stack: f (original), c, b (most recently demoted closest to bottom)
     }
 
-    fn reorder_by_votes(ord: &mut UserOrdering) {
-        let votes = &ord.votes;
-        ord.order.sort_by(|a, b| {
-            let va = *votes.get(a).unwrap_or(&0);
-            let vb = *votes.get(b).unwrap_or(&0);
-            vb.cmp(&va)
-        });
-    }
-
     #[test]
-    fn test_reorder_positive_votes_move_up() {
+    fn test_votes_do_not_reorder_personal_list() {
+        // Votes are decorations for the personal list. Tier assignment (Shift+K/J)
+        // is the only thing that reorders. Votes contribute to global aggregation.
         let mut ord = UserOrdering {
             order: vec!["a".into(), "b".into(), "c".into(), "d".into()],
-            votes: HashMap::from([("c".into(), 2)]),
+            votes: HashMap::from([("d".into(), 5), ("a".into(), -2)]),
             updated_at: Utc::now(),
         };
-        reorder_by_votes(&mut ord);
-        // c has 2 votes, others have 0. c moves to top, rest keep relative order.
-        assert_eq!(ord.order, vec!["c", "a", "b", "d"]);
-    }
-
-    #[test]
-    fn test_reorder_negative_votes_move_down() {
-        let mut ord = UserOrdering {
-            order: vec!["a".into(), "b".into(), "c".into(), "d".into()],
-            votes: HashMap::from([("a".into(), -1)]),
-            updated_at: Utc::now(),
-        };
-        reorder_by_votes(&mut ord);
-        // a has -1, moves to bottom. Others keep relative order.
-        assert_eq!(ord.order, vec!["b", "c", "d", "a"]);
-    }
-
-    #[test]
-    fn test_reorder_stable_for_equal_votes() {
-        let mut ord = UserOrdering {
-            order: vec!["a".into(), "b".into(), "c".into(), "d".into()],
-            votes: HashMap::new(), // no votes — all equal
-            updated_at: Utc::now(),
-        };
-        reorder_by_votes(&mut ord);
-        // Stable sort: original order preserved
-        assert_eq!(ord.order, vec!["a", "b", "c", "d"]);
-    }
-
-    #[test]
-    fn test_reorder_idempotent() {
-        // Running reorder twice should give the same result (no positional feedback)
-        let mut ord = UserOrdering {
-            order: vec!["a".into(), "b".into(), "c".into()],
-            votes: HashMap::from([("c".into(), 1)]),
-            updated_at: Utc::now(),
-        };
-        reorder_by_votes(&mut ord);
-        assert_eq!(ord.order, vec!["c", "a", "b"]);
-        reorder_by_votes(&mut ord);
-        assert_eq!(ord.order, vec!["c", "a", "b"]); // same result, no drift
-    }
-
-    #[test]
-    fn test_reorder_removing_votes_restores_tier_order() {
-        let mut ord = UserOrdering {
-            order: vec!["a".into(), "b".into(), "c".into()],
-            votes: HashMap::from([("c".into(), 1)]),
-            updated_at: Utc::now(),
-        };
-        reorder_by_votes(&mut ord);
-        assert_eq!(ord.order, vec!["c", "a", "b"]);
-
-        // Remove votes — should restore original tier order
-        ord.votes.clear();
-        reorder_by_votes(&mut ord);
-        // All votes are 0, stable sort preserves current order: c, a, b
-        // This is correct: removing votes doesn't undo tier assignments,
-        // it just stops the vote boost. Use Ctrl+Z to undo tier changes.
-        assert_eq!(ord.order, vec!["c", "a", "b"]);
-    }
-
-    #[test]
-    fn test_reorder_mixed_votes() {
-        let mut ord = UserOrdering {
-            order: vec!["a".into(), "b".into(), "c".into(), "d".into(), "e".into()],
-            votes: HashMap::from([("d".into(), 3), ("a".into(), -1), ("c".into(), 1)]),
-            updated_at: Utc::now(),
-        };
-        reorder_by_votes(&mut ord);
-        // d(3) > c(1) > b(0) > e(0) > a(-1)
-        // b and e have equal votes, stable sort keeps b before e
-        assert_eq!(ord.order, vec!["d", "c", "b", "e", "a"]);
+        // Adding votes should not change the order
+        let order_before = ord.order.clone();
+        // (no reorder function called — that's the point)
+        assert_eq!(ord.order, order_before);
     }
 }

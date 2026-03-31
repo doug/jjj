@@ -216,7 +216,7 @@ pub struct UiState {
     /// Empty = showing all items. Each entry narrows to a third of the parent range.
     pub tier_drill: Vec<(String, usize, usize)>,
     /// Undo stack for ordering operations: (milestone_id, previous_ordering).
-    pub ordering_undo: Vec<(String, crate::ranking::ordering::UserOrdering)>,
+    pub ordering_undo: std::collections::VecDeque<(String, crate::ranking::ordering::UserOrdering)>,
 }
 
 impl Default for UiState {
@@ -248,7 +248,7 @@ impl UiState {
             show_personal_ordering: true,
             personal_orderings: HashMap::new(),
             tier_drill: Vec::new(),
-            ordering_undo: Vec::new(),
+            ordering_undo: std::collections::VecDeque::new(),
         }
     }
 }
