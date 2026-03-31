@@ -1,6 +1,5 @@
 use super::{
-    add_frontmatter_context, build_body, parse_body_sections, parse_frontmatter, to_markdown,
-    MetadataStore, CRITIQUES_DIR,
+    add_frontmatter_context, parse_frontmatter, to_markdown, MetadataStore, CRITIQUES_DIR,
 };
 use crate::error::{JjjError, Result};
 use crate::models::{Critique, CritiqueFrontmatter, CritiqueStatus};
@@ -24,8 +23,6 @@ impl MetadataStore {
         let (frontmatter, body): (CritiqueFrontmatter, String) = parse_frontmatter(&content)
             .map_err(|e| add_frontmatter_context(e, "critique", critique_id))?;
 
-        let sections = parse_body_sections(&body);
-
         let critique = Critique {
             id: frontmatter.id,
             title: frontmatter.title,
@@ -36,8 +33,8 @@ impl MetadataStore {
             reviewer: frontmatter.reviewer,
             created_at: frontmatter.created_at,
             updated_at: frontmatter.updated_at,
-            argument: sections.get("Argument").cloned().unwrap_or_default(),
-            evidence: sections.get("Evidence").cloned().unwrap_or_default(),
+            argument: body,
+            evidence: frontmatter.evidence,
             file_path: frontmatter.file_path,
             line_start: frontmatter.line_start,
             line_end: frontmatter.line_end,
@@ -59,10 +56,11 @@ impl MetadataStore {
         fs::create_dir_all(&critiques_dir)?;
 
         let frontmatter = CritiqueFrontmatter::from(critique);
-        let body = build_body(&[
-            ("Argument", &critique.argument),
-            ("Evidence", &critique.evidence),
-        ]);
+        let body = if critique.argument.is_empty() {
+            String::new()
+        } else {
+            format!("{}\n", critique.argument)
+        };
 
         let content = to_markdown(&frontmatter, &body)?;
         let critique_path = critiques_dir.join(format!("{}.md", critique.id));

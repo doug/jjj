@@ -351,6 +351,8 @@ pub struct CritiqueFrontmatter {
     pub github_review_id: Option<u64>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub replies: Vec<Reply>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub evidence: String,
 }
 
 impl From<&Critique> for CritiqueFrontmatter {
@@ -373,6 +375,7 @@ impl From<&Critique> for CritiqueFrontmatter {
             updated_at: c.updated_at,
             github_review_id: c.github_review_id,
             replies: c.replies.clone(),
+            evidence: c.evidence.clone(),
         }
     }
 }

@@ -114,70 +114,6 @@ fn to_markdown<T: serde::Serialize>(frontmatter: &T, body: &str) -> Result<Strin
     Ok(format!("---\n{}---\n\n{}", yaml, body))
 }
 
-/// Parse markdown body sections (## headers).
-/// Headers are normalized to title case for case-insensitive matching.
-fn parse_body_sections(body: &str) -> std::collections::HashMap<String, String> {
-    let mut sections = std::collections::HashMap::new();
-    let mut current_section = String::new();
-    let mut current_content = String::new();
-
-    for line in body.lines() {
-        if line.starts_with("## ") {
-            if !current_section.is_empty() {
-                sections.insert(current_section.clone(), current_content.trim().to_string());
-            }
-            let raw_header = line
-                .strip_prefix("## ")
-                .expect("strip_prefix failed after starts_with check");
-            // Normalize to title case: capitalize first letter, lowercase rest
-            current_section = normalize_section_header(raw_header);
-            current_content = String::new();
-        } else {
-            current_content.push_str(line);
-            current_content.push('\n');
-        }
-    }
-
-    if !current_section.is_empty() {
-        sections.insert(current_section, current_content.trim().to_string());
-    }
-
-    sections
-}
-
-/// Normalize a section header to title case (e.g., "description" -> "Description",
-/// "TRADE-OFFS" -> "Trade-offs", "trade-offs" -> "Trade-offs").
-fn normalize_section_header(header: &str) -> String {
-    let lower = header.to_lowercase();
-    // Map known variants to canonical names
-    match lower.as_str() {
-        "description" => "Description".to_string(),
-        "context" => "Context".to_string(),
-        "approach" => "Approach".to_string(),
-        "trade-offs" | "tradeoffs" | "trade offs" => "Trade-offs".to_string(),
-        "argument" => "Argument".to_string(),
-        "evidence" => "Evidence".to_string(),
-        _ => {
-            // Generic title case: capitalize first char
-            let mut chars = header.chars();
-            match chars.next() {
-                None => String::new(),
-                Some(c) => c.to_uppercase().to_string() + &chars.as_str().to_lowercase(),
-            }
-        }
-    }
-}
-
-/// Build markdown body from sections
-fn build_body(sections: &[(&str, &str)]) -> String {
-    sections
-        .iter()
-        .filter(|(_, content)| !content.is_empty())
-        .map(|(header, content)| format!("## {}\n\n{}", header, content))
-        .collect::<Vec<_>>()
-        .join("\n\n")
-}
-
 impl MetadataStore {
     /// Create a new metadata store
     pub fn new(jj_client: JjClient) -> Result<Self> {
@@ -531,25 +467,6 @@ Some context here.
     }
 
     #[test]
-    fn test_parse_body_sections() {
-        let body = r#"## Description
-
-This is the description.
-
-## Context
-
-This is the context.
-"#;
-
-        let sections = parse_body_sections(body);
-        assert_eq!(
-            sections.get("Description").unwrap(),
-            "This is the description."
-        );
-        assert_eq!(sections.get("Context").unwrap(), "This is the context.");
-    }
-
-    #[test]
     fn test_to_markdown() {
         let frontmatter = ProblemFrontmatter {
             id: "p1".to_string(),
@@ -567,29 +484,15 @@ This is the context.
             dissolved_reason: None,
             github_issue: None,
             tags: vec![],
+            context: String::new(),
         };
 
-        let body = "## Description\n\nTest description";
+        let body = "Test description\n";
         let result = to_markdown(&frontmatter, body).unwrap();
 
         assert!(result.starts_with("---\n"));
         assert!(result.contains("id: p1"));
-        assert!(result.contains("## Description"));
-    }
-
-    #[test]
-    fn test_build_body() {
-        let sections = vec![
-            ("Description", "Test description"),
-            ("Context", "Test context"),
-            ("Empty", ""),
-        ];
-
-        let body = build_body(&sections);
-        assert!(body.contains("## Description"));
-        assert!(body.contains("Test description"));
-        assert!(body.contains("## Context"));
-        assert!(!body.contains("## Empty")); // Empty sections are skipped
+        assert!(result.contains("Test description"));
     }
 
     #[test]
@@ -604,10 +507,7 @@ This is the context.
         critique.reviewer = Some("bob".to_string());
 
         let frontmatter = CritiqueFrontmatter::from(&critique);
-        let body = build_body(&[
-            ("Argument", &critique.argument),
-            ("Evidence", &critique.evidence),
-        ]);
+        let body = format!("{}\n", critique.argument);
 
         let markdown = to_markdown(&frontmatter, &body).unwrap();
         assert!(markdown.contains("reviewer: bob"));

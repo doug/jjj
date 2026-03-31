@@ -1,6 +1,6 @@
 use super::{
-    add_frontmatter_context, build_body, parse_body_sections, parse_frontmatter, to_markdown,
-    MetadataStore, CRITIQUES_DIR, PROBLEMS_DIR, SOLUTIONS_DIR,
+    add_frontmatter_context, parse_frontmatter, to_markdown, MetadataStore, CRITIQUES_DIR,
+    PROBLEMS_DIR, SOLUTIONS_DIR,
 };
 use crate::error::{JjjError, Result};
 use crate::models::{Problem, ProblemFrontmatter};
@@ -28,9 +28,6 @@ impl MetadataStore {
         let (frontmatter, body): (ProblemFrontmatter, String) = parse_frontmatter(&content)
             .map_err(|e| add_frontmatter_context(e, "problem", problem_id))?;
 
-        // Parse body sections
-        let sections = parse_body_sections(&body);
-
         let problem = Problem {
             id: frontmatter.id,
             title: frontmatter.title,
@@ -44,8 +41,8 @@ impl MetadataStore {
             assignee: frontmatter.assignee,
             created_at: frontmatter.created_at,
             updated_at: frontmatter.updated_at,
-            description: sections.get("Description").cloned().unwrap_or_default(),
-            context: sections.get("Context").cloned().unwrap_or_default(),
+            description: body,
+            context: frontmatter.context,
             dissolved_reason: frontmatter.dissolved_reason,
             github_issue: frontmatter.github_issue,
             tags: frontmatter.tags,
@@ -62,10 +59,11 @@ impl MetadataStore {
         fs::create_dir_all(&problems_dir)?;
 
         let frontmatter = ProblemFrontmatter::from(problem);
-        let body = build_body(&[
-            ("Description", &problem.description),
-            ("Context", &problem.context),
-        ]);
+        let body = if problem.description.is_empty() {
+            String::new()
+        } else {
+            format!("{}\n", problem.description)
+        };
 
         let content = to_markdown(&frontmatter, &body)?;
         let problem_path = problems_dir.join(format!("{}.md", problem.id));

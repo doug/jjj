@@ -1,6 +1,6 @@
 use super::{
-    add_frontmatter_context, build_body, parse_body_sections, parse_frontmatter, to_markdown,
-    MetadataStore, CRITIQUES_DIR, SOLUTIONS_DIR,
+    add_frontmatter_context, parse_frontmatter, to_markdown, MetadataStore, CRITIQUES_DIR,
+    SOLUTIONS_DIR,
 };
 use crate::error::{JjjError, Result};
 use crate::models::{Solution, SolutionFrontmatter};
@@ -24,8 +24,6 @@ impl MetadataStore {
         let (frontmatter, body): (SolutionFrontmatter, String) = parse_frontmatter(&content)
             .map_err(|e| add_frontmatter_context(e, "solution", solution_id))?;
 
-        let sections = parse_body_sections(&body);
-
         let solution = Solution {
             id: frontmatter.id,
             title: frontmatter.title,
@@ -36,8 +34,8 @@ impl MetadataStore {
             assignee: frontmatter.assignee,
             created_at: frontmatter.created_at,
             updated_at: frontmatter.updated_at,
-            approach: sections.get("Approach").cloned().unwrap_or_default(),
-            tradeoffs: sections.get("Trade-offs").cloned().unwrap_or_default(),
+            approach: body,
+            tradeoffs: frontmatter.tradeoffs,
             supersedes: frontmatter.supersedes,
             force_approved: frontmatter.force_approved,
             github_pr: frontmatter.github_pr,
@@ -56,10 +54,11 @@ impl MetadataStore {
         fs::create_dir_all(&solutions_dir)?;
 
         let frontmatter = SolutionFrontmatter::from(solution);
-        let body = build_body(&[
-            ("Approach", &solution.approach),
-            ("Trade-offs", &solution.tradeoffs),
-        ]);
+        let body = if solution.approach.is_empty() {
+            String::new()
+        } else {
+            format!("{}\n", solution.approach)
+        };
 
         let content = to_markdown(&frontmatter, &body)?;
         let solution_path = solutions_dir.join(format!("{}.md", solution.id));

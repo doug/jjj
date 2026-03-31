@@ -285,6 +285,8 @@ pub struct SolutionFrontmatter {
     pub tags: Vec<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub tradeoffs: String,
 }
 
 impl From<&Solution> for SolutionFrontmatter {
@@ -304,6 +306,7 @@ impl From<&Solution> for SolutionFrontmatter {
             tags: s.tags.clone(),
             created_at: s.created_at,
             updated_at: s.updated_at,
+            tradeoffs: s.tradeoffs.clone(),
         }
     }
 }

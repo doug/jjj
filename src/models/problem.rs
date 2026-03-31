@@ -387,6 +387,8 @@ pub struct ProblemFrontmatter {
     pub github_issue: Option<u64>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub context: String,
 }
 
 impl From<&Problem> for ProblemFrontmatter {
@@ -407,6 +409,7 @@ impl From<&Problem> for ProblemFrontmatter {
             dissolved_reason: p.dissolved_reason.clone(),
             github_issue: p.github_issue,
             tags: p.tags.clone(),
+            context: p.context.clone(),
         }
     }
 }
