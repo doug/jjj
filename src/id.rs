@@ -15,9 +15,10 @@ pub fn is_uuid(s: &str) -> bool {
 }
 
 /// Check if a string looks like a hex prefix (for prefix matching).
-/// Must be 6+ hex characters.
+/// Must be 6+ characters, allowing hex digits and hyphens (as in UUID fragments).
 pub fn is_hex_prefix(s: &str) -> bool {
-    s.len() >= 6 && s.chars().all(|c| c.is_ascii_hexdigit())
+    let hex_count = s.chars().filter(|c| c.is_ascii_hexdigit()).count();
+    hex_count >= 6 && s.chars().all(|c| c.is_ascii_hexdigit() || c == '-')
 }
 
 #[cfg(test)]
@@ -64,6 +65,7 @@ mod tests {
         assert!(is_hex_prefix("a3f8c2"));
         assert!(is_hex_prefix("01957d3e"));
         assert!(is_hex_prefix("ABCDEF"));
+        assert!(is_hex_prefix("019d427b-fb52")); // hyphenated UUID fragment
         assert!(!is_hex_prefix("a3f8c")); // too short
         assert!(!is_hex_prefix("auth")); // not hex
         assert!(!is_hex_prefix("p1"));

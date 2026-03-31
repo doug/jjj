@@ -455,10 +455,12 @@ impl MetadataStore {
         self.meta_client.execute(&["new"])?;
 
         // The commit we care about is now @- (the parent of the fresh empty
-        // change). Read its change-id for the bookmark update.
+        // change). Read its commit-id for the bookmark update. We use
+        // commit_id rather than change_id because change IDs can become
+        // divergent across workspaces, causing bookmark set to fail.
         let meta_change = self
             .meta_client
-            .execute(&["log", "--no-graph", "-r", "@-", "-T", "change_id"])?
+            .execute(&["log", "--no-graph", "-r", "@-", "-T", "commit_id"])?
             .trim()
             .to_string();
         self.jj_client.execute(&[

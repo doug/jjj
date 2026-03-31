@@ -383,11 +383,11 @@ pub fn annotate_tree_with_actions(items: &mut [FlatTreeItem], next_actions: &[Ne
 
 fn category_to_symbol(category: Category) -> &'static str {
     match category {
-        Category::Ready => "!",
-        Category::Blocked => "X",
-        Category::Waiting => "~",
-        Category::Todo => "+",
-        Category::Review => "?",
+        Category::Ready => "▶",
+        Category::Blocked => "✗",
+        Category::Waiting => "…",
+        Category::Todo => "◇",
+        Category::Review => "◎",
     }
 }
 
@@ -708,7 +708,7 @@ mod tests {
         annotate_tree_with_actions(&mut tree, &actions);
 
         let s1_item = tree.iter().find(|i| i.node.id() == "S-1").unwrap();
-        assert_eq!(s1_item.action_symbol, Some("X".to_string()));
+        assert_eq!(s1_item.action_symbol, Some("✗".to_string()));
     }
 
     #[test]
@@ -722,7 +722,7 @@ mod tests {
         annotate_tree_with_actions(&mut tree, &actions);
 
         let s1_item = tree.iter().find(|i| i.node.id() == "S-1").unwrap();
-        assert_eq!(s1_item.action_symbol, Some("!".to_string()));
+        assert_eq!(s1_item.action_symbol, Some("▶".to_string()));
     }
 
     #[test]
@@ -737,7 +737,7 @@ mod tests {
         annotate_tree_with_actions(&mut tree, &actions);
 
         let c1_item = tree.iter().find(|i| i.node.id() == "C-1").unwrap();
-        assert_eq!(c1_item.action_symbol, Some("?".to_string()));
+        assert_eq!(c1_item.action_symbol, Some("◎".to_string()));
     }
 
     #[test]
@@ -750,7 +750,7 @@ mod tests {
         annotate_tree_with_actions(&mut tree, &actions);
 
         let p1_item = tree.iter().find(|i| i.node.id() == "P-1").unwrap();
-        assert_eq!(p1_item.action_symbol, Some("+".to_string()));
+        assert_eq!(p1_item.action_symbol, Some("◇".to_string()));
     }
 
     #[test]
@@ -763,7 +763,7 @@ mod tests {
         annotate_tree_with_actions(&mut tree, &actions);
 
         let p1_item = tree.iter().find(|i| i.node.id() == "P-1").unwrap();
-        assert_eq!(p1_item.action_symbol, Some("~".to_string()));
+        assert_eq!(p1_item.action_symbol, Some("…".to_string()));
     }
 
     #[test]
@@ -779,10 +779,10 @@ mod tests {
         annotate_tree_with_actions(&mut tree, &actions);
 
         let p1_item = tree.iter().find(|i| i.node.id() == "P-1").unwrap();
-        assert_eq!(p1_item.action_symbol, Some("+".to_string()));
+        assert_eq!(p1_item.action_symbol, Some("◇".to_string()));
 
         let p2_item = tree.iter().find(|i| i.node.id() == "P-2").unwrap();
-        assert_eq!(p2_item.action_symbol, Some("X".to_string()));
+        assert_eq!(p2_item.action_symbol, Some("✗".to_string()));
     }
 
     #[test]
