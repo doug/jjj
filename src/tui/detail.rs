@@ -147,12 +147,6 @@ fn problem_lines(p: &Problem, rank_info: Option<&ProblemRankInfo>) -> Vec<Line<'
         lines.extend(render_md_body(&p.description));
     }
 
-    if !p.context.is_empty() {
-        lines.push(Line::from(""));
-        lines.push(section_header("Context"));
-        lines.extend(render_md_body(&p.context));
-    }
-
     lines.push(Line::from(""));
     lines
 }
@@ -194,11 +188,6 @@ fn solution_lines(s: &Solution) -> Vec<Line<'static>> {
         lines.push(Line::from(""));
         lines.push(section_header("Approach"));
         lines.extend(render_md_body(&s.approach));
-    }
-    if !s.tradeoffs.is_empty() {
-        lines.push(Line::from(""));
-        lines.push(section_header("Tradeoffs"));
-        lines.extend(render_md_body(&s.tradeoffs));
     }
 
     lines.push(Line::from(""));
@@ -242,11 +231,6 @@ fn critique_lines(c: &Critique) -> Vec<Line<'static>> {
         lines.push(Line::from(""));
         lines.push(section_header("Argument"));
         lines.extend(render_md_body(&c.argument));
-    }
-    if !c.evidence.is_empty() {
-        lines.push(Line::from(""));
-        lines.push(section_header("Evidence"));
-        lines.extend(render_md_body(&c.evidence));
     }
     if !c.replies.is_empty() {
         lines.push(Line::from(""));

@@ -17,11 +17,8 @@ pub fn execute(ctx: &CommandContext, action: ProblemAction) -> Result<()> {
             parent,
             milestone,
             force,
-            context,
             tags,
-        } => new_problem(
-            ctx, title, priority, parent, milestone, force, context, tags,
-        ),
+        } => new_problem(ctx, title, priority, parent, milestone, force, tags),
         ProblemAction::List {
             status,
             tree,
@@ -80,7 +77,6 @@ fn new_problem(
     parent: Option<String>,
     milestone: Option<String>,
     force: bool,
-    context: Option<String>,
     tags: Vec<String>,
 ) -> Result<()> {
     let store = &ctx.store;
@@ -165,11 +161,6 @@ fn new_problem(
         problem.priority = priority
             .parse::<Priority>()
             .map_err(|e: String| crate::error::JjjError::Validation(e))?;
-
-        // Set context
-        if let Some(ref ctx_text) = context {
-            problem.context = ctx_text.clone();
-        }
 
         // Set tags (trim, dedup, sort)
         if !tags.is_empty() {
@@ -415,14 +406,8 @@ fn show_problem(ctx: &CommandContext, problem_input: String, json: bool) -> Resu
         println!("Tags: {}", problem.tags.join(", "));
     }
 
-    // Show description
     if !problem.description.is_empty() {
-        println!("\n## Description\n{}", problem.description);
-    }
-
-    // Show context
-    if !problem.context.is_empty() {
-        println!("\n## Context\n{}", problem.context);
+        println!("\n{}", problem.description);
     }
 
     // Show dissolved reason

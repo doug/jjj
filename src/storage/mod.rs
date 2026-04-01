@@ -484,7 +484,6 @@ Some context here.
             dissolved_reason: None,
             github_issue: None,
             tags: vec![],
-            context: String::new(),
         };
 
         let body = "Test description\n";

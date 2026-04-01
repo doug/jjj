@@ -37,10 +37,6 @@ pub struct Critique {
     #[serde(default)]
     pub argument: String,
 
-    /// Supporting evidence or examples
-    #[serde(default)]
-    pub evidence: String,
-
     /// Optional file path for code-level critiques
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub file_path: Option<String>,
@@ -201,7 +197,6 @@ impl Critique {
             created_at: now,
             updated_at: now,
             argument: String::new(),
-            evidence: String::new(),
             file_path: None,
             line_start: None,
             line_end: None,
@@ -351,8 +346,6 @@ pub struct CritiqueFrontmatter {
     pub github_review_id: Option<u64>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub replies: Vec<Reply>,
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub evidence: String,
 }
 
 impl From<&Critique> for CritiqueFrontmatter {
@@ -375,7 +368,6 @@ impl From<&Critique> for CritiqueFrontmatter {
             updated_at: c.updated_at,
             github_review_id: c.github_review_id,
             replies: c.replies.clone(),
-            evidence: c.evidence.clone(),
         }
     }
 }

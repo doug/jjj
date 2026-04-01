@@ -444,11 +444,6 @@ fn show_solution(ctx: &CommandContext, solution_input: String, json: bool) -> Re
         println!("\n## Approach\n{}", solution.approach);
     }
 
-    // Show trade-offs
-    if !solution.tradeoffs.is_empty() {
-        println!("\n## Trade-offs\n{}", solution.tradeoffs);
-    }
-
     // Show critiques
     let critiques = store.list_critiques_for_solution(&solution_id)?;
     if !critiques.is_empty() {

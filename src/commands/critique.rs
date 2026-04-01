@@ -332,11 +332,6 @@ fn show_critique(ctx: &CommandContext, critique_input: String, json: bool) -> Re
         println!("\n## Argument\n{}", critique.argument);
     }
 
-    // Show evidence
-    if !critique.evidence.is_empty() {
-        println!("\n## Evidence\n{}", critique.evidence);
-    }
-
     // Show replies
     if !critique.replies.is_empty() {
         println!("\n## Discussion ({} replies)", critique.replies.len());

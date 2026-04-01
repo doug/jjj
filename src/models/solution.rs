@@ -42,10 +42,6 @@ pub struct Solution {
     #[serde(default)]
     pub approach: String,
 
-    /// Trade-offs - known limitations and trade-offs
-    #[serde(default)]
-    pub tradeoffs: String,
-
     /// ID of the solution this one supersedes (for lineage tracking)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub supersedes: Option<String>,
@@ -129,7 +125,6 @@ impl Solution {
             created_at: now,
             updated_at: now,
             approach: String::new(),
-            tradeoffs: String::new(),
             supersedes: None,
             github_pr: None,
             github_branch: None,
@@ -285,8 +280,6 @@ pub struct SolutionFrontmatter {
     pub tags: Vec<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub tradeoffs: String,
 }
 
 impl From<&Solution> for SolutionFrontmatter {
@@ -306,7 +299,6 @@ impl From<&Solution> for SolutionFrontmatter {
             tags: s.tags.clone(),
             created_at: s.created_at,
             updated_at: s.updated_at,
-            tradeoffs: s.tradeoffs.clone(),
         }
     }
 }

@@ -34,7 +34,6 @@ impl MetadataStore {
             created_at: frontmatter.created_at,
             updated_at: frontmatter.updated_at,
             argument: body,
-            evidence: frontmatter.evidence,
             file_path: frontmatter.file_path,
             line_start: frontmatter.line_start,
             line_end: frontmatter.line_end,
@@ -70,7 +69,7 @@ impl MetadataStore {
         let db_path = self.jj_client.repo_root().join(".jj").join("jjj.db");
         if db_path.exists() {
             if let Ok(db) = crate::db::schema::Database::open(&db_path) {
-                let fts_body = format!("{}\n{}", critique.argument, critique.evidence);
+                let fts_body = critique.argument.clone();
                 let _ = crate::db::sync::update_fts_entry(
                     db.conn(),
                     "critique",

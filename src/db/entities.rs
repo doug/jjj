@@ -84,7 +84,7 @@ pub fn upsert_problem(conn: &Connection, problem: &Problem) -> SqliteResult<()> 
             problem.created_at.to_rfc3339(),
             problem.updated_at.to_rfc3339(),
             problem.description,
-            problem.context,
+            "", // context column (deprecated, kept for schema compat)
             problem.dissolved_reason,
             problem.github_issue.map(|n| n as i64),
             tags_json,
@@ -157,7 +157,6 @@ fn row_to_problem(row: &rusqlite::Row) -> SqliteResult<Problem> {
         created_at: parse_datetime(&created_at_str, "created_at", "problem"),
         updated_at: parse_datetime(&updated_at_str, "updated_at", "problem"),
         description: row.get::<_, Option<String>>(10)?.unwrap_or_default(),
-        context: row.get::<_, Option<String>>(11)?.unwrap_or_default(),
         dissolved_reason: row.get(12)?,
         github_issue: row.get::<_, Option<i64>>(13)?.map(|n| n as u64),
         tags: parse_json_vec(&tags_json, "tags"),
@@ -195,7 +194,7 @@ pub fn upsert_solution(conn: &Connection, solution: &Solution) -> SqliteResult<(
             solution.created_at.to_rfc3339(),
             solution.updated_at.to_rfc3339(),
             solution.approach,
-            solution.tradeoffs,
+            "", // tradeoffs column (deprecated, kept for schema compat)
             solution.github_pr.map(|n| n as i64),
             solution.github_branch,
             tags_json,
@@ -282,7 +281,7 @@ fn row_to_solution(row: &rusqlite::Row) -> SqliteResult<Solution> {
         created_at: parse_datetime(&created_at_str, "created_at", "solution"),
         updated_at: parse_datetime(&updated_at_str, "updated_at", "solution"),
         approach: row.get::<_, Option<String>>(10)?.unwrap_or_default(),
-        tradeoffs: row.get::<_, Option<String>>(11)?.unwrap_or_default(),
+        // column 11 is tradeoffs (deprecated, skipped)
         github_pr: row.get::<_, Option<i64>>(12)?.map(|n| n as u64),
         github_branch: row.get(13)?,
         tags: parse_json_vec(&tags_json, "tags"),
@@ -299,16 +298,6 @@ fn row_to_solution(row: &rusqlite::Row) -> SqliteResult<Solution> {
 pub fn upsert_critique(conn: &Connection, critique: &Critique) -> SqliteResult<()> {
     let replies_json =
         serde_json::to_string(&critique.replies).unwrap_or_else(|_| "[]".to_string());
-
-    // Keep body as combined field for backward compatibility / FTS
-    let body = if critique.evidence.is_empty() {
-        critique.argument.clone()
-    } else {
-        format!(
-            "{}\n\n## Evidence\n\n{}",
-            critique.argument, critique.evidence
-        )
-    };
 
     conn.execute(
         "INSERT OR REPLACE INTO critiques (
@@ -328,9 +317,9 @@ pub fn upsert_critique(conn: &Connection, critique: &Critique) -> SqliteResult<(
             critique.line_start.map(|n| n as i64),
             critique.created_at.to_rfc3339(),
             critique.updated_at.to_rfc3339(),
-            body,
             critique.argument,
-            critique.evidence,
+            critique.argument,
+            "", // evidence column (deprecated, kept for schema compat)
             replies_json,
             critique.github_review_id.map(|n| n as i64),
         ],
@@ -420,7 +409,7 @@ fn row_to_critique(row: &rusqlite::Row) -> SqliteResult<Critique> {
         created_at: parse_datetime(&created_at_str, "created_at", "critique"),
         updated_at: parse_datetime(&updated_at_str, "updated_at", "critique"),
         argument: row.get::<_, Option<String>>(11)?.unwrap_or_default(),
-        evidence: row.get::<_, Option<String>>(12)?.unwrap_or_default(),
+        // column 12 is evidence (deprecated, skipped)
         code_context: Vec::new(),   // Not stored in DB
         context_before: Vec::new(), // Not stored in DB
         context_after: Vec::new(),  // Not stored in DB
@@ -615,7 +604,6 @@ mod tests {
         // Create
         let mut problem = Problem::new("p1".to_string(), "Test problem".to_string());
         problem.description = "A test description".to_string();
-        problem.context = "Some context".to_string();
         problem.priority = Priority::High;
         problem.assignee = Some("alice".to_string());
 
@@ -629,7 +617,6 @@ mod tests {
         assert_eq!(loaded.id, "p1");
         assert_eq!(loaded.title, "Test problem");
         assert_eq!(loaded.description, "A test description");
-        assert_eq!(loaded.context, "Some context");
         assert_eq!(loaded.priority, Priority::High);
         assert_eq!(loaded.assignee, Some("alice".to_string()));
         assert_eq!(loaded.status, ProblemStatus::Open);
@@ -679,7 +666,6 @@ mod tests {
             "p1".to_string(),
         );
         solution.approach = "Use this approach".to_string();
-        solution.tradeoffs = "Some tradeoffs".to_string();
         solution.change_ids = vec!["abc123".to_string(), "def456".to_string()];
         solution.assignee = Some("bob".to_string());
 
@@ -694,7 +680,6 @@ mod tests {
         assert_eq!(loaded.title, "Test solution");
         assert_eq!(loaded.problem_id, "p1");
         assert_eq!(loaded.approach, "Use this approach");
-        assert_eq!(loaded.tradeoffs, "Some tradeoffs");
         assert_eq!(
             loaded.change_ids,
             vec!["abc123".to_string(), "def456".to_string()]
@@ -759,7 +744,6 @@ mod tests {
             "s1".to_string(),
         );
         critique.argument = "This is problematic".to_string();
-        critique.evidence = "Here is the evidence".to_string();
         critique.severity = CritiqueSeverity::High;
         critique.author = Some("charlie".to_string());
         critique.reviewer = Some("charlie".to_string());
@@ -777,7 +761,6 @@ mod tests {
         assert_eq!(loaded.title, "Test critique");
         assert_eq!(loaded.solution_id, "s1");
         assert_eq!(loaded.argument, "This is problematic");
-        assert_eq!(loaded.evidence, "Here is the evidence");
         assert_eq!(loaded.severity, CritiqueSeverity::High);
         assert_eq!(loaded.reviewer, Some("charlie".to_string()));
         assert_eq!(loaded.file_path, Some("src/main.rs".to_string()));

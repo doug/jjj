@@ -115,12 +115,7 @@ pub fn rebuild_fts(db: &Database) -> Result<()> {
     // Index problems
     let problems = list_problems(conn)?;
     for problem in &problems {
-        let body = format!(
-            "{}\n{}\n{}",
-            problem.description,
-            problem.context,
-            problem.tags.join(" ")
-        );
+        let body = format!("{}\n{}", problem.description, problem.tags.join(" "));
         conn.execute(
             "INSERT INTO fts (entity_type, entity_id, title, body) VALUES (?1, ?2, ?3, ?4)",
             params!["problem", &problem.id, &problem.title, &body],
@@ -130,12 +125,7 @@ pub fn rebuild_fts(db: &Database) -> Result<()> {
     // Index solutions
     let solutions = list_solutions(conn)?;
     for solution in &solutions {
-        let body = format!(
-            "{}\n{}\n{}",
-            solution.approach,
-            solution.tradeoffs,
-            solution.tags.join(" ")
-        );
+        let body = format!("{}\n{}", solution.approach, solution.tags.join(" "));
         conn.execute(
             "INSERT INTO fts (entity_type, entity_id, title, body) VALUES (?1, ?2, ?3, ?4)",
             params!["solution", &solution.id, &solution.title, &body],
@@ -145,7 +135,7 @@ pub fn rebuild_fts(db: &Database) -> Result<()> {
     // Index critiques
     let critiques = list_critiques(conn)?;
     for critique in &critiques {
-        let body = format!("{}\n{}", critique.argument, critique.evidence);
+        let body = critique.argument.clone();
         conn.execute(
             "INSERT INTO fts (entity_type, entity_id, title, body) VALUES (?1, ?2, ?3, ?4)",
             params!["critique", &critique.id, &critique.title, &body],
@@ -224,7 +214,7 @@ pub fn rebuild_embeddings(
     // Process problems
     let problems = list_problems(conn)?;
     for problem in &problems {
-        let text = prepare_problem_text(&problem.title, &problem.description, &problem.context);
+        let text = prepare_problem_text(&problem.title, &problem.description);
         if let Ok(embedding) = client.embed(&text) {
             upsert_embedding(conn, "problem", &problem.id, model, &embedding)?;
         }
@@ -233,7 +223,7 @@ pub fn rebuild_embeddings(
     // Process solutions
     let solutions = list_solutions(conn)?;
     for solution in &solutions {
-        let text = prepare_solution_text(&solution.title, &solution.approach, &solution.tradeoffs);
+        let text = prepare_solution_text(&solution.title, &solution.approach);
         if let Ok(embedding) = client.embed(&text) {
             upsert_embedding(conn, "solution", &solution.id, model, &embedding)?;
         }
@@ -242,7 +232,7 @@ pub fn rebuild_embeddings(
     // Process critiques
     let critiques = list_critiques(conn)?;
     for critique in &critiques {
-        let text = prepare_critique_text(&critique.title, &critique.argument, &critique.evidence);
+        let text = prepare_critique_text(&critique.title, &critique.argument);
         if let Ok(embedding) = client.embed(&text) {
             upsert_embedding(conn, "critique", &critique.id, model, &embedding)?;
         }
@@ -359,7 +349,7 @@ mod tests {
         // Insert a problem
         let mut problem = Problem::new("p1".to_string(), "Test Problem".to_string());
         problem.description = "This is a test description".to_string();
-        problem.context = "Some context here".to_string();
+        problem.description = "Some context here".to_string();
         upsert_problem(db.conn(), &problem).expect("Failed to insert problem");
 
         // Rebuild FTS

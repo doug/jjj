@@ -269,24 +269,18 @@ pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
 }
 
 /// Prepare text for embedding from a problem.
-pub fn prepare_problem_text(title: &str, description: &str, context: &str) -> String {
-    format!("{}\n\n{}\n\n{}", title, description, context)
-        .trim()
-        .to_string()
+pub fn prepare_problem_text(title: &str, description: &str) -> String {
+    format!("{}\n\n{}", title, description).trim().to_string()
 }
 
 /// Prepare text for embedding from a solution.
-pub fn prepare_solution_text(title: &str, approach: &str, tradeoffs: &str) -> String {
-    format!("{}\n\n{}\n\n{}", title, approach, tradeoffs)
-        .trim()
-        .to_string()
+pub fn prepare_solution_text(title: &str, approach: &str) -> String {
+    format!("{}\n\n{}", title, approach).trim().to_string()
 }
 
 /// Prepare text for embedding from a critique.
-pub fn prepare_critique_text(title: &str, argument: &str, evidence: &str) -> String {
-    format!("{}\n\n{}\n\n{}", title, argument, evidence)
-        .trim()
-        .to_string()
+pub fn prepare_critique_text(title: &str, argument: &str) -> String {
+    format!("{}\n\n{}", title, argument).trim().to_string()
 }
 
 /// Prepare text for embedding from a milestone.
@@ -340,20 +334,20 @@ mod tests {
 
     #[test]
     fn test_prepare_problem_text() {
-        let text = prepare_problem_text("Title", "Description", "Context");
-        assert_eq!(text, "Title\n\nDescription\n\nContext");
+        let text = prepare_problem_text("Title", "Description");
+        assert_eq!(text, "Title\n\nDescription");
     }
 
     #[test]
     fn test_prepare_solution_text() {
-        let text = prepare_solution_text("Title", "Approach", "Tradeoffs");
-        assert_eq!(text, "Title\n\nApproach\n\nTradeoffs");
+        let text = prepare_solution_text("Title", "Approach");
+        assert_eq!(text, "Title\n\nApproach");
     }
 
     #[test]
     fn test_prepare_critique_text() {
-        let text = prepare_critique_text("Title", "Argument", "Evidence");
-        assert_eq!(text, "Title\n\nArgument\n\nEvidence");
+        let text = prepare_critique_text("Title", "Argument");
+        assert_eq!(text, "Title\n\nArgument");
     }
 
     #[test]

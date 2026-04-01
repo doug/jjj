@@ -347,10 +347,6 @@ pub enum ProblemAction {
         #[arg(long, short = 'f')]
         force: bool,
 
-        /// Initial context for the problem (why is this hard / background)
-        #[arg(long)]
-        context: Option<String>,
-
         /// Comma-separated tags (e.g., --tags backend,auth,size:L)
         #[arg(long, value_delimiter = ',')]
         tags: Vec<String>,

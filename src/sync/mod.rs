@@ -188,7 +188,10 @@ pub fn thread_to_critique(
     }
 
     if thread.is_outdated {
-        critique.evidence = "Note: this comment is on an outdated diff hunk.".to_string();
+        critique.argument = format!(
+            "{}\n\nNote: this comment is on an outdated diff hunk.",
+            critique.argument
+        );
     }
 
     critique
@@ -328,11 +331,11 @@ mod tests {
         assert_eq!(critique.file_path, Some("src/auth.rs".to_string()));
         assert_eq!(critique.line_start, Some(42));
         assert_eq!(critique.github_review_id, Some(99001));
-        assert!(critique.evidence.is_empty());
+        assert!(!critique.argument.contains("outdated"));
     }
 
     #[test]
-    fn test_thread_to_critique_outdated_adds_evidence() {
+    fn test_thread_to_critique_outdated_adds_note() {
         let thread = ReviewThread {
             comment_id: 99002,
             author: "bob".to_string(),
@@ -345,7 +348,7 @@ mod tests {
 
         let critique = thread_to_critique(&thread, "S-20", "C-300".to_string());
 
-        assert!(critique.evidence.contains("outdated"));
+        assert!(critique.argument.contains("outdated"));
     }
 
     #[test]

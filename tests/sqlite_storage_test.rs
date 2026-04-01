@@ -28,7 +28,6 @@ fn test_full_sync_cycle() {
         created_at: Utc::now(),
         updated_at: Utc::now(),
         description: "Test description".to_string(),
-        context: "".to_string(),
         dissolved_reason: None,
         solution_ids: vec![],
         child_ids: vec![],
@@ -50,7 +49,6 @@ fn test_full_sync_cycle() {
         created_at: Utc::now(),
         updated_at: Utc::now(),
         approach: "Do the thing".to_string(),
-        tradeoffs: "".to_string(),
         critique_ids: vec![],
         github_pr: None,
         github_branch: None,
@@ -109,7 +107,6 @@ fn test_validation_catches_invalid_refs() {
         created_at: Utc::now(),
         updated_at: Utc::now(),
         approach: "".to_string(),
-        tradeoffs: "".to_string(),
         critique_ids: vec![],
         github_pr: None,
         github_branch: None,
@@ -181,7 +178,6 @@ fn test_problem_roundtrip() {
         created_at: now,
         updated_at: now,
         description: "Detailed description of the problem".to_string(),
-        context: "Why this is difficult".to_string(),
         dissolved_reason: None,
         solution_ids: vec!["s1".to_string(), "s2".to_string()],
         child_ids: vec!["p2".to_string()],
@@ -201,7 +197,6 @@ fn test_problem_roundtrip() {
     assert_eq!(loaded.priority, Priority::Critical);
     assert_eq!(loaded.assignee, Some("bob".to_string()));
     assert_eq!(loaded.description, "Detailed description of the problem");
-    assert_eq!(loaded.context, "Why this is difficult");
 }
 
 /// Test that search respects entity type filter.

@@ -32,9 +32,15 @@ pub fn issue_to_problem(json: &serde_json::Value, number: u64) -> Result<Problem
         }
     }
 
-    // Map author to assignee context
+    // Append import provenance to description
     if let Some(author) = json["author"]["login"].as_str() {
-        problem.context = format!("Imported from GitHub issue #{} by @{}", number, author);
+        if !problem.description.is_empty() {
+            problem.description.push_str("\n\n");
+        }
+        problem.description.push_str(&format!(
+            "Imported from GitHub issue #{} by @{}",
+            number, author
+        ));
     }
 
     Ok(problem)
@@ -46,12 +52,6 @@ pub fn problem_to_issue_body(problem: &Problem) -> String {
 
     if !problem.description.is_empty() {
         body.push_str(&problem.description);
-        body.push_str("\n\n");
-    }
-
-    if !problem.context.is_empty() {
-        body.push_str("## Context\n\n");
-        body.push_str(&problem.context);
         body.push_str("\n\n");
     }
 
@@ -80,12 +80,6 @@ pub fn format_pr_body(
     if !solution.approach.is_empty() {
         body.push_str("## Approach\n\n");
         body.push_str(&solution.approach);
-        body.push_str("\n\n");
-    }
-
-    if !solution.tradeoffs.is_empty() {
-        body.push_str("## Trade-offs\n\n");
-        body.push_str(&solution.tradeoffs);
         body.push_str("\n\n");
     }
 
@@ -258,13 +252,12 @@ mod tests {
         let problem = issue_to_problem(&issue, 42).unwrap();
 
         assert_eq!(problem.title, "Login fails when session expires");
-        assert_eq!(
-            problem.description,
-            "Users are logged out unexpectedly after 30 minutes."
-        );
+        assert!(problem
+            .description
+            .starts_with("Users are logged out unexpectedly after 30 minutes."));
         assert_eq!(problem.github_issue, Some(42));
-        assert!(problem.context.contains("#42"));
-        assert!(problem.context.contains("@octocat"));
+        assert!(problem.description.contains("#42"));
+        assert!(problem.description.contains("@octocat"));
         // No priority label, so default Medium
         assert_eq!(problem.priority, Priority::Medium);
         assert_eq!(problem.status, ProblemStatus::Open);
@@ -365,7 +358,7 @@ mod tests {
             "author": { "login": "frank" }
         });
         let p = issue_to_problem(&issue, 5).unwrap();
-        assert_eq!(p.description, "");
+        assert!(p.description.contains("Imported from GitHub issue #5"));
     }
 
     #[test]
@@ -376,23 +369,22 @@ mod tests {
             "labels": []
         });
         let p = issue_to_problem(&issue, 7).unwrap();
-        // Without an author, context should not mention @
-        assert!(!p.context.contains("@"));
+        // Without an author, description should not mention @
+        assert!(!p.description.contains("@"));
     }
 
     // ── problem_to_issue_body ─────────────────────────────────────────
 
     #[test]
-    fn test_problem_to_issue_body_with_description_and_context() {
+    fn test_problem_to_issue_body_with_description() {
         let mut problem = Problem::new("P-100".to_string(), "Auth tokens expire".to_string());
-        problem.description = "Tokens expire after 15 min causing UX friction.".to_string();
-        problem.context = "Reported by enterprise customers on SSO plan.".to_string();
+        problem.description =
+            "Tokens expire after 15 min causing UX friction.\n\nReported by enterprise customers on SSO plan.".to_string();
         problem.priority = Priority::High;
 
         let body = problem_to_issue_body(&problem);
 
         assert!(body.contains("Tokens expire after 15 min causing UX friction."));
-        assert!(body.contains("## Context"));
         assert!(body.contains("Reported by enterprise customers on SSO plan."));
         assert!(body.contains("high"));
         assert!(body.contains("open"));
@@ -434,7 +426,6 @@ mod tests {
             "P-1".to_string(),
         );
         solution.approach = "Use Redis as a read-through cache.".to_string();
-        solution.tradeoffs = "Adds operational complexity of running Redis.".to_string();
 
         let critique = Critique::new(
             "C-1".to_string(),
@@ -448,8 +439,6 @@ mod tests {
         assert!(body.contains("Closes #42"));
         assert!(body.contains("## Approach"));
         assert!(body.contains("Use Redis as a read-through cache."));
-        assert!(body.contains("## Trade-offs"));
-        assert!(body.contains("Adds operational complexity of running Redis."));
         assert!(body.contains("## Open Critiques"));
         assert!(body.contains("Cache invalidation is error-prone"));
         assert!(body.contains("Synced from jjj"));

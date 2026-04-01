@@ -66,7 +66,7 @@ pub fn search(
     if should_search("problem") {
         let fts_query = format!("entity_type:problem AND ({})", sanitized_query);
         let mut stmt = conn.prepare(
-            "SELECT p.id, p.title, p.description, p.context
+            "SELECT p.id, p.title, p.description
              FROM problems p
              WHERE p.id IN (
                  SELECT entity_id FROM fts WHERE fts MATCH ?1
@@ -77,9 +77,8 @@ pub fn search(
             let id: String = row.get(0)?;
             let title: String = row.get(1)?;
             let description: String = row.get::<_, Option<String>>(2)?.unwrap_or_default();
-            let context: String = row.get::<_, Option<String>>(3)?.unwrap_or_default();
 
-            let snippet = create_snippet(&description, &context, &title, query);
+            let snippet = create_snippet(&description, "", &title, query);
 
             Ok(SearchResult {
                 entity_type: "problem".to_string(),
@@ -98,7 +97,7 @@ pub fn search(
     if should_search("solution") {
         let fts_query = format!("entity_type:solution AND ({})", sanitized_query);
         let mut stmt = conn.prepare(
-            "SELECT s.id, s.title, s.approach, s.tradeoffs
+            "SELECT s.id, s.title, s.approach
              FROM solutions s
              WHERE s.id IN (
                  SELECT entity_id FROM fts WHERE fts MATCH ?1
@@ -109,9 +108,8 @@ pub fn search(
             let id: String = row.get(0)?;
             let title: String = row.get(1)?;
             let approach: String = row.get::<_, Option<String>>(2)?.unwrap_or_default();
-            let tradeoffs: String = row.get::<_, Option<String>>(3)?.unwrap_or_default();
 
-            let snippet = create_snippet(&approach, &tradeoffs, &title, query);
+            let snippet = create_snippet(&approach, "", &title, query);
 
             Ok(SearchResult {
                 entity_type: "solution".to_string(),

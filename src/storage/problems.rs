@@ -42,7 +42,6 @@ impl MetadataStore {
             created_at: frontmatter.created_at,
             updated_at: frontmatter.updated_at,
             description: body,
-            context: frontmatter.context,
             dissolved_reason: frontmatter.dissolved_reason,
             github_issue: frontmatter.github_issue,
             tags: frontmatter.tags,
