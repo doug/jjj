@@ -128,7 +128,7 @@ pub fn search(
     if should_search("critique") {
         let fts_query = format!("entity_type:critique AND ({})", sanitized_query);
         let mut stmt = conn.prepare(
-            "SELECT c.id, c.title, c.body
+            "SELECT c.id, c.title, c.argument
              FROM critiques c
              WHERE c.id IN (
                  SELECT entity_id FROM fts WHERE fts MATCH ?1
@@ -138,9 +138,9 @@ pub fn search(
         let rows = stmt.query_map(params![fts_query], |row| {
             let id: String = row.get(0)?;
             let title: String = row.get(1)?;
-            let body: String = row.get::<_, Option<String>>(2)?.unwrap_or_default();
+            let argument: String = row.get::<_, Option<String>>(2)?.unwrap_or_default();
 
-            let snippet = create_snippet(&body, "", &title, query);
+            let snippet = create_snippet(&argument, "", &title, query);
 
             Ok(SearchResult {
                 entity_type: "critique".to_string(),

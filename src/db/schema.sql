@@ -1,4 +1,4 @@
--- jjj SQLite schema v1
+-- jjj SQLite schema v9
 -- Runtime cache for fast queries and full-text search
 
 -- Meta table for schema versioning and sync state
@@ -20,7 +20,6 @@ CREATE TABLE IF NOT EXISTS problems (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     description TEXT DEFAULT '',
-    context TEXT DEFAULT '',
     dissolved_reason TEXT,
     github_issue INTEGER,
     tags TEXT DEFAULT '[]',
@@ -41,7 +40,6 @@ CREATE TABLE IF NOT EXISTS solutions (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     approach TEXT DEFAULT '',
-    tradeoffs TEXT DEFAULT '',
     github_pr INTEGER,
     github_branch TEXT,
     tags TEXT DEFAULT '[]',
@@ -62,9 +60,7 @@ CREATE TABLE IF NOT EXISTS critiques (
     line_number INTEGER,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    body TEXT DEFAULT '',
     argument TEXT DEFAULT '',
-    evidence TEXT DEFAULT '',
     replies TEXT DEFAULT '[]',  -- JSON array
     github_review_id INTEGER,
     FOREIGN KEY (solution_id) REFERENCES solutions(id)

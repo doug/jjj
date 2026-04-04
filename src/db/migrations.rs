@@ -111,6 +111,12 @@ pub fn all_migrations() -> Vec<Migration> {
                 Ok(())
             },
         },
+        Migration {
+            version: 9,
+            description: "Remove dead columns: problems.context, solutions.tradeoffs, critiques.body, critiques.evidence",
+            requires_rebuild: true,
+            up: |_conn| Ok(()),
+        },
     ]
 }
 

@@ -698,12 +698,17 @@ fn sync_reopen(
 }
 
 /// Push local state to GitHub: refresh PR bodies and reconcile issue open/closed state.
+///
+/// Each GitHub API call is attempted independently so that a single failure does not
+/// prevent subsequent operations. On completion, a summary of succeeded/failed
+/// operations is printed so the user can manually reconcile any divergence.
 fn sync_push(ctx: &CommandContext, provider: &GitHubProvider, dry_run: bool) -> Result<()> {
     use crate::models::ProblemStatus;
     let solutions = ctx.store.list_solutions()?;
     let problems = ctx.store.list_problems()?;
 
-    let mut any_output = false;
+    let mut succeeded: Vec<String> = Vec::new();
+    let mut failed: Vec<String> = Vec::new();
 
     // 1. Refresh PR bodies for solutions with a linked PR
     for solution in &solutions {
@@ -722,7 +727,7 @@ fn sync_push(ctx: &CommandContext, provider: &GitHubProvider, dry_run: bool) -> 
 
         if dry_run {
             println!("Would update PR #{}: {}", pr_number, solution.title);
-            any_output = true;
+            succeeded.push(format!("PR #{} (dry run)", pr_number));
             continue;
         }
 
@@ -734,9 +739,16 @@ fn sync_push(ctx: &CommandContext, provider: &GitHubProvider, dry_run: bool) -> 
             _ => {}
         }
 
-        provider.update_pr_body(pr_number, solution, problem, &critiques)?;
-        println!("Updated PR #{}: {}", pr_number, solution.title);
-        any_output = true;
+        match provider.update_pr_body(pr_number, solution, problem, &critiques) {
+            Ok(()) => {
+                println!("Updated PR #{}: {}", pr_number, solution.title);
+                succeeded.push(format!("update PR #{}", pr_number));
+            }
+            Err(e) => {
+                eprintln!("  Error: failed to update PR #{}: {}", pr_number, e);
+                failed.push(format!("update PR #{}: {}", pr_number, e));
+            }
+        }
     }
 
     // 2. Reconcile issue open/closed state for problems with a linked issue
@@ -750,6 +762,7 @@ fn sync_push(ctx: &CommandContext, provider: &GitHubProvider, dry_run: bool) -> 
             Ok(s) => s,
             Err(e) => {
                 eprintln!("  Warning: could not check issue #{}: {}", issue_number, e);
+                failed.push(format!("check issue #{}: {}", issue_number, e));
                 continue;
             }
         };
@@ -766,14 +779,22 @@ fn sync_push(ctx: &CommandContext, provider: &GitHubProvider, dry_run: bool) -> 
                         "Would close issue #{} (problem {} is {})",
                         issue_number, problem.title, problem.status
                     );
+                    succeeded.push(format!("issue #{} (dry run)", issue_number));
                 } else {
-                    provider.close_issue(issue_number)?;
-                    println!(
-                        "Closed issue #{}: {} (problem is {})",
-                        issue_number, problem.title, problem.status
-                    );
+                    match provider.close_issue(issue_number) {
+                        Ok(()) => {
+                            println!(
+                                "Closed issue #{}: {} (problem is {})",
+                                issue_number, problem.title, problem.status
+                            );
+                            succeeded.push(format!("close issue #{}", issue_number));
+                        }
+                        Err(e) => {
+                            eprintln!("  Error: failed to close issue #{}: {}", issue_number, e);
+                            failed.push(format!("close issue #{}: {}", issue_number, e));
+                        }
+                    }
                 }
-                any_output = true;
             }
             (false, IssueStatus::Closed) => {
                 if dry_run {
@@ -781,21 +802,44 @@ fn sync_push(ctx: &CommandContext, provider: &GitHubProvider, dry_run: bool) -> 
                         "Would reopen issue #{} (problem {} is {})",
                         issue_number, problem.title, problem.status
                     );
+                    succeeded.push(format!("issue #{} (dry run)", issue_number));
                 } else {
-                    provider.reopen_issue(issue_number)?;
-                    println!(
-                        "Reopened issue #{}: {} (problem is {})",
-                        issue_number, problem.title, problem.status
-                    );
+                    match provider.reopen_issue(issue_number) {
+                        Ok(()) => {
+                            println!(
+                                "Reopened issue #{}: {} (problem is {})",
+                                issue_number, problem.title, problem.status
+                            );
+                            succeeded.push(format!("reopen issue #{}", issue_number));
+                        }
+                        Err(e) => {
+                            eprintln!("  Error: failed to reopen issue #{}: {}", issue_number, e);
+                            failed.push(format!("reopen issue #{}: {}", issue_number, e));
+                        }
+                    }
                 }
-                any_output = true;
             }
             _ => {} // Already in sync
         }
     }
 
-    if !any_output {
+    if succeeded.is_empty() && failed.is_empty() {
         println!("Nothing to push — GitHub is already up to date.");
+    } else if !failed.is_empty() {
+        eprintln!(
+            "\nSync completed with errors ({} succeeded, {} failed):",
+            succeeded.len(),
+            failed.len()
+        );
+        for f in &failed {
+            eprintln!("  FAILED: {}", f);
+        }
+        eprintln!("\nManually reconcile the failed operations above.");
+        return Err(JjjError::Validation(format!(
+            "{} of {} operation(s) failed during push — see errors above",
+            failed.len(),
+            succeeded.len() + failed.len()
+        )));
     }
 
     Ok(())
