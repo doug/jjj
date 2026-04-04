@@ -525,13 +525,15 @@ fn sync_status(ctx: &CommandContext, provider: &GitHubProvider) -> Result<()> {
     if !linked_problems.is_empty() {
         println!("\nLinked problems:");
         for p in &linked_problems {
-            println!(
-                "  p/{} — #{} — {} [{}]",
-                short_id(&p.id),
-                p.github_issue.unwrap(),
-                p.title,
-                p.status
-            );
+            if let Some(issue_num) = p.github_issue {
+                println!(
+                    "  p/{} — #{} — {} [{}]",
+                    short_id(&p.id),
+                    issue_num,
+                    p.title,
+                    p.status
+                );
+            }
         }
     }
 
@@ -542,13 +544,15 @@ fn sync_status(ctx: &CommandContext, provider: &GitHubProvider) -> Result<()> {
     if !linked_solutions.is_empty() {
         println!("\nLinked solutions:");
         for s in &linked_solutions {
-            println!(
-                "  s/{} — PR #{} — {} [{}]",
-                short_id(&s.id),
-                s.github_pr.unwrap(),
-                s.title,
-                s.status
-            );
+            if let Some(pr_num) = s.github_pr {
+                println!(
+                    "  s/{} — PR #{} — {} [{}]",
+                    short_id(&s.id),
+                    pr_num,
+                    s.title,
+                    s.status
+                );
+            }
         }
     }
 

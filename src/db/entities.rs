@@ -317,9 +317,9 @@ pub fn upsert_critique(conn: &Connection, critique: &Critique) -> SqliteResult<(
             critique.line_start.map(|n| n as i64),
             critique.created_at.to_rfc3339(),
             critique.updated_at.to_rfc3339(),
+            "", // body column (deprecated)
             critique.argument,
-            critique.argument,
-            "", // evidence column (deprecated, kept for schema compat)
+            "", // evidence column (deprecated)
             replies_json,
             critique.github_review_id.map(|n| n as i64),
         ],

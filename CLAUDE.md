@@ -59,7 +59,22 @@ config.toml
 events.jsonl
 ```
 
-Entity files use YAML frontmatter + markdown body.
+Entity files use YAML frontmatter + markdown body. Each entity has one free-form body field:
+- **Problem**: body = `description`
+- **Solution**: body = `approach`
+- **Critique**: body = `argument`
+- **Milestone**: body = `description`
+
+Previously separate fields (`context`, `tradeoffs`, `evidence`, `goals`, `success_criteria`) have been removed — all free-form content belongs in the body.
+
+### Ranking & Ordering
+Per-user ordering files in `rankings/{milestone_id}/{user}.json` store problem priority and vote allocations. The TUI provides:
+- **Tier sort** (Shift+K/J): move items to top/bottom of view for fast triage
+- **Bubble** (Ctrl+K/J): swap one position for fine adjustment
+- **Votes** (+/-): pin items to top/bottom zone with magnitude (quadratic cost)
+- **Drill** (Shift+H/L): zoom into a tier for recursive refinement
+
+List order = `[positive-voted by magnitude] [unvoted in tier order] [negative-voted by magnitude]`. Global ranking aggregates all users via Borda count + QV boost.
 
 ### Automation Rules
 Config-driven automation in `config.toml` fires actions on jjj events:
@@ -120,11 +135,19 @@ TUI (src/tui/)               # Ratatui-based interactive UI
 
 ## TUI Navigation
 
-- `Tab`: Switch between NextActions and ProjectTree panes
-- Arrow keys: Navigate within pane
-- `j/k`: Scroll detail pane
-- `Left/Right`: Collapse/expand tree nodes
-- `a/r/d`: Approve/Withdraw/Dismiss actions
+- `Tab`: Switch panes, `q`/`Ctrl+C`: quit
+- `j/k` or arrows: navigate tree / scroll detail
+- `h/l` or left/right: collapse/expand tree nodes
+- `Shift+K/J` or `Shift+Up/Down`: assign to top/bottom tier
+- `Ctrl+K/J` or `Ctrl+Up/Down`: bubble one position
+- `Shift+H/L` or `Shift+Left/Right`: drill into/out of tier
+- `+/-`: add/remove vote (pins to top/bottom zone)
+- `Ctrl+Z`: undo tier/vote change
+- `r`: toggle personal/global ordering view
+- `Space`: toggle selection (`✓`), `Ctrl+A`: select all
+- `n`: new item, `e`: edit title, `E`: open in editor
+- `a/d/s/o/u/v`: entity actions (approve, dismiss, solve, etc.)
+- `c`: cycle RAG confidence
 
 ### Events, Insights, and Timeline
 ```bash
