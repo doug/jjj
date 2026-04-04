@@ -60,7 +60,15 @@ pub(crate) fn parse_editor_content(
         }
     }
 
-    let title = fields.get("title").cloned().unwrap_or_default();
+    let title = fields
+        .get("title")
+        .cloned()
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    if title.is_empty() {
+        return Err("title is required".to_string());
+    }
 
     let tags: Vec<String> = fields
         .get("tags")
@@ -379,12 +387,8 @@ impl App {
                 let target_date = parsed.fields.get("target_date").and_then(|s| {
                     chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d")
                         .ok()
-                        .map(|d| {
-                            d.and_hms_opt(0, 0, 0)
-                                .unwrap()
-                                .and_local_timezone(chrono::Utc)
-                                .unwrap()
-                        })
+                        .and_then(|d| d.and_hms_opt(0, 0, 0))
+                        .and_then(|dt| dt.and_local_timezone(chrono::Utc).single())
                 });
 
                 self.store

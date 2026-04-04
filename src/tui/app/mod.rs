@@ -292,12 +292,29 @@ impl App {
 
         let user = store.jj_client.user_identity().unwrap_or_default();
 
-        // Load personal orderings for the current user
+        // Load personal orderings for the current user, syncing with current problem list
         let mut personal_orderings = HashMap::new();
         for milestone in &data.milestones {
-            if let Ok(Some(ord)) =
+            if let Ok(Some(mut ord)) =
                 ordering::load_user_ordering(store.meta_path(), &milestone.id, &user)
             {
+                // Sync: append new problems, remove stale ones
+                let current_ids: Vec<String> = data
+                    .problems
+                    .iter()
+                    .filter(|p| p.milestone_id.as_deref() == Some(&milestone.id))
+                    .map(|p| p.id.clone())
+                    .collect();
+                let existing: std::collections::HashSet<String> =
+                    ord.order.iter().cloned().collect();
+                for id in &current_ids {
+                    if !existing.contains(id) {
+                        ord.order.push(id.clone());
+                    }
+                }
+                let current_set: std::collections::HashSet<&str> =
+                    current_ids.iter().map(|s| s.as_str()).collect();
+                ord.order.retain(|id| current_set.contains(id.as_str()));
                 personal_orderings.insert(milestone.id.clone(), ord);
             }
         }

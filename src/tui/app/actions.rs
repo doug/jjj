@@ -1502,6 +1502,7 @@ impl App {
 
             let view_size = view_end.saturating_sub(view_start);
             if view_size < 2 {
+                self.show_flash("Too few items to reorder");
                 return Ok(());
             }
 
