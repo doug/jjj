@@ -17,6 +17,11 @@ impl CommandContext {
         Ok(Self { store })
     }
 
+    /// Wrap an existing MetadataStore in a CommandContext.
+    pub fn from_store(store: MetadataStore) -> Self {
+        Self { store }
+    }
+
     /// Get a reference to the JJ client.
     pub fn jj(&self) -> &JjClient {
         &self.store.jj_client

@@ -7,8 +7,8 @@
 
 use std::collections::HashMap;
 
-use crate::context::CommandContext;
 use crate::models::{AutomationAction, AutomationRule, Event, EventType};
+use crate::storage::MetadataStore;
 
 /// Result of executing a single automation rule.
 #[derive(Debug)]
@@ -105,8 +105,8 @@ fn execute_shell(rule: &AutomationRule, auto_ctx: &AutomationContext) -> Automat
 ///
 /// Called from command handlers after recording the event.
 /// Failures print warnings but never block the primary operation.
-pub fn run(ctx: &CommandContext, event: &Event, entity_id: &str) {
-    let config = match ctx.store.load_config() {
+pub fn run(store: &MetadataStore, event: &Event, entity_id: &str) {
+    let config = match store.load_config() {
         Ok(c) => c,
         Err(e) => {
             eprintln!("Warning: automation disabled (config error: {})", e);
@@ -129,12 +129,12 @@ pub fn run(ctx: &CommandContext, event: &Event, entity_id: &str) {
     }
 
     // Try to populate entity-specific vars by loading from store
-    populate_entity_vars(ctx, &event.event_type, entity_id, &mut auto_ctx);
+    populate_entity_vars(store, &event.event_type, entity_id, &mut auto_ctx);
 
     for rule in matching_rules(&config.automation, &event.event_type) {
         let result = match rule.action {
             AutomationAction::Shell => execute_shell(rule, &auto_ctx),
-            _ => execute_builtin(ctx, rule, entity_id),
+            _ => execute_builtin(store, rule, entity_id),
         };
 
         match result {
@@ -149,7 +149,7 @@ pub fn run(ctx: &CommandContext, event: &Event, entity_id: &str) {
 
 /// Populate template variables from the entity that triggered the event.
 fn populate_entity_vars(
-    ctx: &CommandContext,
+    store: &MetadataStore,
     event_type: &EventType,
     entity_id: &str,
     auto_ctx: &mut AutomationContext,
@@ -159,7 +159,7 @@ fn populate_entity_vars(
         | EventType::ProblemSolved
         | EventType::ProblemDissolved
         | EventType::ProblemReopened => {
-            if let Ok(problem) = ctx.store.load_problem(entity_id) {
+            if let Ok(problem) = store.load_problem(entity_id) {
                 auto_ctx.set("title", &problem.title);
                 auto_ctx.set("type", "problem");
                 if let Some(n) = problem.github_issue {
@@ -171,13 +171,13 @@ fn populate_entity_vars(
         | EventType::SolutionSubmitted
         | EventType::SolutionApproved
         | EventType::SolutionWithdrawn => {
-            if let Ok(solution) = ctx.store.load_solution(entity_id) {
+            if let Ok(solution) = store.load_solution(entity_id) {
                 auto_ctx.set("title", &solution.title);
                 auto_ctx.set("type", "solution");
                 if let Some(n) = solution.github_pr {
                     auto_ctx.set("pr_number", &n.to_string());
                 }
-                if let Ok(problem) = ctx.store.load_problem(&solution.problem_id) {
+                if let Ok(problem) = store.load_problem(&solution.problem_id) {
                     auto_ctx.set("problem.title", &problem.title);
                     if let Some(n) = problem.github_issue {
                         auto_ctx.set("issue_number", &n.to_string());
@@ -190,15 +190,15 @@ fn populate_entity_vars(
         | EventType::CritiqueDismissed
         | EventType::CritiqueValidated
         | EventType::CritiqueReplied => {
-            if let Ok(critique) = ctx.store.load_critique(entity_id) {
+            if let Ok(critique) = store.load_critique(entity_id) {
                 auto_ctx.set("title", &critique.title);
                 auto_ctx.set("type", "critique");
-                if let Ok(solution) = ctx.store.load_solution(&critique.solution_id) {
+                if let Ok(solution) = store.load_solution(&critique.solution_id) {
                     auto_ctx.set("solution.title", &solution.title);
                     if let Some(n) = solution.github_pr {
                         auto_ctx.set("pr_number", &n.to_string());
                     }
-                    if let Ok(problem) = ctx.store.load_problem(&solution.problem_id) {
+                    if let Ok(problem) = store.load_problem(&solution.problem_id) {
                         auto_ctx.set("problem.title", &problem.title);
                     }
                 }
@@ -219,7 +219,7 @@ fn populate_entity_vars(
 
 /// Execute a built-in GitHub action.
 fn execute_builtin(
-    ctx: &CommandContext,
+    store: &MetadataStore,
     rule: &AutomationRule,
     entity_id: &str,
 ) -> AutomationResult {
@@ -227,41 +227,41 @@ fn execute_builtin(
 
     match rule.action {
         AutomationAction::GithubIssue => {
-            let mut problem = match ctx.store.load_problem(entity_id) {
+            let mut problem = match store.load_problem(entity_id) {
                 Ok(p) => p,
                 Err(e) => return AutomationResult::Failure(e.to_string()),
             };
-            match hooks::do_create_issue(ctx, &mut problem) {
+            match hooks::do_create_issue(store, &mut problem) {
                 Ok(()) => AutomationResult::Success("created GitHub issue".to_string()),
                 Err(e) => AutomationResult::Failure(e.to_string()),
             }
         }
         AutomationAction::GithubClose => {
-            let problem = match ctx.store.load_problem(entity_id) {
+            let problem = match store.load_problem(entity_id) {
                 Ok(p) => p,
                 Err(e) => return AutomationResult::Failure(e.to_string()),
             };
-            match hooks::do_close_issue(ctx, &problem) {
+            match hooks::do_close_issue(store, &problem) {
                 Ok(()) => AutomationResult::Success("closed GitHub issue".to_string()),
                 Err(e) => AutomationResult::Failure(e.to_string()),
             }
         }
         AutomationAction::GithubPr => {
-            let mut solution = match ctx.store.load_solution(entity_id) {
+            let mut solution = match store.load_solution(entity_id) {
                 Ok(s) => s,
                 Err(e) => return AutomationResult::Failure(e.to_string()),
             };
-            match hooks::do_create_or_update_pr(ctx, &mut solution) {
+            match hooks::do_create_or_update_pr(store, &mut solution) {
                 Ok(()) => AutomationResult::Success("created/updated GitHub PR".to_string()),
                 Err(e) => AutomationResult::Failure(e.to_string()),
             }
         }
         AutomationAction::GithubMerge => {
-            let solution = match ctx.store.load_solution(entity_id) {
+            let solution = match store.load_solution(entity_id) {
                 Ok(s) => s,
                 Err(e) => return AutomationResult::Failure(e.to_string()),
             };
-            match hooks::do_merge_pr(ctx, &solution) {
+            match hooks::do_merge_pr(store, &solution) {
                 Ok(()) => AutomationResult::Success("merged GitHub PR".to_string()),
                 Err(e) => AutomationResult::Failure(e.to_string()),
             }

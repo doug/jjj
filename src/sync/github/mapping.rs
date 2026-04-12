@@ -477,14 +477,14 @@ mod tests {
             "Already addressed".to_string(),
             "S-3".to_string(),
         );
-        addressed.address();
+        addressed.address().unwrap();
 
         let mut dismissed = Critique::new(
             "C-3".to_string(),
             "Not relevant".to_string(),
             "S-3".to_string(),
         );
-        dismissed.dismiss();
+        dismissed.dismiss().unwrap();
 
         let body = format_pr_body(&solution, &problem, &[addressed, dismissed]);
 

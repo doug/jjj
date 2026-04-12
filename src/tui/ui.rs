@@ -521,17 +521,20 @@ fn draw_input_line(f: &mut Frame, prompt: &str, buffer: &str, cursor_pos: usize,
 
     let prompt_span = Span::styled(prompt, Style::default().fg(Color::Yellow));
 
-    let clamped_pos = cursor_pos.min(buffer.len());
-    let before_cursor = &buffer[..clamped_pos];
-    let after_cursor = if clamped_pos < buffer.len() {
-        &buffer[clamped_pos + 1..]
+    // cursor_pos is a char index — convert to byte offset for slicing
+    let char_count = buffer.chars().count();
+    let clamped_char = cursor_pos.min(char_count);
+    let byte_pos = buffer
+        .char_indices()
+        .nth(clamped_char)
+        .map_or(buffer.len(), |(i, _)| i);
+    let before_cursor = &buffer[..byte_pos];
+    let (cursor_char, after_cursor) = if clamped_char < char_count {
+        let ch = buffer[byte_pos..].chars().next().unwrap();
+        let next_byte = byte_pos + ch.len_utf8();
+        (&buffer[byte_pos..next_byte], &buffer[next_byte..])
     } else {
-        ""
-    };
-    let cursor_char = if clamped_pos < buffer.len() {
-        &buffer[clamped_pos..clamped_pos + 1]
-    } else {
-        "█"
+        ("█", "")
     };
 
     let before_span = Span::styled(

@@ -15,6 +15,7 @@ pub mod commands;
 pub mod context;
 pub mod db;
 pub mod display;
+pub mod domain;
 pub mod embeddings;
 pub mod error;
 pub mod id;

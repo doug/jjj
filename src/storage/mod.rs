@@ -256,7 +256,7 @@ impl MetadataStore {
 
         let config_path = self.meta_path.join(CONFIG_FILE);
         let content = toml::to_string_pretty(config)?;
-        fs::write(config_path, content)?;
+        atomic_write(&config_path, content.as_bytes())?;
 
         Ok(())
     }
@@ -367,7 +367,13 @@ impl MetadataStore {
             } else {
                 let lines: String = pending
                     .drain(..)
-                    .filter_map(|e| e.to_commit_suffix().ok())
+                    .filter_map(|e| match e.to_commit_suffix() {
+                        Ok(line) => Some(line),
+                        Err(err) => {
+                            eprintln!("Warning: failed to serialize event: {}", err);
+                            None
+                        }
+                    })
                     .collect::<Vec<_>>()
                     .join("\n");
                 format!("\n\n{}", lines)

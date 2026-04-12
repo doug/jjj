@@ -2,7 +2,7 @@ use super::super::next_actions::EntityType;
 use super::{App, InputAction, InputMode};
 use crate::display::short_id;
 use crate::error::Result;
-use crate::models::{CritiqueStatus, Event, EventExtra, EventType, ProblemStatus};
+
 
 /// Target tier for tertiary sort assignment.
 enum Tier {
@@ -210,7 +210,7 @@ impl App {
                 return Ok(());
             };
 
-        let cursor_pos = current_title.len();
+        let cursor_pos = current_title.chars().count();
         self.ui.input_mode = InputMode::Input {
             prompt,
             buffer: current_title,
@@ -254,7 +254,7 @@ impl App {
                 return Ok(());
             };
 
-        let cursor_pos = current_tags.len();
+        let cursor_pos = current_tags.chars().count();
         self.ui.input_mode = InputMode::Input {
             prompt,
             buffer: current_tags,
@@ -419,11 +419,17 @@ impl App {
             }
         }
 
-        // Batch mode
+        // Batch mode — collect events to fire automation after commit
+        use crate::models::{Event, EventType};
         let mut dismissed = 0usize;
         let mut withdrawn = 0usize;
         let mut dissolved = 0usize;
         let mut cancelled = 0usize;
+        let mut batch_events: Vec<(Event, String)> = Vec::new();
+        let user = self
+            .store
+            .get_current_user()
+            .unwrap_or_else(|_| "unknown".to_string());
 
         self.store
             .with_metadata(&format!("Batch decline {} items", targets.len()), || {
@@ -431,8 +437,16 @@ impl App {
                     match entity_type {
                         EntityType::Critique => {
                             if let Ok(mut critique) = self.store.load_critique(id) {
-                                critique.dismiss();
-                                if self.store.save_critique(&critique).is_ok() {
+                                if critique.dismiss().is_ok()
+                                    && self.store.save_critique(&critique).is_ok()
+                                {
+                                    let event = Event::new(
+                                        EventType::CritiqueDismissed,
+                                        id.clone(),
+                                        user.clone(),
+                                    );
+                                    self.store.set_pending_event(event.clone());
+                                    batch_events.push((event, id.clone()));
                                     dismissed += 1;
                                 }
                             }
@@ -444,6 +458,13 @@ impl App {
                                     continue;
                                 }
                                 if self.store.save_solution(&solution).is_ok() {
+                                    let event = Event::new(
+                                        EventType::SolutionWithdrawn,
+                                        id.clone(),
+                                        user.clone(),
+                                    );
+                                    self.store.set_pending_event(event.clone());
+                                    batch_events.push((event, id.clone()));
                                     withdrawn += 1;
                                 }
                             }
@@ -456,6 +477,13 @@ impl App {
                                 ) {
                                     problem.dissolve("Batch dissolved".to_string());
                                     if self.store.save_problem(&problem).is_ok() {
+                                        let event = Event::new(
+                                            EventType::ProblemDissolved,
+                                            id.clone(),
+                                            user.clone(),
+                                        );
+                                        self.store.set_pending_event(event.clone());
+                                        batch_events.push((event, id.clone()));
                                         dissolved += 1;
                                     }
                                 }
@@ -473,6 +501,11 @@ impl App {
                 }
                 Ok(())
             })?;
+
+        // Fire automation for each batch event
+        for (event, entity_id) in &batch_events {
+            crate::automation::run(&self.store, event, entity_id);
+        }
 
         let mut parts = Vec::new();
         if dismissed > 0 {
@@ -497,7 +530,7 @@ impl App {
     }
 
     pub(super) fn handle_action_s(&mut self) -> Result<()> {
-        use crate::models::{MilestoneStatus, ProblemStatus};
+        use crate::models::{Event, EventType, MilestoneStatus, ProblemStatus};
 
         let targets = self.action_targets();
         if targets.is_empty() {
@@ -507,6 +540,11 @@ impl App {
         let mut solved = 0usize;
         let mut completed = 0usize;
         let mut errors = Vec::new();
+        let mut batch_events: Vec<(Event, String)> = Vec::new();
+        let user = self
+            .store
+            .get_current_user()
+            .unwrap_or_else(|_| "unknown".to_string());
 
         self.store.with_metadata(
             &format!("Batch solve/complete {} items", targets.len()),
@@ -515,11 +553,26 @@ impl App {
                     match entity_type {
                         EntityType::Problem => {
                             match (|| -> crate::error::Result<()> {
+                                let (can_solve, message) =
+                                    self.store.can_solve_problem(id)?;
+                                if !can_solve {
+                                    return Err(crate::error::JjjError::CannotSolveProblem(
+                                        message,
+                                    ));
+                                }
                                 let mut problem = self.store.load_problem(id)?;
                                 problem
                                     .try_set_status(ProblemStatus::Solved)
                                     .map_err(crate::error::JjjError::Validation)?;
-                                self.store.save_problem(&problem)
+                                self.store.save_problem(&problem)?;
+                                let event = Event::new(
+                                    EventType::ProblemSolved,
+                                    id.clone(),
+                                    user.clone(),
+                                );
+                                self.store.set_pending_event(event.clone());
+                                batch_events.push((event, id.clone()));
+                                Ok(())
                             })() {
                                 Ok(_) => solved += 1,
                                 Err(e) => errors.push(format!("{}: {}", short_id(id), e)),
@@ -542,6 +595,11 @@ impl App {
             },
         )?;
 
+        // Fire automation for each batch event
+        for (event, entity_id) in &batch_events {
+            crate::automation::run(&self.store, event, entity_id);
+        }
+
         // Build flash message
         let mut parts = Vec::new();
         if solved > 0 {
@@ -563,21 +621,13 @@ impl App {
     }
 
     pub(super) fn handle_action_o(&mut self) -> Result<()> {
-        use crate::models::{MilestoneStatus, ProblemStatus};
+        use crate::models::MilestoneStatus;
 
         if let Some((id, entity_type)) = self.get_selected_entity() {
             match entity_type {
                 EntityType::Problem => {
                     let id_clone = id.clone();
-                    match self
-                        .store
-                        .with_metadata(&format!("Reopen problem {}", id), || {
-                            let mut problem = self.store.load_problem(&id)?;
-                            problem
-                                .try_set_status(ProblemStatus::Open)
-                                .map_err(crate::error::JjjError::Validation)?;
-                            self.store.save_problem(&problem)
-                        }) {
+                    match crate::domain::reopen_problem(&self.store, &id) {
                         Ok(_) => {
                             self.show_flash(&format!("{} reopened", id_clone));
                             self.refresh_data()?;
@@ -615,13 +665,7 @@ impl App {
         if let Some((id, entity_type)) = self.get_selected_entity() {
             if entity_type == EntityType::Critique {
                 let id_clone = id.clone();
-                match self
-                    .store
-                    .with_metadata(&format!("Validate critique {}", id), || {
-                        let mut critique = self.store.load_critique(&id)?;
-                        critique.validate();
-                        self.store.save_critique(&critique)
-                    }) {
+                match crate::domain::validate_critique(&self.store, &id) {
                     Ok(_) => {
                         self.show_flash(&format!("{} validated", id_clone));
                         self.refresh_data()?;
@@ -636,60 +680,8 @@ impl App {
     }
 
     fn approve_solution(&mut self, solution_id: &str) -> Result<()> {
-        // Block if there are open or valid critiques
-        let blocking_critiques = self
-            .store
-            .list_critiques()
-            .unwrap_or_default()
-            .into_iter()
-            .filter(|c| {
-                c.solution_id == solution_id
-                    && matches!(c.status, CritiqueStatus::Open | CritiqueStatus::Valid)
-            })
-            .count();
-        if blocking_critiques > 0 {
-            self.show_flash(&format!(
-                "Blocked: {} unresolved critique(s) must be addressed first",
-                blocking_critiques
-            ));
-            return Ok(());
-        }
-
         let id = solution_id.to_string();
-        let user = self
-            .store
-            .get_current_user()
-            .unwrap_or_else(|_| "unknown".to_string());
-        match self
-            .store
-            .with_metadata(&format!("Approve solution {}", solution_id), || {
-                let event = Event::new(
-                    EventType::SolutionApproved,
-                    solution_id.to_string(),
-                    user.clone(),
-                );
-                self.store.set_pending_event(event.clone());
-                let mut solution = self.store.load_solution(solution_id)?;
-                solution
-                    .approve()
-                    .map_err(crate::error::JjjError::Validation)?;
-                self.store.save_solution(&solution)?;
-                // Auto-solve problem
-                let (can_solve, _) = self.store.can_solve_problem(&solution.problem_id)?;
-                if can_solve {
-                    let mut problem = self.store.load_problem(&solution.problem_id)?;
-                    if problem.status != ProblemStatus::Solved {
-                        problem
-                            .try_set_status(ProblemStatus::Solved)
-                            .map_err(crate::error::JjjError::Validation)?;
-                        self.store.save_problem(&problem)?;
-                        let solve_event =
-                            Event::new(EventType::ProblemSolved, problem.id.clone(), user.clone());
-                        self.store.set_pending_event(solve_event);
-                    }
-                }
-                Ok(())
-            }) {
+        match crate::domain::approve_solution(&self.store, solution_id, false, None) {
             Ok(_) => {
                 self.show_flash(&format!("{} approved", id));
                 self.refresh_data()?;
@@ -703,16 +695,7 @@ impl App {
 
     fn withdraw_solution(&mut self, solution_id: &str) -> Result<()> {
         let id = solution_id.to_string();
-        match self
-            .store
-            .with_metadata(&format!("Withdraw solution {}", solution_id), || {
-                let mut solution = self.store.load_solution(solution_id)?;
-                solution
-                    .withdraw()
-                    .map_err(crate::error::JjjError::Validation)?;
-                self.store.save_solution(&solution)?;
-                Ok(())
-            }) {
+        match crate::domain::withdraw_solution(&self.store, solution_id, None) {
             Ok(_) => {
                 self.show_flash(&format!("{} withdrawn", id));
                 self.refresh_data()?;
@@ -726,39 +709,7 @@ impl App {
 
     fn submit_solution(&mut self, solution_id: &str) -> Result<()> {
         let id = solution_id.to_string();
-        let user = self
-            .store
-            .get_current_user()
-            .unwrap_or_else(|_| "unknown".to_string());
-        match self.store.with_metadata(
-            &format!("Submit solution {} for review", solution_id),
-            || {
-                let mut solution = self.store.load_solution(solution_id)?;
-                solution
-                    .submit()
-                    .map_err(crate::error::JjjError::Validation)?;
-                self.store.save_solution(&solution)?;
-                let event = Event::new(
-                    EventType::SolutionSubmitted,
-                    solution_id.to_string(),
-                    user.clone(),
-                )
-                .with_extra(EventExtra {
-                    problem: Some(solution.problem_id.clone()),
-                    ..Default::default()
-                });
-                self.store.set_pending_event(event);
-                // Auto-set problem to InProgress if it's Open
-                let mut problem = self.store.load_problem(&solution.problem_id)?;
-                if problem.status == ProblemStatus::Open {
-                    problem
-                        .try_set_status(ProblemStatus::InProgress)
-                        .map_err(crate::error::JjjError::Validation)?;
-                    self.store.save_problem(&problem)?;
-                }
-                Ok(())
-            },
-        ) {
+        match crate::domain::submit_solution(&self.store, solution_id) {
             Ok(_) => {
                 self.show_flash(&format!("{} submitted for review", id));
                 self.refresh_data()?;
@@ -772,14 +723,7 @@ impl App {
 
     fn address_critique(&mut self, critique_id: &str) -> Result<()> {
         let id = critique_id.to_string();
-        match self
-            .store
-            .with_metadata(&format!("Address critique {}", critique_id), || {
-                let mut critique = self.store.load_critique(critique_id)?;
-                critique.address();
-                self.store.save_critique(&critique)?;
-                Ok(())
-            }) {
+        match crate::domain::address_critique(&self.store, critique_id) {
             Ok(_) => {
                 self.show_flash(&format!("{} addressed", id));
                 self.refresh_data()?;
@@ -793,14 +737,7 @@ impl App {
 
     fn dismiss_critique(&mut self, critique_id: &str) -> Result<()> {
         let id = critique_id.to_string();
-        match self
-            .store
-            .with_metadata(&format!("Dismiss critique {}", critique_id), || {
-                let mut critique = self.store.load_critique(critique_id)?;
-                critique.dismiss();
-                self.store.save_critique(&critique)?;
-                Ok(())
-            }) {
+        match crate::domain::dismiss_critique(&self.store, critique_id) {
             Ok(_) => {
                 self.show_flash(&format!("{} dismissed", id));
                 self.refresh_data()?;
@@ -864,13 +801,7 @@ impl App {
 
     pub(super) fn dissolve_problem(&mut self, problem_id: &str, reason: &str) -> Result<()> {
         let id = problem_id.to_string();
-        match self
-            .store
-            .with_metadata(&format!("Dissolve problem {}", problem_id), || {
-                let mut problem = self.store.load_problem(problem_id)?;
-                problem.dissolve(reason.to_string());
-                self.store.save_problem(&problem)
-            }) {
+        match crate::domain::dissolve_problem(&self.store, problem_id, Some(reason)) {
             Ok(_) => {
                 self.show_flash(&format!("{} dissolved", id));
                 self.refresh_data()?;
@@ -1024,31 +955,33 @@ impl App {
     }
 
     pub(super) fn batch_delete(&mut self, entities: &[(String, String)]) -> Result<()> {
-        let count = entities.len();
+        let mut deleted = 0usize;
+        let mut errors = Vec::new();
 
         self.store
-            .with_metadata(&format!("Batch delete {} items", count), || {
+            .with_metadata(&format!("Batch delete {} items", entities.len()), || {
                 for (entity_type, entity_id) in entities {
-                    match entity_type.as_str() {
-                        "critique" => {
-                            let _ = self.store.delete_critique(entity_id);
-                        }
-                        "solution" => {
-                            let _ = self.store.delete_solution(entity_id);
-                        }
-                        "problem" => {
-                            let _ = self.store.delete_problem(entity_id);
-                        }
-                        "milestone" => {
-                            let _ = self.store.delete_milestone(entity_id);
-                        }
-                        _ => {}
+                    let result = match entity_type.as_str() {
+                        "critique" => self.store.delete_critique(entity_id),
+                        "solution" => self.store.delete_solution(entity_id),
+                        "problem" => self.store.delete_problem(entity_id),
+                        "milestone" => self.store.delete_milestone(entity_id),
+                        _ => continue,
+                    };
+                    match result {
+                        Ok(_) => deleted += 1,
+                        Err(e) => errors.push(format!("{}: {}", &entity_id[..6.min(entity_id.len())], e)),
                     }
                 }
                 Ok(())
             })?;
 
-        self.show_flash(&format!("Deleted {} items", count));
+        let msg = if errors.is_empty() {
+            format!("Deleted {} items", deleted)
+        } else {
+            format!("Deleted {}, {} failed", deleted, errors.len())
+        };
+        self.show_flash(&msg);
         self.ui.selected_ids.clear();
         self.refresh_data()?;
         Ok(())
@@ -1441,7 +1374,7 @@ impl App {
                 .filter(|p| p.milestone_id.as_deref() == Some(milestone_id))
                 .map(|p| p.id.clone())
                 .collect();
-            let ordering = self.ui.personal_orderings.get_mut(milestone_id).unwrap();
+            let ordering = self.ui.personal_orderings.get_mut(milestone_id).expect("ensure_ordering guarantees entry");
             let existing: std::collections::HashSet<String> =
                 ordering.order.iter().cloned().collect();
             // Append new problems
@@ -1487,7 +1420,7 @@ impl App {
 
         // All guards use immutable borrows, checked before undo snapshot
         let (current_pos, target_pos, label) = {
-            let ordering = self.ui.personal_orderings.get(&milestone_id).unwrap();
+            let ordering = self.ui.personal_orderings.get(&milestone_id).expect("ensure_ordering guarantees entry");
 
             let (view_start, view_end) =
                 if let Some((drill_ms, start, end)) = self.ui.tier_drill.last() {
@@ -1538,7 +1471,7 @@ impl App {
 
         // All guards passed — snapshot for undo, then mutate
         self.push_ordering_undo(&milestone_id);
-        let ordering = self.ui.personal_orderings.get_mut(&milestone_id).unwrap();
+        let ordering = self.ui.personal_orderings.get_mut(&milestone_id).expect("ensure_ordering guarantees entry");
 
         // Remove from current position and insert at target.
         // When removing from before the target, the target shifts down by 1.
@@ -1602,7 +1535,7 @@ impl App {
         let current_votes;
         let new_val;
         {
-            let ord = self.ui.personal_orderings.get(&milestone_id).unwrap();
+            let ord = self.ui.personal_orderings.get(&milestone_id).expect("ensure_ordering guarantees entry");
             current_votes = *ord.votes.get(&problem_id).unwrap_or(&0);
             new_val = current_votes + delta;
             let new_cost = borda::vote_cost(new_val);
@@ -1622,7 +1555,7 @@ impl App {
 
         // Budget OK — snapshot for undo, then mutate
         self.push_ordering_undo(&milestone_id);
-        let ord = self.ui.personal_orderings.get_mut(&milestone_id).unwrap();
+        let ord = self.ui.personal_orderings.get_mut(&milestone_id).expect("ensure_ordering guarantees entry");
 
         if new_val == 0 {
             ord.votes.remove(&problem_id);
@@ -1700,7 +1633,7 @@ impl App {
         };
 
         self.ensure_ordering(&milestone_id);
-        let ordering = self.ui.personal_orderings.get(&milestone_id).unwrap();
+        let ordering = self.ui.personal_orderings.get(&milestone_id).expect("ensure_ordering guarantees entry");
         let pos = match ordering.order.iter().position(|id| *id == problem_id) {
             Some(p) if p > 0 => p,
             _ => {
@@ -1710,7 +1643,7 @@ impl App {
         };
 
         self.push_ordering_undo(&milestone_id);
-        let ordering = self.ui.personal_orderings.get_mut(&milestone_id).unwrap();
+        let ordering = self.ui.personal_orderings.get_mut(&milestone_id).expect("ensure_ordering guarantees entry");
         ordering.order.swap(pos, pos - 1);
         ordering.updated_at = chrono::Utc::now();
 
@@ -1734,7 +1667,7 @@ impl App {
         };
 
         self.ensure_ordering(&milestone_id);
-        let ordering = self.ui.personal_orderings.get(&milestone_id).unwrap();
+        let ordering = self.ui.personal_orderings.get(&milestone_id).expect("ensure_ordering guarantees entry");
         let len = ordering.order.len();
         let pos = match ordering.order.iter().position(|id| *id == problem_id) {
             Some(p) if p + 1 < len => p,
@@ -1745,7 +1678,7 @@ impl App {
         };
 
         self.push_ordering_undo(&milestone_id);
-        let ordering = self.ui.personal_orderings.get_mut(&milestone_id).unwrap();
+        let ordering = self.ui.personal_orderings.get_mut(&milestone_id).expect("ensure_ordering guarantees entry");
         ordering.order.swap(pos, pos + 1);
         ordering.updated_at = chrono::Utc::now();
 

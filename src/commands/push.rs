@@ -157,8 +157,7 @@ fn check_and_prompt_approve_solve(ctx: &CommandContext) -> Result<()> {
                 "All critiques on {} \"{}\" resolved. Approve solution?",
                 solution.id, solution.title
             )) {
-                // Use finalize_solution for proper validation (critique checks, events, auto-solve)
-                crate::commands::solution::finalize_solution(ctx, &solution.id, false, None)?;
+                crate::domain::approve_solution(&ctx.store, &solution.id, false, None)?;
                 println!("  Solution {} approved.", solution.id);
             }
         }

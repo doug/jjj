@@ -25,6 +25,26 @@ impl JjClient {
     pub fn new() -> Result<Self> {
         let jj_path = find_executable("jj").ok_or(JjjError::JjNotFound)?;
 
+        // Check jj version (warn if older than 0.25.0, but don't block)
+        if let Ok(output) = Command::new(&jj_path).arg("version").output() {
+            if let Ok(version_str) = std::str::from_utf8(&output.stdout) {
+                // Expected format: "jj 0.25.0" or "jj 0.25.0-dev"
+                if let Some(ver) = version_str.split_whitespace().nth(1) {
+                    let parts: Vec<&str> = ver.split('.').collect();
+                    if let (Some(Ok(major)), Some(Ok(minor))) =
+                        (parts.first().map(|s| s.parse::<u32>()), parts.get(1).map(|s| s.parse::<u32>()))
+                    {
+                        if major == 0 && minor < 25 {
+                            eprintln!(
+                                "Warning: jj version {} detected; jjj requires 0.25.0 or later",
+                                ver
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
         let repo_root = Self::find_repo_root()?;
 
         Ok(Self { jj_path, repo_root })

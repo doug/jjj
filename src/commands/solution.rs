@@ -262,7 +262,7 @@ fn new_solution(
         let mut problem = store.load_problem(&problem_id)?;
         problem.add_solution(solution_id.clone());
         if problem.status == ProblemStatus::Open {
-            problem.set_status(ProblemStatus::InProgress);
+            let _ = problem.try_set_status(ProblemStatus::InProgress);
         }
         store.save_problem(&problem)?;
 
@@ -639,48 +639,9 @@ fn detach_change(
 }
 
 fn submit_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
-    let store = &ctx.store;
     let solution_id = ctx.resolve_solution(&solution_input)?;
-
-    let user = store.get_current_user().unwrap_or_default();
-
-    store.with_metadata(
-        &format!("Submit solution {} for review", solution_id),
-        || {
-            let mut solution = store.load_solution(&solution_id)?;
-            solution
-                .submit()
-                .map_err(crate::error::JjjError::Validation)?;
-            store.save_solution(&solution)?;
-
-            let event = Event::new(
-                EventType::SolutionSubmitted,
-                solution_id.clone(),
-                user.clone(),
-            )
-            .with_extra(EventExtra {
-                problem: Some(solution.problem_id.clone()),
-                ..Default::default()
-            });
-            store.set_pending_event(event);
-
-            // Update problem status to in_progress if it's still open
-            let mut problem = store.load_problem(&solution.problem_id)?;
-            if problem.status == ProblemStatus::Open {
-                problem.set_status(ProblemStatus::InProgress);
-                store.save_problem(&problem)?;
-                println!("Problem {} moved to in_progress", problem.id);
-            }
-
-            println!("Solution {} submitted for review", solution_id);
-            Ok(())
-        },
-    )?;
-
-    // Automation rules
-    let event = Event::new(EventType::SolutionSubmitted, solution_id.clone(), user);
-    crate::automation::run(ctx, &event, &solution_id);
-
+    crate::domain::submit_solution(&ctx.store, &solution_id)?;
+    println!("Solution {} submitted for review", solution_id);
     Ok(())
 }
 
@@ -722,34 +683,17 @@ fn approve_solution(
         )));
     }
 
-    if solution.status == SolutionStatus::Proposed {
+    if solution.status == SolutionStatus::Proposed && !force {
         return Err(crate::error::JjjError::Validation(format!(
             "Solution '{}' is proposed — submit it for review first:\n  jjj solution submit {}",
             solution.title, solution.id,
         )));
     }
 
-    // Finalize (critique check, events, auto-solve).
+    // Core approval: critique check, events, auto-solve, automation.
     let rationale_str = rationale.as_deref().filter(|_| !no_rationale);
-    finalize_solution(ctx, &solution.id, force, rationale_str)?;
+    crate::domain::approve_solution(store, &solution.id, force, rationale_str)?;
     println!("Solution '{}' approved.", solution.title);
-
-    // Automation rules
-    let auto_user = store.get_current_user().unwrap_or_default();
-    let approve_event = Event::new(
-        EventType::SolutionApproved,
-        solution.id.clone(),
-        auto_user.clone(),
-    );
-    crate::automation::run(ctx, &approve_event, &solution.id);
-
-    // If finalize_solution auto-solved the parent problem, fire problem_solved automation too
-    if let Ok(problem) = store.load_problem(&solution.problem_id) {
-        if problem.status == ProblemStatus::Solved {
-            let solve_event = Event::new(EventType::ProblemSolved, problem.id.clone(), auto_user);
-            crate::automation::run(ctx, &solve_event, &problem.id);
-        }
-    }
 
     // Merge PR if one is linked.
     if let Some(pr_number) = solution.github_pr {
@@ -763,100 +707,6 @@ fn approve_solution(
     Ok(())
 }
 
-/// Core approval logic shared by `approve` and `github merge`.
-/// Checks critiques, validates state, emits events, approves, and auto-solves.
-/// Does NOT squash code or merge PRs — that is the caller's responsibility.
-pub(crate) fn finalize_solution(
-    ctx: &CommandContext,
-    solution_id: &str,
-    force: bool,
-    rationale: Option<&str>,
-) -> Result<()> {
-    let store = &ctx.store;
-
-    let solution = store.load_solution(solution_id)?;
-
-    // Already approved — idempotent
-    if solution.status == SolutionStatus::Approved {
-        return Ok(());
-    }
-
-    // Solution must be in Review to submit (or force)
-    if solution.status != SolutionStatus::Submitted && !force {
-        return Err(crate::error::JjjError::Validation(format!(
-            "Solution '{}' is {} — move it to review first:\n  jjj solution submit {}",
-            solution.title, solution.status, solution_id,
-        )));
-    }
-
-    // Check open critiques (before state — critiques are the most actionable blocker)
-    let critiques = store.list_critiques()?;
-    let open_critiques: Vec<_> = critiques
-        .iter()
-        .filter(|c| {
-            c.solution_id == solution_id
-                && (c.status == CritiqueStatus::Open || c.status == CritiqueStatus::Valid)
-        })
-        .collect();
-
-    if !open_critiques.is_empty() {
-        if !force {
-            eprintln!("\n  {} open critique(s):", open_critiques.len());
-            for c in &open_critiques {
-                let loc = c
-                    .file_path
-                    .as_ref()
-                    .map(|f| format!(" {}:{}", f, c.line_start.unwrap_or(0)))
-                    .unwrap_or_default();
-                eprintln!("    [{:}] {}{}", c.severity, c.title, loc);
-                eprintln!("       jjj critique address {}", c.id);
-            }
-            eprintln!("\nAddress critiques before submitting, or use --force to override.");
-            return Err(crate::error::JjjError::CannotApproveSolution(
-                "Unresolved critiques block submission".to_string(),
-            ));
-        }
-        eprintln!(
-            "Warning: submitting with {} open critique(s).",
-            open_critiques.len()
-        );
-    }
-
-    let user = store.get_current_user()?;
-    let mut event = Event::new(EventType::SolutionApproved, solution_id.to_string(), user);
-    if let Some(r) = rationale {
-        event = event.with_rationale(r);
-    }
-
-    store.with_metadata(&format!("Approve solution {}", solution_id), || {
-        store.set_pending_event(event.clone());
-        let mut sol = store.load_solution(solution_id)?;
-        if force {
-            sol.force_approved = true;
-        }
-        sol.approve().map_err(crate::error::JjjError::Validation)?;
-        store.save_solution(&sol)?;
-
-        // Auto-solve the parent problem
-        let (can_solve, _) = store.can_solve_problem(&sol.problem_id)?;
-        if can_solve {
-            let mut problem = store.load_problem(&sol.problem_id)?;
-            if problem.status != ProblemStatus::Solved {
-                problem.set_status(ProblemStatus::Solved);
-                store.save_problem(&problem)?;
-                let solve_event = Event::new(
-                    EventType::ProblemSolved,
-                    problem.id.clone(),
-                    event.by.clone(),
-                );
-                store.set_pending_event(solve_event);
-                println!("  Problem '{}' solved.", problem.title);
-            }
-        }
-
-        Ok(())
-    })
-}
 
 fn withdraw_solution(
     ctx: &CommandContext,
@@ -864,9 +714,6 @@ fn withdraw_solution(
     rationale: Option<String>,
     no_rationale: bool,
 ) -> Result<()> {
-    let store = &ctx.store;
-    use crate::models::{Event, EventType};
-
     let solution_id = ctx.resolve_solution(&solution_input)?;
 
     // Get rationale (prompt if not provided and not skipped)
@@ -887,24 +734,9 @@ fn withdraw_solution(
         }
     };
 
-    // Create event
-    let user = store.get_current_user()?;
-    let mut event = Event::new(EventType::SolutionWithdrawn, solution_id.clone(), user);
-    if let Some(r) = &rationale {
-        event = event.with_rationale(r);
-    }
-
-    store.with_metadata(&format!("Withdraw solution {}", solution_id), || {
-        store.set_pending_event(event.clone());
-
-        let mut solution = store.load_solution(&solution_id)?;
-        solution
-            .withdraw()
-            .map_err(crate::error::JjjError::Validation)?;
-        store.save_solution(&solution)?;
-        println!("Solution {} withdrawn", solution_id);
-        Ok(())
-    })
+    crate::domain::withdraw_solution(&ctx.store, &solution_id, rationale.as_deref())?;
+    println!("Solution {} withdrawn", solution_id);
+    Ok(())
 }
 
 fn assign_solution(
@@ -959,15 +791,37 @@ fn resume_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
                 .map_err(crate::error::JjjError::Validation)?;
             store.save_solution(&solution)?;
 
+            // Emit submit event
+            let user = store.get_current_user().unwrap_or_default();
+            let event = Event::new(
+                EventType::SolutionSubmitted,
+                solution_id.to_string(),
+                user,
+            )
+            .with_extra(EventExtra {
+                problem: Some(solution.problem_id.clone()),
+                ..Default::default()
+            });
+            store.set_pending_event(event);
+
             // Update problem status
             let mut problem = store.load_problem(&solution.problem_id)?;
             if problem.status == ProblemStatus::Open {
-                problem.set_status(ProblemStatus::InProgress);
+                let _ = problem.try_set_status(ProblemStatus::InProgress);
                 store.save_problem(&problem)?;
             }
 
             Ok(())
         })?;
+
+        // Fire automation
+        let user = store.get_current_user().unwrap_or_default();
+        let event = Event::new(
+            EventType::SolutionSubmitted,
+            solution_id.to_string(),
+            user,
+        );
+        crate::automation::run(store, &event, &solution_id);
     }
 
     Ok(())
@@ -1016,28 +870,24 @@ fn lgtm_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
     };
 
     let critique_id = critique.id.clone();
-    store.with_metadata(&format!("LGTM on solution {}", solution_id), || {
-        let mut c = store.load_critique(&critique_id)?;
-        c.address();
-        store.save_critique(&c)?;
-        println!("Signed off on '{}' as @{}", solution.title, current_user);
+    crate::domain::address_critique(store, &critique_id)?;
+    println!("Signed off on '{}' as @{}", solution.title, current_user);
 
-        // Check if this was the last blocking item
-        let remaining = store
-            .list_critiques_for_solution(&solution_id)?
-            .into_iter()
-            .filter(|c| c.status == CritiqueStatus::Open || c.status == CritiqueStatus::Valid)
-            .count();
+    // Check if this was the last blocking item
+    let remaining = store
+        .list_critiques_for_solution(&solution_id)?
+        .into_iter()
+        .filter(|c| c.status == CritiqueStatus::Open || c.status == CritiqueStatus::Valid)
+        .count();
 
-        if remaining == 0 {
-            println!("All critiques resolved. Ready to approve:");
-            println!("  jjj solution approve \"{}\"", solution.title);
-        } else {
-            println!("{} critique(s) still open.", remaining);
-        }
+    if remaining == 0 {
+        println!("All critiques resolved. Ready to approve:");
+        println!("  jjj solution approve \"{}\"", solution.title);
+    } else {
+        println!("{} critique(s) still open.", remaining);
+    }
 
-        Ok(())
-    })
+    Ok(())
 }
 
 fn comment_solution(

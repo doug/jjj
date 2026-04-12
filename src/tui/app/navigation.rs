@@ -180,6 +180,7 @@ impl App {
                         break;
                     }
                 }
+                self.update_selected_detail();
             }
         }
     }
@@ -285,7 +286,7 @@ impl App {
         use super::InputAction;
         use super::InputMode;
         let buffer = self.ui.search_filter.clone().unwrap_or_default();
-        let cursor_pos = buffer.len();
+        let cursor_pos = buffer.chars().count();
         self.ui.input_mode = InputMode::Input {
             prompt: "/".to_string(),
             buffer,
@@ -360,10 +361,6 @@ impl App {
 
     pub(super) fn apply_search_filter(&mut self) {
         self.rebuild_tree();
-        super::super::annotate_tree_with_actions(
-            &mut self.cache.tree_items,
-            &self.cache.next_actions,
-        );
         // Clamp tree_index
         let max_index = self.cache.tree_items.len().saturating_sub(1);
         if self.ui.tree_index > max_index {

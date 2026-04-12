@@ -17,6 +17,13 @@ mod editor;
 mod navigation;
 mod related;
 
+/// Convert a char-based cursor position to a byte index in a string.
+fn char_to_byte_pos(s: &str, char_pos: usize) -> usize {
+    s.char_indices()
+        .nth(char_pos)
+        .map_or(s.len(), |(i, _)| i)
+}
+
 /// Which pane currently has keyboard focus.
 #[derive(Default, Clone, Copy, PartialEq, Eq)]
 pub enum FocusedPane {
@@ -578,7 +585,7 @@ impl App {
                         prompt,
                         buffer: buffer.clone(),
                         action,
-                        cursor_pos: (cursor_pos + 1).min(buffer.len()),
+                        cursor_pos: (cursor_pos + 1).min(buffer.chars().count()),
                     };
                 }
                 KeyCode::Home => {
@@ -594,13 +601,14 @@ impl App {
                         prompt,
                         buffer: buffer.clone(),
                         action,
-                        cursor_pos: buffer.len(),
+                        cursor_pos: buffer.chars().count(),
                     };
                 }
                 KeyCode::Backspace => {
                     if cursor_pos > 0 {
                         let mut new_buffer = buffer;
-                        new_buffer.remove(cursor_pos - 1);
+                        let byte_pos = char_to_byte_pos(&new_buffer, cursor_pos - 1);
+                        new_buffer.remove(byte_pos);
                         let new_cursor = cursor_pos - 1;
                         self.ui.search_filter = if new_buffer.is_empty() {
                             None
@@ -618,7 +626,8 @@ impl App {
                 }
                 KeyCode::Char(c) => {
                     let mut new_buffer = buffer;
-                    new_buffer.insert(cursor_pos, c);
+                    let byte_pos = char_to_byte_pos(&new_buffer, cursor_pos);
+                    new_buffer.insert(byte_pos, c);
                     self.ui.search_filter = Some(new_buffer.clone());
                     self.ui.input_mode = InputMode::Input {
                         prompt,
@@ -663,7 +672,7 @@ impl App {
                     prompt,
                     buffer: buffer.clone(),
                     action,
-                    cursor_pos: (cursor_pos + 1).min(buffer.len()),
+                    cursor_pos: (cursor_pos + 1).min(buffer.chars().count()),
                 };
             }
             KeyCode::Home => {
@@ -679,13 +688,14 @@ impl App {
                     prompt,
                     buffer: buffer.clone(),
                     action,
-                    cursor_pos: buffer.len(),
+                    cursor_pos: buffer.chars().count(),
                 };
             }
             KeyCode::Backspace => {
                 if cursor_pos > 0 {
                     let mut new_buffer = buffer;
-                    new_buffer.remove(cursor_pos - 1);
+                    let byte_pos = char_to_byte_pos(&new_buffer, cursor_pos - 1);
+                    new_buffer.remove(byte_pos);
                     self.ui.input_mode = InputMode::Input {
                         prompt,
                         buffer: new_buffer,
@@ -696,7 +706,8 @@ impl App {
             }
             KeyCode::Char(c) => {
                 let mut new_buffer = buffer;
-                new_buffer.insert(cursor_pos, c);
+                let byte_pos = char_to_byte_pos(&new_buffer, cursor_pos);
+                new_buffer.insert(byte_pos, c);
                 self.ui.input_mode = InputMode::Input {
                     prompt,
                     buffer: new_buffer,

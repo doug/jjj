@@ -401,6 +401,8 @@ impl App {
                         }
                         if let Some(d) = target_date {
                             milestone.target_date = Some(d);
+                        } else {
+                            milestone.target_date = None;
                         }
                         self.store.save_milestone(&milestone)
                     })?;

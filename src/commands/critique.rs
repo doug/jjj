@@ -174,7 +174,7 @@ fn new_critique(
     let cid = critique_id_cell.into_inner();
     if !cid.is_empty() {
         let event = Event::new(EventType::CritiqueRaised, cid.clone(), user.clone());
-        crate::automation::run(ctx, &event, &cid);
+        crate::automation::run(&ctx.store, &event, &cid);
     }
 
     Ok(())
@@ -384,13 +384,9 @@ fn edit_critique(
             let new_status: CritiqueStatus = status_str
                 .parse()
                 .map_err(|e: String| crate::error::JjjError::Validation(e))?;
-            if !critique.can_transition_to(&new_status) {
-                return Err(crate::error::JjjError::Validation(format!(
-                    "Invalid status transition: {} -> {}",
-                    critique.status, new_status
-                )));
-            }
-            critique.set_status(new_status);
+            critique
+                .try_set_status(new_status)
+                .map_err(crate::error::JjjError::Validation)?;
         }
 
         store.save_critique(&critique)?;
@@ -401,82 +397,52 @@ fn edit_critique(
 
 fn address_critique(ctx: &CommandContext, critique_input: String) -> Result<()> {
     let critique_id = ctx.resolve_critique(&critique_input)?;
-    let store = &ctx.store;
-
-    // Create event for decision log
-    let user = store.get_current_user()?;
-    let event = Event::new(EventType::CritiqueAddressed, critique_id.clone(), user);
-
-    store.with_metadata(&format!("Address critique {}", critique_id), || {
-        store.set_pending_event(event.clone());
-        let mut critique = store.load_critique(&critique_id)?;
-        critique.address();
-        store.save_critique(&critique)?;
-        println!(
-            "Critique {} marked as addressed (solution was modified to address it)",
-            critique_id
-        );
-        Ok(())
-    })
+    crate::domain::address_critique(&ctx.store, &critique_id)?;
+    println!(
+        "Critique {} marked as addressed (solution was modified to address it)",
+        critique_id
+    );
+    Ok(())
 }
 
 fn validate_critique(ctx: &CommandContext, critique_input: String) -> Result<()> {
     let critique_id = ctx.resolve_critique(&critique_input)?;
     let store = &ctx.store;
 
-    // Create event for decision log
-    let user = store.get_current_user()?;
-    let event = Event::new(EventType::CritiqueValidated, critique_id.clone(), user);
+    // Load critique before domain call to get solution_id for the hint message
+    let critique = store.load_critique(&critique_id)?;
+    let solution_id = critique.solution_id.clone();
 
-    store.with_metadata(&format!("Validate critique {}", critique_id), || {
-        store.set_pending_event(event.clone());
-        let mut critique = store.load_critique(&critique_id)?;
-        let solution_id = critique.solution_id.clone();
+    crate::domain::validate_critique(store, &critique_id)?;
+    println!(
+        "Critique {} validated (it's correct - the solution has a flaw)",
+        critique_id
+    );
 
-        critique.validate();
-        store.save_critique(&critique)?;
-
+    // Hint about withdrawing the solution
+    let solution = store.load_solution(&solution_id)?;
+    if solution.status != SolutionStatus::Withdrawn {
         println!(
-            "Critique {} validated (it's correct - the solution has a flaw)",
-            critique_id
+            "\nThe target solution {} should likely be withdrawn.",
+            solution_id
         );
+        println!(
+            "Use 'jjj solution withdraw {}' to withdraw it.",
+            solution_id
+        );
+    }
 
-        // Optionally withdraw the solution
-        let solution = store.load_solution(&solution_id)?;
-        if solution.status != SolutionStatus::Withdrawn {
-            println!(
-                "\nThe target solution {} should likely be withdrawn.",
-                solution_id
-            );
-            println!(
-                "Use 'jjj solution withdraw {}' to withdraw it.",
-                solution_id
-            );
-        }
-
-        Ok(())
-    })
+    Ok(())
 }
 
 fn dismiss_critique(ctx: &CommandContext, critique_input: String) -> Result<()> {
     let critique_id = ctx.resolve_critique(&critique_input)?;
-    let store = &ctx.store;
-
-    // Create event for decision log
-    let user = store.get_current_user()?;
-    let event = Event::new(EventType::CritiqueDismissed, critique_id.clone(), user);
-
-    store.with_metadata(&format!("Dismiss critique {}", critique_id), || {
-        store.set_pending_event(event.clone());
-        let mut critique = store.load_critique(&critique_id)?;
-        critique.dismiss();
-        store.save_critique(&critique)?;
-        println!(
-            "Critique {} dismissed (shown to be incorrect or irrelevant)",
-            critique_id
-        );
-        Ok(())
-    })
+    crate::domain::dismiss_critique(&ctx.store, &critique_id)?;
+    println!(
+        "Critique {} dismissed (shown to be incorrect or irrelevant)",
+        critique_id
+    );
+    Ok(())
 }
 
 fn reply_to_critique(ctx: &CommandContext, critique_input: String, body: String) -> Result<()> {

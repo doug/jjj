@@ -220,7 +220,7 @@ fn new_problem(
             }
 
             let event = Event::new(EventType::ProblemCreated, pid.clone(), user.clone());
-            crate::automation::run(ctx, &event, &pid);
+            crate::automation::run(&ctx.store, &event, &pid);
         }
     }
 
@@ -574,29 +574,9 @@ fn show_tree(ctx: &CommandContext, problem_input: Option<String>) -> Result<()> 
 
 fn solve_problem(ctx: &CommandContext, problem_input: String, github_close: bool) -> Result<()> {
     let store = &ctx.store;
-
     let problem_id = ctx.resolve_problem(&problem_input)?;
 
-    // Check if can be solved
-    let (can_solve, message) = store.can_solve_problem(&problem_id)?;
-
-    if !can_solve {
-        // Already-solved is idempotent: still honour --github-close.
-        if message == "Problem is already solved" {
-            println!("Problem {} is already marked as solved.", problem_id);
-            if let Ok(problem) = store.load_problem(&problem_id) {
-                crate::sync::hooks::auto_close_issue(ctx, &problem, github_close);
-            }
-            return Ok(());
-        }
-        return Err(crate::error::JjjError::CannotSolveProblem(message));
-    }
-
-    if !message.is_empty() {
-        println!("{}", message);
-    }
-
-    // Warn about active solutions still in progress
+    // Warn about active solutions still in progress (CLI-specific UX)
     let solutions = store.list_solutions()?;
     let active: Vec<_> = solutions
         .iter()
@@ -613,33 +593,23 @@ fn solve_problem(ctx: &CommandContext, problem_input: String, github_close: bool
         eprintln!("Proceeding with solve anyway.");
     }
 
-    // Create event for decision log
-    let user = store.get_current_user()?;
-    let event = Event::new(EventType::ProblemSolved, problem_id.clone(), user.clone());
+    crate::domain::solve_problem(store, &problem_id)?;
+    println!("Problem {} marked as solved.", problem_id);
 
-    store.with_metadata(&format!("Solve problem {}", problem_id), || {
-        store.set_pending_event(event.clone());
-        let mut problem = store.load_problem(&problem_id)?;
-        problem.set_status(ProblemStatus::Solved);
-        store.save_problem(&problem)?;
-        println!("Problem {} marked as solved.", problem_id);
-        Ok(())
-    })?;
-
-    // Auto-close GitHub issue if explicitly requested or configured
-    if let Ok(problem) = ctx.store.load_problem(&problem_id) {
-        let has_rules = ctx
-            .store
-            .load_config()
-            .ok()
-            .map(|c| crate::automation::has_explicit_rule(&c.automation, &EventType::ProblemSolved))
-            .unwrap_or(false);
-        if !has_rules {
-            crate::sync::hooks::auto_close_issue(ctx, &problem, github_close);
+    // Auto-close GitHub issue if explicitly requested or configured (CLI-specific)
+    if github_close {
+        if let Ok(problem) = store.load_problem(&problem_id) {
+            let has_rules = store
+                .load_config()
+                .ok()
+                .map(|c| {
+                    crate::automation::has_explicit_rule(&c.automation, &EventType::ProblemSolved)
+                })
+                .unwrap_or(false);
+            if !has_rules {
+                crate::sync::hooks::auto_close_issue(ctx, &problem, github_close);
+            }
         }
-
-        let event = Event::new(EventType::ProblemSolved, problem_id.clone(), user);
-        crate::automation::run(ctx, &event, &problem_id);
     }
 
     Ok(())
@@ -652,56 +622,31 @@ fn dissolve_problem(
     github_close: bool,
 ) -> Result<()> {
     let store = &ctx.store;
-
     let problem_id = ctx.resolve_problem(&problem_input)?;
 
-    // Create event for decision log
-    let user = store.get_current_user()?;
-    let mut event = Event::new(
-        EventType::ProblemDissolved,
-        problem_id.clone(),
-        user.clone(),
+    crate::domain::dissolve_problem(store, &problem_id, reason.as_deref())?;
+    println!(
+        "Problem {} marked as dissolved (based on false premises or became irrelevant).",
+        problem_id
     );
-    if let Some(ref r) = reason {
-        event = event.with_rationale(r);
-    }
 
-    store.with_metadata(&format!("Dissolve problem {}", problem_id), || {
-        store.set_pending_event(event.clone());
-        let mut problem = store.load_problem(&problem_id)?;
-        if let Some(reason) = reason.clone() {
-            problem.dissolve(reason);
-        } else {
-            problem.set_status(ProblemStatus::Dissolved);
+    // Auto-close GitHub issue if explicitly requested or configured (CLI-specific)
+    if github_close {
+        if let Ok(problem) = store.load_problem(&problem_id) {
+            let has_rules = store
+                .load_config()
+                .ok()
+                .map(|c| {
+                    crate::automation::has_explicit_rule(
+                        &c.automation,
+                        &EventType::ProblemDissolved,
+                    )
+                })
+                .unwrap_or(false);
+            if !has_rules {
+                crate::sync::hooks::auto_close_issue(ctx, &problem, github_close);
+            }
         }
-        store.save_problem(&problem)?;
-        println!(
-            "Problem {} marked as dissolved (based on false premises or became irrelevant).",
-            problem_id
-        );
-        Ok(())
-    })?;
-
-    // Auto-close GitHub issue if explicitly requested or configured
-    if let Ok(problem) = ctx.store.load_problem(&problem_id) {
-        let has_rules = ctx
-            .store
-            .load_config()
-            .ok()
-            .map(|c| {
-                crate::automation::has_explicit_rule(&c.automation, &EventType::ProblemDissolved)
-            })
-            .unwrap_or(false);
-        if !has_rules {
-            crate::sync::hooks::auto_close_issue(ctx, &problem, github_close);
-        }
-
-        let event = Event::new(
-            EventType::ProblemDissolved,
-            problem_id.clone(),
-            user.clone(),
-        );
-        crate::automation::run(ctx, &event, &problem_id);
     }
 
     Ok(())
@@ -748,17 +693,9 @@ fn reopen_problem(ctx: &CommandContext, problem_input: String) -> Result<()> {
         )));
     }
 
-    let user = store.get_current_user()?;
-    let event = Event::new(EventType::ProblemReopened, problem_id.clone(), user);
-
-    store.with_metadata(&format!("Reopen problem {}", problem_id), || {
-        store.set_pending_event(event.clone());
-        let mut problem = store.load_problem(&problem_id)?;
-        problem.set_status(ProblemStatus::Open);
-        store.save_problem(&problem)?;
-        println!("Problem '{}' reopened.", problem.title);
-        Ok(())
-    })
+    crate::domain::reopen_problem(store, &problem_id)?;
+    println!("Problem '{}' reopened.", problem.title);
+    Ok(())
 }
 
 fn duplicate_problem(ctx: &CommandContext, input: String, canonical_input: String) -> Result<()> {

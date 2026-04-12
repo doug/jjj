@@ -59,3 +59,7 @@ path = "src/lib.rs"
 [[bin]]
 name = "jjj"
 path = "src/main.rs"
+
+[profile.release]
+strip = true
+lto = "thin"

@@ -25,46 +25,61 @@ pub fn load_from_markdown(db: &Database, store: &MetadataStore) -> Result<()> {
     // Set dirty flag before we start modifying data
     set_dirty_internal(conn, true)?;
 
-    // Clear all tables
-    clear_all_tables(conn)?;
+    // Wrap the entire load in a transaction so a partial failure doesn't
+    // leave a half-populated DB.
+    conn.execute_batch("BEGIN")?;
 
-    // Load milestones first (problems reference milestones via FK)
-    let milestones = store.list_milestones()?;
-    for milestone in &milestones {
-        upsert_milestone(conn, milestone)?;
+    let result = (|| -> Result<()> {
+        // Clear all tables
+        clear_all_tables(conn)?;
+
+        // Load milestones first (problems reference milestones via FK)
+        let milestones = store.list_milestones()?;
+        for milestone in &milestones {
+            upsert_milestone(conn, milestone)?;
+        }
+
+        // Load problems (solutions reference problems via FK)
+        let problems = store.list_problems()?;
+        for problem in &problems {
+            upsert_problem(conn, problem)?;
+        }
+
+        // Load solutions (critiques reference solutions via FK)
+        let solutions = store.list_solutions()?;
+        for solution in &solutions {
+            upsert_solution(conn, solution)?;
+        }
+
+        // Load critiques
+        let critiques = store.list_critiques()?;
+        for critique in &critiques {
+            upsert_critique(conn, critique)?;
+        }
+
+        // Load events from the jjj commit history (the canonical source)
+        let events = store.list_events()?;
+        for event in &events {
+            insert_event(conn, event)?;
+        }
+
+        Ok(())
+    })();
+
+    match result {
+        Ok(()) => {
+            conn.execute_batch("COMMIT")?;
+            // Rebuild FTS index (operates outside the main transaction)
+            rebuild_fts(db)?;
+            // Clear dirty flag on successful completion
+            set_dirty_internal(conn, false)?;
+            Ok(())
+        }
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK");
+            Err(e)
+        }
     }
-
-    // Load problems (solutions reference problems via FK)
-    let problems = store.list_problems()?;
-    for problem in &problems {
-        upsert_problem(conn, problem)?;
-    }
-
-    // Load solutions (critiques reference solutions via FK)
-    let solutions = store.list_solutions()?;
-    for solution in &solutions {
-        upsert_solution(conn, solution)?;
-    }
-
-    // Load critiques
-    let critiques = store.list_critiques()?;
-    for critique in &critiques {
-        upsert_critique(conn, critique)?;
-    }
-
-    // Load events from the jjj commit history (the canonical source)
-    let events = store.list_events()?;
-    for event in &events {
-        insert_event(conn, event)?;
-    }
-
-    // Rebuild FTS index
-    rebuild_fts(db)?;
-
-    // Clear dirty flag on successful completion
-    set_dirty_internal(conn, false)?;
-
-    Ok(())
 }
 
 /// Dump all metadata from SQLite back to markdown files.

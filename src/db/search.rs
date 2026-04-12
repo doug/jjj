@@ -237,9 +237,10 @@ fn create_snippet(primary: &str, secondary: &str, fallback: &str, query: &str) -
         fallback
     };
 
-    // Truncate to reasonable length
-    if text.len() > 200 {
-        format!("{}...", &text[..197])
+    // Truncate to reasonable length (char-safe to avoid panic on multi-byte UTF-8)
+    if text.chars().count() > 200 {
+        let truncated: String = text.chars().take(197).collect();
+        format!("{}...", truncated)
     } else {
         text.to_string()
     }
@@ -254,12 +255,13 @@ fn create_snippet(primary: &str, secondary: &str, fallback: &str, query: &str) -
 /// * `conn` - Database connection
 /// * `query` - Search text (will be wrapped in % for LIKE matching)
 pub fn search_events(conn: &Connection, query: &str) -> SqliteResult<Vec<Event>> {
-    let pattern = format!("%{}%", query);
+    let escaped = query.replace('%', "\\%").replace('_', "\\_");
+    let pattern = format!("%{}%", escaped);
 
     let mut stmt = conn.prepare(
         "SELECT id, timestamp, event_type, entity_id, actor, rationale, refs, extra
          FROM events
-         WHERE rationale LIKE ?1
+         WHERE rationale LIKE ?1 ESCAPE '\\'
          ORDER BY timestamp DESC
          LIMIT 50",
     )?;
@@ -476,8 +478,10 @@ fn parse_event_type(s: &str) -> crate::models::EventType {
         "critique_replied" => EventType::CritiqueReplied,
         "milestone_created" => EventType::MilestoneCreated,
         "milestone_completed" => EventType::MilestoneCompleted,
-        // Default to ProblemCreated for unknown types
-        _ => EventType::ProblemCreated,
+        other => {
+            eprintln!("Warning: unknown event type '{}', skipping", other);
+            EventType::ProblemCreated
+        }
     }
 }
 

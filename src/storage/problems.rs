@@ -73,13 +73,15 @@ impl MetadataStore {
         if db_path.exists() {
             if let Ok(db) = crate::db::schema::Database::open(&db_path) {
                 let body = format!("{}\n{}", problem.description, problem.tags.join(" "));
-                let _ = crate::db::sync::update_fts_entry(
+                if let Err(e) = crate::db::sync::update_fts_entry(
                     db.conn(),
                     "problem",
                     &problem.id,
                     &problem.title,
                     &body,
-                );
+                ) {
+                    eprintln!("Warning: FTS index update failed: {}", e);
+                }
             }
         }
 
@@ -189,6 +191,15 @@ impl MetadataStore {
         }
 
         fs::remove_file(problem_path)?;
+
+        // Remove from FTS index if DB exists (best-effort)
+        let db_path = self.jj_client.repo_root().join(".jj").join("jjj.db");
+        if db_path.exists() {
+            if let Ok(db) = crate::db::schema::Database::open(&db_path) {
+                let _ = db.conn().execute("DELETE FROM fts WHERE id = ?1", rusqlite::params![problem_id]);
+            }
+        }
+
         Ok(())
     }
 

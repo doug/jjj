@@ -224,6 +224,9 @@ impl Critique {
                 | (CritiqueStatus::Addressed, CritiqueStatus::Open)
                 | (CritiqueStatus::Addressed, CritiqueStatus::Valid)
                 | (CritiqueStatus::Addressed, CritiqueStatus::Dismissed)
+                | (CritiqueStatus::Valid, CritiqueStatus::Addressed)
+                | (CritiqueStatus::Valid, CritiqueStatus::Dismissed)
+                | (CritiqueStatus::Dismissed, CritiqueStatus::Open)
         )
     }
 
@@ -246,18 +249,18 @@ impl Critique {
     }
 
     /// Mark as addressed (solution was modified)
-    pub fn address(&mut self) {
-        self.set_status(CritiqueStatus::Addressed);
+    pub fn address(&mut self) -> Result<(), String> {
+        self.try_set_status(CritiqueStatus::Addressed)
     }
 
     /// Validate the critique (it's correct, solution should be withdrawn)
-    pub fn validate(&mut self) {
-        self.set_status(CritiqueStatus::Valid);
+    pub fn validate(&mut self) -> Result<(), String> {
+        self.try_set_status(CritiqueStatus::Valid)
     }
 
     /// Dismiss the critique (it's incorrect or irrelevant)
-    pub fn dismiss(&mut self) {
-        self.set_status(CritiqueStatus::Dismissed);
+    pub fn dismiss(&mut self) -> Result<(), String> {
+        self.try_set_status(CritiqueStatus::Dismissed)
     }
 
     /// Check if critique is still active (needs attention)
@@ -398,7 +401,7 @@ mod tests {
         assert_eq!(critique.status, CritiqueStatus::Open);
         assert!(critique.is_active());
 
-        critique.address();
+        critique.address().unwrap();
         assert_eq!(critique.status, CritiqueStatus::Addressed);
         assert!(critique.is_resolved());
         assert!(!critique.invalidates_solution());
@@ -412,7 +415,7 @@ mod tests {
             "s1".to_string(),
         );
 
-        critique.validate();
+        critique.validate().unwrap();
         assert_eq!(critique.status, CritiqueStatus::Valid);
         assert!(critique.is_resolved());
         assert!(critique.invalidates_solution());
@@ -426,7 +429,7 @@ mod tests {
             "s1".to_string(),
         );
 
-        critique.dismiss();
+        critique.dismiss().unwrap();
         assert_eq!(critique.status, CritiqueStatus::Dismissed);
         assert!(critique.is_resolved());
         assert!(!critique.invalidates_solution());

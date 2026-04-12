@@ -606,7 +606,7 @@ fn sync_merge(
     })?;
 
     // Approve solution, emit SolutionApproved event, auto-solve problem
-    super::solution::finalize_solution(ctx, &sol_id, false, None)?;
+    crate::domain::approve_solution(&ctx.store, &sol_id, false, None)?;
 
     println!(
         "Merged PR #{} and approved solution '{}'",

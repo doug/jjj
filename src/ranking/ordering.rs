@@ -24,7 +24,12 @@ pub fn sanitize_user(user: &str) -> String {
         .map(|c| if c.is_alphanumeric() { c } else { '-' })
         .collect();
 
-    slug.trim_matches('-').to_string()
+    let trimmed = slug.trim_matches('-');
+    if trimmed.is_empty() {
+        "anonymous".to_string()
+    } else {
+        trimmed.to_string()
+    }
 }
 
 /// A single user's ordering and vote allocations for a milestone.
