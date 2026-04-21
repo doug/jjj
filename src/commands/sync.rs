@@ -690,6 +690,11 @@ fn sync_reopen(
 
     provider.reopen_issue(issue_number)?;
 
+    // Reopen the problem locally if it's solved/dissolved
+    if problem.is_resolved() {
+        crate::domain::reopen_problem(&ctx.store, &prob_id)?;
+    }
+
     println!(
         "Reopened issue #{} for problem '{}'",
         issue_number, problem.title

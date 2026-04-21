@@ -712,30 +712,21 @@ fn duplicate_problem(ctx: &CommandContext, input: String, canonical_input: Strin
     let canonical = store.load_problem(&canonical_id)?;
     let reason = format!("Duplicate of '{}'", canonical.title);
 
-    let user = store.get_current_user()?;
-    let event = Event::new(EventType::ProblemDissolved, dup_id.clone(), user)
-        .with_rationale(reason.clone());
+    // Check if already resolved before dissolving
+    let problem = store.load_problem(&dup_id)?;
+    if problem.is_resolved() {
+        return Err(crate::error::JjjError::Validation(format!(
+            "Problem '{}' is already {} — cannot mark as duplicate.",
+            problem.title, problem.status
+        )));
+    }
 
-    store.with_metadata(
-        &format!("Mark problem {} as duplicate of {}", dup_id, canonical_id),
-        || {
-            store.set_pending_event(event.clone());
-            let mut problem = store.load_problem(&dup_id)?;
-            if problem.is_resolved() {
-                return Err(crate::error::JjjError::Validation(format!(
-                    "Problem '{}' is already {} — cannot mark as duplicate.",
-                    problem.title, problem.status
-                )));
-            }
-            problem.dissolve(reason.clone());
-            store.save_problem(&problem)?;
-            println!(
-                "Problem '{}' dissolved as duplicate of '{}'.",
-                problem.title, canonical.title
-            );
-            Ok(())
-        },
-    )
+    crate::domain::dissolve_problem(store, &dup_id, Some(&reason))?;
+    println!(
+        "Problem '{}' dissolved as duplicate of '{}'.",
+        problem.title, canonical.title
+    );
+    Ok(())
 }
 
 fn check_for_duplicates(

@@ -780,6 +780,18 @@ fn resume_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
     } else {
         println!("No active change for solution. Creating new change.");
 
+        // Build event before with_metadata so automation gets the same event
+        let resume_user = store.get_current_user().unwrap_or_default();
+        let resume_event = Event::new(
+            EventType::SolutionSubmitted,
+            solution_id.to_string(),
+            resume_user,
+        )
+        .with_extra(EventExtra {
+            problem: Some(solution.problem_id.clone()),
+            ..Default::default()
+        });
+
         store.with_metadata(&format!("Resume solution: {}", solution.title), || {
             jj_client.new_empty_change(&solution.title)?;
             let change_id = jj_client.current_change_id()?;
@@ -791,18 +803,7 @@ fn resume_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
                 .map_err(crate::error::JjjError::Validation)?;
             store.save_solution(&solution)?;
 
-            // Emit submit event
-            let user = store.get_current_user().unwrap_or_default();
-            let event = Event::new(
-                EventType::SolutionSubmitted,
-                solution_id.to_string(),
-                user,
-            )
-            .with_extra(EventExtra {
-                problem: Some(solution.problem_id.clone()),
-                ..Default::default()
-            });
-            store.set_pending_event(event);
+            store.set_pending_event(resume_event.clone());
 
             // Update problem status
             let mut problem = store.load_problem(&solution.problem_id)?;
@@ -814,14 +815,7 @@ fn resume_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
             Ok(())
         })?;
 
-        // Fire automation
-        let user = store.get_current_user().unwrap_or_default();
-        let event = Event::new(
-            EventType::SolutionSubmitted,
-            solution_id.to_string(),
-            user,
-        );
-        crate::automation::run(store, &event, &solution_id);
+        crate::automation::run(store, &resume_event, &solution_id);
     }
 
     Ok(())

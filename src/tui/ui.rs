@@ -250,7 +250,7 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                         .map(|a| {
                             // Extract name from "Name <email>" format
                             let name = a.split('<').next().unwrap_or(a).trim();
-                            let name = if name.len() > 12 { &name[..12] } else { name };
+                            let name = name.char_indices().nth(12).map_or(name, |(i, _)| &name[..i]);
                             format!(" @{}", name)
                         })
                         .unwrap_or_default();
@@ -271,7 +271,7 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                         .as_deref()
                         .map(|a| {
                             let name = a.split('<').next().unwrap_or(a).trim();
-                            let name = if name.len() > 12 { &name[..12] } else { name };
+                            let name = name.char_indices().nth(12).map_or(name, |(i, _)| &name[..i]);
                             format!(" @{}", name)
                         })
                         .unwrap_or_default();
@@ -360,12 +360,12 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                 // Vote arrows
                 if *votes > 0 {
                     spans.push(Span::styled(
-                        format!(" {}", "▲".repeat(*votes as usize)),
+                        format!(" {}", "▲".repeat((*votes).min(10) as usize)),
                         Style::default().fg(Color::Green),
                     ));
                 } else if *votes < 0 {
                     spans.push(Span::styled(
-                        format!(" {}", "▼".repeat(votes.unsigned_abs() as usize)),
+                        format!(" {}", "▼".repeat((votes.unsigned_abs()).min(10) as usize)),
                         Style::default().fg(Color::Red),
                     ));
                 }

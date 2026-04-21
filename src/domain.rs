@@ -96,13 +96,8 @@ pub fn approve_solution(
         Ok(())
     })?;
 
-    // Fire automation
-    let approve_event = Event::new(
-        EventType::SolutionApproved,
-        solution_id.to_string(),
-        user.clone(),
-    );
-    crate::automation::run(store, &approve_event, solution_id);
+    // Fire automation (reuse the event with rationale intact)
+    crate::automation::run(store, &event, solution_id);
 
     // Fire problem-solved automation if auto-solve triggered
     if let Ok(problem) = store.load_problem(&problem_id) {
@@ -121,6 +116,18 @@ pub fn approve_solution(
 pub fn submit_solution(store: &MetadataStore, solution_id: &str) -> Result<()> {
     let user = store.get_current_user().unwrap_or_default();
 
+    // Build event before with_metadata so we can reuse it for automation
+    let solution = store.load_solution(solution_id)?;
+    let event = Event::new(
+        EventType::SolutionSubmitted,
+        solution_id.to_string(),
+        user,
+    )
+    .with_extra(EventExtra {
+        problem: Some(solution.problem_id.clone()),
+        ..Default::default()
+    });
+
     store.with_metadata(
         &format!("Submit solution {} for review", solution_id),
         || {
@@ -128,16 +135,7 @@ pub fn submit_solution(store: &MetadataStore, solution_id: &str) -> Result<()> {
             solution.submit().map_err(JjjError::Validation)?;
             store.save_solution(&solution)?;
 
-            let event = Event::new(
-                EventType::SolutionSubmitted,
-                solution_id.to_string(),
-                user.clone(),
-            )
-            .with_extra(EventExtra {
-                problem: Some(solution.problem_id.clone()),
-                ..Default::default()
-            });
-            store.set_pending_event(event);
+            store.set_pending_event(event.clone());
 
             // Auto-set problem to InProgress if still Open
             let mut problem = store.load_problem(&solution.problem_id)?;
@@ -151,11 +149,6 @@ pub fn submit_solution(store: &MetadataStore, solution_id: &str) -> Result<()> {
         },
     )?;
 
-    let event = Event::new(
-        EventType::SolutionSubmitted,
-        solution_id.to_string(),
-        user,
-    );
     crate::automation::run(store, &event, solution_id);
 
     Ok(())
@@ -185,12 +178,7 @@ pub fn withdraw_solution(
         Ok(())
     })?;
 
-    let auto_event = Event::new(
-        EventType::SolutionWithdrawn,
-        solution_id.to_string(),
-        event.by.clone(),
-    );
-    crate::automation::run(store, &auto_event, solution_id);
+    crate::automation::run(store, &event, solution_id);
 
     Ok(())
 }
@@ -210,7 +198,7 @@ pub fn solve_problem(store: &MetadataStore, problem_id: &str) -> Result<()> {
     }
 
     let user = store.get_current_user()?;
-    let event = Event::new(EventType::ProblemSolved, problem_id.to_string(), user.clone());
+    let event = Event::new(EventType::ProblemSolved, problem_id.to_string(), user);
 
     store.with_metadata(&format!("Solve problem {}", problem_id), || {
         store.set_pending_event(event.clone());
@@ -221,7 +209,6 @@ pub fn solve_problem(store: &MetadataStore, problem_id: &str) -> Result<()> {
         Ok(())
     })?;
 
-    let event = Event::new(EventType::ProblemSolved, problem_id.to_string(), user);
     crate::automation::run(store, &event, problem_id);
 
     Ok(())
@@ -257,11 +244,6 @@ pub fn dissolve_problem(
         Ok(())
     })?;
 
-    let event = Event::new(
-        EventType::ProblemDissolved,
-        problem_id.to_string(),
-        user,
-    );
     crate::automation::run(store, &event, problem_id);
 
     Ok(())
@@ -286,11 +268,6 @@ pub fn reopen_problem(store: &MetadataStore, problem_id: &str) -> Result<()> {
         Ok(())
     })?;
 
-    let event = Event::new(
-        EventType::ProblemReopened,
-        problem_id.to_string(),
-        user,
-    );
     crate::automation::run(store, &event, problem_id);
 
     Ok(())

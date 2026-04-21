@@ -181,19 +181,31 @@ impl EmbeddingClient {
 
         let status_code = parse_status_code(&status_line);
 
-        // Skip headers
+        // Parse headers — extract Content-Length if present
+        let mut content_length: Option<usize> = None;
         loop {
             let mut header = String::new();
             reader.read_line(&mut header)?;
             if header == "\r\n" || header.is_empty() {
                 break;
             }
+            if let Some(value) = header.strip_prefix("Content-Length:").or_else(|| header.strip_prefix("content-length:")) {
+                content_length = value.trim().parse().ok();
+            }
         }
 
-        // Read body
-        let mut response_body = String::new();
+        // Read body — use Content-Length if available (handles chunked TE safely),
+        // otherwise fall back to read_to_string (works with Connection: close).
         use std::io::Read;
-        reader.read_to_string(&mut response_body)?;
+        let mut response_body = String::new();
+        if let Some(len) = content_length {
+            let mut buf = vec![0u8; len];
+            reader.read_exact(&mut buf)?;
+            response_body = String::from_utf8(buf)
+                .map_err(|e| EmbeddingError::Parse(format!("invalid UTF-8 in response: {}", e)))?;
+        } else {
+            reader.read_to_string(&mut response_body)?;
+        }
 
         if status_code != 200 {
             return Err(EmbeddingError::Api {
@@ -208,6 +220,14 @@ impl EmbeddingClient {
 
 /// Parse host, port, and path from a base URL string like "http://localhost:11434/v1".
 fn parse_base_url(base_url: &str) -> (String, u16, String) {
+    // Reject HTTPS — we use raw TcpStream without TLS
+    if base_url.starts_with("https://") {
+        eprintln!(
+            "Warning: HTTPS is not supported for embeddings (no TLS). Treating as HTTP: {}",
+            base_url
+        );
+    }
+
     // Strip scheme
     let without_scheme = base_url
         .strip_prefix("http://")

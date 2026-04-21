@@ -242,7 +242,10 @@ pub(crate) fn build_next_actions(
     for solution in solutions.iter().filter(|s| s.is_active()) {
         let open_critiques: Vec<&Critique> = critiques
             .iter()
-            .filter(|c| c.solution_id == solution.id && c.status == CritiqueStatus::Open)
+            .filter(|c| {
+                c.solution_id == solution.id
+                    && matches!(c.status, CritiqueStatus::Open | CritiqueStatus::Valid)
+            })
             .collect();
 
         if !open_critiques.is_empty() {
@@ -300,9 +303,10 @@ pub(crate) fn build_next_actions(
 
     // 2. READY: Solutions with all critiques resolved + review satisfied
     for solution in solutions.iter().filter(|s| s.is_active()) {
-        let has_open = critiques
-            .iter()
-            .any(|c| c.solution_id == solution.id && c.status == CritiqueStatus::Open);
+        let has_open = critiques.iter().any(|c| {
+            c.solution_id == solution.id
+                && matches!(c.status, CritiqueStatus::Open | CritiqueStatus::Valid)
+        });
 
         if !has_open && !solution.critique_ids.is_empty() {
             let problem = problems.iter().find(|p| p.id == solution.problem_id);

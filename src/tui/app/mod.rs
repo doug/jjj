@@ -92,6 +92,9 @@ pub enum InputAction {
     MoveProblemsToMilestone {
         problem_ids: Vec<String>,
     },
+    BatchEditTags {
+        targets: Vec<(EntityType, String)>, // Vec<(entity_type, entity_id)>
+    },
 }
 
 /// A pending request to suspend the TUI and open an entity in an external editor.
@@ -651,6 +654,7 @@ impl App {
                     || matches!(
                         action,
                         InputAction::EditTags { .. }
+                            | InputAction::BatchEditTags { .. }
                             | InputAction::MoveProblemToMilestone { .. }
                             | InputAction::MoveProblemsToMilestone { .. }
                     )
@@ -815,6 +819,9 @@ impl App {
                 } else {
                     self.show_flash("Delete cancelled");
                 }
+            }
+            InputAction::BatchEditTags { targets } => {
+                self.batch_update_tags(targets, title)?;
             }
             InputAction::Search => {
                 // Search is handled directly in handle_input_key
