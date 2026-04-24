@@ -27,7 +27,7 @@ pub(super) fn atomic_write(path: &std::path::Path, content: &[u8]) -> std::io::R
     Ok(())
 }
 
-pub(super) const META_BOOKMARK: &str = "jjj";
+pub const META_BOOKMARK: &str = "jjj";
 pub(super) const CONFIG_FILE: &str = "config.toml";
 pub(super) const PROBLEMS_DIR: &str = "problems";
 pub(super) const SOLUTIONS_DIR: &str = "solutions";
@@ -36,25 +36,76 @@ pub(super) const MILESTONES_DIR: &str = "milestones";
 
 /// The core storage abstraction for jjj metadata.
 ///
-/// Manages reading/writing Problems, Solutions, Critiques, and Milestones from
-/// an orphaned `jjj` bookmark stored in `.jj/jjj-meta/`. Each write goes through
-/// [`with_metadata`](MetadataStore::with_metadata), which atomically commits the
-/// change with an event appended to the commit message.
+/// Manages reading/writing Problems, Solutions, Critiques, and Milestones as
+/// markdown files in `.jj/jjj-meta/`. Events are appended to `events.jsonl`.
 ///
 /// The metadata lives entirely outside the working copy — operations here never
-/// touch the user's working changes.
+/// touch the user's working changes. Sync (push/fetch) is handled separately
+/// and only requires a configured sync backend.
 pub struct MetadataStore {
-    /// Path to the metadata directory (checked out from jjj bookmark)
+    /// Path to the metadata directory (.jj/jjj-meta/)
     meta_path: PathBuf,
+
+    /// Path to the events log file (.jj/jjj-meta/events.jsonl)
+    events_path: PathBuf,
 
     /// JJ client for interacting with the repository
     pub jj_client: JjClient,
 
-    /// JJ client for the metadata workspace
-    pub meta_client: JjClient,
-
-    /// Events to embed in the next commit description
+    /// Events to append to events.jsonl on the next flush
     pending_events: RefCell<Vec<Event>>,
+}
+
+/// Load the global user config from ~/.config/jjj/config.toml.
+fn load_global_config() -> ProjectConfig {
+    let config_dir = global_config_dir().join("config.toml");
+    if !config_dir.exists() {
+        return ProjectConfig::default();
+    }
+    std::fs::read_to_string(&config_dir)
+        .ok()
+        .and_then(|s| toml::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+/// Get the global jjj config directory (~/.config/jjj/).
+fn global_config_dir() -> std::path::PathBuf {
+    if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME") {
+        return std::path::PathBuf::from(xdg).join("jjj");
+    }
+    if let Some(home) = std::env::var_os("HOME") {
+        return std::path::PathBuf::from(home).join(".config").join("jjj");
+    }
+    std::path::PathBuf::from(".config").join("jjj")
+}
+
+/// Merge project config on top of global config.
+fn merge_config(base: &mut ProjectConfig, project: &ProjectConfig) {
+    if project.name.is_some() {
+        base.name = project.name.clone();
+    }
+    if !project.default_reviewers.is_empty() {
+        base.default_reviewers = project.default_reviewers.clone();
+    }
+    if !project.settings.is_empty() {
+        base.settings.extend(project.settings.clone());
+    }
+    base.github = project.github.clone();
+    if project.sync.fetch.is_some() {
+        base.sync.fetch = project.sync.fetch.clone();
+    }
+    if project.sync.push.is_some() {
+        base.sync.push = project.sync.push.clone();
+    }
+    if project.sync.track.is_some() {
+        base.sync.track = project.sync.track.clone();
+    }
+    if project.sync.workspace.is_some() {
+        base.sync.workspace = project.sync.workspace.clone();
+    }
+    if !project.automation.is_empty() {
+        base.automation = project.automation.clone();
+    }
 }
 
 // =============================================================================
@@ -119,15 +170,18 @@ impl MetadataStore {
     pub fn new(jj_client: JjClient) -> Result<Self> {
         let repo_root = jj_client.repo_root().to_path_buf();
         let meta_path = repo_root.join(".jj").join("jjj-meta");
+        let events_path = meta_path.join("events.jsonl");
 
-        let meta_client = JjClient::with_root(meta_path.clone())?;
-
-        Ok(Self {
+        let store = Self {
             meta_path,
+            events_path,
             jj_client,
-            meta_client,
             pending_events: RefCell::new(Vec::new()),
-        })
+        };
+
+        store.maybe_migrate();
+
+        Ok(store)
     }
 
     /// Get the path to the metadata directory
@@ -135,118 +189,99 @@ impl MetadataStore {
         &self.meta_path
     }
 
-    /// Initialize the metadata store (create jjj bookmark)
+    /// Migrate events from old commit-based storage to events.jsonl.
+    fn maybe_migrate(&self) {
+        if self.events_path.exists() {
+            return;
+        }
+        let meta_jj = self.meta_path.join(".jj");
+        if !meta_jj.exists() {
+            return;
+        }
+        let meta_client = match JjClient::with_root(self.meta_path.clone()) {
+            Ok(c) => c,
+            Err(_) => return,
+        };
+        let descriptions = match meta_client.log_descriptions("::@") {
+            Ok(d) => d,
+            Err(_) => return,
+        };
+        let events: Vec<Event> = descriptions
+            .iter()
+            .flat_map(|d| {
+                d.lines()
+                    .filter(|l| l.starts_with("jjj: "))
+                    .filter_map(|l| serde_json::from_str(&l["jjj: ".len()..]).ok())
+            })
+            .collect();
+        if events.is_empty() {
+            return;
+        }
+        use std::io::Write;
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.events_path)
+        {
+            for event in &events {
+                if let Ok(line) = event.to_json_line() {
+                    let _ = writeln!(file, "{}", line);
+                }
+            }
+            eprintln!(
+                "Migrated {} events from commit history to events.jsonl",
+                events.len()
+            );
+        }
+    }
+
+    /// Initialize the metadata store (create directory structure)
     pub fn init(&self) -> Result<()> {
-        // Check if already initialized
-        if self.jj_client.bookmark_exists(META_BOOKMARK)? {
+        if self.meta_path.join(CONFIG_FILE).exists() {
             return Err(crate::error::JjjError::Validation(
                 "jjj is already initialized".to_string(),
             ));
         }
+        self.ensure_meta_dirs()?;
+        let default_config = ProjectConfig::default();
+        self.save_config(&default_config)?;
+        Ok(())
+    }
 
-        // Create the meta workspace directly at root() so we never touch the
-        // user's main working copy (fixes #3: init clobbers working copy).
-        let meta_path_str = self
-            .meta_path
-            .to_str()
-            .ok_or_else(|| JjjError::PathError(self.meta_path.clone()))?;
-        self.jj_client
-            .execute(&["workspace", "add", meta_path_str, "-r", "root()"])?;
-
-        // Describe the new workspace's change from inside the meta workspace
-        // so all operations stay in that workspace.
-        self.meta_client.describe("Initialize jjj metadata")?;
-        let change_id = self.meta_client.current_change_id()?;
-
-        // Create the bookmark from the main workspace using --ignore-working-copy
-        // to avoid stale-workspace errors from the workspace add above.
-        self.jj_client.execute(&[
-            "--ignore-working-copy",
-            "bookmark",
-            "create",
-            META_BOOKMARK,
-            "-r",
-            &change_id,
-        ])?;
-
-        // Create initial structure
+    /// Ensure the metadata directory structure exists.
+    pub(super) fn ensure_meta_dirs(&self) -> Result<()> {
         fs::create_dir_all(self.meta_path.join(PROBLEMS_DIR))?;
         fs::create_dir_all(self.meta_path.join(SOLUTIONS_DIR))?;
         fs::create_dir_all(self.meta_path.join(CRITIQUES_DIR))?;
         fs::create_dir_all(self.meta_path.join(MILESTONES_DIR))?;
-
-        // Create default config
-        let default_config = ProjectConfig::default();
-        self.save_config(&default_config)?;
-
-        // Commit the initial structure
-        self.commit_changes("Initialize jjj structure")?;
-
         Ok(())
     }
 
-    /// Ensure the metadata workspace exists and is checked out from the `jjj` bookmark.
-    ///
-    /// Creates a new `jj workspace` pointing at `.jj/jjj-meta/` if the directory
-    /// does not already exist. If the `jjj` bookmark itself does not yet exist,
-    /// auto-initializes the metadata store so any command works on a fresh repo
-    /// without requiring an explicit `jjj init`.
     pub(super) fn ensure_meta_checkout(&self) -> Result<()> {
-        if !self.meta_path.exists() {
-            let meta_path_str = self
-                .meta_path
-                .to_str()
-                .ok_or_else(|| JjjError::PathError(self.meta_path.clone()))?;
-
-            // Auto-initialize if the jjj bookmark has never been created.
-            // Create workspace at root() so we never touch the user's main
-            // working copy.
-            if !self.jj_client.bookmark_exists(META_BOOKMARK)? {
-                self.jj_client
-                    .execute(&["workspace", "add", meta_path_str, "-r", "root()"])?;
-                self.meta_client.describe("Initialize jjj metadata")?;
-                let change_id = self.meta_client.current_change_id()?;
-                self.jj_client.execute(&[
-                    "--ignore-working-copy",
-                    "bookmark",
-                    "create",
-                    META_BOOKMARK,
-                    "-r",
-                    &change_id,
-                ])?;
-            } else {
-                self.jj_client.execute(&[
-                    "workspace",
-                    "add",
-                    meta_path_str,
-                    "-r",
-                    META_BOOKMARK,
-                ])?;
-            }
-            // Create required subdirectories inside the newly-checked-out workspace.
-            fs::create_dir_all(self.meta_path.join(PROBLEMS_DIR))?;
-            fs::create_dir_all(self.meta_path.join(SOLUTIONS_DIR))?;
-            fs::create_dir_all(self.meta_path.join(CRITIQUES_DIR))?;
-            fs::create_dir_all(self.meta_path.join(MILESTONES_DIR))?;
-        }
-        Ok(())
+        self.ensure_meta_dirs()
     }
 
     // =========================================================================
     // Config Operations
     // =========================================================================
 
-    /// Load project configuration
+    /// Load project configuration, merging with global config.
+    ///
+    /// Load order (later overrides earlier):
+    /// 1. `~/.config/jjj/config.toml` (global user defaults)
+    /// 2. `.jj/jjj-meta/config.toml` (project-specific)
     pub fn load_config(&self) -> Result<ProjectConfig> {
         self.ensure_meta_checkout()?;
 
+        let mut config = load_global_config();
+
         let config_path = self.meta_path.join(CONFIG_FILE);
-        if !config_path.exists() {
-            return Ok(ProjectConfig::default());
+        if config_path.exists() {
+            let content = fs::read_to_string(config_path)?;
+            let project: ProjectConfig = toml::from_str(&content)?;
+            merge_config(&mut config, &project);
         }
 
-        let content = fs::read_to_string(config_path)?;
-        let config: ProjectConfig = toml::from_str(&content)?;
         Ok(config)
     }
 
@@ -355,81 +390,45 @@ impl MetadataStore {
     // Commit Operations
     // =========================================================================
 
-    /// Commit changes to the metadata
-    pub fn commit_changes(&self, message: &str) -> Result<()> {
-        // Embed all pending events as `jjj: <json>` lines in the commit
-        // description. The commit history is the sole authoritative event
-        // store; there is no separate events.jsonl file to update.
-        let event_suffix = {
-            let mut pending = self.pending_events.borrow_mut();
-            if pending.is_empty() {
-                String::new()
-            } else {
-                let lines: String = pending
-                    .drain(..)
-                    .filter_map(|e| match e.to_commit_suffix() {
-                        Ok(line) => Some(line),
-                        Err(err) => {
-                            eprintln!("Warning: failed to serialize event: {}", err);
-                            None
-                        }
-                    })
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                format!("\n\n{}", lines)
+    /// Flush pending events to events.jsonl.
+    pub fn commit_changes(&self, _message: &str) -> Result<()> {
+        use std::io::Write;
+
+        let mut pending = self.pending_events.borrow_mut();
+        if pending.is_empty() {
+            return Ok(());
+        }
+
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.events_path)
+            .map_err(JjjError::Io)?;
+
+        for event in pending.drain(..) {
+            match event.to_json_line() {
+                Ok(line) => {
+                    if let Err(e) = writeln!(file, "{}", line) {
+                        eprintln!("Warning: failed to write event: {}", e);
+                    }
+                }
+                Err(err) => {
+                    eprintln!("Warning: failed to serialize event: {}", err);
+                }
             }
-        };
-
-        let full_message = format!("{}{}", message, event_suffix);
-
-        // The meta workspace may be stale from a previous bookmark set in the
-        // main workspace (bookmark set advances the shared op log). Bring it
-        // current before describing, which needs a non-stale working copy
-        // to snapshot the metadata files we just wrote to disk.
-        let _ = self.meta_client.execute(&["workspace", "update-stale"]);
-
-        // Describe FIRST so jj snapshots the working-copy files into the
-        // current change and attaches our message. Then `jj new` creates an
-        // empty child, leaving the described change as @- with all content.
-        // (The old order — new then describe — caused content to land in the
-        // parent while the description went to an empty child: issue #4.)
-        self.meta_client.describe(&full_message)?;
-        self.meta_client.execute(&["new"])?;
-
-        // The commit we care about is now @- (the parent of the fresh empty
-        // change). Read its commit-id for the bookmark update. We use
-        // commit_id rather than change_id because change IDs can become
-        // divergent across workspaces, causing bookmark set to fail.
-        let meta_change = self
-            .meta_client
-            .execute(&["log", "--no-graph", "-r", "@-", "-T", "commit_id"])?
-            .trim()
-            .to_string();
-        self.jj_client.execute(&[
-            "--ignore-working-copy",
-            "bookmark",
-            "set",
-            META_BOOKMARK,
-            "-r",
-            &meta_change,
-            "--allow-backwards",
-        ])?;
+        }
 
         Ok(())
     }
 
-    /// Execute an operation on the metadata store and atomically commit the result.
+    /// Execute an operation on the metadata store and flush events.
     ///
     /// This is the primary mechanism for all metadata writes. The `operation`
-    /// closure runs first; if it succeeds, changes are committed to the `jjj`
-    /// bookmark with `message` as the commit description. Any events queued
-    /// via [`set_pending_event`](MetadataStore::set_pending_event) are
-    /// embedded as `jjj: <json>` lines in the commit description.
+    /// closure runs first; if it succeeds, any events queued via
+    /// [`set_pending_event`](MetadataStore::set_pending_event) are appended
+    /// to `events.jsonl`.
     ///
-    /// The commit history is the sole authoritative event store — there is no
-    /// separate cache file. Events are replayed from `::@` on demand.
-    ///
-    /// If `operation` returns an error, no commit is made.
+    /// If `operation` returns an error, no events are flushed.
     pub fn with_metadata<F, R>(&self, message: &str, operation: F) -> Result<R>
     where
         F: FnOnce() -> Result<R>,

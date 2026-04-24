@@ -1,13 +1,60 @@
+use std::collections::HashSet;
 use std::fs;
+use std::path::Path;
 
 use crate::context::CommandContext;
 use crate::db::{self, Database};
 use crate::error::Result;
-use crate::jj::JjClient;
 use crate::storage::MetadataStore;
+
+/// Merge remote events into the local events.jsonl, deduplicating by content.
+fn merge_events_jsonl(local_path: &Path, remote_content: &str) {
+    let existing: HashSet<String> = if local_path.exists() {
+        fs::read_to_string(local_path)
+            .unwrap_or_default()
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .map(|l| l.to_string())
+            .collect()
+    } else {
+        HashSet::new()
+    };
+
+    let new_lines: Vec<&str> = remote_content
+        .lines()
+        .filter(|l| !l.trim().is_empty() && !existing.contains(*l))
+        .collect();
+
+    if new_lines.is_empty() {
+        return;
+    }
+
+    use std::io::Write;
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(local_path)
+    {
+        for line in &new_lines {
+            let _ = writeln!(file, "{}", line);
+        }
+    }
+}
 
 pub fn execute(ctx: &CommandContext, remote: &str) -> Result<()> {
     let jj_client = ctx.jj();
+    let sync_config = ctx.store.load_config().unwrap_or_default().sync;
+    let has_git = jj_client.has_git_backend();
+
+    // Resolve sync commands: explicit config > git default > skip
+    let fetch_cmd = match sync_config.resolve_fetch(has_git) {
+        Some(cmd) => cmd,
+        None => {
+            println!("No sync backend configured and no git backend detected.");
+            println!("Configure [sync] fetch in config.toml for custom sync commands.");
+            return Ok(());
+        }
+    };
 
     // Check if we need to save local changes before fetch
     let db_path = jj_client.repo_root().join(".jj").join("jjj.db");
@@ -25,30 +72,64 @@ pub fn execute(ctx: &CommandContext, remote: &str) -> Result<()> {
     let solutions_before = ctx.store.list_solutions().unwrap_or_default().len();
     let critiques_before = ctx.store.list_critiques().unwrap_or_default().len();
 
-    // 1. Fetch from remote.
-    // --ignore-working-copy: if commit_changes() ran above to flush dirty
-    // local changes, it left the main workspace stale. git fetch doesn't
-    // need to snapshot the working copy, so the stale check can be skipped.
+    // 1. Fetch from remote using configured or default command.
     println!("Fetching from {}...", remote);
-    jj_client.execute(&["--ignore-working-copy", "git", "fetch", "--remote", remote])?;
+    let vars = [("remote", remote), ("bookmark", "jjj")];
+    jj_client.execute_sync_command(&fetch_cmd, &vars)?;
 
     // Track the jjj bookmark from the remote if it exists
-    // This allows push to update the bookmark without conflicts
-    let _ = jj_client.execute(&["bookmark", "track", "jjj", "--remote", remote]);
-    // Bookmark might already be tracked or might not exist on remote, that's OK
+    if let Some(track_cmd) = sync_config.resolve_track(has_git) {
+        let _ = jj_client.execute_sync_command(&track_cmd, &vars);
+    }
 
-    // 2. Update jjj-meta workspace if it exists
+    // 2. Extract updated files from the fetched jjj bookmark.
+    // Use `jj file show` to read files from the remote bookmark without
+    // needing a workspace checkout.
     let meta_path = jj_client.repo_root().join(".jj").join("jjj-meta");
-    if meta_path.exists() {
-        if let Ok(meta_client) = JjClient::with_root(meta_path) {
-            if let Err(e) = meta_client.execute(&["new", "jjj@origin"]) {
-                eprintln!("Warning: could not update jjj-meta workspace: {}", e);
+    if jj_client.bookmark_exists("jjj")? {
+        fs::create_dir_all(&meta_path)?;
+        // Copy entity files from the fetched bookmark into the local meta directory
+        for dir in &["problems", "solutions", "critiques", "milestones"] {
+            fs::create_dir_all(meta_path.join(dir))?;
+            // List files in this directory at the bookmark revision
+            if let Ok(listing) = jj_client.execute(&[
+                "file",
+                "list",
+                "-r",
+                "jjj",
+                &format!("{}/", dir),
+            ]) {
+                for file_path in listing.lines().filter(|l| !l.trim().is_empty()) {
+                    if let Ok(content) = jj_client.execute(&[
+                        "file",
+                        "show",
+                        "-r",
+                        "jjj",
+                        file_path,
+                    ]) {
+                        let local_path = meta_path.join(file_path);
+                        let _ = fs::write(&local_path, &content);
+                    }
+                }
             }
+        }
+        // Also fetch config.toml
+        if let Ok(content) =
+            jj_client.execute(&["file", "show", "-r", "jjj", "config.toml"])
+        {
+            let _ = fs::write(meta_path.join("config.toml"), &content);
+        }
+        // Merge events: fetch remote events.jsonl and append any new events
+        if let Ok(remote_events) =
+            jj_client.execute(&["file", "show", "-r", "jjj", "events.jsonl"])
+        {
+            merge_events_jsonl(&meta_path.join("events.jsonl"), &remote_events);
         }
     }
 
     // 3. Update working copy to avoid stale workspace errors
-    let _ = jj_client.execute(&["workspace", "update-stale"]);
+    let ws_prefix = sync_config.workspace.as_deref();
+    let _ = jj_client.execute_workspace(ws_prefix, "update-stale", &[]);
 
     // 4. Rebuild database from updated markdown files
     println!("Rebuilding database...");

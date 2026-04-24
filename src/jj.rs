@@ -4,13 +4,9 @@ use std::process::Command;
 
 /// Thin wrapper around `jj` subprocess calls.
 ///
-/// Discovers the `jj` executable on `PATH` and the repository root (by walking
-/// up from `CWD` until a `.jj/` directory is found). All operations invoke `jj`
-/// as a child process and parse stdout/stderr.
-///
-/// Use [`with_root`](JjClient::with_root) to target a different directory — the
-/// metadata workspace uses this to operate on `.jj/jjj-meta/` independently of
-/// the main repo.
+/// Discovers the `jj` executable on `PATH` and the repository root via
+/// `jj root`. All operations invoke `jj` as a child process and parse
+/// stdout/stderr.
 #[derive(Debug, Clone)]
 pub struct JjClient {
     /// Path to the jj executable
@@ -45,7 +41,7 @@ impl JjClient {
             }
         }
 
-        let repo_root = Self::find_repo_root()?;
+        let repo_root = Self::find_repo_root(&jj_path)?;
 
         Ok(Self { jj_path, repo_root })
     }
@@ -63,27 +59,41 @@ impl JjClient {
         })
     }
 
-    /// Find the repository root by looking for .jj directory
-    fn find_repo_root() -> Result<PathBuf> {
-        let current_dir = std::env::current_dir()?;
-
-        let mut dir = current_dir.as_path();
-        loop {
-            let jj_dir = dir.join(".jj");
-            if jj_dir.exists() && jj_dir.is_dir() {
-                return Ok(dir.to_path_buf());
-            }
-
-            match dir.parent() {
-                Some(parent) => dir = parent,
-                None => return Err(JjjError::NotInRepository),
-            }
+    /// Find the repository root using `jj root`.
+    ///
+    /// This delegates to jj's own repo discovery, which handles colocated repos,
+    /// custom store paths, and symlinked `.jj` directories that a manual
+    /// directory walk would miss.
+    fn find_repo_root(jj_path: &Path) -> Result<PathBuf> {
+        let output = Command::new(jj_path)
+            .arg("root")
+            .output()
+            .map_err(|e| JjjError::JjIo {
+                args: "root".to_string(),
+                source: e,
+            })?;
+        if !output.status.success() {
+            return Err(JjjError::NotInRepository);
         }
+        Ok(PathBuf::from(
+            String::from_utf8_lossy(&output.stdout).trim(),
+        ))
     }
 
     /// Get the repository root
     pub fn repo_root(&self) -> &Path {
         &self.repo_root
+    }
+
+    /// Check whether this repository is backed by a git backend.
+    ///
+    /// Returns `false` for native jj backends or when the store type cannot
+    /// be determined. Used to gate `jj git push/fetch` operations.
+    pub fn has_git_backend(&self) -> bool {
+        let type_file = self.repo_root.join(".jj/repo/store/type");
+        std::fs::read_to_string(type_file)
+            .map(|s| s.trim() == "git")
+            .unwrap_or(false)
     }
 
     /// Execute a jj command and return the output
@@ -245,6 +255,41 @@ impl JjClient {
             Err(crate::error::JjjError::JjCommandFailed { .. }) => Ok(false),
             Err(e) => Err(e),
         }
+    }
+
+    /// Execute a workspace subcommand using a configurable prefix.
+    ///
+    /// `workspace_prefix` defaults to `"workspace"` but can be overridden
+    /// (e.g., `"citc workspace"`) to support custom jj extensions.
+    pub fn execute_workspace(
+        &self,
+        workspace_prefix: Option<&str>,
+        subcommand: &str,
+        extra_args: &[&str],
+    ) -> Result<String> {
+        let prefix = workspace_prefix.unwrap_or("workspace");
+        let mut args: Vec<&str> = prefix.split_whitespace().collect();
+        args.push(subcommand);
+        args.extend_from_slice(extra_args);
+        self.execute(&args)
+    }
+
+    /// Execute a shell command string with template variable expansion.
+    ///
+    /// Used for config-driven sync commands. The command is split on whitespace
+    /// and executed as a `jj` subprocess (the `jj` prefix is implied — the
+    /// command should start with the subcommand, e.g., `"git push -b {bookmark}"`).
+    pub fn execute_sync_command(
+        &self,
+        command_template: &str,
+        vars: &[(&str, &str)],
+    ) -> Result<String> {
+        let mut expanded = command_template.to_string();
+        for (key, value) in vars {
+            expanded = expanded.replace(&format!("{{{}}}", key), value);
+        }
+        let args: Vec<&str> = expanded.split_whitespace().collect();
+        self.execute(&args)
     }
 
     /// Get user name from config

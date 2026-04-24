@@ -13,7 +13,7 @@ covers:
   - "events --json structured output"
   - "events rebuild"
   - "events validate"
-  - "No events.jsonl -- events live in commit history"
+  - "Events stored in events.jsonl"
   - "Approve emits two events in one commit"
 tags: [events, audit, filtering, rebuild, validate]
 ---
@@ -233,23 +233,23 @@ events validate
 
 Events validate confirms the event log is internally consistent -- useful in CI.
 
-## Step 11: No events.jsonl -- events live in commit history
+## Step 11: Events stored in events.jsonl
 
-Events are embedded as `jjj: <json>` lines in commit descriptions, so the history IS the event log. This means bookmark merges never produce conflict markers in an events file.
+Events are stored as NDJSON (one JSON object per line) in `events.jsonl`. On sync, events are merged by deduplicating identical lines.
 
 ```shell
-test ! -f .jj/jjj-meta/events.jsonl && echo "no events.jsonl"
-> no events.jsonl
+test -f .jj/jjj-meta/events.jsonl && echo "events.jsonl exists"
+> events.jsonl exists
 ```
 
-Events are still fully readable despite having no file:
+Events are readable via the events command:
 
 ```jjj
 events
 > problem_created
 ```
 
-No events.jsonl means no merge conflicts. Two contributors can push independently; after fetch, all events appear automatically.
+Events are append-only. On fetch, remote events are merged into the local file with deduplication.
 
 ## Step 12: Approve emits two events in one commit
 

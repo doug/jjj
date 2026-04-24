@@ -342,7 +342,11 @@ Add the custom label-to-priority mapping to config:
 
 ```shell:setup
 CONFIG_PATH="$REPO/label-config/.jj/jjj-meta/config.toml"
-cat >> "$CONFIG_PATH" << 'TOMLEOF'
+cat > "$CONFIG_PATH" << 'TOMLEOF'
+[github]
+problem_label = "jjj"
+
+[github.label_priority]
 "team-priority-1" = "critical"
 TOMLEOF
 ```

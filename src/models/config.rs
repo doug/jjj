@@ -93,6 +93,88 @@ pub struct AutomationRule {
     pub enabled: bool,
 }
 
+/// Sync configuration for push/fetch operations.
+///
+/// Commands are shell strings with template variables:
+/// - `{remote}` — remote name (default: "origin")
+/// - `{bookmark}` — bookmark name being pushed
+///
+/// When not configured, jjj auto-detects: uses `jj git push/fetch` for
+/// git-backed repos, and errors for other backends.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SyncConfig {
+    /// Command to fetch metadata from remote.
+    /// Example: "jj git fetch --remote {remote}"
+    #[serde(default)]
+    pub fetch: Option<String>,
+
+    /// Command to push a bookmark to remote.
+    /// Example: "jj git push -b {bookmark} --remote {remote} --allow-empty-description"
+    #[serde(default)]
+    pub push: Option<String>,
+
+    /// Command to track a remote bookmark locally.
+    /// Example: "jj bookmark track {bookmark} --remote {remote}"
+    #[serde(default)]
+    pub track: Option<String>,
+
+    /// Workspace command prefix. Replaces `workspace` in all jj workspace
+    /// subcommands (add, update-stale, etc.).
+    /// Example for CitC: "citc workspace"
+    /// Default: "workspace"
+    #[serde(default)]
+    pub workspace: Option<String>,
+
+}
+
+impl SyncConfig {
+    /// Resolve the fetch command: explicit config > git default > None.
+    pub fn resolve_fetch(&self, has_git: bool) -> Option<String> {
+        if let Some(ref cmd) = self.fetch {
+            return Some(cmd.clone());
+        }
+        if has_git {
+            return Some("--ignore-working-copy git fetch --remote {remote}".to_string());
+        }
+        None
+    }
+
+    /// Resolve the push command: explicit config > git default > None.
+    pub fn resolve_push(&self, has_git: bool) -> Option<String> {
+        if let Some(ref cmd) = self.push {
+            return Some(cmd.clone());
+        }
+        if has_git {
+            return Some(
+                "git push -b {bookmark} --remote {remote} --allow-empty-description".to_string(),
+            );
+        }
+        None
+    }
+
+    /// Resolve the track command: explicit config > git default > None.
+    pub fn resolve_track(&self, has_git: bool) -> Option<String> {
+        if let Some(ref cmd) = self.track {
+            return Some(cmd.clone());
+        }
+        if has_git {
+            return Some("bookmark track {bookmark} --remote {remote}".to_string());
+        }
+        None
+    }
+
+    /// Resolve the workspace prefix: explicit config > "workspace".
+    pub fn workspace_prefix(&self) -> &str {
+        self.workspace.as_deref().unwrap_or("workspace")
+    }
+
+
+    /// Whether any sync mechanism is available.
+    pub fn has_sync(&self, has_git: bool) -> bool {
+        self.fetch.is_some() || self.push.is_some() || has_git
+    }
+}
+
 /// Project-wide configuration stored in config.toml
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ProjectConfig {
@@ -111,6 +193,10 @@ pub struct ProjectConfig {
     /// GitHub integration settings
     #[serde(default)]
     pub github: GitHubConfig,
+
+    /// Sync configuration for push/fetch
+    #[serde(default)]
+    pub sync: SyncConfig,
 
     /// Automation rules — fire actions on jjj events
     #[serde(default)]

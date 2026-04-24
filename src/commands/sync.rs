@@ -444,8 +444,7 @@ fn sync_pr(
     let change_id = &solution.change_ids[0];
 
     // Set the bookmark on the solution's change.
-    // --ignore-working-copy: main workspace may be stale from a prior
-    // commit_changes(); bookmark set doesn't touch the working copy.
+    // Bookmarks are a core jj concept — no backend config needed.
     ctx.jj().execute(&[
         "--ignore-working-copy",
         "bookmark",
@@ -455,8 +454,21 @@ fn sync_pr(
         change_id,
     ])?;
 
-    // Push the branch
-    ctx.jj().execute(&["git", "push", "--bookmark", &branch])?;
+    // Push the branch using configured or default sync command
+    let sync_config = ctx.store.load_config().unwrap_or_default().sync;
+    let has_git = ctx.jj().has_git_backend();
+    let push_cmd = match sync_config.resolve_push(has_git) {
+        Some(cmd) => cmd,
+        None => {
+            return Err(JjjError::Validation(
+                "Creating PRs requires a sync backend for pushing branches.\n\
+                 Configure [sync] push in config.toml."
+                    .to_string(),
+            ));
+        }
+    };
+    let vars = [("bookmark", branch.as_str()), ("remote", "origin")];
+    ctx.jj().execute_sync_command(&push_cmd, &vars)?;
 
     // Create the PR
     let pr_number = provider.create_pr(&solution, &problem, &branch)?;

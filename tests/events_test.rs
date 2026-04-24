@@ -302,14 +302,14 @@ fn test_events_no_jsonl_file() {
     );
     assert!(output.status.success());
 
-    // events.jsonl must NOT exist anywhere under .jj/jjj-meta/
+    // events.jsonl stores all events
     let events_file = dir.join(".jj").join("jjj-meta").join("events.jsonl");
     assert!(
-        !events_file.exists(),
-        "events.jsonl must not exist — events live in commit descriptions, not a file"
+        events_file.exists(),
+        "events.jsonl must exist — events are stored as NDJSON lines"
     );
 
-    // Events are still readable from commit history
+    // Events are readable from events.jsonl
     let output = run_jjj(dir, &["events", "--json"]);
     assert!(output.status.success(), "events --json failed");
     let stdout = String::from_utf8_lossy(&output.stdout);
