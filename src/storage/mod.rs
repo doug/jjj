@@ -177,9 +177,24 @@ fn add_frontmatter_context(err: JjjError, entity_type: &str, entity_id: &str) ->
     }
 }
 
-/// Serialize entity to markdown with YAML frontmatter
-fn to_markdown<T: serde::Serialize>(frontmatter: &T, body: &str) -> Result<String> {
-    let yaml = serde_yml::to_string(frontmatter)?;
+/// Serialize an entity to markdown with YAML frontmatter, stripping the
+/// body field from the frontmatter (it lives in the markdown body below).
+///
+/// `body_field` is the name of the field on `T` that holds the markdown body
+/// (`description`, `approach`, `argument`, etc.). The field is removed from
+/// the serialized YAML map before rendering, then `body` is appended after
+/// the closing `---`. The entity type itself keeps the field for in-memory
+/// access and for full JSON output via other code paths.
+fn to_markdown_strip<T: serde::Serialize>(
+    entity: &T,
+    body: &str,
+    body_field: &str,
+) -> Result<String> {
+    let mut value = serde_yml::to_value(entity)?;
+    if let Some(map) = value.as_mapping_mut() {
+        map.remove(serde_yml::Value::String(body_field.to_string()));
+    }
+    let yaml = serde_yml::to_string(&value)?;
     Ok(format!("---\n{}---\n\n{}", yaml, body))
 }
 
@@ -463,8 +478,7 @@ impl MetadataStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{Confidence, Priority, ProblemFrontmatter};
-    use chrono::Utc;
+    use crate::models::Problem;
 
     #[test]
     fn test_parse_frontmatter() {
@@ -486,42 +500,36 @@ This is a test problem.
 Some context here.
 "#;
 
-        let (frontmatter, body): (ProblemFrontmatter, String) = parse_frontmatter(content).unwrap();
-        assert_eq!(frontmatter.id, "p1");
-        assert_eq!(frontmatter.title, "Test Problem");
+        let (problem, body): (Problem, String) = parse_frontmatter(content).unwrap();
+        assert_eq!(problem.id, "p1");
+        assert_eq!(problem.title, "Test Problem");
         assert!(body.contains("## Description"));
+        // The description field defaults to empty when missing from YAML;
+        // storage::load_problem assigns it from the body after parsing.
+        assert!(problem.description.is_empty());
     }
 
     #[test]
-    fn test_to_markdown() {
-        let frontmatter = ProblemFrontmatter {
-            id: "p1".to_string(),
-            title: "Test".to_string(),
-            parent_id: None,
-            status: ProblemStatus::Open,
-            priority: Priority::default(),
-            confidence: Confidence::default(),
-            solution_ids: vec![],
-            milestone_id: None,
-            assignee: None,
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
-            dissolved_reason: None,
-            github_issue: None,
-            tags: vec![],
-        };
+    fn test_to_markdown_strips_body_field() {
+        let mut problem = Problem::new("p1".to_string(), "Test".to_string());
+        problem.description = "irrelevant — this lives in the body".to_string();
 
         let body = "Test description\n";
-        let result = to_markdown(&frontmatter, body).unwrap();
+        let result = to_markdown_strip(&problem, body, "description").unwrap();
 
         assert!(result.starts_with("---\n"));
         assert!(result.contains("id: p1"));
         assert!(result.contains("Test description"));
+        // `description` must not appear in the YAML frontmatter — it lives
+        // in the body section after the closing `---`.
+        let frontmatter_end = result.find("\n---\n\n").unwrap();
+        let frontmatter = &result[..frontmatter_end];
+        assert!(!frontmatter.contains("description:"));
     }
 
     #[test]
-    fn test_critique_frontmatter_with_reviewer() {
-        use crate::models::{Critique, CritiqueFrontmatter};
+    fn test_to_markdown_strip_critique_with_reviewer() {
+        use crate::models::Critique;
 
         let mut critique = Critique::new(
             "c1".to_string(),
@@ -530,10 +538,8 @@ Some context here.
         );
         critique.reviewer = Some("bob".to_string());
 
-        let frontmatter = CritiqueFrontmatter::from(&critique);
         let body = format!("{}\n", critique.argument);
-
-        let markdown = to_markdown(&frontmatter, &body).unwrap();
+        let markdown = to_markdown_strip(&critique, &body, "argument").unwrap();
         assert!(markdown.contains("reviewer: bob"));
     }
 }

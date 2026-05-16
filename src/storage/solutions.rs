@@ -1,9 +1,9 @@
 use super::{
-    add_frontmatter_context, parse_frontmatter, to_markdown, MetadataStore, CRITIQUES_DIR,
+    add_frontmatter_context, parse_frontmatter, to_markdown_strip, MetadataStore, CRITIQUES_DIR,
     SOLUTIONS_DIR,
 };
 use crate::error::{JjjError, Result};
-use crate::models::{Solution, SolutionFrontmatter};
+use crate::models::Solution;
 use std::fs;
 
 impl MetadataStore {
@@ -21,26 +21,9 @@ impl MetadataStore {
         }
 
         let content = fs::read_to_string(solution_path)?;
-        let (frontmatter, body): (SolutionFrontmatter, String) = parse_frontmatter(&content)
+        let (mut solution, body): (Solution, String) = parse_frontmatter(&content)
             .map_err(|e| add_frontmatter_context(e, "solution", solution_id))?;
-
-        let solution = Solution {
-            id: frontmatter.id,
-            title: frontmatter.title,
-            problem_id: frontmatter.problem_id,
-            status: frontmatter.status,
-            critique_ids: frontmatter.critique_ids,
-            change_ids: frontmatter.change_ids,
-            assignee: frontmatter.assignee,
-            created_at: frontmatter.created_at,
-            updated_at: frontmatter.updated_at,
-            approach: body,
-            supersedes: frontmatter.supersedes,
-            force_approved: frontmatter.force_approved,
-            github_pr: frontmatter.github_pr,
-            github_branch: frontmatter.github_branch,
-            tags: frontmatter.tags,
-        };
+        solution.approach = body;
 
         Ok(solution)
     }
@@ -52,14 +35,13 @@ impl MetadataStore {
         let solutions_dir = self.meta_path.join(SOLUTIONS_DIR);
         fs::create_dir_all(&solutions_dir)?;
 
-        let frontmatter = SolutionFrontmatter::from(solution);
         let body = if solution.approach.is_empty() {
             String::new()
         } else {
             format!("{}\n", solution.approach)
         };
 
-        let content = to_markdown(&frontmatter, &body)?;
+        let content = to_markdown_strip(solution, &body, "approach")?;
         let solution_path = solutions_dir.join(format!("{}.md", solution.id));
         super::atomic_write(&solution_path, content.as_bytes())?;
 

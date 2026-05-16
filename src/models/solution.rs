@@ -3,6 +3,13 @@ use serde::{Deserialize, Serialize};
 
 /// A solution is a conjecture - a tentative attempt to solve a problem.
 /// Solutions must face explicit criticism to survive or be withdrawn.
+///
+/// # Serialization
+///
+/// `approach` is the markdown body, not part of the YAML frontmatter. See
+/// the doc on [`crate::models::Problem`] for the full serialization rules.
+/// Field order matches the historical YAML output so on-disk diffs are
+/// minimal when round-tripping through save/load.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Solution {
     /// Unique solution identifier (e.g., "S-1")
@@ -18,29 +25,20 @@ pub struct Solution {
     pub status: SolutionStatus,
 
     /// Critique IDs - critiques of this solution
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub critique_ids: Vec<String>,
 
     /// Associated jj change IDs implementing this solution
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub change_ids: Vec<String>,
 
     /// Assigned owner
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub assignee: Option<String>,
 
     /// Force-approved without full sign-off
     #[serde(default, alias = "force_accepted")]
     pub force_approved: bool,
-
-    /// Creation timestamp
-    pub created_at: DateTime<Utc>,
-
-    /// Last update timestamp
-    pub updated_at: DateTime<Utc>,
-
-    /// Approach - how this solution addresses the problem (markdown body)
-    #[serde(default)]
-    pub approach: String,
 
     /// ID of the solution this one supersedes (for lineage tracking)
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -57,6 +55,17 @@ pub struct Solution {
     /// Tags for flexible categorization (e.g., "backend", "size:L", "area:auth")
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
+
+    /// Creation timestamp
+    pub created_at: DateTime<Utc>,
+
+    /// Last update timestamp
+    pub updated_at: DateTime<Utc>,
+
+    /// Markdown body. Not stored in the YAML frontmatter; stripped by
+    /// `to_markdown_strip` on save and assigned from the body on load.
+    #[serde(default)]
+    pub approach: String,
 }
 
 /// Status of a solution (conjecture)
@@ -255,54 +264,6 @@ impl Solution {
     }
 }
 
-/// YAML frontmatter for Solution markdown files
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SolutionFrontmatter {
-    pub id: String,
-    pub title: String,
-    pub problem_id: String,
-    pub status: SolutionStatus,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub critique_ids: Vec<String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub change_ids: Vec<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub assignee: Option<String>,
-    #[serde(default, alias = "force_accepted")]
-    pub force_approved: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub supersedes: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub github_pr: Option<u64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub github_branch: Option<String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub tags: Vec<String>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-}
-
-impl From<&Solution> for SolutionFrontmatter {
-    fn from(s: &Solution) -> Self {
-        Self {
-            id: s.id.clone(),
-            title: s.title.clone(),
-            problem_id: s.problem_id.clone(),
-            status: s.status.clone(),
-            critique_ids: s.critique_ids.clone(),
-            change_ids: s.change_ids.clone(),
-            assignee: s.assignee.clone(),
-            force_approved: s.force_approved,
-            supersedes: s.supersedes.clone(),
-            github_pr: s.github_pr,
-            github_branch: s.github_branch.clone(),
-            tags: s.tags.clone(),
-            created_at: s.created_at,
-            updated_at: s.updated_at,
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -406,20 +367,26 @@ mod tests {
     }
 
     #[test]
-    fn test_solution_tags() {
+    fn test_solution_tags_roundtrip() {
         let mut s = Solution::new("S-1".to_string(), "Test".to_string(), "P-1".to_string());
         assert!(s.tags.is_empty());
 
         s.tags = vec!["refactor".to_string(), "backend".to_string()];
 
-        let fm = SolutionFrontmatter::from(&s);
-        assert_eq!(fm.tags, vec!["refactor".to_string(), "backend".to_string()]);
-
-        let yaml = serde_yml::to_string(&fm).unwrap();
+        let yaml = serde_yml::to_string(&s).unwrap();
         assert!(yaml.contains("tags:"));
         assert!(yaml.contains("refactor"));
 
-        let parsed: SolutionFrontmatter = serde_yml::from_str(&yaml).unwrap();
+        let parsed: Solution = serde_yml::from_str(&yaml).unwrap();
         assert_eq!(parsed.tags, s.tags);
+    }
+
+    #[test]
+    fn test_solution_force_accepted_alias_still_loads() {
+        // Old files may have used `force_accepted` before the rename to
+        // `force_approved`. The serde alias must keep them readable.
+        let yaml = "id: s1\ntitle: t\nproblem_id: p\nstatus: proposed\nforce_accepted: true\ncreated_at: '2025-01-01T00:00:00Z'\nupdated_at: '2025-01-01T00:00:00Z'\n";
+        let s: Solution = serde_yml::from_str(yaml).unwrap();
+        assert!(s.force_approved);
     }
 }

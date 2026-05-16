@@ -4,6 +4,13 @@ use serde::{Deserialize, Serialize};
 /// A critique is an explicit criticism of a solution.
 /// Critiques are the mechanism for error elimination - the way we make
 /// progress by discovering flaws in our conjectures.
+///
+/// # Serialization
+///
+/// `argument` is the markdown body, not part of the YAML frontmatter. See
+/// the doc on [`crate::models::Problem`] for full serialization rules.
+/// Field order matches the historical YAML output so on-disk diffs are
+/// minimal when round-tripping through save/load.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Critique {
     /// Unique critique identifier (e.g., "CQ-1")
@@ -22,20 +29,12 @@ pub struct Critique {
     pub severity: CritiqueSeverity,
 
     /// Author of the critique
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub author: Option<String>,
 
     /// Who should address/review this critique
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reviewer: Option<String>,
-
-    /// Creation timestamp
-    pub created_at: DateTime<Utc>,
-
-    /// Last update timestamp
-    pub updated_at: DateTime<Utc>,
-
-    /// The argument - why the solution is problematic (markdown body)
-    #[serde(default)]
-    pub argument: String,
 
     /// Optional file path for code-level critiques
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -61,13 +60,24 @@ pub struct Critique {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub context_after: Vec<String>,
 
-    /// Discussion thread
-    #[serde(default)]
-    pub replies: Vec<Reply>,
+    /// Creation timestamp
+    pub created_at: DateTime<Utc>,
+
+    /// Last update timestamp
+    pub updated_at: DateTime<Utc>,
 
     /// Linked GitHub review ID
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub github_review_id: Option<u64>,
+
+    /// Discussion thread
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub replies: Vec<Reply>,
+
+    /// Markdown body. Not stored in the YAML frontmatter; stripped by
+    /// `to_markdown_strip` on save and assigned from the body on load.
+    #[serde(default)]
+    pub argument: String,
 }
 
 /// A reply in a critique discussion thread
@@ -324,62 +334,6 @@ impl Critique {
     /// Check if this critique has a code location
     pub fn has_location(&self) -> bool {
         self.file_path.is_some() && self.line_start.is_some()
-    }
-}
-
-/// YAML frontmatter for Critique markdown files
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CritiqueFrontmatter {
-    pub id: String,
-    pub title: String,
-    pub solution_id: String,
-    pub status: CritiqueStatus,
-    pub severity: CritiqueSeverity,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub author: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub reviewer: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub file_path: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub line_start: Option<usize>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub line_end: Option<usize>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub code_context: Vec<String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub context_before: Vec<String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub context_after: Vec<String>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub github_review_id: Option<u64>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub replies: Vec<Reply>,
-}
-
-impl From<&Critique> for CritiqueFrontmatter {
-    fn from(c: &Critique) -> Self {
-        Self {
-            id: c.id.clone(),
-            title: c.title.clone(),
-            solution_id: c.solution_id.clone(),
-            status: c.status.clone(),
-            severity: c.severity.clone(),
-            author: c.author.clone(),
-            reviewer: c.reviewer.clone(),
-            file_path: c.file_path.clone(),
-            line_start: c.line_start,
-            line_end: c.line_end,
-            code_context: c.code_context.clone(),
-            context_before: c.context_before.clone(),
-            context_after: c.context_after.clone(),
-            created_at: c.created_at,
-            updated_at: c.updated_at,
-            github_review_id: c.github_review_id,
-            replies: c.replies.clone(),
-        }
     }
 }
 

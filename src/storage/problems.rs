@@ -1,9 +1,9 @@
 use super::{
-    add_frontmatter_context, parse_frontmatter, to_markdown, MetadataStore, CRITIQUES_DIR,
+    add_frontmatter_context, parse_frontmatter, to_markdown_strip, MetadataStore, CRITIQUES_DIR,
     PROBLEMS_DIR, SOLUTIONS_DIR,
 };
 use crate::error::{JjjError, Result};
-use crate::models::{Problem, ProblemFrontmatter};
+use crate::models::Problem;
 use std::fs;
 
 impl MetadataStore {
@@ -24,26 +24,9 @@ impl MetadataStore {
         }
 
         let content = fs::read_to_string(problem_path)?;
-        let (frontmatter, body): (ProblemFrontmatter, String) = parse_frontmatter(&content)
+        let (mut problem, body): (Problem, String) = parse_frontmatter(&content)
             .map_err(|e| add_frontmatter_context(e, "problem", problem_id))?;
-
-        let problem = Problem {
-            id: frontmatter.id,
-            title: frontmatter.title,
-            parent_id: frontmatter.parent_id,
-            status: frontmatter.status,
-            priority: frontmatter.priority,
-            confidence: frontmatter.confidence,
-            solution_ids: frontmatter.solution_ids,
-            milestone_id: frontmatter.milestone_id,
-            assignee: frontmatter.assignee,
-            created_at: frontmatter.created_at,
-            updated_at: frontmatter.updated_at,
-            description: body,
-            dissolved_reason: frontmatter.dissolved_reason,
-            github_issue: frontmatter.github_issue,
-            tags: frontmatter.tags,
-        };
+        problem.description = body;
 
         Ok(problem)
     }
@@ -55,14 +38,13 @@ impl MetadataStore {
         let problems_dir = self.meta_path.join(PROBLEMS_DIR);
         fs::create_dir_all(&problems_dir)?;
 
-        let frontmatter = ProblemFrontmatter::from(problem);
         let body = if problem.description.is_empty() {
             String::new()
         } else {
             format!("{}\n", problem.description)
         };
 
-        let content = to_markdown(&frontmatter, &body)?;
+        let content = to_markdown_strip(problem, &body, "description")?;
         let problem_path = problems_dir.join(format!("{}.md", problem.id));
         super::atomic_write(&problem_path, content.as_bytes())?;
 

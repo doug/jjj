@@ -1,8 +1,8 @@
 use super::{
-    add_frontmatter_context, parse_frontmatter, to_markdown, MetadataStore, CRITIQUES_DIR,
+    add_frontmatter_context, parse_frontmatter, to_markdown_strip, MetadataStore, CRITIQUES_DIR,
 };
 use crate::error::{JjjError, Result};
-use crate::models::{Critique, CritiqueFrontmatter, CritiqueStatus};
+use crate::models::{Critique, CritiqueStatus};
 use std::fs;
 
 impl MetadataStore {
@@ -20,29 +20,9 @@ impl MetadataStore {
         }
 
         let content = fs::read_to_string(critique_path)?;
-        let (frontmatter, body): (CritiqueFrontmatter, String) = parse_frontmatter(&content)
+        let (mut critique, body): (Critique, String) = parse_frontmatter(&content)
             .map_err(|e| add_frontmatter_context(e, "critique", critique_id))?;
-
-        let critique = Critique {
-            id: frontmatter.id,
-            title: frontmatter.title,
-            solution_id: frontmatter.solution_id,
-            status: frontmatter.status,
-            severity: frontmatter.severity,
-            author: frontmatter.author,
-            reviewer: frontmatter.reviewer,
-            created_at: frontmatter.created_at,
-            updated_at: frontmatter.updated_at,
-            argument: body,
-            file_path: frontmatter.file_path,
-            line_start: frontmatter.line_start,
-            line_end: frontmatter.line_end,
-            code_context: frontmatter.code_context,
-            context_before: frontmatter.context_before,
-            context_after: frontmatter.context_after,
-            replies: frontmatter.replies,
-            github_review_id: frontmatter.github_review_id,
-        };
+        critique.argument = body;
 
         Ok(critique)
     }
@@ -54,14 +34,13 @@ impl MetadataStore {
         let critiques_dir = self.meta_path.join(CRITIQUES_DIR);
         fs::create_dir_all(&critiques_dir)?;
 
-        let frontmatter = CritiqueFrontmatter::from(critique);
         let body = if critique.argument.is_empty() {
             String::new()
         } else {
             format!("{}\n", critique.argument)
         };
 
-        let content = to_markdown(&frontmatter, &body)?;
+        let content = to_markdown_strip(critique, &body, "argument")?;
         let critique_path = critiques_dir.join(format!("{}.md", critique.id));
         super::atomic_write(&critique_path, content.as_bytes())?;
 

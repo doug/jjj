@@ -3,6 +3,11 @@ use serde::{Deserialize, Serialize};
 
 /// A milestone represents a cycle when we expect to have reasonable solutions
 /// for a set of problems. It's a temporal target for problem resolution.
+///
+/// # Serialization
+///
+/// `description` is the markdown body, not part of the YAML frontmatter. See
+/// the doc on [`crate::models::Problem`] for full serialization rules.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Milestone {
     /// Unique milestone identifier (e.g., "M-1")
@@ -12,16 +17,18 @@ pub struct Milestone {
     pub title: String,
 
     /// Target completion date
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub target_date: Option<DateTime<Utc>>,
 
     /// Current status
     pub status: MilestoneStatus,
 
     /// Problems we aim to solve this cycle
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub problem_ids: Vec<String>,
 
     /// Assigned owner/lead
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub assignee: Option<String>,
 
     /// Creation timestamp
@@ -30,7 +37,8 @@ pub struct Milestone {
     /// Last update timestamp
     pub updated_at: DateTime<Utc>,
 
-    /// Free-form description (markdown body)
+    /// Markdown body. Not stored in the YAML frontmatter; stripped by
+    /// `to_markdown_strip` on save and assigned from the body on load.
     #[serde(default)]
     pub description: String,
 }
@@ -148,37 +156,6 @@ impl Milestone {
             self.status,
             MilestoneStatus::Planning | MilestoneStatus::Active
         )
-    }
-}
-
-/// YAML frontmatter for Milestone markdown files
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MilestoneFrontmatter {
-    pub id: String,
-    pub title: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub target_date: Option<DateTime<Utc>>,
-    pub status: MilestoneStatus,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub problem_ids: Vec<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub assignee: Option<String>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-}
-
-impl From<&Milestone> for MilestoneFrontmatter {
-    fn from(m: &Milestone) -> Self {
-        Self {
-            id: m.id.clone(),
-            title: m.title.clone(),
-            target_date: m.target_date,
-            status: m.status.clone(),
-            problem_ids: m.problem_ids.clone(),
-            assignee: m.assignee.clone(),
-            created_at: m.created_at,
-            updated_at: m.updated_at,
-        }
     }
 }
 

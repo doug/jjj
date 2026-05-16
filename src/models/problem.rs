@@ -4,6 +4,16 @@ use serde::{Deserialize, Serialize};
 /// A problem represents something that needs to be addressed.
 /// Problems are fundamental - all knowledge begins with problems.
 /// Problems can be decomposed into sub-problems, forming a DAG.
+///
+/// # Serialization
+///
+/// `description` is the markdown body of the on-disk file, not part of the
+/// YAML frontmatter. Storage layer strips it from the YAML output via
+/// `to_markdown_strip` on save, and restores it from the body section on
+/// load. JSON output paths (`--json`) serialize it normally.
+///
+/// Optional fields use `skip_serializing_if` so absent values do not appear
+/// in either YAML frontmatter or JSON output as `null`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Problem {
     /// Unique problem identifier (e.g., "P-1")
@@ -13,6 +23,7 @@ pub struct Problem {
     pub title: String,
 
     /// Parent problem ID (for sub-problems)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent_id: Option<String>,
 
     /// Current status
@@ -26,13 +37,15 @@ pub struct Problem {
     pub confidence: Confidence,
 
     /// Solution IDs attempting to address this problem
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub solution_ids: Vec<String>,
 
     /// Target milestone (optional)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub milestone_id: Option<String>,
 
     /// Assigned owner
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub assignee: Option<String>,
 
     /// Creation timestamp
@@ -40,10 +53,6 @@ pub struct Problem {
 
     /// Last update timestamp
     pub updated_at: DateTime<Utc>,
-
-    /// Description of the problem (markdown body)
-    #[serde(default)]
-    pub description: String,
 
     /// Reason the problem was dissolved (if status is Dissolved)
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -56,6 +65,11 @@ pub struct Problem {
     /// Tags for flexible categorization (e.g., "backend", "size:L", "area:auth")
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
+
+    /// Markdown body. Not stored in the YAML frontmatter; stripped by
+    /// `to_markdown_strip` on save and assigned from the body on load.
+    #[serde(default)]
+    pub description: String,
 }
 
 /// Confidence (RAG) indicator for problem health/progress.
@@ -322,54 +336,6 @@ impl Problem {
     }
 }
 
-/// YAML frontmatter for Problem markdown files
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProblemFrontmatter {
-    pub id: String,
-    pub title: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub parent_id: Option<String>,
-    pub status: ProblemStatus,
-    pub priority: Priority,
-    #[serde(default, skip_serializing_if = "is_confidence_unknown")]
-    pub confidence: Confidence,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub solution_ids: Vec<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub milestone_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub assignee: Option<String>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub dissolved_reason: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub github_issue: Option<u64>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub tags: Vec<String>,
-}
-
-impl From<&Problem> for ProblemFrontmatter {
-    fn from(p: &Problem) -> Self {
-        Self {
-            id: p.id.clone(),
-            title: p.title.clone(),
-            parent_id: p.parent_id.clone(),
-            status: p.status.clone(),
-            priority: p.priority.clone(),
-            confidence: p.confidence.clone(),
-            solution_ids: p.solution_ids.clone(),
-            milestone_id: p.milestone_id.clone(),
-            assignee: p.assignee.clone(),
-            created_at: p.created_at,
-            updated_at: p.updated_at,
-            dissolved_reason: p.dissolved_reason.clone(),
-            github_issue: p.github_issue,
-            tags: p.tags.clone(),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -489,7 +455,7 @@ mod tests {
     }
 
     #[test]
-    fn test_problem_tags() {
+    fn test_problem_tags_roundtrip() {
         let mut p = Problem::new("P-1".to_string(), "Test".to_string());
         assert!(p.tags.is_empty());
 
@@ -499,31 +465,22 @@ mod tests {
             "size:L".to_string(),
         ];
 
-        // Round-trip through frontmatter
-        let fm = ProblemFrontmatter::from(&p);
-        assert_eq!(
-            fm.tags,
-            vec![
-                "backend".to_string(),
-                "auth".to_string(),
-                "size:L".to_string()
-            ]
-        );
-
-        // Verify serde round-trip
-        let yaml = serde_yml::to_string(&fm).unwrap();
+        let yaml = serde_yml::to_string(&p).unwrap();
         assert!(yaml.contains("tags:"));
         assert!(yaml.contains("backend"));
 
-        let parsed: ProblemFrontmatter = serde_yml::from_str(&yaml).unwrap();
+        let parsed: Problem = serde_yml::from_str(&yaml).unwrap();
         assert_eq!(parsed.tags, p.tags);
     }
 
     #[test]
-    fn test_problem_tags_serde_default() {
+    fn test_problem_serde_default_tags() {
         // YAML without tags field should deserialize with empty vec
-        let yaml = "id: P-1\ntitle: Test\nstatus: open\npriority: medium\nsolution_ids: []\ncreated_at: '2025-01-01T00:00:00Z'\nupdated_at: '2025-01-01T00:00:00Z'\n";
-        let fm: ProblemFrontmatter = serde_yml::from_str(yaml).unwrap();
-        assert!(fm.tags.is_empty());
+        let yaml = "id: P-1\ntitle: Test\nstatus: open\npriority: medium\ncreated_at: '2025-01-01T00:00:00Z'\nupdated_at: '2025-01-01T00:00:00Z'\n";
+        let p: Problem = serde_yml::from_str(yaml).unwrap();
+        assert!(p.tags.is_empty());
+        assert!(p.solution_ids.is_empty());
+        assert!(p.parent_id.is_none());
+        assert!(p.description.is_empty());
     }
 }

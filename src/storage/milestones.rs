@@ -1,8 +1,8 @@
 use super::{
-    add_frontmatter_context, parse_frontmatter, to_markdown, MetadataStore, MILESTONES_DIR,
+    add_frontmatter_context, parse_frontmatter, to_markdown_strip, MetadataStore, MILESTONES_DIR,
 };
 use crate::error::{JjjError, Result};
-use crate::models::{Milestone, MilestoneFrontmatter};
+use crate::models::Milestone;
 use std::fs;
 
 impl MetadataStore {
@@ -20,20 +20,9 @@ impl MetadataStore {
         }
 
         let content = fs::read_to_string(milestone_path)?;
-        let (frontmatter, body): (MilestoneFrontmatter, String) = parse_frontmatter(&content)
+        let (mut milestone, body): (Milestone, String) = parse_frontmatter(&content)
             .map_err(|e| add_frontmatter_context(e, "milestone", milestone_id))?;
-
-        let milestone = Milestone {
-            id: frontmatter.id,
-            title: frontmatter.title,
-            target_date: frontmatter.target_date,
-            status: frontmatter.status,
-            problem_ids: frontmatter.problem_ids,
-            assignee: frontmatter.assignee,
-            created_at: frontmatter.created_at,
-            updated_at: frontmatter.updated_at,
-            description: body,
-        };
+        milestone.description = body;
 
         Ok(milestone)
     }
@@ -45,14 +34,13 @@ impl MetadataStore {
         let milestones_dir = self.meta_path.join(MILESTONES_DIR);
         fs::create_dir_all(&milestones_dir)?;
 
-        let frontmatter = MilestoneFrontmatter::from(milestone);
         let body = if milestone.description.is_empty() {
             String::new()
         } else {
             format!("{}\n", milestone.description)
         };
 
-        let content = to_markdown(&frontmatter, &body)?;
+        let content = to_markdown_strip(milestone, &body, "description")?;
         let milestone_path = milestones_dir.join(format!("{}.md", milestone.id));
         super::atomic_write(&milestone_path, content.as_bytes())?;
 

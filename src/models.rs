@@ -6,8 +6,8 @@ mod problem;
 mod solution;
 
 pub use config::{AutomationAction, AutomationRule, GitHubConfig, ProjectConfig, SyncConfig};
-pub use critique::{Critique, CritiqueFrontmatter, CritiqueSeverity, CritiqueStatus, Reply};
+pub use critique::{Critique, CritiqueSeverity, CritiqueStatus, Reply};
 pub use event::{Event, EventExtra, EventType};
-pub use milestone::{Milestone, MilestoneFrontmatter, MilestoneStatus};
-pub use problem::{Confidence, Priority, Problem, ProblemFrontmatter, ProblemStatus};
-pub use solution::{Solution, SolutionFrontmatter, SolutionStatus};
+pub use milestone::{Milestone, MilestoneStatus};
+pub use problem::{Confidence, Priority, Problem, ProblemStatus};
+pub use solution::{Solution, SolutionStatus};
