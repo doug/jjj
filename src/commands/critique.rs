@@ -100,10 +100,17 @@ fn new_critique(
 
             // Set location if provided
             if let (Some(file_path), Some(line_num)) = (file.clone(), line) {
-                // Try to read context from file
+                // Try to read context from file; warn if unavailable so the
+                // user knows the critique was saved without code context.
                 let (code_context, context_before, context_after) = store
                     .jj_client
                     .file_at_revision("@", &file_path)
+                    .inspect_err(|e| {
+                        eprintln!(
+                            "Warning: could not read {} for code context: {}",
+                            file_path, e
+                        );
+                    })
                     .ok()
                     .map(|content| {
                         let lines: Vec<String> = content.lines().map(|s| s.to_string()).collect();

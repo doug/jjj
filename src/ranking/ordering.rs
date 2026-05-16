@@ -9,27 +9,54 @@ use crate::error::Result;
 const RANKINGS_DIR: &str = "rankings";
 
 /// Normalize a user identity string (e.g., "Alice Smith <alice@test.com>") into
-/// a filesystem-safe slug (e.g., "alice-smith").
+/// a filesystem-safe slug (e.g., "alice-smith-a3f9").
+///
+/// The slug encodes both the display name *and* a short hash of the email so
+/// two users named "Alex" with different emails don't collide. When no email
+/// is present, only the name slug is used.
 pub fn sanitize_user(user: &str) -> String {
-    let name_part = if let Some(idx) = user.find('<') {
-        &user[..idx]
+    let (name_part, email_part) = if let Some(start) = user.find('<') {
+        let after = &user[start + 1..];
+        let email = after.split_once('>').map(|(e, _)| e).unwrap_or(after);
+        (&user[..start], email)
     } else {
-        user
+        (user, "")
     };
 
-    let slug: String = name_part
+    let name_slug: String = name_part
         .trim()
         .to_lowercase()
         .chars()
         .map(|c| if c.is_alphanumeric() { c } else { '-' })
         .collect();
 
-    let trimmed = slug.trim_matches('-');
-    if trimmed.is_empty() {
+    let name_slug = name_slug.trim_matches('-').to_string();
+    let base = if name_slug.is_empty() {
         "anonymous".to_string()
     } else {
-        trimmed.to_string()
+        name_slug
+    };
+
+    if email_part.trim().is_empty() {
+        return base;
     }
+
+    // Append a short hash of the email so identities with the same display
+    // name but different emails don't share a slug. djb2 hash truncated to 4
+    // hex chars is more than enough for casual collision avoidance and avoids
+    // pulling in a real hash dependency.
+    let hash = djb2_short(email_part.trim().to_lowercase().as_bytes());
+    format!("{}-{:04x}", base, hash)
+}
+
+/// Simple djb2 hash, truncated to 16 bits. Not cryptographic — used only
+/// to disambiguate user slugs with similar display names.
+fn djb2_short(bytes: &[u8]) -> u16 {
+    let mut h: u32 = 5381;
+    for &b in bytes {
+        h = h.wrapping_mul(33).wrapping_add(b as u32);
+    }
+    (h & 0xFFFF) as u16
 }
 
 /// A single user's ordering and vote allocations for a milestone.
@@ -141,6 +168,34 @@ mod tests {
     use chrono::Utc;
     use std::collections::HashMap;
     use tempfile::TempDir;
+
+    #[test]
+    fn test_sanitize_user_disambiguates_same_name() {
+        let a = sanitize_user("Alex <alex@a.com>");
+        let b = sanitize_user("Alex <alex@b.com>");
+        assert_ne!(a, b, "two Alexes with different emails must not collide");
+        assert!(a.starts_with("alex-"));
+        assert!(b.starts_with("alex-"));
+    }
+
+    #[test]
+    fn test_sanitize_user_same_email_stable() {
+        let a = sanitize_user("Alex Smith <alex@a.com>");
+        let b = sanitize_user("Alex Smith <alex@a.com>");
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn test_sanitize_user_no_email_falls_back_to_name_only() {
+        let s = sanitize_user("alice");
+        assert_eq!(s, "alice");
+    }
+
+    #[test]
+    fn test_sanitize_user_empty_uses_anonymous() {
+        let s = sanitize_user("");
+        assert_eq!(s, "anonymous");
+    }
 
     #[test]
     fn test_user_ordering_roundtrip() {
