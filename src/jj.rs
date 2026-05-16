@@ -16,29 +16,25 @@ pub struct JjClient {
     repo_root: PathBuf,
 }
 
+/// Minimum supported jj version (major, minor).
+pub const MIN_JJ_VERSION: (u32, u32) = (0, 25);
+
 impl JjClient {
-    /// Create a new JjClient, discovering the jj executable and repo root
+    /// Create a new JjClient, discovering the jj executable and repo root.
+    ///
+    /// Enforces a minimum jj version: older versions fail early with a clear
+    /// message rather than producing cryptic errors deeper in command flow.
+    /// Version parse failures are tolerated (e.g., custom builds).
     pub fn new() -> Result<Self> {
         let jj_path = find_executable("jj").ok_or(JjjError::JjNotFound)?;
 
-        // Check jj version (warn if older than 0.25.0, but don't block)
-        if let Ok(output) = Command::new(&jj_path).arg("version").output() {
-            if let Ok(version_str) = std::str::from_utf8(&output.stdout) {
-                // Expected format: "jj 0.25.0" or "jj 0.25.0-dev"
-                if let Some(ver) = version_str.split_whitespace().nth(1) {
-                    let parts: Vec<&str> = ver.split('.').collect();
-                    if let (Some(Ok(major)), Some(Ok(minor))) = (
-                        parts.first().map(|s| s.parse::<u32>()),
-                        parts.get(1).map(|s| s.parse::<u32>()),
-                    ) {
-                        if major == 0 && minor < 25 {
-                            eprintln!(
-                                "Warning: jj version {} detected; jjj requires 0.25.0 or later",
-                                ver
-                            );
-                        }
-                    }
-                }
+        if let Some((major, minor)) = jj_version(&jj_path) {
+            if (major, minor) < MIN_JJ_VERSION {
+                return Err(JjjError::Validation(format!(
+                    "jj version {}.{} is too old; jjj requires {}.{} or later. \
+                     Upgrade jj: https://github.com/jj-vcs/jj",
+                    major, minor, MIN_JJ_VERSION.0, MIN_JJ_VERSION.1
+                )));
             }
         }
 
@@ -128,13 +124,13 @@ impl JjClient {
         Ok(output.trim().to_string())
     }
 
-    /// Check if a bookmark exists
+    /// Check if a bookmark exists.
+    ///
+    /// Uses a templated `jj bookmark list` so the parser doesn't depend on
+    /// jj's display formatting (which has changed across releases).
     pub fn bookmark_exists(&self, bookmark: &str) -> Result<bool> {
-        let output = self.execute(&["bookmark", "list"])?;
-        Ok(output.lines().any(|line| {
-            let name = line.split_whitespace().next().unwrap_or("");
-            name == bookmark || name.trim_end_matches(':') == bookmark
-        }))
+        let output = self.execute(&["bookmark", "list", "-T", r#"name ++ "\n""#])?;
+        Ok(output.lines().any(|line| line.trim() == bookmark))
     }
 
     /// Create a new bookmark
@@ -208,20 +204,19 @@ impl JjClient {
         self.execute(&["diff", "-r", change_id])
     }
 
-    /// Get changed files for a specific change
+    /// Get changed files for a specific change.
+    ///
+    /// `jj diff --summary` emits one line per file: `<STATUS> <PATH>`. Use
+    /// `split_once` on the first whitespace so paths containing spaces are
+    /// preserved verbatim. Lines without a path are skipped.
     pub fn changed_files(&self, change_id: &str) -> Result<Vec<PathBuf>> {
         let output = self.execute(&["diff", "-r", change_id, "--summary"])?;
 
         let files: Vec<PathBuf> = output
             .lines()
             .filter_map(|line| {
-                // Parse jj diff summary format
-                let parts: Vec<&str> = line.split_whitespace().collect();
-                if parts.len() >= 2 {
-                    Some(PathBuf::from(parts[1]))
-                } else {
-                    None
-                }
+                line.split_once(char::is_whitespace)
+                    .map(|(_, path)| PathBuf::from(path.trim_start()))
             })
             .collect();
 
@@ -249,11 +244,20 @@ impl JjClient {
         Ok(())
     }
 
-    /// Check if a change ID exists in the repository
+    /// Check if a change ID exists in the repository.
+    ///
+    /// Distinguishes "revision not found" from other jj errors by inspecting
+    /// stderr — other failures (auth, repo corruption) propagate.
     pub fn change_exists(&self, change_id: &str) -> Result<bool> {
         match self.execute(&["log", "--no-graph", "-r", change_id, "-T", "change_id"]) {
             Ok(_) => Ok(true),
-            Err(crate::error::JjjError::JjCommandFailed { .. }) => Ok(false),
+            Err(crate::error::JjjError::JjCommandFailed { ref stderr, .. })
+                if stderr.contains("No such revision")
+                    || stderr.contains("Revision")
+                    || stderr.contains("does not exist") =>
+            {
+                Ok(false)
+            }
             Err(e) => Err(e),
         }
     }
@@ -335,4 +339,18 @@ pub fn find_executable(name: &str) -> Option<PathBuf> {
         .into_iter()
         .map(|dir| dir.join(name))
         .find(|path| path.is_file())
+}
+
+/// Parse `(major, minor)` from `jj version` output.
+///
+/// Expected format: `jj 0.25.0` or `jj 0.25.0-dev`. Returns `None` if the
+/// version string can't be parsed.
+fn jj_version(jj_path: &Path) -> Option<(u32, u32)> {
+    let output = Command::new(jj_path).arg("version").output().ok()?;
+    let s = std::str::from_utf8(&output.stdout).ok()?;
+    let ver = s.split_whitespace().nth(1)?;
+    let mut parts = ver.split('.');
+    let major = parts.next()?.parse().ok()?;
+    let minor = parts.next()?.parse().ok()?;
+    Some((major, minor))
 }

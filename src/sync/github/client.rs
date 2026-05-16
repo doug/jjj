@@ -18,10 +18,30 @@ pub struct GhClient {
     repo_root: PathBuf,
 }
 
+/// Minimum supported gh version (major, minor).
+///
+/// 2.30 is the first release where `gh pr create --json number --jq` works
+/// reliably; earlier versions return URLs on stdout instead.
+pub const MIN_GH_VERSION: (u32, u32) = (2, 30);
+
 impl GhClient {
     /// Create a new GhClient, discovering the `gh` executable.
+    ///
+    /// Enforces a minimum gh version so JSON-output parsing in this module
+    /// doesn't silently break.
     pub fn new(repo_root: &Path) -> Result<Self> {
         let gh_path = find_executable("gh").ok_or(JjjError::GhNotFound)?;
+
+        if let Some((major, minor)) = gh_version(&gh_path) {
+            if (major, minor) < MIN_GH_VERSION {
+                return Err(JjjError::Validation(format!(
+                    "gh version {}.{} is too old; jjj requires {}.{} or later. \
+                     Upgrade gh: https://github.com/cli/cli",
+                    major, minor, MIN_GH_VERSION.0, MIN_GH_VERSION.1
+                )));
+            }
+        }
+
         Ok(Self {
             gh_path,
             repo_root: repo_root.to_path_buf(),
@@ -243,4 +263,22 @@ impl GhClient {
             "issue", "view", &num_str, "--json", "state", "--jq", ".state",
         ])
     }
+}
+
+/// Parse `(major, minor)` from `gh --version` output.
+///
+/// Expected format: `gh version 2.40.1 (2024-01-01)\n...`. Returns `None` if
+/// the version string can't be parsed.
+fn gh_version(gh_path: &Path) -> Option<(u32, u32)> {
+    let output = std::process::Command::new(gh_path)
+        .arg("--version")
+        .output()
+        .ok()?;
+    let s = std::str::from_utf8(&output.stdout).ok()?;
+    let first_line = s.lines().next()?;
+    let ver = first_line.split_whitespace().nth(2)?;
+    let mut parts = ver.split('.');
+    let major = parts.next()?.parse().ok()?;
+    let minor = parts.next()?.parse().ok()?;
+    Some((major, minor))
 }

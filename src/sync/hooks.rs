@@ -97,12 +97,22 @@ pub fn do_merge_pr(store: &MetadataStore, solution: &Solution) -> crate::error::
 // ── Legacy wrappers (check auto_push, used by existing command handlers) ──
 
 /// Auto-create a GitHub issue after a new problem is created.
+///
+/// Skipped if an explicit automation rule matches `problem_created` — the
+/// `automation::run` path handles the action in that case, and firing both
+/// would create two GitHub issues.
 pub fn auto_create_issue(ctx: &CommandContext, problem: &mut Problem) {
     let config = match ctx.store.load_config() {
         Ok(c) => c,
         Err(_) => return,
     };
     if !config.github.auto_push {
+        return;
+    }
+    if crate::automation::has_explicit_rule(
+        &config.automation,
+        &crate::models::EventType::ProblemCreated,
+    ) {
         return;
     }
     if let Err(e) = do_create_issue(&ctx.store, problem) {
@@ -116,12 +126,23 @@ pub fn auto_create_issue(ctx: &CommandContext, problem: &mut Problem) {
 /// - `force` is set (caller passed `--github-close`)
 /// - `github.auto_close_on_solve = true` in config
 /// - `github.auto_push = true` in config (coarse-grained catch-all)
+///
+/// Skipped if an explicit automation rule matches `problem_solved` — that
+/// rule fires the action; firing both would close the issue twice.
 pub fn auto_close_issue(ctx: &CommandContext, problem: &Problem, force: bool) {
     let config = match ctx.store.load_config() {
         Ok(c) => c,
         Err(_) => return,
     };
     if !force && !config.github.auto_push && !config.github.auto_close_on_solve {
+        return;
+    }
+    if !force
+        && crate::automation::has_explicit_rule(
+            &config.automation,
+            &crate::models::EventType::ProblemSolved,
+        )
+    {
         return;
     }
     if let Err(e) = do_close_issue(&ctx.store, problem) {

@@ -90,8 +90,14 @@ fn execute_with_context(ctx: &CommandContext, command: Commands) -> Result<()> {
             no_prompt,
             dry_run,
         } => {
-            fetch::execute(ctx, &remote)?;
-            push::execute(ctx, vec![], &remote, no_prompt, dry_run)
+            if dry_run {
+                println!("Sync dry-run: would fetch from '{remote}' and push to it.");
+                println!("Run without --dry-run to perform the sync.");
+                Ok(())
+            } else {
+                fetch::execute(ctx, &remote)?;
+                push::execute(ctx, vec![], &remote, no_prompt, dry_run)
+            }
         }
 
         // GitHub bridge
