@@ -1,61 +1,34 @@
-use super::{
-    add_frontmatter_context, parse_frontmatter, to_markdown_strip, MetadataStore, CRITIQUES_DIR,
-    SOLUTIONS_DIR,
-};
+//! Solution-specific storage methods.
+//!
+//! Generic load/save/list/next-id come from the `Persist` trait + the
+//! generic methods on `MetadataStore`. This file holds the type-specific
+//! helpers (`list_solutions_for_problem`) and the solution-specific
+//! `delete_solution` cleanup logic.
+
+use super::{MetadataStore, CRITIQUES_DIR};
 use crate::error::{JjjError, Result};
 use crate::models::Solution;
 use std::fs;
 
 impl MetadataStore {
-    /// Load a solution by ID
+    /// Load a solution by ID.
     pub fn load_solution(&self, solution_id: &str) -> Result<Solution> {
-        self.ensure_meta_checkout()?;
-
-        let solution_path = self
-            .meta_path
-            .join(SOLUTIONS_DIR)
-            .join(format!("{}.md", solution_id));
-
-        if !solution_path.exists() {
-            return Err(JjjError::SolutionNotFound(solution_id.to_string()));
-        }
-
-        let content = fs::read_to_string(solution_path)?;
-        let (mut solution, body): (Solution, String) = parse_frontmatter(&content)
-            .map_err(|e| add_frontmatter_context(e, "solution", solution_id))?;
-        solution.approach = body;
-
-        Ok(solution)
+        self.load::<Solution>(solution_id)
     }
 
-    /// Save a solution
+    /// Save a solution.
     pub fn save_solution(&self, solution: &Solution) -> Result<()> {
-        self.ensure_meta_checkout()?;
+        self.save(solution)
+    }
 
-        let solutions_dir = self.meta_path.join(SOLUTIONS_DIR);
-        fs::create_dir_all(&solutions_dir)?;
+    /// List all solutions.
+    pub fn list_solutions(&self) -> Result<Vec<Solution>> {
+        self.list::<Solution>()
+    }
 
-        let body = if solution.approach.is_empty() {
-            String::new()
-        } else {
-            format!("{}\n", solution.approach)
-        };
-
-        let content = to_markdown_strip(solution, &body, "approach")?;
-        let solution_path = solutions_dir.join(format!("{}.md", solution.id));
-        super::atomic_write(&solution_path, content.as_bytes())?;
-
-        // Best-effort cache sync; the markdown is canonical.
-        if let Some(ref db) = *self.cache() {
-            if let Err(e) = crate::db::sync::sync_solution_to_cache(db, solution) {
-                eprintln!(
-                    "Warning: cache sync failed for solution {}: {}",
-                    solution.id, e
-                );
-            }
-        }
-
-        Ok(())
+    /// Generate the next solution ID (UUID7).
+    pub fn next_solution_id(&self) -> Result<String> {
+        Ok(crate::id::generate_id())
     }
 
     /// Delete a solution and clean up references.
@@ -64,24 +37,13 @@ impl MetadataStore {
     /// - Delete associated critiques
     /// - Remove the solution from its parent problem's solution_ids
     pub fn delete_solution(&self, solution_id: &str) -> Result<()> {
-        self.ensure_meta_checkout()?;
-
-        let solution_path = self
-            .meta_path
-            .join(SOLUTIONS_DIR)
-            .join(format!("{}.md", solution_id));
-
-        if !solution_path.exists() {
-            return Err(JjjError::SolutionNotFound(solution_id.to_string()));
-        }
-
         let solution = self.load_solution(solution_id)?;
 
         // Delete associated critiques
         if let Ok(critiques) = self.list_critiques_for_solution(solution_id) {
             for critique in critiques {
                 if let Err(e) = fs::remove_file(
-                    self.meta_path
+                    self.meta_path()
                         .join(CRITIQUES_DIR)
                         .join(format!("{}.md", critique.id)),
                 ) {
@@ -101,59 +63,7 @@ impl MetadataStore {
             }
         }
 
-        fs::remove_file(solution_path)?;
-
-        // Best-effort cache removal
-        if let Some(ref db) = *self.cache() {
-            if let Err(e) = crate::db::sync::remove_entity_from_cache(db, "solution", solution_id) {
-                eprintln!(
-                    "Warning: cache removal failed for solution {}: {}",
-                    solution_id, e
-                );
-            }
-        }
-
-        Ok(())
-    }
-
-    /// List all solutions
-    pub fn list_solutions(&self) -> Result<Vec<Solution>> {
-        self.ensure_meta_checkout()?;
-
-        let solutions_dir = self.meta_path.join(SOLUTIONS_DIR);
-        if !solutions_dir.exists() {
-            return Ok(Vec::new());
-        }
-
-        let mut solutions = Vec::new();
-        let mut failures = Vec::new();
-        for entry in fs::read_dir(solutions_dir)? {
-            let entry = entry?;
-            let path = entry.path();
-
-            if path.extension().and_then(|s| s.to_str()) == Some("md") {
-                if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                    match self.load_solution(stem) {
-                        Ok(solution) => solutions.push(solution),
-                        Err(e) => failures.push(format!("{}: {}", stem, e)),
-                    }
-                }
-            }
-        }
-
-        if !failures.is_empty() {
-            eprintln!("Warning: Failed to load {} solution(s):", failures.len());
-            for failure in &failures {
-                eprintln!("  {}", failure);
-            }
-        }
-
-        Ok(solutions)
-    }
-
-    /// Generate next solution ID using UUID7.
-    pub fn next_solution_id(&self) -> Result<String> {
-        Ok(crate::id::generate_id())
+        self.delete_file_and_cache::<Solution>(solution_id)
     }
 
     /// Get solutions for a problem.
@@ -184,6 +94,4 @@ impl MetadataStore {
             .filter(|s| s.problem_id == problem_id)
             .collect())
     }
-
-    // =========================================================================
 }

@@ -198,6 +198,137 @@ fn to_markdown_strip<T: serde::Serialize>(
     Ok(format!("---\n{}---\n\n{}", yaml, body))
 }
 
+// =============================================================================
+// Persist trait: shared CRUD shape for markdown-backed entities
+// =============================================================================
+
+/// Contract for the four markdown-backed entity types (Problem, Solution,
+/// Critique, Milestone).
+///
+/// Implementors expose enough metadata for the generic [`MetadataStore`]
+/// load/save/list/delete methods to work polymorphically — directory name,
+/// body field name, error variants, and the per-entity cache-sync hook.
+///
+/// This trait is the seam between the type system and the four
+/// near-identical CRUD blocks the storage layer used to have. Concrete
+/// `load_problem` / `save_solution` / etc. methods on `MetadataStore` are
+/// thin delegates over the generic methods so callers don't need turbofish.
+pub trait Persist: serde::Serialize + serde::de::DeserializeOwned + Sized {
+    /// Directory under `.jj/jjj-meta/` where instances of this type live.
+    const DIR: &'static str;
+
+    /// Frontmatter field name whose value is stored as the markdown body
+    /// (e.g. `description`, `approach`, `argument`).
+    const BODY_FIELD: &'static str;
+
+    /// Short type tag used in cache rows, error context, and warnings.
+    const ENTITY_TYPE: &'static str;
+
+    /// The entity's stable UUID.
+    fn id(&self) -> &str;
+
+    /// Borrow the markdown-body field.
+    fn body(&self) -> &str;
+
+    /// Set the markdown-body field, used by `load` after parsing the YAML
+    /// frontmatter and reading the body section.
+    fn set_body(&mut self, body: String);
+
+    /// Construct the appropriate `EntityNotFound` error for this type.
+    fn not_found(id: &str) -> JjjError;
+
+    /// Best-effort sync of this entity to the SQLite cache row + FTS index.
+    fn sync_to_cache(&self, db: &crate::db::Database) -> Result<()>;
+}
+
+impl Persist for crate::models::Problem {
+    const DIR: &'static str = PROBLEMS_DIR;
+    const BODY_FIELD: &'static str = "description";
+    const ENTITY_TYPE: &'static str = "problem";
+
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn body(&self) -> &str {
+        &self.description
+    }
+    fn set_body(&mut self, body: String) {
+        self.description = body;
+    }
+    fn not_found(id: &str) -> JjjError {
+        JjjError::ProblemNotFound(id.to_string())
+    }
+    fn sync_to_cache(&self, db: &crate::db::Database) -> Result<()> {
+        crate::db::sync::sync_problem_to_cache(db, self)
+    }
+}
+
+impl Persist for crate::models::Solution {
+    const DIR: &'static str = SOLUTIONS_DIR;
+    const BODY_FIELD: &'static str = "approach";
+    const ENTITY_TYPE: &'static str = "solution";
+
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn body(&self) -> &str {
+        &self.approach
+    }
+    fn set_body(&mut self, body: String) {
+        self.approach = body;
+    }
+    fn not_found(id: &str) -> JjjError {
+        JjjError::SolutionNotFound(id.to_string())
+    }
+    fn sync_to_cache(&self, db: &crate::db::Database) -> Result<()> {
+        crate::db::sync::sync_solution_to_cache(db, self)
+    }
+}
+
+impl Persist for crate::models::Critique {
+    const DIR: &'static str = CRITIQUES_DIR;
+    const BODY_FIELD: &'static str = "argument";
+    const ENTITY_TYPE: &'static str = "critique";
+
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn body(&self) -> &str {
+        &self.argument
+    }
+    fn set_body(&mut self, body: String) {
+        self.argument = body;
+    }
+    fn not_found(id: &str) -> JjjError {
+        JjjError::CritiqueNotFound(id.to_string())
+    }
+    fn sync_to_cache(&self, db: &crate::db::Database) -> Result<()> {
+        crate::db::sync::sync_critique_to_cache(db, self)
+    }
+}
+
+impl Persist for crate::models::Milestone {
+    const DIR: &'static str = MILESTONES_DIR;
+    const BODY_FIELD: &'static str = "description";
+    const ENTITY_TYPE: &'static str = "milestone";
+
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn body(&self) -> &str {
+        &self.description
+    }
+    fn set_body(&mut self, body: String) {
+        self.description = body;
+    }
+    fn not_found(id: &str) -> JjjError {
+        JjjError::MilestoneNotFound(id.to_string())
+    }
+    fn sync_to_cache(&self, db: &crate::db::Database) -> Result<()> {
+        crate::db::sync::sync_milestone_to_cache(db, self)
+    }
+}
+
 impl MetadataStore {
     /// Create a new metadata store
     pub fn new(jj_client: JjClient) -> Result<Self> {
@@ -247,6 +378,133 @@ impl MetadataStore {
     /// Get the path to the metadata directory
     pub fn meta_path(&self) -> &std::path::Path {
         &self.meta_path
+    }
+
+    // =========================================================================
+    // Generic Persist CRUD
+    // =========================================================================
+    //
+    // These methods are the single implementation of load/save/list for all
+    // four entity types. The type-specific wrappers (`load_problem`,
+    // `save_solution`, etc.) in `storage/{problems,solutions,critiques,
+    // milestones}.rs` are 1-line delegates over these.
+
+    /// Load an entity from disk by ID. Returns `T::not_found(id)` if the
+    /// markdown file is absent.
+    pub(super) fn load<T: Persist>(&self, id: &str) -> Result<T> {
+        self.ensure_meta_checkout()?;
+
+        let path = self.meta_path.join(T::DIR).join(format!("{}.md", id));
+        if !path.exists() {
+            return Err(T::not_found(id));
+        }
+
+        let content = fs::read_to_string(path)?;
+        let (mut entity, body): (T, String) = parse_frontmatter(&content)
+            .map_err(|e| add_frontmatter_context(e, T::ENTITY_TYPE, id))?;
+        entity.set_body(body);
+        Ok(entity)
+    }
+
+    /// Persist an entity to disk and best-effort sync to the SQLite cache.
+    ///
+    /// The markdown is canonical; cache-sync failures emit a warning but do
+    /// not fail the save.
+    pub(super) fn save<T: Persist>(&self, entity: &T) -> Result<()> {
+        self.ensure_meta_checkout()?;
+
+        let dir = self.meta_path.join(T::DIR);
+        fs::create_dir_all(&dir)?;
+
+        let body = if entity.body().is_empty() {
+            String::new()
+        } else {
+            format!("{}\n", entity.body())
+        };
+        let content = to_markdown_strip(entity, &body, T::BODY_FIELD)?;
+        let path = dir.join(format!("{}.md", entity.id()));
+        atomic_write(&path, content.as_bytes())?;
+
+        if let Some(ref db) = *self.cache() {
+            if let Err(e) = entity.sync_to_cache(db) {
+                eprintln!(
+                    "Warning: cache sync failed for {} {}: {}",
+                    T::ENTITY_TYPE,
+                    entity.id(),
+                    e
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    /// List every entity of a given type by walking the directory.
+    ///
+    /// Files that fail to parse are skipped with a per-file warning; the
+    /// rest of the directory is returned. This matches the behavior of the
+    /// previous per-entity `list_*` implementations.
+    pub(super) fn list<T: Persist>(&self) -> Result<Vec<T>> {
+        self.ensure_meta_checkout()?;
+
+        let dir = self.meta_path.join(T::DIR);
+        if !dir.exists() {
+            return Ok(Vec::new());
+        }
+
+        let mut entities = Vec::new();
+        let mut failures = Vec::new();
+        for entry in fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) != Some("md") {
+                continue;
+            }
+            let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+                continue;
+            };
+            match self.load::<T>(stem) {
+                Ok(entity) => entities.push(entity),
+                Err(e) => failures.push(format!("{}: {}", stem, e)),
+            }
+        }
+
+        if !failures.is_empty() {
+            eprintln!(
+                "Warning: Failed to load {} {}(s):",
+                failures.len(),
+                T::ENTITY_TYPE
+            );
+            for failure in &failures {
+                eprintln!("  {}", failure);
+            }
+        }
+
+        Ok(entities)
+    }
+
+    /// Delete an entity's markdown file and remove it from the cache.
+    ///
+    /// Returns `T::not_found(id)` if the file doesn't exist. Type-specific
+    /// `delete_*` methods perform their own pre-cleanup (orphaning children,
+    /// removing back-references) and then call this to do the final removal.
+    pub(super) fn delete_file_and_cache<T: Persist>(&self, id: &str) -> Result<()> {
+        let path = self.meta_path.join(T::DIR).join(format!("{}.md", id));
+        if !path.exists() {
+            return Err(T::not_found(id));
+        }
+        fs::remove_file(path)?;
+        if let Some(ref db) = *self.cache() {
+            if let Err(e) = crate::db::sync::remove_entity_from_cache(db, T::ENTITY_TYPE, id) {
+                eprintln!(
+                    "Warning: cache removal failed for {} {}: {}",
+                    T::ENTITY_TYPE,
+                    id,
+                    e
+                );
+            }
+        }
+        Ok(())
     }
 
     /// Initialize the metadata store (create directory structure)

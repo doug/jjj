@@ -1,118 +1,39 @@
-use super::{
-    add_frontmatter_context, parse_frontmatter, to_markdown_strip, MetadataStore, MILESTONES_DIR,
-};
-use crate::error::{JjjError, Result};
+//! Milestone-specific storage methods.
+//!
+//! Generic load/save/list/next-id come from the `Persist` trait + the
+//! generic methods on `MetadataStore`. This file holds the milestone-
+//! specific `delete_milestone` cleanup logic.
+
+use super::MetadataStore;
+use crate::error::Result;
 use crate::models::Milestone;
-use std::fs;
 
 impl MetadataStore {
-    /// Load a milestone by ID
+    /// Load a milestone by ID.
     pub fn load_milestone(&self, milestone_id: &str) -> Result<Milestone> {
-        self.ensure_meta_checkout()?;
-
-        let milestone_path = self
-            .meta_path
-            .join(MILESTONES_DIR)
-            .join(format!("{}.md", milestone_id));
-
-        if !milestone_path.exists() {
-            return Err(JjjError::MilestoneNotFound(milestone_id.to_string()));
-        }
-
-        let content = fs::read_to_string(milestone_path)?;
-        let (mut milestone, body): (Milestone, String) = parse_frontmatter(&content)
-            .map_err(|e| add_frontmatter_context(e, "milestone", milestone_id))?;
-        milestone.description = body;
-
-        Ok(milestone)
+        self.load::<Milestone>(milestone_id)
     }
 
-    /// Save a milestone
+    /// Save a milestone.
     pub fn save_milestone(&self, milestone: &Milestone) -> Result<()> {
-        self.ensure_meta_checkout()?;
-
-        let milestones_dir = self.meta_path.join(MILESTONES_DIR);
-        fs::create_dir_all(&milestones_dir)?;
-
-        let body = if milestone.description.is_empty() {
-            String::new()
-        } else {
-            format!("{}\n", milestone.description)
-        };
-
-        let content = to_markdown_strip(milestone, &body, "description")?;
-        let milestone_path = milestones_dir.join(format!("{}.md", milestone.id));
-        super::atomic_write(&milestone_path, content.as_bytes())?;
-
-        // Best-effort cache sync; the markdown is canonical.
-        // Previously milestone saves skipped the cache entirely.
-        if let Some(ref db) = *self.cache() {
-            if let Err(e) = crate::db::sync::sync_milestone_to_cache(db, milestone) {
-                eprintln!(
-                    "Warning: cache sync failed for milestone {}: {}",
-                    milestone.id, e
-                );
-            }
-        }
-
-        Ok(())
+        self.save(milestone)
     }
 
-    /// List all milestones
+    /// List all milestones.
     pub fn list_milestones(&self) -> Result<Vec<Milestone>> {
-        self.ensure_meta_checkout()?;
-
-        let milestones_dir = self.meta_path.join(MILESTONES_DIR);
-        if !milestones_dir.exists() {
-            return Ok(Vec::new());
-        }
-
-        let mut milestones = Vec::new();
-        let mut failures = Vec::new();
-        for entry in fs::read_dir(milestones_dir)? {
-            let entry = entry?;
-            let path = entry.path();
-
-            if path.extension().and_then(|s| s.to_str()) == Some("md") {
-                if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                    match self.load_milestone(stem) {
-                        Ok(milestone) => milestones.push(milestone),
-                        Err(e) => failures.push(format!("{}: {}", stem, e)),
-                    }
-                }
-            }
-        }
-
-        if !failures.is_empty() {
-            eprintln!("Warning: Failed to load {} milestone(s):", failures.len());
-            for failure in &failures {
-                eprintln!("  {}", failure);
-            }
-        }
-
-        Ok(milestones)
+        self.list::<Milestone>()
     }
 
-    /// Generate next milestone ID using UUID7.
+    /// Generate the next milestone ID (UUID7).
     pub fn next_milestone_id(&self) -> Result<String> {
         Ok(crate::id::generate_id())
     }
 
-    /// Delete a milestone by ID, orphaning any associated problems
+    /// Delete a milestone by ID, orphaning any associated problems.
     pub fn delete_milestone(&self, milestone_id: &str) -> Result<()> {
-        self.ensure_meta_checkout()?;
-
-        let milestone_path = self
-            .meta_path
-            .join(MILESTONES_DIR)
-            .join(format!("{}.md", milestone_id));
-
-        if !milestone_path.exists() {
-            return Err(JjjError::MilestoneNotFound(milestone_id.to_string()));
-        }
+        let milestone = self.load_milestone(milestone_id)?;
 
         // Orphan any associated problems (unset milestone_id)
-        let milestone = self.load_milestone(milestone_id)?;
         for problem_id in &milestone.problem_ids {
             if let Ok(mut problem) = self.load_problem(problem_id) {
                 if problem.milestone_id.as_deref() == Some(milestone_id) {
@@ -124,19 +45,6 @@ impl MetadataStore {
             }
         }
 
-        fs::remove_file(milestone_path)?;
-
-        // Best-effort cache removal
-        if let Some(ref db) = *self.cache() {
-            if let Err(e) = crate::db::sync::remove_entity_from_cache(db, "milestone", milestone_id)
-            {
-                eprintln!(
-                    "Warning: cache removal failed for milestone {}: {}",
-                    milestone_id, e
-                );
-            }
-        }
-
-        Ok(())
+        self.delete_file_and_cache::<Milestone>(milestone_id)
     }
 }

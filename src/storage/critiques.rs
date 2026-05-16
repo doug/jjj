@@ -1,79 +1,41 @@
-use super::{
-    add_frontmatter_context, parse_frontmatter, to_markdown_strip, MetadataStore, CRITIQUES_DIR,
-};
+//! Critique-specific storage methods.
+//!
+//! Generic load/save/list/next-id come from the `Persist` trait + the
+//! generic methods on `MetadataStore`. This file holds the type-specific
+//! helpers (`list_critiques_for_solution`, `has_valid_critiques`, etc.)
+//! and the critique-specific `delete_critique` cleanup logic.
+
+use super::MetadataStore;
 use crate::error::{JjjError, Result};
 use crate::models::{Critique, CritiqueStatus};
-use std::fs;
 
 impl MetadataStore {
-    /// Load a critique by ID
+    /// Load a critique by ID.
     pub fn load_critique(&self, critique_id: &str) -> Result<Critique> {
-        self.ensure_meta_checkout()?;
-
-        let critique_path = self
-            .meta_path
-            .join(CRITIQUES_DIR)
-            .join(format!("{}.md", critique_id));
-
-        if !critique_path.exists() {
-            return Err(JjjError::CritiqueNotFound(critique_id.to_string()));
-        }
-
-        let content = fs::read_to_string(critique_path)?;
-        let (mut critique, body): (Critique, String) = parse_frontmatter(&content)
-            .map_err(|e| add_frontmatter_context(e, "critique", critique_id))?;
-        critique.argument = body;
-
-        Ok(critique)
+        self.load::<Critique>(critique_id)
     }
 
-    /// Save a critique
+    /// Save a critique.
     pub fn save_critique(&self, critique: &Critique) -> Result<()> {
-        self.ensure_meta_checkout()?;
+        self.save(critique)
+    }
 
-        let critiques_dir = self.meta_path.join(CRITIQUES_DIR);
-        fs::create_dir_all(&critiques_dir)?;
+    /// List all critiques.
+    pub fn list_critiques(&self) -> Result<Vec<Critique>> {
+        self.list::<Critique>()
+    }
 
-        let body = if critique.argument.is_empty() {
-            String::new()
-        } else {
-            format!("{}\n", critique.argument)
-        };
-
-        let content = to_markdown_strip(critique, &body, "argument")?;
-        let critique_path = critiques_dir.join(format!("{}.md", critique.id));
-        super::atomic_write(&critique_path, content.as_bytes())?;
-
-        // Best-effort cache sync; the markdown is canonical.
-        if let Some(ref db) = *self.cache() {
-            if let Err(e) = crate::db::sync::sync_critique_to_cache(db, critique) {
-                eprintln!(
-                    "Warning: cache sync failed for critique {}: {}",
-                    critique.id, e
-                );
-            }
-        }
-
-        Ok(())
+    /// Generate the next critique ID (UUID7).
+    pub fn next_critique_id(&self) -> Result<String> {
+        Ok(crate::id::generate_id())
     }
 
     /// Delete a critique and clean up references.
     ///
-    /// This will remove the critique from its parent solution's critique_ids.
+    /// Removes the critique from its parent solution's `critique_ids`.
     pub fn delete_critique(&self, critique_id: &str) -> Result<()> {
-        self.ensure_meta_checkout()?;
-
-        let critique_path = self
-            .meta_path
-            .join(CRITIQUES_DIR)
-            .join(format!("{}.md", critique_id));
-
-        if !critique_path.exists() {
-            return Err(JjjError::CritiqueNotFound(critique_id.to_string()));
-        }
-
-        // Remove from parent solution's critique_ids
         let critique = self.load_critique(critique_id)?;
+
         if let Ok(mut solution) = self.load_solution(&critique.solution_id) {
             solution.remove_critique(critique_id);
             if let Err(e) = self.save_solution(&solution) {
@@ -84,59 +46,7 @@ impl MetadataStore {
             }
         }
 
-        fs::remove_file(critique_path)?;
-
-        // Best-effort cache removal
-        if let Some(ref db) = *self.cache() {
-            if let Err(e) = crate::db::sync::remove_entity_from_cache(db, "critique", critique_id) {
-                eprintln!(
-                    "Warning: cache removal failed for critique {}: {}",
-                    critique_id, e
-                );
-            }
-        }
-
-        Ok(())
-    }
-
-    /// List all critiques
-    pub fn list_critiques(&self) -> Result<Vec<Critique>> {
-        self.ensure_meta_checkout()?;
-
-        let critiques_dir = self.meta_path.join(CRITIQUES_DIR);
-        if !critiques_dir.exists() {
-            return Ok(Vec::new());
-        }
-
-        let mut critiques = Vec::new();
-        let mut failures = Vec::new();
-        for entry in fs::read_dir(critiques_dir)? {
-            let entry = entry?;
-            let path = entry.path();
-
-            if path.extension().and_then(|s| s.to_str()) == Some("md") {
-                if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                    match self.load_critique(stem) {
-                        Ok(critique) => critiques.push(critique),
-                        Err(e) => failures.push(format!("{}: {}", stem, e)),
-                    }
-                }
-            }
-        }
-
-        if !failures.is_empty() {
-            eprintln!("Warning: Failed to load {} critique(s):", failures.len());
-            for failure in &failures {
-                eprintln!("  {}", failure);
-            }
-        }
-
-        Ok(critiques)
-    }
-
-    /// Generate next critique ID using UUID7.
-    pub fn next_critique_id(&self) -> Result<String> {
-        Ok(crate::id::generate_id())
+        self.delete_file_and_cache::<Critique>(critique_id)
     }
 
     /// Get critiques for a solution.
@@ -218,6 +128,4 @@ impl MetadataStore {
         let critiques = self.list_critiques_for_solution(solution_id)?;
         Ok(critiques.iter().any(|c| c.status == CritiqueStatus::Valid))
     }
-
-    // =========================================================================
 }

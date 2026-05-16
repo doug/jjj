@@ -1,7 +1,11 @@
-use super::{
-    add_frontmatter_context, parse_frontmatter, to_markdown_strip, MetadataStore, CRITIQUES_DIR,
-    PROBLEMS_DIR, SOLUTIONS_DIR,
-};
+//! Problem-specific storage methods.
+//!
+//! Generic load/save/list/next-id come from the `Persist` trait + the
+//! generic methods on `MetadataStore`. This file holds the type-specific
+//! helpers (`list_subproblems`, `list_root_problems`, `parent_chain`) and
+//! the problem-specific `delete_problem` cleanup logic.
+
+use super::{MetadataStore, CRITIQUES_DIR, SOLUTIONS_DIR};
 use crate::error::{JjjError, Result};
 use crate::models::Problem;
 use std::fs;
@@ -12,53 +16,22 @@ impl MetadataStore {
     /// Use [`MetadataStore::list_subproblems`] to get the children of a problem;
     /// children are derived from `parent_id` references, never stored.
     pub fn load_problem(&self, problem_id: &str) -> Result<Problem> {
-        self.ensure_meta_checkout()?;
-
-        let problem_path = self
-            .meta_path
-            .join(PROBLEMS_DIR)
-            .join(format!("{}.md", problem_id));
-
-        if !problem_path.exists() {
-            return Err(JjjError::ProblemNotFound(problem_id.to_string()));
-        }
-
-        let content = fs::read_to_string(problem_path)?;
-        let (mut problem, body): (Problem, String) = parse_frontmatter(&content)
-            .map_err(|e| add_frontmatter_context(e, "problem", problem_id))?;
-        problem.description = body;
-
-        Ok(problem)
+        self.load::<Problem>(problem_id)
     }
 
-    /// Save a problem
+    /// Save a problem.
     pub fn save_problem(&self, problem: &Problem) -> Result<()> {
-        self.ensure_meta_checkout()?;
+        self.save(problem)
+    }
 
-        let problems_dir = self.meta_path.join(PROBLEMS_DIR);
-        fs::create_dir_all(&problems_dir)?;
+    /// List all problems.
+    pub fn list_problems(&self) -> Result<Vec<Problem>> {
+        self.list::<Problem>()
+    }
 
-        let body = if problem.description.is_empty() {
-            String::new()
-        } else {
-            format!("{}\n", problem.description)
-        };
-
-        let content = to_markdown_strip(problem, &body, "description")?;
-        let problem_path = problems_dir.join(format!("{}.md", problem.id));
-        super::atomic_write(&problem_path, content.as_bytes())?;
-
-        // Best-effort cache sync; the markdown is canonical.
-        if let Some(ref db) = *self.cache() {
-            if let Err(e) = crate::db::sync::sync_problem_to_cache(db, problem) {
-                eprintln!(
-                    "Warning: cache sync failed for problem {}: {}",
-                    problem.id, e
-                );
-            }
-        }
-
-        Ok(())
+    /// Generate the next problem ID (UUID7).
+    pub fn next_problem_id(&self) -> Result<String> {
+        Ok(crate::id::generate_id())
     }
 
     /// Delete a problem and clean up references.
@@ -68,17 +41,6 @@ impl MetadataStore {
     /// - Delete associated solutions and their critiques
     /// - Remove the problem from its milestone
     pub fn delete_problem(&self, problem_id: &str) -> Result<()> {
-        self.ensure_meta_checkout()?;
-
-        let problem_path = self
-            .meta_path
-            .join(PROBLEMS_DIR)
-            .join(format!("{}.md", problem_id));
-
-        if !problem_path.exists() {
-            return Err(JjjError::ProblemNotFound(problem_id.to_string()));
-        }
-
         let problem = self.load_problem(problem_id)?;
 
         // Orphan child problems
@@ -115,7 +77,7 @@ impl MetadataStore {
                         Ok(critiques) => {
                             for critique in critiques {
                                 let path = self
-                                    .meta_path
+                                    .meta_path()
                                     .join(CRITIQUES_DIR)
                                     .join(format!("{}.md", critique.id));
                                 if let Err(e) = fs::remove_file(&path) {
@@ -132,7 +94,7 @@ impl MetadataStore {
                         ),
                     }
                     let path = self
-                        .meta_path
+                        .meta_path()
                         .join(SOLUTIONS_DIR)
                         .join(format!("{}.md", solution.id));
                     if let Err(e) = fs::remove_file(&path) {
@@ -162,59 +124,7 @@ impl MetadataStore {
             }
         }
 
-        fs::remove_file(problem_path)?;
-
-        // Best-effort cache removal
-        if let Some(ref db) = *self.cache() {
-            if let Err(e) = crate::db::sync::remove_entity_from_cache(db, "problem", problem_id) {
-                eprintln!(
-                    "Warning: cache removal failed for problem {}: {}",
-                    problem_id, e
-                );
-            }
-        }
-
-        Ok(())
-    }
-
-    /// List all problems
-    pub fn list_problems(&self) -> Result<Vec<Problem>> {
-        self.ensure_meta_checkout()?;
-
-        let problems_dir = self.meta_path.join(PROBLEMS_DIR);
-        if !problems_dir.exists() {
-            return Ok(Vec::new());
-        }
-
-        let mut problems = Vec::new();
-        let mut failures = Vec::new();
-        for entry in fs::read_dir(problems_dir)? {
-            let entry = entry?;
-            let path = entry.path();
-
-            if path.extension().and_then(|s| s.to_str()) == Some("md") {
-                if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                    match self.load_problem(stem) {
-                        Ok(problem) => problems.push(problem),
-                        Err(e) => failures.push(format!("{}: {}", stem, e)),
-                    }
-                }
-            }
-        }
-
-        if !failures.is_empty() {
-            eprintln!("Warning: Failed to load {} problem(s):", failures.len());
-            for failure in &failures {
-                eprintln!("  {}", failure);
-            }
-        }
-
-        Ok(problems)
-    }
-
-    /// Generate next problem ID using UUID7.
-    pub fn next_problem_id(&self) -> Result<String> {
-        Ok(crate::id::generate_id())
+        self.delete_file_and_cache::<Problem>(problem_id)
     }
 
     /// Get subproblems of a problem.
@@ -275,7 +185,7 @@ impl MetadataStore {
             .collect())
     }
 
-    /// Get the parent chain for a problem (ancestors up to root)
+    /// Get the parent chain for a problem (ancestors up to root).
     pub fn parent_chain(&self, problem_id: &str) -> Result<Vec<Problem>> {
         let mut chain = Vec::new();
         let mut current_id = Some(problem_id.to_string());
@@ -304,6 +214,4 @@ impl MetadataStore {
 
         Ok(chain)
     }
-
-    // =========================================================================
 }
