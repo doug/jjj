@@ -391,13 +391,38 @@ impl MetadataStore {
     // =========================================================================
 
     /// Flush pending events to events.jsonl.
+    ///
+    /// All pending events are serialized into a single buffer first; only if
+    /// serialization and the entire append succeed are the events drained from
+    /// `pending_events`. If any step fails, the pending queue is left intact
+    /// so the caller (or a later flush) can retry without losing events.
+    ///
+    /// A trailing serialization error on one event will still abort the flush
+    /// — partial writes are not durable here.
     pub fn commit_changes(&self, _message: &str) -> Result<()> {
         use std::io::Write;
 
-        let mut pending = self.pending_events.borrow_mut();
+        let pending = self.pending_events.borrow();
         if pending.is_empty() {
             return Ok(());
         }
+
+        // Serialize all events first; if any one fails we abort without
+        // touching the file or draining the queue.
+        let mut buf = String::new();
+        for event in pending.iter() {
+            match event.to_json_line() {
+                Ok(line) => {
+                    buf.push_str(&line);
+                    buf.push('\n');
+                }
+                Err(err) => {
+                    eprintln!("Warning: failed to serialize event: {}", err);
+                    return Err(JjjError::JsonParse(err));
+                }
+            }
+        }
+        drop(pending);
 
         let mut file = std::fs::OpenOptions::new()
             .create(true)
@@ -405,18 +430,11 @@ impl MetadataStore {
             .open(&self.events_path)
             .map_err(JjjError::Io)?;
 
-        for event in pending.drain(..) {
-            match event.to_json_line() {
-                Ok(line) => {
-                    if let Err(e) = writeln!(file, "{}", line) {
-                        eprintln!("Warning: failed to write event: {}", e);
-                    }
-                }
-                Err(err) => {
-                    eprintln!("Warning: failed to serialize event: {}", err);
-                }
-            }
-        }
+        file.write_all(buf.as_bytes()).map_err(JjjError::Io)?;
+        file.sync_data().map_err(JjjError::Io)?;
+
+        // Only drain after a fully successful write.
+        self.pending_events.borrow_mut().clear();
 
         Ok(())
     }

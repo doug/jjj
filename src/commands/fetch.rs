@@ -92,21 +92,13 @@ pub fn execute(ctx: &CommandContext, remote: &str) -> Result<()> {
         for dir in &["problems", "solutions", "critiques", "milestones"] {
             fs::create_dir_all(meta_path.join(dir))?;
             // List files in this directory at the bookmark revision
-            if let Ok(listing) = jj_client.execute(&[
-                "file",
-                "list",
-                "-r",
-                "jjj",
-                &format!("{}/", dir),
-            ]) {
+            if let Ok(listing) =
+                jj_client.execute(&["file", "list", "-r", "jjj", &format!("{}/", dir)])
+            {
                 for file_path in listing.lines().filter(|l| !l.trim().is_empty()) {
-                    if let Ok(content) = jj_client.execute(&[
-                        "file",
-                        "show",
-                        "-r",
-                        "jjj",
-                        file_path,
-                    ]) {
+                    if let Ok(content) =
+                        jj_client.execute(&["file", "show", "-r", "jjj", file_path])
+                    {
                         let local_path = meta_path.join(file_path);
                         let _ = fs::write(&local_path, &content);
                     }
@@ -114,14 +106,11 @@ pub fn execute(ctx: &CommandContext, remote: &str) -> Result<()> {
             }
         }
         // Also fetch config.toml
-        if let Ok(content) =
-            jj_client.execute(&["file", "show", "-r", "jjj", "config.toml"])
-        {
+        if let Ok(content) = jj_client.execute(&["file", "show", "-r", "jjj", "config.toml"]) {
             let _ = fs::write(meta_path.join("config.toml"), &content);
         }
         // Merge events: fetch remote events.jsonl and append any new events
-        if let Ok(remote_events) =
-            jj_client.execute(&["file", "show", "-r", "jjj", "events.jsonl"])
+        if let Ok(remote_events) = jj_client.execute(&["file", "show", "-r", "jjj", "events.jsonl"])
         {
             merge_events_jsonl(&meta_path.join("events.jsonl"), &remote_events);
         }

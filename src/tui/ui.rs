@@ -250,7 +250,10 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                         .map(|a| {
                             // Extract name from "Name <email>" format
                             let name = a.split('<').next().unwrap_or(a).trim();
-                            let name = name.char_indices().nth(12).map_or(name, |(i, _)| &name[..i]);
+                            let name = name
+                                .char_indices()
+                                .nth(12)
+                                .map_or(name, |(i, _)| &name[..i]);
                             format!(" @{}", name)
                         })
                         .unwrap_or_default();
@@ -271,7 +274,10 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                         .as_deref()
                         .map(|a| {
                             let name = a.split('<').next().unwrap_or(a).trim();
-                            let name = name.char_indices().nth(12).map_or(name, |(i, _)| &name[..i]);
+                            let name = name
+                                .char_indices()
+                                .nth(12)
+                                .map_or(name, |(i, _)| &name[..i]);
                             format!(" @{}", name)
                         })
                         .unwrap_or_default();

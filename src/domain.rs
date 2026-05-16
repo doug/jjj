@@ -6,10 +6,21 @@
 //! and automation dispatch regardless of interface.
 
 use crate::error::{JjjError, Result};
-use crate::models::{
-    CritiqueStatus, Event, EventExtra, EventType, ProblemStatus, SolutionStatus,
-};
+use crate::models::{CritiqueStatus, Event, EventExtra, EventType, ProblemStatus, SolutionStatus};
 use crate::storage::MetadataStore;
+
+/// Resolve the current user for event attribution.
+///
+/// Falls back to `"unknown"` rather than an empty string when jj has no
+/// `user.name` configured. An empty `by` field in the audit log is
+/// indistinguishable from a deliberately anonymous entry; the sentinel makes
+/// it greppable.
+fn current_user(store: &MetadataStore) -> String {
+    match store.get_current_user() {
+        Ok(name) if !name.trim().is_empty() => name,
+        _ => "unknown".to_string(),
+    }
+}
 
 // ── Solution operations ────────────────────────────────────────────
 
@@ -55,7 +66,7 @@ pub fn approve_solution(
         )));
     }
 
-    let user = store.get_current_user().unwrap_or_default();
+    let user = current_user(store);
     let mut event = Event::new(
         EventType::SolutionApproved,
         solution_id.to_string(),
@@ -102,8 +113,7 @@ pub fn approve_solution(
     // Fire problem-solved automation if auto-solve triggered
     if let Ok(problem) = store.load_problem(&problem_id) {
         if problem.status == ProblemStatus::Solved {
-            let solve_event =
-                Event::new(EventType::ProblemSolved, problem.id.clone(), user);
+            let solve_event = Event::new(EventType::ProblemSolved, problem.id.clone(), user);
             crate::automation::run(store, &solve_event, &problem.id);
         }
     }
@@ -114,19 +124,16 @@ pub fn approve_solution(
 /// Submit a solution for review: validate state, emit events,
 /// auto-set parent problem to InProgress, and fire automation.
 pub fn submit_solution(store: &MetadataStore, solution_id: &str) -> Result<()> {
-    let user = store.get_current_user().unwrap_or_default();
+    let user = current_user(store);
 
     // Build event before with_metadata so we can reuse it for automation
     let solution = store.load_solution(solution_id)?;
-    let event = Event::new(
-        EventType::SolutionSubmitted,
-        solution_id.to_string(),
-        user,
-    )
-    .with_extra(EventExtra {
-        problem: Some(solution.problem_id.clone()),
-        ..Default::default()
-    });
+    let event = Event::new(EventType::SolutionSubmitted, solution_id.to_string(), user).with_extra(
+        EventExtra {
+            problem: Some(solution.problem_id.clone()),
+            ..Default::default()
+        },
+    );
 
     store.with_metadata(
         &format!("Submit solution {} for review", solution_id),
@@ -160,12 +167,8 @@ pub fn withdraw_solution(
     solution_id: &str,
     rationale: Option<&str>,
 ) -> Result<()> {
-    let user = store.get_current_user().unwrap_or_default();
-    let mut event = Event::new(
-        EventType::SolutionWithdrawn,
-        solution_id.to_string(),
-        user,
-    );
+    let user = current_user(store);
+    let mut event = Event::new(EventType::SolutionWithdrawn, solution_id.to_string(), user);
     if let Some(r) = rationale {
         event = event.with_rationale(r);
     }
@@ -197,7 +200,7 @@ pub fn solve_problem(store: &MetadataStore, problem_id: &str) -> Result<()> {
         return Err(JjjError::CannotSolveProblem(message));
     }
 
-    let user = store.get_current_user()?;
+    let user = current_user(store);
     let event = Event::new(EventType::ProblemSolved, problem_id.to_string(), user);
 
     store.with_metadata(&format!("Solve problem {}", problem_id), || {
@@ -220,7 +223,7 @@ pub fn dissolve_problem(
     problem_id: &str,
     reason: Option<&str>,
 ) -> Result<()> {
-    let user = store.get_current_user()?;
+    let user = current_user(store);
     let mut event = Event::new(
         EventType::ProblemDissolved,
         problem_id.to_string(),
@@ -251,7 +254,7 @@ pub fn dissolve_problem(
 
 /// Reopen a previously solved or dissolved problem, emit events, fire automation.
 pub fn reopen_problem(store: &MetadataStore, problem_id: &str) -> Result<()> {
-    let user = store.get_current_user()?;
+    let user = current_user(store);
     let event = Event::new(
         EventType::ProblemReopened,
         problem_id.to_string(),
@@ -275,14 +278,10 @@ pub fn reopen_problem(store: &MetadataStore, problem_id: &str) -> Result<()> {
 
 // ── Critique operations ────────────────────────────────────────────
 
-/// Address a critique: validate state, emit events.
+/// Address a critique: validate state, emit events, fire automation.
 pub fn address_critique(store: &MetadataStore, critique_id: &str) -> Result<()> {
-    let user = store.get_current_user().unwrap_or_default();
-    let event = Event::new(
-        EventType::CritiqueAddressed,
-        critique_id.to_string(),
-        user,
-    );
+    let user = current_user(store);
+    let event = Event::new(EventType::CritiqueAddressed, critique_id.to_string(), user);
 
     store.with_metadata(&format!("Address critique {}", critique_id), || {
         store.set_pending_event(event.clone());
@@ -290,17 +289,17 @@ pub fn address_critique(store: &MetadataStore, critique_id: &str) -> Result<()> 
         critique.address().map_err(JjjError::Validation)?;
         store.save_critique(&critique)?;
         Ok(())
-    })
+    })?;
+
+    crate::automation::run(store, &event, critique_id);
+
+    Ok(())
 }
 
-/// Validate a critique: confirm it's correct, emit events.
+/// Validate a critique: confirm it's correct, emit events, fire automation.
 pub fn validate_critique(store: &MetadataStore, critique_id: &str) -> Result<()> {
-    let user = store.get_current_user().unwrap_or_default();
-    let event = Event::new(
-        EventType::CritiqueValidated,
-        critique_id.to_string(),
-        user,
-    );
+    let user = current_user(store);
+    let event = Event::new(EventType::CritiqueValidated, critique_id.to_string(), user);
 
     store.with_metadata(&format!("Validate critique {}", critique_id), || {
         store.set_pending_event(event.clone());
@@ -308,17 +307,17 @@ pub fn validate_critique(store: &MetadataStore, critique_id: &str) -> Result<()>
         critique.validate().map_err(JjjError::Validation)?;
         store.save_critique(&critique)?;
         Ok(())
-    })
+    })?;
+
+    crate::automation::run(store, &event, critique_id);
+
+    Ok(())
 }
 
-/// Dismiss a critique: mark as incorrect or irrelevant, emit events.
+/// Dismiss a critique: mark as incorrect or irrelevant, emit events, fire automation.
 pub fn dismiss_critique(store: &MetadataStore, critique_id: &str) -> Result<()> {
-    let user = store.get_current_user().unwrap_or_default();
-    let event = Event::new(
-        EventType::CritiqueDismissed,
-        critique_id.to_string(),
-        user,
-    );
+    let user = current_user(store);
+    let event = Event::new(EventType::CritiqueDismissed, critique_id.to_string(), user);
 
     store.with_metadata(&format!("Dismiss critique {}", critique_id), || {
         store.set_pending_event(event.clone());
@@ -326,5 +325,9 @@ pub fn dismiss_critique(store: &MetadataStore, critique_id: &str) -> Result<()> 
         critique.dismiss().map_err(JjjError::Validation)?;
         store.save_critique(&critique)?;
         Ok(())
-    })
+    })?;
+
+    crate::automation::run(store, &event, critique_id);
+
+    Ok(())
 }

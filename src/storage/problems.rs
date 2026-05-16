@@ -196,7 +196,10 @@ impl MetadataStore {
         let db_path = self.jj_client.repo_root().join(".jj").join("jjj.db");
         if db_path.exists() {
             if let Ok(db) = crate::db::schema::Database::open(&db_path) {
-                let _ = db.conn().execute("DELETE FROM fts WHERE id = ?1", rusqlite::params![problem_id]);
+                let _ = db.conn().execute(
+                    "DELETE FROM fts WHERE id = ?1",
+                    rusqlite::params![problem_id],
+                );
             }
         }
 

@@ -707,7 +707,6 @@ fn approve_solution(
     Ok(())
 }
 
-
 fn withdraw_solution(
     ctx: &CommandContext,
     solution_input: String,

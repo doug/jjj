@@ -47,12 +47,22 @@ pub fn load_embedding(
         params![entity_type, entity_id],
         |row| {
             let blob: Vec<u8> = row.get(4)?;
+            let embedding = blob_to_embedding(&blob).ok_or_else(|| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    4,
+                    rusqlite::types::Type::Blob,
+                    Box::<dyn std::error::Error + Send + Sync>::from(format!(
+                        "embedding blob length {} is not a multiple of 4",
+                        blob.len()
+                    )),
+                )
+            })?;
             Ok(EmbeddingRecord {
                 entity_type: row.get(0)?,
                 entity_id: row.get(1)?,
                 model: row.get(2)?,
                 dimensions: row.get(3)?,
-                embedding: blob_to_embedding(&blob),
+                embedding,
                 created_at: row.get(5)?,
             })
         },
@@ -145,12 +155,22 @@ pub fn get_embedding_model(conn: &Connection) -> SqliteResult<Option<String>> {
 // Helper to convert row to EmbeddingRecord
 fn row_to_record(row: &rusqlite::Row) -> SqliteResult<EmbeddingRecord> {
     let blob: Vec<u8> = row.get(4)?;
+    let embedding = blob_to_embedding(&blob).ok_or_else(|| {
+        rusqlite::Error::FromSqlConversionFailure(
+            4,
+            rusqlite::types::Type::Blob,
+            Box::<dyn std::error::Error + Send + Sync>::from(format!(
+                "embedding blob length {} is not a multiple of 4",
+                blob.len()
+            )),
+        )
+    })?;
     Ok(EmbeddingRecord {
         entity_type: row.get(0)?,
         entity_id: row.get(1)?,
         model: row.get(2)?,
         dimensions: row.get(3)?,
-        embedding: blob_to_embedding(&blob),
+        embedding,
         created_at: row.get(5)?,
     })
 }
@@ -165,10 +185,19 @@ fn embedding_to_blob(embedding: &[f32]) -> Vec<u8> {
 }
 
 /// Convert blob back to f32 vector.
-fn blob_to_embedding(blob: &[u8]) -> Vec<f32> {
-    blob.chunks_exact(4)
-        .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
-        .collect()
+///
+/// Returns `None` if the blob length is not a multiple of 4 (each f32 is 4 bytes).
+/// A misaligned blob is corrupted storage — silently truncating would yield a
+/// vector with the wrong dimensions and no error.
+fn blob_to_embedding(blob: &[u8]) -> Option<Vec<f32>> {
+    if blob.len() % 4 != 0 {
+        return None;
+    }
+    Some(
+        blob.chunks_exact(4)
+            .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+            .collect(),
+    )
 }
 
 #[cfg(test)]
@@ -180,12 +209,26 @@ mod tests {
     fn test_embedding_blob_roundtrip() {
         let original = vec![1.0f32, 2.5, -3.7, 0.0, 1e-6];
         let blob = embedding_to_blob(&original);
-        let recovered = blob_to_embedding(&blob);
+        let recovered = blob_to_embedding(&blob).expect("aligned blob");
 
         assert_eq!(original.len(), recovered.len());
         for (a, b) in original.iter().zip(recovered.iter()) {
             assert!((a - b).abs() < 1e-10);
         }
+    }
+
+    #[test]
+    fn test_embedding_blob_misaligned_returns_none() {
+        // 13 bytes is not a multiple of 4 — a corrupted write
+        let blob = vec![0u8; 13];
+        assert!(blob_to_embedding(&blob).is_none());
+    }
+
+    #[test]
+    fn test_embedding_blob_empty_is_valid() {
+        let blob: Vec<u8> = vec![];
+        let recovered = blob_to_embedding(&blob).expect("empty blob is aligned");
+        assert!(recovered.is_empty());
     }
 
     #[test]

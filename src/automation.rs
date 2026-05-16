@@ -103,8 +103,22 @@ fn execute_shell(rule: &AutomationRule, auto_ctx: &AutomationContext) -> Automat
 
 /// Execute all matching automation rules for an event.
 ///
-/// Called from command handlers after recording the event.
-/// Failures print warnings but never block the primary operation.
+/// # Semantics
+///
+/// Automation has **at-most-once** semantics. The flow is:
+///
+/// 1. Caller wraps the metadata write in [`MetadataStore::with_metadata`].
+///    The entity save and any pending events are flushed inside this block.
+/// 2. After `with_metadata` returns `Ok`, the caller invokes [`run`].
+/// 3. `run` enumerates matching rules and dispatches each.
+///
+/// If the process is killed between step 1 and 3, the event is durable but
+/// the action does not fire. Recovery is manual: inspect the failure sidecar
+/// (`.jj/jjj-meta/automation-failures.jsonl`) and re-trigger the action
+/// (e.g., `jjj github push`).
+///
+/// Failures are appended to the sidecar and printed as warnings; they never
+/// propagate to the caller.
 pub fn run(store: &MetadataStore, event: &Event, entity_id: &str) {
     let config = match store.load_config() {
         Ok(c) => c,
@@ -140,9 +154,38 @@ pub fn run(store: &MetadataStore, event: &Event, entity_id: &str) {
         match result {
             AutomationResult::Success(msg) => println!("  (auto: {})", msg),
             AutomationResult::Failure(msg) => {
-                eprintln!("  Warning: automation '{:?}' failed: {}", rule.action, msg)
+                eprintln!("  Warning: automation '{:?}' failed: {}", rule.action, msg);
+                record_failure(store, event, &rule.action, &msg);
             }
             AutomationResult::Skipped(_) => {}
+        }
+    }
+}
+
+/// Append a failed automation attempt to the sidecar log for manual replay.
+///
+/// The sidecar lives at `.jj/jjj-meta/automation-failures.jsonl`. Each line is
+/// a JSON object: `{ "when", "event_type", "entity_id", "action", "message" }`.
+/// Failures here are silently dropped — the caller already warned.
+fn record_failure(store: &MetadataStore, event: &Event, action: &AutomationAction, message: &str) {
+    use std::io::Write;
+
+    let path = store.meta_path().join("automation-failures.jsonl");
+    let record = serde_json::json!({
+        "when": event.when.to_rfc3339(),
+        "event_type": event.event_type.to_string(),
+        "entity_id": event.entity,
+        "action": format!("{:?}", action),
+        "message": message,
+    });
+
+    if let Ok(line) = serde_json::to_string(&record) {
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)
+        {
+            let _ = writeln!(f, "{}", line);
         }
     }
 }

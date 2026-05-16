@@ -27,9 +27,10 @@ impl JjClient {
                 // Expected format: "jj 0.25.0" or "jj 0.25.0-dev"
                 if let Some(ver) = version_str.split_whitespace().nth(1) {
                     let parts: Vec<&str> = ver.split('.').collect();
-                    if let (Some(Ok(major)), Some(Ok(minor))) =
-                        (parts.first().map(|s| s.parse::<u32>()), parts.get(1).map(|s| s.parse::<u32>()))
-                    {
+                    if let (Some(Ok(major)), Some(Ok(minor))) = (
+                        parts.first().map(|s| s.parse::<u32>()),
+                        parts.get(1).map(|s| s.parse::<u32>()),
+                    ) {
                         if major == 0 && minor < 25 {
                             eprintln!(
                                 "Warning: jj version {} detected; jjj requires 0.25.0 or later",

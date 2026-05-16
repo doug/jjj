@@ -19,9 +19,7 @@ mod related;
 
 /// Convert a char-based cursor position to a byte index in a string.
 fn char_to_byte_pos(s: &str, char_pos: usize) -> usize {
-    s.char_indices()
-        .nth(char_pos)
-        .map_or(s.len(), |(i, _)| i)
+    s.char_indices().nth(char_pos).map_or(s.len(), |(i, _)| i)
 }
 
 /// Which pane currently has keyboard focus.

@@ -124,7 +124,6 @@ pub struct SyncConfig {
     /// Default: "workspace"
     #[serde(default)]
     pub workspace: Option<String>,
-
 }
 
 impl SyncConfig {
@@ -167,7 +166,6 @@ impl SyncConfig {
     pub fn workspace_prefix(&self) -> &str {
         self.workspace.as_deref().unwrap_or("workspace")
     }
-
 
     /// Whether any sync mechanism is available.
     pub fn has_sync(&self, has_git: bool) -> bool {

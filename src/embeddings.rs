@@ -189,7 +189,10 @@ impl EmbeddingClient {
             if header == "\r\n" || header.is_empty() {
                 break;
             }
-            if let Some(value) = header.strip_prefix("Content-Length:").or_else(|| header.strip_prefix("content-length:")) {
+            if let Some(value) = header
+                .strip_prefix("Content-Length:")
+                .or_else(|| header.strip_prefix("content-length:"))
+            {
                 content_length = value.trim().parse().ok();
             }
         }

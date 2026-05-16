@@ -2,12 +2,23 @@ use super::super::next_actions::EntityType;
 use super::{App, InputAction, InputMode};
 use crate::display::short_id;
 use crate::error::Result;
-
+use crate::storage::MetadataStore;
 
 /// Target tier for tertiary sort assignment.
 enum Tier {
     Top,
     Bottom,
+}
+
+/// Resolve the current user for TUI-originated events.
+///
+/// Mirrors `domain::current_user`: never returns an empty string, so the audit
+/// log always has a non-empty `by` field even when jj has no user configured.
+fn tui_current_user(store: &MetadataStore) -> String {
+    match store.get_current_user() {
+        Ok(name) if !name.trim().is_empty() => name,
+        _ => "unknown".to_string(),
+    }
 }
 
 impl App {
@@ -17,16 +28,22 @@ impl App {
         milestone_id: Option<String>,
     ) -> Result<()> {
         use crate::id::generate_id;
-        use crate::models::Problem;
+        use crate::models::{Event, EventType, Problem};
 
         let id = generate_id();
         let mut problem = Problem::new(id.clone(), title.to_string());
         problem.milestone_id = milestone_id;
 
+        let user = tui_current_user(&self.store);
+        let event = Event::new(EventType::ProblemCreated, id.clone(), user);
+
         self.store
             .with_metadata(&format!("Create problem: {}", title), || {
+                self.store.set_pending_event(event.clone());
                 self.store.save_problem(&problem)
             })?;
+
+        crate::automation::run(&self.store, &event, &id);
 
         self.show_flash(&format!("Created {}", id));
         self.refresh_data()?;
@@ -35,15 +52,25 @@ impl App {
 
     pub(super) fn create_solution(&mut self, title: &str, problem_id: &str) -> Result<()> {
         use crate::id::generate_id;
-        use crate::models::Solution;
+        use crate::models::{Event, EventExtra, EventType, Solution};
 
         let id = generate_id();
         let solution = Solution::new(id.clone(), title.to_string(), problem_id.to_string());
 
+        let user = tui_current_user(&self.store);
+        let event =
+            Event::new(EventType::SolutionCreated, id.clone(), user).with_extra(EventExtra {
+                problem: Some(problem_id.to_string()),
+                ..Default::default()
+            });
+
         self.store
             .with_metadata(&format!("Create solution: {}", title), || {
+                self.store.set_pending_event(event.clone());
                 self.store.save_solution(&solution)
             })?;
+
+        crate::automation::run(&self.store, &event, &id);
 
         self.show_flash(&format!("Created {}", id));
         self.refresh_data()?;
@@ -52,15 +79,26 @@ impl App {
 
     pub(super) fn create_critique(&mut self, title: &str, solution_id: &str) -> Result<()> {
         use crate::id::generate_id;
-        use crate::models::Critique;
+        use crate::models::{Critique, Event, EventExtra, EventType};
 
         let id = generate_id();
         let critique = Critique::new(id.clone(), title.to_string(), solution_id.to_string());
 
+        let user = tui_current_user(&self.store);
+        let event =
+            Event::new(EventType::CritiqueRaised, id.clone(), user).with_extra(EventExtra {
+                target: Some(solution_id.to_string()),
+                title: Some(title.to_string()),
+                ..Default::default()
+            });
+
         self.store
             .with_metadata(&format!("Create critique: {}", title), || {
+                self.store.set_pending_event(event.clone());
                 self.store.save_critique(&critique)
             })?;
+
+        crate::automation::run(&self.store, &event, &id);
 
         self.show_flash(&format!("Created {}", id));
         self.refresh_data()?;
@@ -240,7 +278,10 @@ impl App {
                 return Ok(());
             }
             self.ui.input_mode = InputMode::Input {
-                prompt: format!("Tags for {} items (+add, -remove, or replace): ", targets.len()),
+                prompt: format!(
+                    "Tags for {} items (+add, -remove, or replace): ",
+                    targets.len()
+                ),
                 buffer: String::new(),
                 action: InputAction::BatchEditTags { targets },
                 cursor_pos: 0,
@@ -345,8 +386,14 @@ impl App {
         input: &str,
     ) -> Result<()> {
         // Parse input into add/remove/replace sets
-        let tokens: Vec<&str> = input.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
-        let has_prefixes = tokens.iter().any(|t| t.starts_with('+') || t.starts_with('-'));
+        let tokens: Vec<&str> = input
+            .split(',')
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .collect();
+        let has_prefixes = tokens
+            .iter()
+            .any(|t| t.starts_with('+') || t.starts_with('-'));
 
         let (to_add, to_remove): (Vec<String>, Vec<String>) = if has_prefixes {
             let mut add = Vec::new();
@@ -375,9 +422,8 @@ impl App {
         let replace_mode = !has_prefixes;
 
         let count = targets.len();
-        self.store.with_metadata(
-            &format!("Batch update tags on {} items", count),
-            || {
+        self.store
+            .with_metadata(&format!("Batch update tags on {} items", count), || {
                 for (entity_type, entity_id) in targets {
                     match entity_type {
                         EntityType::Problem => {
@@ -418,8 +464,7 @@ impl App {
                     }
                 }
                 Ok(())
-            },
-        )?;
+            })?;
 
         let msg = if replace_mode {
             format!("Tags set on {} items", count)
@@ -686,8 +731,7 @@ impl App {
                     match entity_type {
                         EntityType::Problem => {
                             match (|| -> crate::error::Result<()> {
-                                let (can_solve, message) =
-                                    self.store.can_solve_problem(id)?;
+                                let (can_solve, message) = self.store.can_solve_problem(id)?;
                                 if !can_solve {
                                     return Err(crate::error::JjjError::CannotSolveProblem(
                                         message,
@@ -698,11 +742,8 @@ impl App {
                                     .try_set_status(ProblemStatus::Solved)
                                     .map_err(crate::error::JjjError::Validation)?;
                                 self.store.save_problem(&problem)?;
-                                let event = Event::new(
-                                    EventType::ProblemSolved,
-                                    id.clone(),
-                                    user.clone(),
-                                );
+                                let event =
+                                    Event::new(EventType::ProblemSolved, id.clone(), user.clone());
                                 self.store.set_pending_event(event.clone());
                                 batch_events.push((event, id.clone()));
                                 Ok(())
@@ -1103,7 +1144,9 @@ impl App {
                     };
                     match result {
                         Ok(_) => deleted += 1,
-                        Err(e) => errors.push(format!("{}: {}", &entity_id[..6.min(entity_id.len())], e)),
+                        Err(e) => {
+                            errors.push(format!("{}: {}", &entity_id[..6.min(entity_id.len())], e))
+                        }
                     }
                 }
                 Ok(())
@@ -1507,7 +1550,11 @@ impl App {
                 .filter(|p| p.milestone_id.as_deref() == Some(milestone_id))
                 .map(|p| p.id.clone())
                 .collect();
-            let ordering = self.ui.personal_orderings.get_mut(milestone_id).expect("ensure_ordering guarantees entry");
+            let ordering = self
+                .ui
+                .personal_orderings
+                .get_mut(milestone_id)
+                .expect("ensure_ordering guarantees entry");
             let existing: std::collections::HashSet<String> =
                 ordering.order.iter().cloned().collect();
             // Append new problems
@@ -1553,7 +1600,11 @@ impl App {
 
         // All guards use immutable borrows, checked before undo snapshot
         let (current_pos, target_pos, label) = {
-            let ordering = self.ui.personal_orderings.get(&milestone_id).expect("ensure_ordering guarantees entry");
+            let ordering = self
+                .ui
+                .personal_orderings
+                .get(&milestone_id)
+                .expect("ensure_ordering guarantees entry");
 
             let (view_start, view_end) =
                 if let Some((drill_ms, start, end)) = self.ui.tier_drill.last() {
@@ -1604,7 +1655,11 @@ impl App {
 
         // All guards passed — snapshot for undo, then mutate
         self.push_ordering_undo(&milestone_id);
-        let ordering = self.ui.personal_orderings.get_mut(&milestone_id).expect("ensure_ordering guarantees entry");
+        let ordering = self
+            .ui
+            .personal_orderings
+            .get_mut(&milestone_id)
+            .expect("ensure_ordering guarantees entry");
 
         // Remove from current position and insert at target.
         // When removing from before the target, the target shifts down by 1.
@@ -1668,7 +1723,11 @@ impl App {
         let current_votes;
         let new_val;
         {
-            let ord = self.ui.personal_orderings.get(&milestone_id).expect("ensure_ordering guarantees entry");
+            let ord = self
+                .ui
+                .personal_orderings
+                .get(&milestone_id)
+                .expect("ensure_ordering guarantees entry");
             current_votes = *ord.votes.get(&problem_id).unwrap_or(&0);
             new_val = current_votes + delta;
             let new_cost = borda::vote_cost(new_val);
@@ -1688,7 +1747,11 @@ impl App {
 
         // Budget OK — snapshot for undo, then mutate
         self.push_ordering_undo(&milestone_id);
-        let ord = self.ui.personal_orderings.get_mut(&milestone_id).expect("ensure_ordering guarantees entry");
+        let ord = self
+            .ui
+            .personal_orderings
+            .get_mut(&milestone_id)
+            .expect("ensure_ordering guarantees entry");
 
         if new_val == 0 {
             ord.votes.remove(&problem_id);
@@ -1766,7 +1829,11 @@ impl App {
         };
 
         self.ensure_ordering(&milestone_id);
-        let ordering = self.ui.personal_orderings.get(&milestone_id).expect("ensure_ordering guarantees entry");
+        let ordering = self
+            .ui
+            .personal_orderings
+            .get(&milestone_id)
+            .expect("ensure_ordering guarantees entry");
         let pos = match ordering.order.iter().position(|id| *id == problem_id) {
             Some(p) if p > 0 => p,
             _ => {
@@ -1776,7 +1843,11 @@ impl App {
         };
 
         self.push_ordering_undo(&milestone_id);
-        let ordering = self.ui.personal_orderings.get_mut(&milestone_id).expect("ensure_ordering guarantees entry");
+        let ordering = self
+            .ui
+            .personal_orderings
+            .get_mut(&milestone_id)
+            .expect("ensure_ordering guarantees entry");
         ordering.order.swap(pos, pos - 1);
         ordering.updated_at = chrono::Utc::now();
 
@@ -1800,7 +1871,11 @@ impl App {
         };
 
         self.ensure_ordering(&milestone_id);
-        let ordering = self.ui.personal_orderings.get(&milestone_id).expect("ensure_ordering guarantees entry");
+        let ordering = self
+            .ui
+            .personal_orderings
+            .get(&milestone_id)
+            .expect("ensure_ordering guarantees entry");
         let len = ordering.order.len();
         let pos = match ordering.order.iter().position(|id| *id == problem_id) {
             Some(p) if p + 1 < len => p,
@@ -1811,7 +1886,11 @@ impl App {
         };
 
         self.push_ordering_undo(&milestone_id);
-        let ordering = self.ui.personal_orderings.get_mut(&milestone_id).expect("ensure_ordering guarantees entry");
+        let ordering = self
+            .ui
+            .personal_orderings
+            .get_mut(&milestone_id)
+            .expect("ensure_ordering guarantees entry");
         ordering.order.swap(pos, pos + 1);
         ordering.updated_at = chrono::Utc::now();
 
