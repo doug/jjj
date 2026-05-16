@@ -108,59 +108,65 @@ impl App {
     /// Walks up the entity hierarchy (critique → solution → problem → milestone)
     /// and inserts each ancestor's ID into `expanded_nodes`. Must be followed by
     /// `rebuild_tree()` to take effect.
+    ///
+    /// Builds three HashMaps once and uses O(1) lookups instead of repeated
+    /// `iter().find()` linear scans — important for large projects where this
+    /// is called on every `jump_to_next_action` keypress.
     fn expand_to_reveal(&mut self, target_id: &str) {
-        // For a solution, we need its problem expanded, and that problem's milestone expanded
-        if let Some(solution) = self.data.solutions.iter().find(|s| s.id == target_id) {
-            self.ui.expanded_nodes.insert(solution.problem_id.clone());
+        use std::collections::HashMap;
 
-            if let Some(problem) = self
-                .data
-                .problems
-                .iter()
-                .find(|p| p.id == solution.problem_id)
-            {
+        // Index entities by ID for O(1) ancestor walking.
+        let problem_by_id: HashMap<&str, &crate::models::Problem> = self
+            .data
+            .problems
+            .iter()
+            .map(|p| (p.id.as_str(), p))
+            .collect();
+        let solution_by_id: HashMap<&str, &crate::models::Solution> = self
+            .data
+            .solutions
+            .iter()
+            .map(|s| (s.id.as_str(), s))
+            .collect();
+        let critique_by_id: HashMap<&str, &crate::models::Critique> = self
+            .data
+            .critiques
+            .iter()
+            .map(|c| (c.id.as_str(), c))
+            .collect();
+
+        let mut to_expand: Vec<String> = Vec::new();
+
+        // Helper: expand a problem's milestone (or backlog if none).
+        let push_milestone_for_problem =
+            |to_expand: &mut Vec<String>, problem: &crate::models::Problem| {
                 if let Some(milestone_id) = &problem.milestone_id {
-                    self.ui.expanded_nodes.insert(milestone_id.clone());
+                    to_expand.push(milestone_id.clone());
                 } else {
-                    self.ui.expanded_nodes.insert("backlog".to_string());
+                    to_expand.push("backlog".to_string());
+                }
+            };
+
+        // Walk from the deepest possible ancestor inward.
+        if let Some(critique) = critique_by_id.get(target_id) {
+            to_expand.push(critique.solution_id.clone());
+            if let Some(solution) = solution_by_id.get(critique.solution_id.as_str()) {
+                to_expand.push(solution.problem_id.clone());
+                if let Some(problem) = problem_by_id.get(solution.problem_id.as_str()) {
+                    push_milestone_for_problem(&mut to_expand, problem);
                 }
             }
+        } else if let Some(solution) = solution_by_id.get(target_id) {
+            to_expand.push(solution.problem_id.clone());
+            if let Some(problem) = problem_by_id.get(solution.problem_id.as_str()) {
+                push_milestone_for_problem(&mut to_expand, problem);
+            }
+        } else if let Some(problem) = problem_by_id.get(target_id) {
+            push_milestone_for_problem(&mut to_expand, problem);
         }
 
-        // For a problem, we need its milestone expanded
-        if let Some(problem) = self.data.problems.iter().find(|p| p.id == target_id) {
-            if let Some(milestone_id) = &problem.milestone_id {
-                self.ui.expanded_nodes.insert(milestone_id.clone());
-            } else {
-                self.ui.expanded_nodes.insert("backlog".to_string());
-            }
-        }
-
-        // For a critique, we need its solution and problem expanded
-        if let Some(critique) = self.data.critiques.iter().find(|c| c.id == target_id) {
-            self.ui.expanded_nodes.insert(critique.solution_id.clone());
-
-            if let Some(solution) = self
-                .data
-                .solutions
-                .iter()
-                .find(|s| s.id == critique.solution_id)
-            {
-                self.ui.expanded_nodes.insert(solution.problem_id.clone());
-
-                if let Some(problem) = self
-                    .data
-                    .problems
-                    .iter()
-                    .find(|p| p.id == solution.problem_id)
-                {
-                    if let Some(milestone_id) = &problem.milestone_id {
-                        self.ui.expanded_nodes.insert(milestone_id.clone());
-                    } else {
-                        self.ui.expanded_nodes.insert("backlog".to_string());
-                    }
-                }
-            }
+        for id in to_expand {
+            self.ui.expanded_nodes.insert(id);
         }
     }
 

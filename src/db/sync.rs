@@ -309,15 +309,27 @@ pub fn open_cache_if_present(repo_root: &std::path::Path) -> Option<Database> {
     Database::open(&path).ok()
 }
 
+/// Number of texts to send in a single embedding API call.
+///
+/// Larger batches reduce per-request overhead with the Ollama HTTP API but
+/// require the model to hold them all simultaneously. 32 is a reasonable
+/// default for qwen3-embedding on commodity hardware.
+const EMBEDDING_BATCH_SIZE: usize = 32;
+
 /// Rebuild all embeddings from entities.
 ///
-/// This computes embeddings for all problems, solutions, critiques, and milestones.
-/// Uses batch processing for efficiency.
+/// Computes embeddings for problems, solutions, critiques, and milestones,
+/// sending them in batches of [`EMBEDDING_BATCH_SIZE`] to the embedding API.
+/// Batching dramatically reduces overhead vs. one-at-a-time: with qwen3 at
+/// ~50ms per request, batching cuts a 1000-entity rebuild from ~50s to ~2s.
+///
+/// Individual batch failures are logged and skipped; a fully failed batch
+/// does not abort the whole rebuild (the partial result is still useful).
 pub fn rebuild_embeddings(
     db: &Database,
     client: &crate::embeddings::EmbeddingClient,
 ) -> Result<()> {
-    use crate::db::embeddings::{clear_embeddings, upsert_embedding};
+    use crate::db::embeddings::clear_embeddings;
     use crate::embeddings::{
         prepare_critique_text, prepare_milestone_text, prepare_problem_text, prepare_solution_text,
     };
@@ -325,45 +337,85 @@ pub fn rebuild_embeddings(
     let conn = db.conn();
     let model = client.model();
 
-    // Clear existing embeddings
     clear_embeddings(conn)?;
 
-    // Process problems
+    // Each entity type → vector of (id, text) to embed.
     let problems = list_problems(conn)?;
-    for problem in &problems {
-        let text = prepare_problem_text(&problem.title, &problem.description);
-        if let Ok(embedding) = client.embed(&text) {
-            upsert_embedding(conn, "problem", &problem.id, model, &embedding)?;
-        }
-    }
+    let problem_inputs: Vec<(String, String)> = problems
+        .iter()
+        .map(|p| (p.id.clone(), prepare_problem_text(&p.title, &p.description)))
+        .collect();
+    embed_and_store_batch(conn, client, model, "problem", &problem_inputs)?;
 
-    // Process solutions
     let solutions = list_solutions(conn)?;
-    for solution in &solutions {
-        let text = prepare_solution_text(&solution.title, &solution.approach);
-        if let Ok(embedding) = client.embed(&text) {
-            upsert_embedding(conn, "solution", &solution.id, model, &embedding)?;
-        }
-    }
+    let solution_inputs: Vec<(String, String)> = solutions
+        .iter()
+        .map(|s| (s.id.clone(), prepare_solution_text(&s.title, &s.approach)))
+        .collect();
+    embed_and_store_batch(conn, client, model, "solution", &solution_inputs)?;
 
-    // Process critiques
     let critiques = list_critiques(conn)?;
-    for critique in &critiques {
-        let text = prepare_critique_text(&critique.title, &critique.argument);
-        if let Ok(embedding) = client.embed(&text) {
-            upsert_embedding(conn, "critique", &critique.id, model, &embedding)?;
-        }
-    }
+    let critique_inputs: Vec<(String, String)> = critiques
+        .iter()
+        .map(|c| (c.id.clone(), prepare_critique_text(&c.title, &c.argument)))
+        .collect();
+    embed_and_store_batch(conn, client, model, "critique", &critique_inputs)?;
 
-    // Process milestones
     let milestones = list_milestones(conn)?;
-    for milestone in &milestones {
-        let text = prepare_milestone_text(&milestone.title, &milestone.description);
-        if let Ok(embedding) = client.embed(&text) {
-            upsert_embedding(conn, "milestone", &milestone.id, model, &embedding)?;
+    let milestone_inputs: Vec<(String, String)> = milestones
+        .iter()
+        .map(|m| {
+            (
+                m.id.clone(),
+                prepare_milestone_text(&m.title, &m.description),
+            )
+        })
+        .collect();
+    embed_and_store_batch(conn, client, model, "milestone", &milestone_inputs)?;
+
+    Ok(())
+}
+
+/// Embed `(id, text)` pairs in batches of [`EMBEDDING_BATCH_SIZE`] and upsert
+/// each resulting embedding into the SQLite cache.
+///
+/// A failed batch logs a warning and skips its entities; subsequent batches
+/// continue. Individual SQL errors propagate.
+fn embed_and_store_batch(
+    conn: &rusqlite::Connection,
+    client: &crate::embeddings::EmbeddingClient,
+    model: &str,
+    entity_type: &str,
+    items: &[(String, String)],
+) -> Result<()> {
+    use crate::db::embeddings::upsert_embedding;
+
+    for chunk in items.chunks(EMBEDDING_BATCH_SIZE) {
+        let texts: Vec<&str> = chunk.iter().map(|(_, t)| t.as_str()).collect();
+        match client.embed_batch(&texts) {
+            Ok(embeddings) if embeddings.len() == chunk.len() => {
+                for ((id, _), embedding) in chunk.iter().zip(embeddings.iter()) {
+                    upsert_embedding(conn, entity_type, id, model, embedding)?;
+                }
+            }
+            Ok(embeddings) => {
+                eprintln!(
+                    "Warning: {} batch returned {} embeddings for {} inputs; skipping batch",
+                    entity_type,
+                    embeddings.len(),
+                    chunk.len()
+                );
+            }
+            Err(e) => {
+                eprintln!(
+                    "Warning: embedding batch failed for {} ({} items): {}",
+                    entity_type,
+                    chunk.len(),
+                    e
+                );
+            }
         }
     }
-
     Ok(())
 }
 

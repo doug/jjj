@@ -215,6 +215,14 @@ impl Critique {
     }
 
     /// Check if a status transition is valid.
+    ///
+    /// The workflow treats `Valid` as informational ("this critique is
+    /// correct as written") and expects the user to either:
+    ///   - fix the flaw and move it to `Addressed`, or
+    ///   - decide the validation was wrong and `Dismiss` it, or
+    ///   - withdraw the solution.
+    ///
+    /// See `journeys/08-critique-validate.md` for the canonical flow.
     pub fn can_transition_to(&self, target: &CritiqueStatus) -> bool {
         matches!(
             (&self.status, target),
