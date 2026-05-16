@@ -65,20 +65,13 @@ impl MetadataStore {
         let critique_path = critiques_dir.join(format!("{}.md", critique.id));
         super::atomic_write(&critique_path, content.as_bytes())?;
 
-        // Update FTS if DB exists (best-effort)
-        let db_path = self.jj_client.repo_root().join(".jj").join("jjj.db");
-        if db_path.exists() {
-            if let Ok(db) = crate::db::schema::Database::open(&db_path) {
-                let fts_body = critique.argument.clone();
-                if let Err(e) = crate::db::sync::update_fts_entry(
-                    db.conn(),
-                    "critique",
-                    &critique.id,
-                    &critique.title,
-                    &fts_body,
-                ) {
-                    eprintln!("Warning: FTS index update failed: {}", e);
-                }
+        // Best-effort cache sync; the markdown is canonical.
+        if let Some(ref db) = *self.cache() {
+            if let Err(e) = crate::db::sync::sync_critique_to_cache(db, critique) {
+                eprintln!(
+                    "Warning: cache sync failed for critique {}: {}",
+                    critique.id, e
+                );
             }
         }
 
@@ -114,13 +107,12 @@ impl MetadataStore {
 
         fs::remove_file(critique_path)?;
 
-        // Remove from FTS index if DB exists (best-effort)
-        let db_path = self.jj_client.repo_root().join(".jj").join("jjj.db");
-        if db_path.exists() {
-            if let Ok(db) = crate::db::schema::Database::open(&db_path) {
-                let _ = db.conn().execute(
-                    "DELETE FROM fts WHERE id = ?1",
-                    rusqlite::params![critique_id],
+        // Best-effort cache removal
+        if let Some(ref db) = *self.cache() {
+            if let Err(e) = crate::db::sync::remove_entity_from_cache(db, "critique", critique_id) {
+                eprintln!(
+                    "Warning: cache removal failed for critique {}: {}",
+                    critique_id, e
                 );
             }
         }
@@ -168,8 +160,30 @@ impl MetadataStore {
         Ok(crate::id::generate_id())
     }
 
-    /// Get critiques for a solution
+    /// Get critiques for a solution.
+    ///
+    /// Uses the SQLite cache when present (indexed query); falls back to
+    /// filesystem walk when the cache is missing.
     pub fn list_critiques_for_solution(&self, solution_id: &str) -> Result<Vec<Critique>> {
+        if let Some(ref db) = *self.cache() {
+            let mut stmt = db
+                .conn()
+                .prepare("SELECT id FROM critiques WHERE solution_id = ?1 ORDER BY created_at")?;
+            let ids: Vec<String> = stmt
+                .query_map(rusqlite::params![solution_id], |row| {
+                    row.get::<_, String>(0)
+                })?
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+            let mut critiques = Vec::with_capacity(ids.len());
+            for id in ids {
+                match self.load_critique(&id) {
+                    Ok(c) => critiques.push(c),
+                    Err(JjjError::CritiqueNotFound(_)) => continue,
+                    Err(e) => return Err(e),
+                }
+            }
+            return Ok(critiques);
+        }
         let critiques = self.list_critiques()?;
         Ok(critiques
             .into_iter()
@@ -177,8 +191,31 @@ impl MetadataStore {
             .collect())
     }
 
-    /// Get open critiques for a solution
+    /// Get open critiques for a solution.
+    ///
+    /// Uses the SQLite cache when present; otherwise filters the FS walk.
     pub fn list_open_critiques_for_solution(&self, solution_id: &str) -> Result<Vec<Critique>> {
+        if let Some(ref db) = *self.cache() {
+            let mut stmt = db.conn().prepare(
+                "SELECT id FROM critiques WHERE solution_id = ?1 AND status = 'open' \
+                 ORDER BY created_at",
+            )?;
+            let ids: Vec<String> = stmt
+                .query_map(rusqlite::params![solution_id], |row| {
+                    row.get::<_, String>(0)
+                })?
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+            let mut critiques = Vec::with_capacity(ids.len());
+            for id in ids {
+                match self.load_critique(&id) {
+                    Ok(c) if c.status == CritiqueStatus::Open => critiques.push(c),
+                    Ok(_) => continue, // raced with a status change
+                    Err(JjjError::CritiqueNotFound(_)) => continue,
+                    Err(e) => return Err(e),
+                }
+            }
+            return Ok(critiques);
+        }
         let critiques = self.list_critiques_for_solution(solution_id)?;
         Ok(critiques
             .into_iter()
@@ -186,8 +223,19 @@ impl MetadataStore {
             .collect())
     }
 
-    /// Check if a solution has any valid critiques (that block approval)
+    /// Check if a solution has any valid critiques (that block approval).
+    ///
+    /// Uses the SQLite cache when present (single COUNT query); otherwise
+    /// walks the filesystem.
     pub fn has_valid_critiques(&self, solution_id: &str) -> Result<bool> {
+        if let Some(ref db) = *self.cache() {
+            let count: i64 = db.conn().query_row(
+                "SELECT COUNT(*) FROM critiques WHERE solution_id = ?1 AND status = 'valid'",
+                rusqlite::params![solution_id],
+                |row| row.get(0),
+            )?;
+            return Ok(count > 0);
+        }
         let critiques = self.list_critiques_for_solution(solution_id)?;
         Ok(critiques.iter().any(|c| c.status == CritiqueStatus::Valid))
     }

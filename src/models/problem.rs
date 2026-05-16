@@ -29,10 +29,6 @@ pub struct Problem {
     #[serde(default)]
     pub solution_ids: Vec<String>,
 
-    /// Child problem IDs (sub-problems - computed from parent_id references)
-    #[serde(default)]
-    pub child_ids: Vec<String>,
-
     /// Target milestone (optional)
     pub milestone_id: Option<String>,
 
@@ -214,7 +210,6 @@ impl Problem {
             priority: Priority::default(),
             confidence: Confidence::default(),
             solution_ids: Vec::new(),
-            child_ids: Vec::new(),
             milestone_id: None,
             assignee: None,
             created_at: now,
@@ -245,34 +240,6 @@ impl Problem {
     pub fn remove_solution(&mut self, solution_id: &str) -> bool {
         if let Some(pos) = self.solution_ids.iter().position(|id| id == solution_id) {
             self.solution_ids.remove(pos);
-            self.updated_at = Utc::now();
-            true
-        } else {
-            false
-        }
-    }
-
-    /// Add a child ID to the in-memory list.
-    ///
-    /// **Note:** `child_ids` is not persisted to disk — it is derived at read
-    /// time in [`MetadataStore::list_problems`]. Calling this method has no
-    /// lasting effect; use [`MetadataStore::list_subproblems`] to query children.
-    pub fn add_child(&mut self, child_id: impl Into<String>) {
-        let child_id = child_id.into();
-        if !self.child_ids.contains(&child_id) {
-            self.child_ids.push(child_id);
-            self.updated_at = Utc::now();
-        }
-    }
-
-    /// Remove a child ID from the in-memory list.
-    ///
-    /// **Note:** `child_ids` is not persisted to disk — it is derived at read
-    /// time in [`MetadataStore::list_problems`]. Calling this method has no
-    /// lasting effect; use [`MetadataStore::list_subproblems`] to query children.
-    pub fn remove_child(&mut self, child_id: &str) -> bool {
-        if let Some(pos) = self.child_ids.iter().position(|id| id == child_id) {
-            self.child_ids.remove(pos);
             self.updated_at = Utc::now();
             true
         } else {
@@ -368,8 +335,6 @@ pub struct ProblemFrontmatter {
     pub confidence: Confidence,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub solution_ids: Vec<String>,
-    #[serde(skip)]
-    pub child_ids: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub milestone_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -394,7 +359,6 @@ impl From<&Problem> for ProblemFrontmatter {
             priority: p.priority.clone(),
             confidence: p.confidence.clone(),
             solution_ids: p.solution_ids.clone(),
-            child_ids: p.child_ids.clone(),
             milestone_id: p.milestone_id.clone(),
             assignee: p.assignee.clone(),
             created_at: p.created_at,
@@ -454,16 +418,6 @@ mod tests {
 
         assert_eq!(problem.solution_ids.len(), 2);
         assert!(problem.solution_ids.contains(&"S-1".to_string()));
-    }
-
-    #[test]
-    fn test_add_child() {
-        let mut problem = Problem::new("P-1".to_string(), "Parent".to_string());
-        problem.add_child("P-2".to_string());
-        problem.add_child("P-3".to_string());
-
-        assert_eq!(problem.child_ids.len(), 2);
-        assert!(problem.child_ids.contains(&"P-2".to_string()));
     }
 
     #[test]

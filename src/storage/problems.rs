@@ -9,9 +9,8 @@ use std::fs;
 impl MetadataStore {
     /// Load a problem by ID.
     ///
-    /// **Note:** `child_ids` is always empty on the returned value because
-    /// children are derived from `parent_id` references across all problems.
-    /// Use [`MetadataStore::list_subproblems`] to get the children of a problem.
+    /// Use [`MetadataStore::list_subproblems`] to get the children of a problem;
+    /// children are derived from `parent_id` references, never stored.
     pub fn load_problem(&self, problem_id: &str) -> Result<Problem> {
         self.ensure_meta_checkout()?;
 
@@ -36,7 +35,6 @@ impl MetadataStore {
             priority: frontmatter.priority,
             confidence: frontmatter.confidence,
             solution_ids: frontmatter.solution_ids,
-            child_ids: frontmatter.child_ids,
             milestone_id: frontmatter.milestone_id,
             assignee: frontmatter.assignee,
             created_at: frontmatter.created_at,
@@ -68,20 +66,13 @@ impl MetadataStore {
         let problem_path = problems_dir.join(format!("{}.md", problem.id));
         super::atomic_write(&problem_path, content.as_bytes())?;
 
-        // Update FTS if DB exists (best-effort)
-        let db_path = self.jj_client.repo_root().join(".jj").join("jjj.db");
-        if db_path.exists() {
-            if let Ok(db) = crate::db::schema::Database::open(&db_path) {
-                let body = format!("{}\n{}", problem.description, problem.tags.join(" "));
-                if let Err(e) = crate::db::sync::update_fts_entry(
-                    db.conn(),
-                    "problem",
-                    &problem.id,
-                    &problem.title,
-                    &body,
-                ) {
-                    eprintln!("Warning: FTS index update failed: {}", e);
-                }
+        // Best-effort cache sync; the markdown is canonical.
+        if let Some(ref db) = *self.cache() {
+            if let Err(e) = crate::db::sync::sync_problem_to_cache(db, problem) {
+                eprintln!(
+                    "Warning: cache sync failed for problem {}: {}",
+                    problem.id, e
+                );
             }
         }
 
@@ -92,7 +83,6 @@ impl MetadataStore {
     ///
     /// This will:
     /// - Orphan child problems (remove their parent_id)
-    /// - Remove the problem from its parent's child_ids
     /// - Delete associated solutions and their critiques
     /// - Remove the problem from its milestone
     pub fn delete_problem(&self, problem_id: &str) -> Result<()> {
@@ -192,13 +182,12 @@ impl MetadataStore {
 
         fs::remove_file(problem_path)?;
 
-        // Remove from FTS index if DB exists (best-effort)
-        let db_path = self.jj_client.repo_root().join(".jj").join("jjj.db");
-        if db_path.exists() {
-            if let Ok(db) = crate::db::schema::Database::open(&db_path) {
-                let _ = db.conn().execute(
-                    "DELETE FROM fts WHERE id = ?1",
-                    rusqlite::params![problem_id],
+        // Best-effort cache removal
+        if let Some(ref db) = *self.cache() {
+            if let Err(e) = crate::db::sync::remove_entity_from_cache(db, "problem", problem_id) {
+                eprintln!(
+                    "Warning: cache removal failed for problem {}: {}",
+                    problem_id, e
                 );
             }
         }
@@ -238,18 +227,6 @@ impl MetadataStore {
             }
         }
 
-        // Derive child_ids from parent_id references (child_ids is not stored on disk).
-        let mut child_map: std::collections::HashMap<String, Vec<String>> =
-            std::collections::HashMap::new();
-        for p in &problems {
-            if let Some(ref pid) = p.parent_id {
-                child_map.entry(pid.clone()).or_default().push(p.id.clone());
-            }
-        }
-        for p in &mut problems {
-            p.child_ids = child_map.remove(&p.id).unwrap_or_default();
-        }
-
         Ok(problems)
     }
 
@@ -258,8 +235,29 @@ impl MetadataStore {
         Ok(crate::id::generate_id())
     }
 
-    /// Get subproblems of a problem
+    /// Get subproblems of a problem.
+    ///
+    /// Uses the SQLite cache when present (single indexed query); falls back
+    /// to walking the filesystem and filtering when the cache is missing.
     pub fn list_subproblems(&self, problem_id: &str) -> Result<Vec<Problem>> {
+        if let Some(ref db) = *self.cache() {
+            let mut stmt = db
+                .conn()
+                .prepare("SELECT id FROM problems WHERE parent_id = ?1 ORDER BY created_at")?;
+            let ids: Vec<String> = stmt
+                .query_map(rusqlite::params![problem_id], |row| row.get::<_, String>(0))?
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+            let mut children = Vec::with_capacity(ids.len());
+            for id in ids {
+                match self.load_problem(&id) {
+                    Ok(p) => children.push(p),
+                    Err(JjjError::ProblemNotFound(_)) => continue,
+                    Err(e) => return Err(e),
+                }
+            }
+            return Ok(children);
+        }
+        // Fallback: filesystem walk.
         let problems = self.list_problems()?;
         Ok(problems
             .into_iter()
@@ -267,8 +265,27 @@ impl MetadataStore {
             .collect())
     }
 
-    /// Get root problems (problems without parents)
+    /// Get root problems (problems without parents).
+    ///
+    /// Uses the SQLite cache when present; falls back to filesystem walk.
     pub fn list_root_problems(&self) -> Result<Vec<Problem>> {
+        if let Some(ref db) = *self.cache() {
+            let mut stmt = db
+                .conn()
+                .prepare("SELECT id FROM problems WHERE parent_id IS NULL ORDER BY created_at")?;
+            let ids: Vec<String> = stmt
+                .query_map([], |row| row.get::<_, String>(0))?
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+            let mut roots = Vec::with_capacity(ids.len());
+            for id in ids {
+                match self.load_problem(&id) {
+                    Ok(p) => roots.push(p),
+                    Err(JjjError::ProblemNotFound(_)) => continue,
+                    Err(e) => return Err(e),
+                }
+            }
+            return Ok(roots);
+        }
         let problems = self.list_problems()?;
         Ok(problems
             .into_iter()

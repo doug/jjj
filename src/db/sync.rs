@@ -207,6 +207,108 @@ pub fn remove_fts_entry(
     Ok(())
 }
 
+// ============================================================================
+// Per-entity sync hooks
+// ============================================================================
+//
+// These functions keep the SQLite cache in step with on-disk markdown after
+// each save/delete. They handle both the entity row and the FTS index in one
+// call so storage modules don't have to duplicate the pattern.
+//
+// Each `sync_*_to_cache` is best-effort: it returns Result so callers can
+// detect failure but the storage layer typically logs and continues, since
+// the markdown remains canonical.
+
+use crate::models::{Critique, Milestone, Problem, Solution};
+
+/// Sync a problem to SQLite (entity row + FTS).
+///
+/// Per-entity writes are atomic and leave the cache in a consistent state, so
+/// they do NOT set the dirty flag. `dirty` is reserved for bulk operations
+/// (`load_from_markdown`) that may be interrupted mid-flight.
+pub fn sync_problem_to_cache(db: &Database, problem: &Problem) -> Result<()> {
+    let conn = db.conn();
+    crate::db::entities::upsert_problem(conn, problem)?;
+    let body = format!("{}\n{}", problem.description, problem.tags.join(" "));
+    update_fts_entry(conn, "problem", &problem.id, &problem.title, &body)?;
+    Ok(())
+}
+
+/// Sync a solution to SQLite (entity row + FTS).
+pub fn sync_solution_to_cache(db: &Database, solution: &Solution) -> Result<()> {
+    let conn = db.conn();
+    crate::db::entities::upsert_solution(conn, solution)?;
+    let body = format!("{}\n{}", solution.approach, solution.tags.join(" "));
+    update_fts_entry(conn, "solution", &solution.id, &solution.title, &body)?;
+    Ok(())
+}
+
+/// Sync a critique to SQLite (entity row + FTS).
+pub fn sync_critique_to_cache(db: &Database, critique: &Critique) -> Result<()> {
+    let conn = db.conn();
+    crate::db::entities::upsert_critique(conn, critique)?;
+    update_fts_entry(
+        conn,
+        "critique",
+        &critique.id,
+        &critique.title,
+        &critique.argument,
+    )?;
+    Ok(())
+}
+
+/// Sync a milestone to SQLite (entity row + FTS).
+///
+/// Previously milestone saves skipped the cache entirely; this closes that gap.
+pub fn sync_milestone_to_cache(db: &Database, milestone: &Milestone) -> Result<()> {
+    let conn = db.conn();
+    crate::db::entities::upsert_milestone(conn, milestone)?;
+    update_fts_entry(
+        conn,
+        "milestone",
+        &milestone.id,
+        &milestone.title,
+        &milestone.description,
+    )?;
+    Ok(())
+}
+
+/// Remove an entity's row + FTS entry from SQLite.
+pub fn remove_entity_from_cache(db: &Database, entity_type: &str, entity_id: &str) -> Result<()> {
+    let conn = db.conn();
+    let table = match entity_type {
+        "problem" => "problems",
+        "solution" => "solutions",
+        "critique" => "critiques",
+        "milestone" => "milestones",
+        other => {
+            return Err(crate::error::JjjError::Validation(format!(
+                "unknown entity_type for cache removal: {}",
+                other
+            )))
+        }
+    };
+    conn.execute(
+        &format!("DELETE FROM {} WHERE id = ?1", table),
+        params![entity_id],
+    )?;
+    remove_fts_entry(conn, entity_type, entity_id)?;
+    Ok(())
+}
+
+/// Open the on-disk SQLite cache for the given repo root, if it exists.
+///
+/// Returns `None` if `.jj/jjj.db` is absent (the cache hasn't been built yet).
+/// Used by storage modules that want to opportunistically update the cache
+/// from a `save_*` path without taking a hard dependency on it.
+pub fn open_cache_if_present(repo_root: &std::path::Path) -> Option<Database> {
+    let path = repo_root.join(".jj").join("jjj.db");
+    if !path.exists() {
+        return None;
+    }
+    Database::open(&path).ok()
+}
+
 /// Rebuild all embeddings from entities.
 ///
 /// This computes embeddings for all problems, solutions, critiques, and milestones.

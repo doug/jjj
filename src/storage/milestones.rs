@@ -56,6 +56,17 @@ impl MetadataStore {
         let milestone_path = milestones_dir.join(format!("{}.md", milestone.id));
         super::atomic_write(&milestone_path, content.as_bytes())?;
 
+        // Best-effort cache sync; the markdown is canonical.
+        // Previously milestone saves skipped the cache entirely.
+        if let Some(ref db) = *self.cache() {
+            if let Err(e) = crate::db::sync::sync_milestone_to_cache(db, milestone) {
+                eprintln!(
+                    "Warning: cache sync failed for milestone {}: {}",
+                    milestone.id, e
+                );
+            }
+        }
+
         Ok(())
     }
 
@@ -127,13 +138,13 @@ impl MetadataStore {
 
         fs::remove_file(milestone_path)?;
 
-        // Remove from FTS index if DB exists (best-effort)
-        let db_path = self.jj_client.repo_root().join(".jj").join("jjj.db");
-        if db_path.exists() {
-            if let Ok(db) = crate::db::schema::Database::open(&db_path) {
-                let _ = db.conn().execute(
-                    "DELETE FROM fts WHERE id = ?1",
-                    rusqlite::params![milestone_id],
+        // Best-effort cache removal
+        if let Some(ref db) = *self.cache() {
+            if let Err(e) = crate::db::sync::remove_entity_from_cache(db, "milestone", milestone_id)
+            {
+                eprintln!(
+                    "Warning: cache removal failed for milestone {}: {}",
+                    milestone_id, e
                 );
             }
         }

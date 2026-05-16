@@ -42,6 +42,17 @@ pub(super) const MILESTONES_DIR: &str = "milestones";
 /// The metadata lives entirely outside the working copy — operations here never
 /// touch the user's working changes. Sync (push/fetch) is handled separately
 /// and only requires a configured sync backend.
+///
+/// # Cache
+///
+/// If `.jj/jjj.db` exists at construction time, the store opens a long-lived
+/// SQLite connection and uses it for:
+/// - Per-entity FTS + table sync on save/delete (see `db::sync`).
+/// - Cache-aware list helpers (e.g., [`list_solutions_for_problem_cached`])
+///   that do SQL joins instead of walking the filesystem.
+///
+/// If the DB is missing, all reads fall back to filesystem walks (correct but
+/// slower) and saves skip the cache update. Run `jjj db rebuild` to populate.
 pub struct MetadataStore {
     /// Path to the metadata directory (.jj/jjj-meta/)
     meta_path: PathBuf,
@@ -54,6 +65,13 @@ pub struct MetadataStore {
 
     /// Events to append to events.jsonl on the next flush
     pending_events: RefCell<Vec<Event>>,
+
+    /// Long-lived SQLite cache, if present.
+    ///
+    /// Opened in `new()` from `.jj/jjj.db`. `None` if the DB hasn't been
+    /// built yet. Wrapped in `RefCell` to allow lazy lifecycle (e.g., a
+    /// caller building the DB after the store exists could install it).
+    cache: RefCell<Option<crate::db::Database>>,
 }
 
 /// Load the global user config from ~/.config/jjj/config.toml.
@@ -172,67 +190,48 @@ impl MetadataStore {
         let meta_path = repo_root.join(".jj").join("jjj-meta");
         let events_path = meta_path.join("events.jsonl");
 
+        let cache = crate::db::sync::open_cache_if_present(&repo_root);
+
         let store = Self {
             meta_path,
             events_path,
             jj_client,
             pending_events: RefCell::new(Vec::new()),
+            cache: RefCell::new(cache),
         };
 
-        store.maybe_migrate();
-
         Ok(store)
+    }
+
+    /// Borrow the SQLite cache, if present.
+    ///
+    /// Returns `None` when `.jj/jjj.db` was missing at construction time.
+    /// Callers that need cache-aware reads should fall back to filesystem
+    /// walks in the `None` case.
+    pub fn cache(&self) -> std::cell::Ref<'_, Option<crate::db::Database>> {
+        self.cache.borrow()
+    }
+
+    /// Install (or replace) the SQLite cache after construction.
+    ///
+    /// Used by `jjj db rebuild` and tests that build the DB after the store
+    /// exists.
+    pub fn install_cache(&self, db: crate::db::Database) {
+        *self.cache.borrow_mut() = Some(db);
+    }
+
+    /// Re-open the cache from disk if a DB file is present.
+    ///
+    /// Call after operations that rebuild the DB file from scratch (e.g.,
+    /// `fetch` which deletes and re-creates the .db).
+    pub fn reload_cache(&self) {
+        let new_cache = crate::db::sync::open_cache_if_present(self.jj_client.repo_root());
+        *self.cache.borrow_mut() = new_cache;
     }
 
     /// Get the path to the metadata directory
     pub fn meta_path(&self) -> &std::path::Path {
         &self.meta_path
-    }
-
-    /// Migrate events from old commit-based storage to events.jsonl.
-    fn maybe_migrate(&self) {
-        if self.events_path.exists() {
-            return;
-        }
-        let meta_jj = self.meta_path.join(".jj");
-        if !meta_jj.exists() {
-            return;
-        }
-        let meta_client = match JjClient::with_root(self.meta_path.clone()) {
-            Ok(c) => c,
-            Err(_) => return,
-        };
-        let descriptions = match meta_client.log_descriptions("::@") {
-            Ok(d) => d,
-            Err(_) => return,
-        };
-        let events: Vec<Event> = descriptions
-            .iter()
-            .flat_map(|d| {
-                d.lines()
-                    .filter(|l| l.starts_with("jjj: "))
-                    .filter_map(|l| serde_json::from_str(&l["jjj: ".len()..]).ok())
-            })
-            .collect();
-        if events.is_empty() {
-            return;
-        }
-        use std::io::Write;
-        if let Ok(mut file) = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&self.events_path)
-        {
-            for event in &events {
-                if let Ok(line) = event.to_json_line() {
-                    let _ = writeln!(file, "{}", line);
-                }
-            }
-            eprintln!(
-                "Migrated {} events from commit history to events.jsonl",
-                events.len()
-            );
-        }
     }
 
     /// Initialize the metadata store (create directory structure)
@@ -399,7 +398,7 @@ impl MetadataStore {
     ///
     /// A trailing serialization error on one event will still abort the flush
     /// — partial writes are not durable here.
-    pub fn commit_changes(&self, _message: &str) -> Result<()> {
+    pub fn commit_changes(&self) -> Result<()> {
         use std::io::Write;
 
         let pending = self.pending_events.borrow();
@@ -447,12 +446,16 @@ impl MetadataStore {
     /// to `events.jsonl`.
     ///
     /// If `operation` returns an error, no events are flushed.
-    pub fn with_metadata<F, R>(&self, message: &str, operation: F) -> Result<R>
+    ///
+    /// The `_message` parameter is unused at present; it is retained so a
+    /// future implementation can annotate the audit log with a batch
+    /// description.
+    pub fn with_metadata<F, R>(&self, _message: &str, operation: F) -> Result<R>
     where
         F: FnOnce() -> Result<R>,
     {
         let result = operation()?;
-        self.commit_changes(message)?;
+        self.commit_changes()?;
         Ok(result)
     }
 }
@@ -499,7 +502,6 @@ Some context here.
             priority: Priority::default(),
             confidence: Confidence::default(),
             solution_ids: vec![],
-            child_ids: vec![],
             milestone_id: None,
             assignee: None,
             created_at: Utc::now(),

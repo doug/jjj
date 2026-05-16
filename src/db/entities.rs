@@ -4,8 +4,8 @@
 //! values emit a `Warning:` to stderr and fall back to a safe default rather
 //! than failing.
 //!
-//! Computed fields (`solution_ids`, `child_ids`, `critique_ids`) are left empty
-//! by the individual `row_to_*` functions and must be populated afterwards via
+//! Computed fields (`solution_ids`, `critique_ids`) are left empty by the
+//! individual `row_to_*` functions and must be populated afterwards via
 //! [`populate_problem_computed_fields`] / [`populate_solution_computed_fields`].
 //!
 //! This module provides functions to store, retrieve, and delete
@@ -159,9 +159,8 @@ fn row_to_problem(row: &rusqlite::Row) -> SqliteResult<Problem> {
         dissolved_reason: row.get(11)?,
         github_issue: row.get::<_, Option<i64>>(12)?.map(|n| n as u64),
         tags: parse_json_vec(&tags_json, "tags"),
-        // Computed fields - leave empty, will be populated by relationships
+        // Computed field — leave empty, populated by populate_problem_computed_fields.
         solution_ids: Vec::new(),
-        child_ids: Vec::new(),
     })
 }
 
@@ -512,7 +511,7 @@ fn row_to_milestone(row: &rusqlite::Row) -> SqliteResult<Milestone> {
 // Computed field population
 // ============================================================================
 
-/// Populate computed fields on problems (solution_ids, child_ids) from DB relationships.
+/// Populate computed fields on problems (solution_ids) from DB relationships.
 pub fn populate_problem_computed_fields(
     conn: &Connection,
     problems: &mut [Problem],
@@ -531,24 +530,9 @@ pub fn populate_problem_computed_fields(
             .push(solution_id);
     }
 
-    // Build child_ids: parent_id -> [child_id]
-    let mut stmt =
-        conn.prepare("SELECT parent_id, id FROM problems WHERE parent_id IS NOT NULL")?;
-    let mut child_map: std::collections::HashMap<String, Vec<String>> =
-        std::collections::HashMap::new();
-    let mut rows = stmt.query([])?;
-    while let Some(row) = rows.next()? {
-        let parent_id: String = row.get(0)?;
-        let child_id: String = row.get(1)?;
-        child_map.entry(parent_id).or_default().push(child_id);
-    }
-
     for problem in problems.iter_mut() {
         if let Some(sids) = solution_map.remove(&problem.id) {
             problem.solution_ids = sids;
-        }
-        if let Some(cids) = child_map.remove(&problem.id) {
-            problem.child_ids = cids;
         }
     }
 

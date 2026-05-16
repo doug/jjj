@@ -162,7 +162,7 @@ pub fn execute(
         println!("  \u{2713} All checks passed");
 
         // Flush any pending events
-        store.commit_changes("jjj: sync database before push")?;
+        store.commit_changes()?;
     }
 
     // Create/update the jjj bookmark from the metadata files.

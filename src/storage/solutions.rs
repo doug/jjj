@@ -63,20 +63,13 @@ impl MetadataStore {
         let solution_path = solutions_dir.join(format!("{}.md", solution.id));
         super::atomic_write(&solution_path, content.as_bytes())?;
 
-        // Update FTS if DB exists (best-effort)
-        let db_path = self.jj_client.repo_root().join(".jj").join("jjj.db");
-        if db_path.exists() {
-            if let Ok(db) = crate::db::schema::Database::open(&db_path) {
-                let fts_body = format!("{}\n{}", solution.approach, solution.tags.join(" "));
-                if let Err(e) = crate::db::sync::update_fts_entry(
-                    db.conn(),
-                    "solution",
-                    &solution.id,
-                    &solution.title,
-                    &fts_body,
-                ) {
-                    eprintln!("Warning: FTS index update failed: {}", e);
-                }
+        // Best-effort cache sync; the markdown is canonical.
+        if let Some(ref db) = *self.cache() {
+            if let Err(e) = crate::db::sync::sync_solution_to_cache(db, solution) {
+                eprintln!(
+                    "Warning: cache sync failed for solution {}: {}",
+                    solution.id, e
+                );
             }
         }
 
@@ -128,13 +121,12 @@ impl MetadataStore {
 
         fs::remove_file(solution_path)?;
 
-        // Remove from FTS index if DB exists (best-effort)
-        let db_path = self.jj_client.repo_root().join(".jj").join("jjj.db");
-        if db_path.exists() {
-            if let Ok(db) = crate::db::schema::Database::open(&db_path) {
-                let _ = db.conn().execute(
-                    "DELETE FROM fts WHERE id = ?1",
-                    rusqlite::params![solution_id],
+        // Best-effort cache removal
+        if let Some(ref db) = *self.cache() {
+            if let Err(e) = crate::db::sync::remove_entity_from_cache(db, "solution", solution_id) {
+                eprintln!(
+                    "Warning: cache removal failed for solution {}: {}",
+                    solution_id, e
                 );
             }
         }
@@ -182,8 +174,28 @@ impl MetadataStore {
         Ok(crate::id::generate_id())
     }
 
-    /// Get solutions for a problem
+    /// Get solutions for a problem.
+    ///
+    /// Uses the SQLite cache when present (indexed query); falls back to
+    /// filesystem walk when the cache is missing.
     pub fn list_solutions_for_problem(&self, problem_id: &str) -> Result<Vec<Solution>> {
+        if let Some(ref db) = *self.cache() {
+            let mut stmt = db
+                .conn()
+                .prepare("SELECT id FROM solutions WHERE problem_id = ?1 ORDER BY created_at")?;
+            let ids: Vec<String> = stmt
+                .query_map(rusqlite::params![problem_id], |row| row.get::<_, String>(0))?
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+            let mut sols = Vec::with_capacity(ids.len());
+            for id in ids {
+                match self.load_solution(&id) {
+                    Ok(s) => sols.push(s),
+                    Err(JjjError::SolutionNotFound(_)) => continue,
+                    Err(e) => return Err(e),
+                }
+            }
+            return Ok(sols);
+        }
         let solutions = self.list_solutions()?;
         Ok(solutions
             .into_iter()

@@ -30,7 +30,6 @@ fn test_full_sync_cycle() {
         description: "Test description".to_string(),
         dissolved_reason: None,
         solution_ids: vec![],
-        child_ids: vec![],
         github_issue: None,
         tags: vec![],
     };
@@ -180,7 +179,6 @@ fn test_problem_roundtrip() {
         description: "Detailed description of the problem".to_string(),
         dissolved_reason: None,
         solution_ids: vec!["s1".to_string(), "s2".to_string()],
-        child_ids: vec!["p2".to_string()],
         github_issue: None,
         tags: vec![],
     };

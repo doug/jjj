@@ -14,7 +14,8 @@ pub use embeddings::{
 pub use schema::{Database, SCHEMA_VERSION};
 pub use search::{search, search_events, SearchResult};
 pub use sync::{
-    dump_to_markdown, is_dirty, load_from_markdown, rebuild_embeddings, rebuild_fts, set_dirty,
-    update_fts_entry,
+    dump_to_markdown, is_dirty, load_from_markdown, open_cache_if_present, rebuild_embeddings,
+    rebuild_fts, remove_entity_from_cache, set_dirty, sync_critique_to_cache,
+    sync_milestone_to_cache, sync_problem_to_cache, sync_solution_to_cache, update_fts_entry,
 };
 pub use validate::{validate, ValidationError};

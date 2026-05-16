@@ -80,7 +80,6 @@ fn test_problem_creation() {
     assert_eq!(problem.title, "Test problem");
     assert!(problem.is_open());
     assert!(problem.solution_ids.is_empty());
-    assert!(problem.child_ids.is_empty());
     assert!(problem.parent_id.is_none());
 }
 
@@ -189,16 +188,16 @@ fn test_problem_dissolve() {
 #[test]
 fn test_problem_dag_structure() {
     // Given: A parent problem
-    let mut parent = Problem::new("p1".to_string(), "Parent problem".to_string());
+    let _parent = Problem::new("p1".to_string(), "Parent problem".to_string());
 
     // When: I create a child problem
     let mut child = Problem::new("p2".to_string(), "Child problem".to_string());
     child.set_parent(Some("p1".to_string()));
-    parent.add_child("p2".to_string());
 
-    // Then: The DAG relationship should be established
+    // Then: The DAG relationship should be established by parent_id only;
+    // children are queried via MetadataStore::list_subproblems, not stored
+    // on the parent.
     assert!(child.parent_id.as_deref() == Some("p1"));
-    assert!(parent.child_ids.contains(&"p2".to_string()));
 }
 
 #[test]
