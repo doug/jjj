@@ -73,25 +73,15 @@ pub struct Problem {
 }
 
 /// Confidence (RAG) indicator for problem health/progress.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, strum::Display)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum Confidence {
     #[default]
     Unknown,
     Red,
     Amber,
     Green,
-}
-
-impl std::fmt::Display for Confidence {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Confidence::Unknown => write!(f, "unknown"),
-            Confidence::Red => write!(f, "red"),
-            Confidence::Amber => write!(f, "amber"),
-            Confidence::Green => write!(f, "green"),
-        }
-    }
 }
 
 impl std::str::FromStr for Confidence {
@@ -128,25 +118,17 @@ fn is_confidence_unknown(c: &Confidence) -> bool {
 }
 
 /// Priority level for a problem
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
+#[derive(
+    Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord, strum::Display,
+)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum Priority {
     Low,
     #[default]
     Medium,
     High,
     Critical,
-}
-
-impl std::fmt::Display for Priority {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Priority::Low => write!(f, "low"),
-            Priority::Medium => write!(f, "medium"),
-            Priority::High => write!(f, "high"),
-            Priority::Critical => write!(f, "critical"),
-        }
-    }
 }
 
 impl std::str::FromStr for Priority {
@@ -167,8 +149,11 @@ impl std::str::FromStr for Priority {
 }
 
 /// Status of a problem
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, strum::Display,
+)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum ProblemStatus {
     /// Problem identified, not yet being addressed
     #[default]
@@ -182,17 +167,6 @@ pub enum ProblemStatus {
 
     /// Problem was based on false premises or became irrelevant
     Dissolved,
-}
-
-impl std::fmt::Display for ProblemStatus {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ProblemStatus::Open => write!(f, "open"),
-            ProblemStatus::InProgress => write!(f, "in_progress"),
-            ProblemStatus::Solved => write!(f, "solved"),
-            ProblemStatus::Dissolved => write!(f, "dissolved"),
-        }
-    }
 }
 
 impl std::str::FromStr for ProblemStatus {

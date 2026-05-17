@@ -69,8 +69,11 @@ pub struct Solution {
 }
 
 /// Status of a solution (conjecture)
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, strum::Display,
+)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum SolutionStatus {
     /// Conjecture put forward, not yet submitted for review
     #[default]
@@ -84,17 +87,6 @@ pub enum SolutionStatus {
 
     /// Survived critique, approved and integrated
     Approved,
-}
-
-impl std::fmt::Display for SolutionStatus {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            SolutionStatus::Proposed => write!(f, "proposed"),
-            SolutionStatus::Submitted => write!(f, "submitted"),
-            SolutionStatus::Withdrawn => write!(f, "withdrawn"),
-            SolutionStatus::Approved => write!(f, "approved"),
-        }
-    }
 }
 
 impl std::str::FromStr for SolutionStatus {

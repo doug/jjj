@@ -44,8 +44,9 @@ pub struct Milestone {
 }
 
 /// Status of a milestone
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, strum::Display)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum MilestoneStatus {
     /// Planning phase
     #[default]
@@ -59,17 +60,6 @@ pub enum MilestoneStatus {
 
     /// Cancelled/abandoned
     Cancelled,
-}
-
-impl std::fmt::Display for MilestoneStatus {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            MilestoneStatus::Planning => write!(f, "planning"),
-            MilestoneStatus::Active => write!(f, "active"),
-            MilestoneStatus::Completed => write!(f, "completed"),
-            MilestoneStatus::Cancelled => write!(f, "cancelled"),
-        }
-    }
 }
 
 impl std::str::FromStr for MilestoneStatus {

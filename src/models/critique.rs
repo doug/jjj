@@ -97,8 +97,9 @@ pub struct Reply {
 }
 
 /// Status of a critique
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, strum::Display)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum CritiqueStatus {
     /// Critique raised, not yet addressed
     #[default]
@@ -112,17 +113,6 @@ pub enum CritiqueStatus {
 
     /// Critique shown to be incorrect or irrelevant
     Dismissed,
-}
-
-impl std::fmt::Display for CritiqueStatus {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            CritiqueStatus::Open => write!(f, "open"),
-            CritiqueStatus::Addressed => write!(f, "addressed"),
-            CritiqueStatus::Valid => write!(f, "valid"),
-            CritiqueStatus::Dismissed => write!(f, "dismissed"),
-        }
-    }
 }
 
 impl std::str::FromStr for CritiqueStatus {
@@ -143,8 +133,11 @@ impl std::str::FromStr for CritiqueStatus {
 }
 
 /// Severity level for critiques
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, strum::Display,
+)]
 #[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase")]
 pub enum CritiqueSeverity {
     /// Minor issue, doesn't fundamentally challenge the solution
     Low,
@@ -158,17 +151,6 @@ pub enum CritiqueSeverity {
 
     /// Critical flaw that definitely invalidates the solution
     Critical,
-}
-
-impl std::fmt::Display for CritiqueSeverity {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            CritiqueSeverity::Low => write!(f, "low"),
-            CritiqueSeverity::Medium => write!(f, "medium"),
-            CritiqueSeverity::High => write!(f, "high"),
-            CritiqueSeverity::Critical => write!(f, "critical"),
-        }
-    }
 }
 
 impl std::str::FromStr for CritiqueSeverity {
