@@ -207,3 +207,51 @@ pub(crate) fn show_related_items(
 pub(crate) fn truncate_title(s: &str, max_len: usize) -> String {
     crate::utils::truncate(s, max_len)
 }
+
+/// Best-effort FTS lookup for entities whose title resembles `title`.
+///
+/// Used by `problem new` and `solution new` to short-circuit creation when a
+/// near-duplicate already exists. Returns `Ok(())` when the user should be
+/// allowed to proceed, or a `Validation` error when a similar entity was
+/// found and `--force` would override.
+///
+/// `entity_type` is the FTS tag (`"problem"`, `"solution"`, etc.) and
+/// `type_prefix` is the short reference prefix (`"p"`, `"s"`, etc.) used in
+/// the warning. Skips silently if the SQLite DB hasn't been built yet.
+pub(crate) fn check_similar_entities(
+    ctx: &CommandContext,
+    title: &str,
+    entity_type: &str,
+    type_prefix: char,
+) -> Result<()> {
+    let repo_root = ctx.jj().repo_root();
+    let db_path = repo_root.join(".jj").join("jjj.db");
+    if !db_path.exists() {
+        return Ok(());
+    }
+    let db = match Database::open(&db_path) {
+        Ok(db) => db,
+        Err(_) => return Ok(()),
+    };
+    let results = match db_search::search(db.conn(), title, Some(entity_type)) {
+        Ok(r) => r,
+        Err(_) => return Ok(()),
+    };
+    if results.is_empty() {
+        return Ok(());
+    }
+
+    eprintln!("Warning: similar {}s already exist:", entity_type);
+    for r in &results {
+        eprintln!(
+            "  {}/{} — \"{}\"",
+            type_prefix,
+            short_id(&r.entity_id),
+            r.title
+        );
+    }
+    eprintln!("\nUse --force to create anyway.");
+    Err(crate::error::JjjError::Validation(
+        "Similar entities exist. Use --force to override.".to_string(),
+    ))
+}

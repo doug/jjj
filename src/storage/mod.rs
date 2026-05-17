@@ -237,6 +237,12 @@ pub trait Persist: serde::Serialize + serde::de::DeserializeOwned + Sized {
     /// Construct the appropriate `EntityNotFound` error for this type.
     fn not_found(id: &str) -> JjjError;
 
+    /// Whether the given error is the `not_found` variant for this type.
+    ///
+    /// Used by [`MetadataStore::load_by_ids`] to skip rows that exist in the
+    /// SQLite cache but whose markdown file has been deleted concurrently.
+    fn is_not_found(err: &JjjError) -> bool;
+
     /// Best-effort sync of this entity to the SQLite cache row + FTS index.
     fn sync_to_cache(&self, db: &crate::db::Database) -> Result<()>;
 }
@@ -257,6 +263,9 @@ impl Persist for crate::models::Problem {
     }
     fn not_found(id: &str) -> JjjError {
         JjjError::ProblemNotFound(id.to_string())
+    }
+    fn is_not_found(err: &JjjError) -> bool {
+        matches!(err, JjjError::ProblemNotFound(_))
     }
     fn sync_to_cache(&self, db: &crate::db::Database) -> Result<()> {
         crate::db::sync::sync_problem_to_cache(db, self)
@@ -280,6 +289,9 @@ impl Persist for crate::models::Solution {
     fn not_found(id: &str) -> JjjError {
         JjjError::SolutionNotFound(id.to_string())
     }
+    fn is_not_found(err: &JjjError) -> bool {
+        matches!(err, JjjError::SolutionNotFound(_))
+    }
     fn sync_to_cache(&self, db: &crate::db::Database) -> Result<()> {
         crate::db::sync::sync_solution_to_cache(db, self)
     }
@@ -302,6 +314,9 @@ impl Persist for crate::models::Critique {
     fn not_found(id: &str) -> JjjError {
         JjjError::CritiqueNotFound(id.to_string())
     }
+    fn is_not_found(err: &JjjError) -> bool {
+        matches!(err, JjjError::CritiqueNotFound(_))
+    }
     fn sync_to_cache(&self, db: &crate::db::Database) -> Result<()> {
         crate::db::sync::sync_critique_to_cache(db, self)
     }
@@ -323,6 +338,9 @@ impl Persist for crate::models::Milestone {
     }
     fn not_found(id: &str) -> JjjError {
         JjjError::MilestoneNotFound(id.to_string())
+    }
+    fn is_not_found(err: &JjjError) -> bool {
+        matches!(err, JjjError::MilestoneNotFound(_))
     }
     fn sync_to_cache(&self, db: &crate::db::Database) -> Result<()> {
         crate::db::sync::sync_milestone_to_cache(db, self)
@@ -505,6 +523,51 @@ impl MetadataStore {
             }
         }
         Ok(())
+    }
+
+    /// Load each entity in `ids`, skipping IDs whose markdown file is missing.
+    ///
+    /// Used by cache-aware query helpers: the SQLite cache lists candidate IDs,
+    /// but a concurrent delete may have removed the markdown file in between.
+    /// Other load errors (parse failures, IO problems) propagate.
+    pub(super) fn load_by_ids<T: Persist>(&self, ids: Vec<String>) -> Result<Vec<T>> {
+        let mut out = Vec::with_capacity(ids.len());
+        for id in ids {
+            match self.load::<T>(&id) {
+                Ok(entity) => out.push(entity),
+                Err(e) if T::is_not_found(&e) => continue,
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(out)
+    }
+
+    /// Query the SQLite cache for a list of entity IDs, then materialize them
+    /// via [`load_by_ids`]. If the cache is missing, run `fallback` instead.
+    ///
+    /// Lets the entity-specific query helpers express their cache path as a
+    /// single SQL statement and their FS-walk fallback as a closure, without
+    /// re-duplicating the surrounding scaffolding on every call.
+    pub(super) fn query_ids_or_fallback<T, P, F>(
+        &self,
+        sql: &str,
+        params: P,
+        fallback: F,
+    ) -> Result<Vec<T>>
+    where
+        T: Persist,
+        P: rusqlite::Params,
+        F: FnOnce() -> Result<Vec<T>>,
+    {
+        if let Some(ref db) = *self.cache() {
+            let mut stmt = db.conn().prepare(sql)?;
+            let ids: Vec<String> = stmt
+                .query_map(params, |row| row.get::<_, String>(0))?
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+            self.load_by_ids::<T>(ids)
+        } else {
+            fallback()
+        }
     }
 
     /// Initialize the metadata store (create directory structure)

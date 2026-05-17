@@ -6,7 +6,7 @@
 //! the problem-specific `delete_problem` cleanup logic.
 
 use super::{MetadataStore, CRITIQUES_DIR, SOLUTIONS_DIR};
-use crate::error::{JjjError, Result};
+use crate::error::Result;
 use crate::models::Problem;
 use std::fs;
 
@@ -129,60 +129,36 @@ impl MetadataStore {
 
     /// Get subproblems of a problem.
     ///
-    /// Uses the SQLite cache when present (single indexed query); falls back
-    /// to walking the filesystem and filtering when the cache is missing.
+    /// Uses the SQLite cache when present; falls back to a filesystem walk.
     pub fn list_subproblems(&self, problem_id: &str) -> Result<Vec<Problem>> {
-        if let Some(ref db) = *self.cache() {
-            let mut stmt = db
-                .conn()
-                .prepare("SELECT id FROM problems WHERE parent_id = ?1 ORDER BY created_at")?;
-            let ids: Vec<String> = stmt
-                .query_map(rusqlite::params![problem_id], |row| row.get::<_, String>(0))?
-                .collect::<std::result::Result<Vec<_>, _>>()?;
-            let mut children = Vec::with_capacity(ids.len());
-            for id in ids {
-                match self.load_problem(&id) {
-                    Ok(p) => children.push(p),
-                    Err(JjjError::ProblemNotFound(_)) => continue,
-                    Err(e) => return Err(e),
-                }
-            }
-            return Ok(children);
-        }
-        // Fallback: filesystem walk.
-        let problems = self.list_problems()?;
-        Ok(problems
-            .into_iter()
-            .filter(|p| p.parent_id.as_deref() == Some(problem_id))
-            .collect())
+        self.query_ids_or_fallback(
+            "SELECT id FROM problems WHERE parent_id = ?1 ORDER BY created_at",
+            rusqlite::params![problem_id],
+            || {
+                Ok(self
+                    .list_problems()?
+                    .into_iter()
+                    .filter(|p| p.parent_id.as_deref() == Some(problem_id))
+                    .collect())
+            },
+        )
     }
 
     /// Get root problems (problems without parents).
     ///
-    /// Uses the SQLite cache when present; falls back to filesystem walk.
+    /// Uses the SQLite cache when present; falls back to a filesystem walk.
     pub fn list_root_problems(&self) -> Result<Vec<Problem>> {
-        if let Some(ref db) = *self.cache() {
-            let mut stmt = db
-                .conn()
-                .prepare("SELECT id FROM problems WHERE parent_id IS NULL ORDER BY created_at")?;
-            let ids: Vec<String> = stmt
-                .query_map([], |row| row.get::<_, String>(0))?
-                .collect::<std::result::Result<Vec<_>, _>>()?;
-            let mut roots = Vec::with_capacity(ids.len());
-            for id in ids {
-                match self.load_problem(&id) {
-                    Ok(p) => roots.push(p),
-                    Err(JjjError::ProblemNotFound(_)) => continue,
-                    Err(e) => return Err(e),
-                }
-            }
-            return Ok(roots);
-        }
-        let problems = self.list_problems()?;
-        Ok(problems
-            .into_iter()
-            .filter(|p| p.parent_id.is_none())
-            .collect())
+        self.query_ids_or_fallback(
+            "SELECT id FROM problems WHERE parent_id IS NULL ORDER BY created_at",
+            [],
+            || {
+                Ok(self
+                    .list_problems()?
+                    .into_iter()
+                    .filter(|p| p.parent_id.is_none())
+                    .collect())
+            },
+        )
     }
 
     /// Get the parent chain for a problem (ancestors up to root).

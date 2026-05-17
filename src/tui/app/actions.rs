@@ -838,16 +838,29 @@ impl App {
     pub(super) fn handle_action_v(&mut self) -> Result<()> {
         if let Some((id, entity_type)) = self.get_selected_entity() {
             if entity_type == EntityType::Critique {
-                let id_clone = id.clone();
-                match crate::domain::validate_critique(&self.store, &id) {
-                    Ok(_) => {
-                        self.show_flash(&format!("{} validated", id_clone));
-                        self.refresh_data()?;
-                    }
-                    Err(e) => {
-                        self.show_flash(&format!("Error: {}", e));
-                    }
-                }
+                let id = id.clone();
+                return self.dispatch_domain(&id, "validated", |store| {
+                    crate::domain::validate_critique(store, &id)
+                });
+            }
+        }
+        Ok(())
+    }
+
+    /// Run a domain action, then either flash a success message + refresh or
+    /// flash the error message. Centralizes the "domain call → flash →
+    /// refresh" pattern shared by every transition action below.
+    fn dispatch_domain<F>(&mut self, id: &str, verb: &str, f: F) -> Result<()>
+    where
+        F: FnOnce(&crate::storage::MetadataStore) -> Result<()>,
+    {
+        match f(&self.store) {
+            Ok(_) => {
+                self.show_flash(&format!("{} {}", id, verb));
+                self.refresh_data()?;
+            }
+            Err(e) => {
+                self.show_flash(&format!("Error: {}", e));
             }
         }
         Ok(())
@@ -855,72 +868,37 @@ impl App {
 
     fn approve_solution(&mut self, solution_id: &str) -> Result<()> {
         let id = solution_id.to_string();
-        match crate::domain::approve_solution(&self.store, solution_id, false, None) {
-            Ok(_) => {
-                self.show_flash(&format!("{} approved", id));
-                self.refresh_data()?;
-            }
-            Err(e) => {
-                self.show_flash(&format!("Error: {}", e));
-            }
-        }
-        Ok(())
+        self.dispatch_domain(&id, "approved", |store| {
+            crate::domain::approve_solution(store, &id, false, None)
+        })
     }
 
     fn withdraw_solution(&mut self, solution_id: &str) -> Result<()> {
         let id = solution_id.to_string();
-        match crate::domain::withdraw_solution(&self.store, solution_id, None) {
-            Ok(_) => {
-                self.show_flash(&format!("{} withdrawn", id));
-                self.refresh_data()?;
-            }
-            Err(e) => {
-                self.show_flash(&format!("Error: {}", e));
-            }
-        }
-        Ok(())
+        self.dispatch_domain(&id, "withdrawn", |store| {
+            crate::domain::withdraw_solution(store, &id, None)
+        })
     }
 
     fn submit_solution(&mut self, solution_id: &str) -> Result<()> {
         let id = solution_id.to_string();
-        match crate::domain::submit_solution(&self.store, solution_id) {
-            Ok(_) => {
-                self.show_flash(&format!("{} submitted for review", id));
-                self.refresh_data()?;
-            }
-            Err(e) => {
-                self.show_flash(&format!("Error: {}", e));
-            }
-        }
-        Ok(())
+        self.dispatch_domain(&id, "submitted for review", |store| {
+            crate::domain::submit_solution(store, &id)
+        })
     }
 
     fn address_critique(&mut self, critique_id: &str) -> Result<()> {
         let id = critique_id.to_string();
-        match crate::domain::address_critique(&self.store, critique_id) {
-            Ok(_) => {
-                self.show_flash(&format!("{} addressed", id));
-                self.refresh_data()?;
-            }
-            Err(e) => {
-                self.show_flash(&format!("Error: {}", e));
-            }
-        }
-        Ok(())
+        self.dispatch_domain(&id, "addressed", |store| {
+            crate::domain::address_critique(store, &id)
+        })
     }
 
     fn dismiss_critique(&mut self, critique_id: &str) -> Result<()> {
         let id = critique_id.to_string();
-        match crate::domain::dismiss_critique(&self.store, critique_id) {
-            Ok(_) => {
-                self.show_flash(&format!("{} dismissed", id));
-                self.refresh_data()?;
-            }
-            Err(e) => {
-                self.show_flash(&format!("Error: {}", e));
-            }
-        }
-        Ok(())
+        self.dispatch_domain(&id, "dismissed", |store| {
+            crate::domain::dismiss_critique(store, &id)
+        })
     }
 
     pub(super) fn refresh_data(&mut self) -> Result<()> {
@@ -975,16 +953,10 @@ impl App {
 
     pub(super) fn dissolve_problem(&mut self, problem_id: &str, reason: &str) -> Result<()> {
         let id = problem_id.to_string();
-        match crate::domain::dissolve_problem(&self.store, problem_id, Some(reason)) {
-            Ok(_) => {
-                self.show_flash(&format!("{} dissolved", id));
-                self.refresh_data()?;
-            }
-            Err(e) => {
-                self.show_flash(&format!("Error: {}", e));
-            }
-        }
-        Ok(())
+        let reason = reason.to_string();
+        self.dispatch_domain(&id, "dissolved", |store| {
+            crate::domain::dissolve_problem(store, &id, Some(&reason))
+        })
     }
 
     pub(super) fn handle_action_shift_a(&mut self) -> Result<()> {

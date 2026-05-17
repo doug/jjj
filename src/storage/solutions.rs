@@ -6,7 +6,7 @@
 //! `delete_solution` cleanup logic.
 
 use super::{MetadataStore, CRITIQUES_DIR};
-use crate::error::{JjjError, Result};
+use crate::error::Result;
 use crate::models::Solution;
 use std::fs;
 
@@ -68,30 +68,18 @@ impl MetadataStore {
 
     /// Get solutions for a problem.
     ///
-    /// Uses the SQLite cache when present (indexed query); falls back to
-    /// filesystem walk when the cache is missing.
+    /// Uses the SQLite cache when present; falls back to a filesystem walk.
     pub fn list_solutions_for_problem(&self, problem_id: &str) -> Result<Vec<Solution>> {
-        if let Some(ref db) = *self.cache() {
-            let mut stmt = db
-                .conn()
-                .prepare("SELECT id FROM solutions WHERE problem_id = ?1 ORDER BY created_at")?;
-            let ids: Vec<String> = stmt
-                .query_map(rusqlite::params![problem_id], |row| row.get::<_, String>(0))?
-                .collect::<std::result::Result<Vec<_>, _>>()?;
-            let mut sols = Vec::with_capacity(ids.len());
-            for id in ids {
-                match self.load_solution(&id) {
-                    Ok(s) => sols.push(s),
-                    Err(JjjError::SolutionNotFound(_)) => continue,
-                    Err(e) => return Err(e),
-                }
-            }
-            return Ok(sols);
-        }
-        let solutions = self.list_solutions()?;
-        Ok(solutions
-            .into_iter()
-            .filter(|s| s.problem_id == problem_id)
-            .collect())
+        self.query_ids_or_fallback(
+            "SELECT id FROM solutions WHERE problem_id = ?1 ORDER BY created_at",
+            rusqlite::params![problem_id],
+            || {
+                Ok(self
+                    .list_solutions()?
+                    .into_iter()
+                    .filter(|s| s.problem_id == problem_id)
+                    .collect())
+            },
+        )
     }
 }

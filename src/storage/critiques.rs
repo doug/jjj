@@ -6,7 +6,7 @@
 //! and the critique-specific `delete_critique` cleanup logic.
 
 use super::MetadataStore;
-use crate::error::{JjjError, Result};
+use crate::error::Result;
 use crate::models::{Critique, CritiqueStatus};
 
 impl MetadataStore {
@@ -51,60 +51,27 @@ impl MetadataStore {
 
     /// Get critiques for a solution.
     ///
-    /// Uses the SQLite cache when present (indexed query); falls back to
-    /// filesystem walk when the cache is missing.
+    /// Uses the SQLite cache when present; falls back to a filesystem walk.
     pub fn list_critiques_for_solution(&self, solution_id: &str) -> Result<Vec<Critique>> {
-        if let Some(ref db) = *self.cache() {
-            let mut stmt = db
-                .conn()
-                .prepare("SELECT id FROM critiques WHERE solution_id = ?1 ORDER BY created_at")?;
-            let ids: Vec<String> = stmt
-                .query_map(rusqlite::params![solution_id], |row| {
-                    row.get::<_, String>(0)
-                })?
-                .collect::<std::result::Result<Vec<_>, _>>()?;
-            let mut critiques = Vec::with_capacity(ids.len());
-            for id in ids {
-                match self.load_critique(&id) {
-                    Ok(c) => critiques.push(c),
-                    Err(JjjError::CritiqueNotFound(_)) => continue,
-                    Err(e) => return Err(e),
-                }
-            }
-            return Ok(critiques);
-        }
-        let critiques = self.list_critiques()?;
-        Ok(critiques
-            .into_iter()
-            .filter(|c| c.solution_id == solution_id)
-            .collect())
+        self.query_ids_or_fallback(
+            "SELECT id FROM critiques WHERE solution_id = ?1 ORDER BY created_at",
+            rusqlite::params![solution_id],
+            || {
+                Ok(self
+                    .list_critiques()?
+                    .into_iter()
+                    .filter(|c| c.solution_id == solution_id)
+                    .collect())
+            },
+        )
     }
 
     /// Get open critiques for a solution.
     ///
-    /// Uses the SQLite cache when present; otherwise filters the FS walk.
+    /// Loads the per-solution set and filters by status. The post-load
+    /// `Open` filter guards against races where the cache row's status is
+    /// `open` but the markdown has since been updated to something else.
     pub fn list_open_critiques_for_solution(&self, solution_id: &str) -> Result<Vec<Critique>> {
-        if let Some(ref db) = *self.cache() {
-            let mut stmt = db.conn().prepare(
-                "SELECT id FROM critiques WHERE solution_id = ?1 AND status = 'open' \
-                 ORDER BY created_at",
-            )?;
-            let ids: Vec<String> = stmt
-                .query_map(rusqlite::params![solution_id], |row| {
-                    row.get::<_, String>(0)
-                })?
-                .collect::<std::result::Result<Vec<_>, _>>()?;
-            let mut critiques = Vec::with_capacity(ids.len());
-            for id in ids {
-                match self.load_critique(&id) {
-                    Ok(c) if c.status == CritiqueStatus::Open => critiques.push(c),
-                    Ok(_) => continue, // raced with a status change
-                    Err(JjjError::CritiqueNotFound(_)) => continue,
-                    Err(e) => return Err(e),
-                }
-            }
-            return Ok(critiques);
-        }
         let critiques = self.list_critiques_for_solution(solution_id)?;
         Ok(critiques
             .into_iter()
