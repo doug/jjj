@@ -7,6 +7,7 @@ use std::path::PathBuf;
 
 mod critiques;
 mod events;
+pub mod merge;
 mod milestones;
 mod problems;
 mod solutions;
@@ -33,6 +34,15 @@ pub(super) const PROBLEMS_DIR: &str = "problems";
 pub(super) const SOLUTIONS_DIR: &str = "solutions";
 pub(super) const CRITIQUES_DIR: &str = "critiques";
 pub(super) const MILESTONES_DIR: &str = "milestones";
+
+/// Subdirectory next to `.jj/jjj-meta/` that holds a snapshot of metadata
+/// files as of the last successful fetch or push. Acts as the merge ancestor
+/// during the next fetch: a file's "base" is whatever was here when the
+/// remote diverged from us.
+pub const META_BASE_DIR_NAME: &str = "jjj-meta-base";
+
+/// Entity directories that participate in three-way merge.
+pub const ENTITY_DIRS: &[&str] = &[PROBLEMS_DIR, SOLUTIONS_DIR, CRITIQUES_DIR, MILESTONES_DIR];
 
 /// The core storage abstraction for jjj metadata.
 ///
@@ -396,6 +406,19 @@ impl MetadataStore {
     /// Get the path to the metadata directory
     pub fn meta_path(&self) -> &std::path::Path {
         &self.meta_path
+    }
+
+    /// Path to the merge-ancestor snapshot directory (`.jj/jjj-meta-base/`).
+    ///
+    /// This sibling of [`Self::meta_path`] holds a frozen copy of every
+    /// metadata file as of the last successful fetch or push. Fetch uses
+    /// these as the "base" input to three-way merges so concurrent edits
+    /// can be reconciled without data loss.
+    pub fn base_path(&self) -> std::path::PathBuf {
+        self.meta_path
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new("."))
+            .join(META_BASE_DIR_NAME)
     }
 
     // =========================================================================

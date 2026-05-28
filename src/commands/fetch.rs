@@ -1,44 +1,49 @@
-use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 
 use crate::context::CommandContext;
 use crate::db::{self, Database};
 use crate::error::Result;
+use crate::storage::merge::{
+    merge_entity_md, merge_events_jsonl, read_base_file, snapshot_base, write_base_file,
+};
 use crate::storage::MetadataStore;
 
-/// Merge remote events into the local events.jsonl, deduplicating by content.
-fn merge_events_jsonl(local_path: &Path, remote_content: &str) {
-    let existing: HashSet<String> = if local_path.exists() {
-        fs::read_to_string(local_path)
-            .unwrap_or_default()
-            .lines()
-            .filter(|l| !l.trim().is_empty())
-            .map(|l| l.to_string())
-            .collect()
-    } else {
-        HashSet::new()
+/// Merge a single remote entity file into the local copy using a three-way
+/// merge against the base snapshot.
+///
+/// Returns true when the merged result differs from the existing local file
+/// (i.e. the file changed as a result of the fetch).
+fn merge_entity_into_local(
+    base_path: &Path,
+    local_path: &Path,
+    relative: &Path,
+    remote_content: &str,
+) -> Result<bool> {
+    let local_full = local_path.join(relative);
+    let local_existing = fs::read_to_string(&local_full).ok();
+    let base_existing = read_base_file(base_path, relative);
+
+    let merged = match local_existing.as_deref() {
+        // No local file → adopt the remote version as-is.
+        None => remote_content.to_string(),
+        Some(local) => merge_entity_md(base_existing.as_deref(), local, remote_content)?,
     };
 
-    let new_lines: Vec<&str> = remote_content
-        .lines()
-        .filter(|l| !l.trim().is_empty() && !existing.contains(*l))
-        .collect();
+    let changed = local_existing.as_deref() != Some(merged.as_str());
 
-    if new_lines.is_empty() {
-        return;
-    }
-
-    use std::io::Write;
-    if let Ok(mut file) = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(local_path)
-    {
-        for line in &new_lines {
-            let _ = writeln!(file, "{}", line);
+    if changed {
+        if let Some(parent) = local_full.parent() {
+            fs::create_dir_all(parent)?;
         }
+        fs::write(&local_full, &merged)?;
     }
+
+    // Advance the ancestor for the next fetch regardless of whether the
+    // merged result equals the local — the merge base must be the latest
+    // remote content we've observed.
+    write_base_file(base_path, relative, remote_content)?;
+    Ok(changed)
 }
 
 pub fn execute(ctx: &CommandContext, remote: &str) -> Result<()> {
@@ -81,38 +86,64 @@ pub fn execute(ctx: &CommandContext, remote: &str) -> Result<()> {
         let _ = jj_client.execute_sync_command(&track_cmd, &vars);
     }
 
-    // 2. Extract updated files from the fetched jjj bookmark.
-    // Use `jj file show` to read files from the remote bookmark without
-    // needing a workspace checkout.
+    // 2. Extract updated files from the fetched jjj bookmark and three-way
+    //    merge them into the local working set.
     let meta_path = jj_client.repo_root().join(".jj").join("jjj-meta");
+    let base_path = ctx.store.base_path();
+    let mut merge_conflicts: Vec<String> = Vec::new();
     if jj_client.bookmark_exists("jjj")? {
         fs::create_dir_all(&meta_path)?;
-        // Copy entity files from the fetched bookmark into the local meta directory
+        fs::create_dir_all(&base_path)?;
+
         for dir in &["problems", "solutions", "critiques", "milestones"] {
             fs::create_dir_all(meta_path.join(dir))?;
-            // List files in this directory at the bookmark revision
             if let Ok(listing) =
                 jj_client.execute(&["file", "list", "-r", "jjj", &format!("{}/", dir)])
             {
                 for file_path in listing.lines().filter(|l| !l.trim().is_empty()) {
-                    if let Ok(content) =
-                        jj_client.execute(&["file", "show", "-r", "jjj", file_path])
+                    let remote = match jj_client.execute(&["file", "show", "-r", "jjj", file_path])
                     {
-                        let local_path = meta_path.join(file_path);
-                        let _ = fs::write(&local_path, &content);
+                        Ok(c) => c,
+                        Err(_) => continue,
+                    };
+                    let relative = Path::new(file_path);
+                    match merge_entity_into_local(&base_path, &meta_path, relative, &remote) {
+                        Ok(_) => {
+                            // Detect any conflict markers we emitted so we can
+                            // surface them to the user once at the end.
+                            let local_full = meta_path.join(relative);
+                            if let Ok(content) = fs::read_to_string(&local_full) {
+                                if content.contains("<<<<<<< local") {
+                                    merge_conflicts.push(file_path.to_string());
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("  Warning: merge failed for {}: {}", file_path, e);
+                        }
                     }
                 }
             }
         }
-        // Also fetch config.toml
+
+        // config.toml: last-fetch-wins (rarely a hot conflict surface).
         if let Ok(content) = jj_client.execute(&["file", "show", "-r", "jjj", "config.toml"]) {
             let _ = fs::write(meta_path.join("config.toml"), &content);
         }
-        // Merge events: fetch remote events.jsonl and append any new events
+
+        // events.jsonl: append-only line union. Base not needed.
         if let Ok(remote_events) = jj_client.execute(&["file", "show", "-r", "jjj", "events.jsonl"])
         {
-            merge_events_jsonl(&meta_path.join("events.jsonl"), &remote_events);
+            let local_events_path = meta_path.join("events.jsonl");
+            let local_events = fs::read_to_string(&local_events_path).unwrap_or_default();
+            let merged = merge_events_jsonl(&local_events, &remote_events);
+            if merged != local_events {
+                let _ = fs::write(&local_events_path, &merged);
+            }
         }
+
+        // Capture the new ancestor for the next fetch.
+        snapshot_base(&meta_path, &base_path)?;
     }
 
     // 3. Update working copy to avoid stale workspace errors
@@ -144,6 +175,17 @@ pub fn execute(ctx: &CommandContext, remote: &str) -> Result<()> {
     }
     if new_solutions == 0 && new_critiques == 0 {
         println!("  No new jjj changes.");
+    }
+
+    if !merge_conflicts.is_empty() {
+        eprintln!(
+            "\nMerge conflicts in {} file(s) — both sides edited the same body:",
+            merge_conflicts.len()
+        );
+        for path in &merge_conflicts {
+            eprintln!("  {}", path);
+        }
+        eprintln!("Open each file, resolve the <<<<<<< / >>>>>>> markers, then save.");
     }
 
     Ok(())

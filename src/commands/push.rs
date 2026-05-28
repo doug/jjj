@@ -3,6 +3,7 @@ use crate::db::{self, Database};
 use crate::error::{JjjError, Result};
 use crate::jj::JjClient;
 use crate::models::CritiqueStatus;
+use crate::storage::merge::snapshot_base;
 use crate::storage::MetadataStore;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -266,6 +267,12 @@ pub fn execute(
     }
 
     println!("Pushed to {}.", remote);
+
+    // The pushed state is now the shared baseline. Snapshot it so the next
+    // fetch can three-way merge against the correct ancestor.
+    let base_path = store.base_path();
+    std::fs::create_dir_all(&base_path)?;
+    snapshot_base(store.meta_path(), &base_path)?;
 
     // Clear dirty flag after successful push
     if db_path.exists() {
