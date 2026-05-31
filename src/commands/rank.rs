@@ -5,8 +5,8 @@ use serde::Serialize;
 use crate::cli::RankAction;
 use crate::context::CommandContext;
 use crate::error::Result;
-use crate::ranking::borda::{aggregate_rankings, qv_budget, total_vote_cost};
 use crate::ranking::ordering::load_all_orderings;
+use crate::ranking::scoring::{aggregate_rankings, qv_budget, total_vote_cost};
 use crate::utils::truncate;
 
 /// Dispatch a `jjj rank` subcommand.
@@ -115,6 +115,14 @@ fn show(ctx: &CommandContext, milestone: Option<String>, by_user: bool, json: bo
     let ms = ctx.store.load_milestone(&milestone_id)?;
     let (problem_ids, titles) = open_problems_in_milestone(ctx, &milestone_id)?;
 
+    // Canonical problem_count for the QV budget — must match the TUI vote-entry
+    // budget (all problems in the milestone), not the open-problem subset, or
+    // votes accepted in the TUI get dropped here as over-budget.
+    let problem_count = crate::ranking::scoring::milestone_problem_count(
+        &ctx.store.list_problems()?,
+        &milestone_id,
+    );
+
     let orderings = load_all_orderings(ctx.store.meta_path(), &milestone_id)?;
 
     if orderings.is_empty() {
@@ -122,7 +130,7 @@ fn show(ctx: &CommandContext, milestone: Option<String>, by_user: bool, json: bo
             println!("[]");
         } else {
             println!(
-                "No rankings yet for milestone '{}'. Start with `jjj rank session`.",
+                "No rankings yet for milestone '{}'. Open the TUI (`jjj ui`) and use the ranking view to set priorities.",
                 ms.title,
             );
         }
@@ -130,9 +138,9 @@ fn show(ctx: &CommandContext, milestone: Option<String>, by_user: bool, json: bo
     }
 
     if by_user {
-        show_by_user(&orderings, &problem_ids, &titles, json)?;
+        show_by_user(&orderings, &problem_ids, problem_count, &titles, json)?;
     } else {
-        let ranked = aggregate_rankings(&orderings, problem_ids.len());
+        let ranked = aggregate_rankings(&orderings, problem_count);
 
         // Build entries (only for problems still in the milestone).
         let entries: Vec<RankEntry> = ranked
@@ -179,13 +187,16 @@ fn show(ctx: &CommandContext, milestone: Option<String>, by_user: bool, json: bo
 fn show_by_user(
     orderings: &HashMap<String, crate::ranking::ordering::UserOrdering>,
     problem_ids: &[String],
+    problem_count: usize,
     titles: &HashMap<String, String>,
     json: bool,
 ) -> Result<()> {
     let mut users: Vec<&String> = orderings.keys().collect();
     users.sort();
 
-    let budget = qv_budget(problem_ids.len());
+    // Budget uses the canonical milestone problem count (matches the TUI and
+    // the aggregate view); problem_ids is only the open subset shown below.
+    let budget = qv_budget(problem_count);
 
     if json {
         let mut all_data: HashMap<&str, UserBreakdown> = HashMap::new();

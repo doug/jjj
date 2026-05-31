@@ -68,9 +68,9 @@ pub fn search(
         let mut stmt = conn.prepare(
             "SELECT p.id, p.title, p.description
              FROM problems p
-             WHERE p.id IN (
-                 SELECT entity_id FROM fts WHERE fts MATCH ?1
-             )",
+             JOIN fts ON fts.entity_id = p.id
+             WHERE fts MATCH ?1
+             ORDER BY rank",
         )?;
 
         let rows = stmt.query_map(params![fts_query], |row| {
@@ -99,9 +99,9 @@ pub fn search(
         let mut stmt = conn.prepare(
             "SELECT s.id, s.title, s.approach
              FROM solutions s
-             WHERE s.id IN (
-                 SELECT entity_id FROM fts WHERE fts MATCH ?1
-             )",
+             JOIN fts ON fts.entity_id = s.id
+             WHERE fts MATCH ?1
+             ORDER BY rank",
         )?;
 
         let rows = stmt.query_map(params![fts_query], |row| {
@@ -130,9 +130,9 @@ pub fn search(
         let mut stmt = conn.prepare(
             "SELECT c.id, c.title, c.argument
              FROM critiques c
-             WHERE c.id IN (
-                 SELECT entity_id FROM fts WHERE fts MATCH ?1
-             )",
+             JOIN fts ON fts.entity_id = c.id
+             WHERE fts MATCH ?1
+             ORDER BY rank",
         )?;
 
         let rows = stmt.query_map(params![fts_query], |row| {
@@ -161,9 +161,9 @@ pub fn search(
         let mut stmt = conn.prepare(
             "SELECT m.id, m.title, m.description
              FROM milestones m
-             WHERE m.id IN (
-                 SELECT entity_id FROM fts WHERE fts MATCH ?1
-             )",
+             JOIN fts ON fts.entity_id = m.id
+             WHERE fts MATCH ?1
+             ORDER BY rank",
         )?;
 
         let rows = stmt.query_map(params![fts_query], |row| {

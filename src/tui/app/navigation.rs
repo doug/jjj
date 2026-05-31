@@ -212,8 +212,20 @@ impl App {
         }
     }
 
+    /// Largest useful detail scroll offset: one less than the rendered line
+    /// count, so at least the final line stays visible. Prevents `G` and
+    /// over-scroll from skipping past all content and blanking the pane.
+    fn max_detail_scroll(&self) -> u16 {
+        let lines = self.cache.selected_detail.to_styled_lines().len();
+        lines.saturating_sub(1).min(u16::MAX as usize) as u16
+    }
+
     pub(super) fn scroll_detail_down(&mut self) {
-        self.ui.detail_scroll = self.ui.detail_scroll.saturating_add(1);
+        self.ui.detail_scroll = self
+            .ui
+            .detail_scroll
+            .saturating_add(1)
+            .min(self.max_detail_scroll());
     }
 
     pub(super) fn scroll_detail_up(&mut self) {
@@ -225,7 +237,11 @@ impl App {
     }
 
     pub(super) fn page_detail_down(&mut self) {
-        self.ui.detail_scroll = self.ui.detail_scroll.saturating_add(10);
+        self.ui.detail_scroll = self
+            .ui
+            .detail_scroll
+            .saturating_add(10)
+            .min(self.max_detail_scroll());
     }
 
     pub(super) fn detail_scroll_to_top(&mut self) {
@@ -233,7 +249,7 @@ impl App {
     }
 
     pub(super) fn detail_scroll_to_bottom(&mut self) {
-        self.ui.detail_scroll = u16::MAX;
+        self.ui.detail_scroll = self.max_detail_scroll();
     }
 
     /// Toggle multi-select on the current tree item and advance cursor.
@@ -500,9 +516,9 @@ impl App {
         let (my_votes, budget_used, budget_total) =
             if let Some(ordering) = self.ui.personal_orderings.get(milestone_id) {
                 let v = ordering.votes.get(&problem.id).copied().unwrap_or(0);
-                let used = crate::ranking::borda::vote_cost(v);
+                let used = crate::ranking::scoring::vote_cost(v);
                 let problem_count = ordering.order.len();
-                let total = crate::ranking::borda::qv_budget(problem_count);
+                let total = crate::ranking::scoring::qv_budget(problem_count);
                 (v, used, total)
             } else {
                 (0, 0, 0)

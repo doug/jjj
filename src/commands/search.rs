@@ -106,13 +106,17 @@ fn execute_hybrid_search(
     // Always do FTS search
     let fts_results = search::search(conn, query, entity_type)?;
 
-    // Try semantic search if client available
+    // Try semantic search if client available. Track whether semantic results
+    // were actually fused in, so the "(hybrid)" label isn't shown when the
+    // embeddings table is empty and we silently fell back to FTS-only.
+    let mut used_semantic = false;
     let final_results = if let Some(client) = embedding_client {
         if let Ok(query_embedding) = client.embed(query) {
             let semantic_results =
                 search::similarity_search(conn, &query_embedding, entity_type, None, 50)?;
 
             if !semantic_results.is_empty() {
+                used_semantic = true;
                 // Merge with RRF
                 search::merge_with_rrf(fts_results, semantic_results, 60)
             } else {
@@ -141,11 +145,7 @@ fn execute_hybrid_search(
     } else if final_results.is_empty() {
         println!("No results found for \"{}\"", query);
     } else {
-        let hybrid_note = if embedding_client.is_some() {
-            " (hybrid)"
-        } else {
-            ""
-        };
+        let hybrid_note = if used_semantic { " (hybrid)" } else { "" };
         println!(
             "Found {} result(s) for \"{}\"{}:\n",
             final_results.len(),
@@ -173,13 +173,9 @@ fn resolve_entity_id(
     entity_type: &str,
     prefix: &str,
 ) -> Result<String> {
-    let table = match entity_type {
-        "problem" => "problems",
-        "solution" => "solutions",
-        "critique" => "critiques",
-        "milestone" => "milestones",
-        _ => return Err(crate::error::JjjError::EntityNotFound(prefix.to_string())),
-    };
+    let table = crate::entity_type::EntityType::from_singular(entity_type)
+        .map(|e| e.table())
+        .ok_or_else(|| crate::error::JjjError::EntityNotFound(prefix.to_string()))?;
 
     let sql = format!("SELECT id FROM {} WHERE id LIKE ?1 || '%'", table);
     let pattern = prefix;

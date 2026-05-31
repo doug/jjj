@@ -365,3 +365,117 @@ fn test_push_validates_before_pushing() {
         stdout
     );
 }
+
+/// Regression for the rankings-never-synced bug (audit 0.3): per-user ranking
+/// files (`rankings/{milestone}/{user}.json`) must travel through push/fetch so
+/// global Borda+QV aggregation can see every collaborator. We write a ranking
+/// file as the TUI's save_user_ordering would, push as Alice, and assert Bob
+/// receives it on fetch.
+#[test]
+fn test_rankings_sync_roundtrip() {
+    if jjj::jj::find_executable("jj").is_none() {
+        eprintln!("Skipping test: jj not found");
+        return;
+    }
+
+    let remote_dir = create_bare_remote();
+
+    // Alice: init and stage a ranking file.
+    let alice_dir = setup_repo_with_remote(remote_dir.path());
+    run_jjj(alice_dir.path(), &["init"]);
+
+    let rankings_rel = std::path::Path::new(".jj")
+        .join("jjj-meta")
+        .join("rankings")
+        .join("m-test");
+    let alice_rankings = alice_dir.path().join(&rankings_rel);
+    std::fs::create_dir_all(&alice_rankings).expect("create rankings dir");
+    let ordering = r#"{"order":["p1","p2"],"votes":{"p1":2},"updated_at":"2026-05-01T00:00:00Z"}"#;
+    std::fs::write(alice_rankings.join("alice.json"), ordering).expect("write ranking");
+
+    let output = run_jjj(alice_dir.path(), &["push", "--remote", "origin"]);
+    assert!(
+        output.status.success(),
+        "Alice push failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    // Bob: init and fetch — the ranking file should arrive.
+    let bob_dir = setup_repo_with_remote(remote_dir.path());
+    run_jjj(bob_dir.path(), &["init"]);
+    let output = run_jjj(bob_dir.path(), &["fetch", "--remote", "origin"]);
+    assert!(
+        output.status.success(),
+        "Bob fetch failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let bob_ranking = bob_dir.path().join(&rankings_rel).join("alice.json");
+    assert!(
+        bob_ranking.exists(),
+        "Bob should have received Alice's ranking file at {}",
+        bob_ranking.display()
+    );
+    let got = std::fs::read_to_string(&bob_ranking).expect("read bob ranking");
+    assert!(
+        got.contains("\"p1\"") && got.contains("2026-05-01T00:00:00Z"),
+        "ranking content should round-trip, got: {}",
+        got
+    );
+}
+
+/// Regression for the dump_to_markdown hazard (audit 3.6): markdown is the
+/// source of truth. If the cache is dirty (an interrupted bulk load), the next
+/// `Database::open` rebuilds it to EMPTY — and the old code unconditionally
+/// dumped that empty DB back over the markdown during push, wiping it (and
+/// pushing the wipe). Push must instead load markdown→DB, leaving files intact.
+#[test]
+fn test_push_does_not_wipe_markdown_when_cache_is_dirty() {
+    if jjj::jj::find_executable("jj").is_none() {
+        eprintln!("Skipping test: jj not found");
+        return;
+    }
+
+    let remote_dir = create_bare_remote();
+    let repo = setup_repo_with_remote(remote_dir.path());
+    let path = repo.path();
+
+    run_jjj(path, &["init"]);
+    run_jjj(path, &["problem", "new", "Important problem", "--force"]);
+
+    // Simulate an interrupted load: mark the cache dirty so push's
+    // Database::open rebuilds it to empty.
+    let db_path = path.join(".jj").join("jjj.db");
+    {
+        let db = jjj::db::Database::open(&db_path).expect("open db");
+        jjj::db::set_dirty(&db, true).expect("set dirty");
+    }
+
+    let out = run_jjj(path, &["push", "--remote", "origin"]);
+    assert!(
+        out.status.success(),
+        "push failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    // The markdown entity must still exist — not wiped by an empty-DB dump.
+    let list = run_jjj(path, &["problem", "list"]);
+    let stdout = String::from_utf8_lossy(&list.stdout);
+    assert!(
+        stdout.contains("Important problem"),
+        "markdown was wiped by push after a dirty-cache rebuild! list output: {}",
+        stdout
+    );
+    let problems_dir = path.join(".jj").join("jjj-meta").join("problems");
+    let md_count = std::fs::read_dir(&problems_dir)
+        .map(|d| {
+            d.filter_map(|e| e.ok())
+                .filter(|e| e.path().extension().and_then(|x| x.to_str()) == Some("md"))
+                .count()
+        })
+        .unwrap_or(0);
+    assert!(
+        md_count >= 1,
+        "problem markdown file should survive the push"
+    );
+}

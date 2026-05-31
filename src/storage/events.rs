@@ -23,11 +23,22 @@ impl MetadataStore {
         }
 
         let content = std::fs::read_to_string(&self.events_path)?;
-        let mut events: Vec<Event> = content
-            .lines()
-            .filter(|l| !l.trim().is_empty())
-            .filter_map(|l| serde_json::from_str(l).ok())
-            .collect();
+        let mut events: Vec<Event> = Vec::new();
+        let mut skipped = 0usize;
+        for line in content.lines().filter(|l| !l.trim().is_empty()) {
+            match serde_json::from_str::<Event>(line) {
+                Ok(e) => events.push(e),
+                // Don't silently drop: a malformed line or an event type from a
+                // newer jjj version would otherwise vanish without a trace.
+                Err(_) => skipped += 1,
+            }
+        }
+        if skipped > 0 {
+            eprintln!(
+                "Warning: skipped {} unparseable line(s) in events.jsonl",
+                skipped
+            );
+        }
 
         events.sort_by_key(|e| e.when);
 

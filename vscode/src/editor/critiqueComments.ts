@@ -131,7 +131,6 @@ export class CritiqueCommentController implements vscode.Disposable {
       lines.push("", "```", ...critique.code_context, "```");
     }
     if (critique.argument) { lines.push("", critique.argument); }
-    if (critique.evidence) { lines.push("", `**Evidence:** ${critique.evidence}`); }
     const solution = this.cache.getSolution(critique.solution_id);
     if (solution) { lines.push("", `*Solution: ${solution.title}*`); }
     const md = new vscode.MarkdownString(lines.join("\n"));

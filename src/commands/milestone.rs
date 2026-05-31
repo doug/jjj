@@ -2,7 +2,7 @@ use crate::cli::MilestoneAction;
 use crate::context::CommandContext;
 use crate::display::truncated_prefixes;
 use crate::error::Result;
-use crate::models::{Milestone, MilestoneStatus, ProblemStatus, SolutionStatus};
+use crate::models::{Event, EventType, Milestone, MilestoneStatus, ProblemStatus, SolutionStatus};
 use chrono::NaiveDate;
 
 pub fn execute(ctx: &CommandContext, action: MilestoneAction) -> Result<()> {
@@ -61,6 +61,16 @@ fn create_milestone(ctx: &CommandContext, title: String, date: Option<String>) -
         milestone.set_target_date(target_date);
 
         store.save_milestone(&milestone)?;
+
+        // Emit a creation event so `jjj events --check` doesn't flag every
+        // milestone as "has no creation event".
+        let user = store.jj_client.user_name().unwrap_or_default();
+        store.set_pending_event(Event::new(
+            EventType::MilestoneCreated,
+            milestone_id.clone(),
+            user,
+        ));
+
         println!("Created milestone {} ({})", milestone_id, title);
         if let Some(d) = target_date {
             println!("  Target date: {}", d.format("%Y-%m-%d"));
@@ -99,14 +109,29 @@ fn edit_milestone(
             milestone.set_target_date(Some(dt.and_utc()));
         }
 
+        let mut completed_now = false;
         if let Some(s) = status {
             let new_status: MilestoneStatus = s
                 .parse()
                 .map_err(|e: String| crate::error::JjjError::Validation(e))?;
+            completed_now = new_status == MilestoneStatus::Completed
+                && milestone.status != MilestoneStatus::Completed;
             milestone.set_status(new_status);
         }
 
         store.save_milestone(&milestone)?;
+
+        // Emit a completion event when a milestone first reaches Completed so
+        // the consistency checker's milestone_completed requirement is met.
+        if completed_now {
+            let user = store.jj_client.user_name().unwrap_or_default();
+            store.set_pending_event(Event::new(
+                EventType::MilestoneCompleted,
+                milestone_id.clone(),
+                user,
+            ));
+        }
+
         println!("Updated milestone {}", milestone_id);
         Ok(())
     })

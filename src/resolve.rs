@@ -2,8 +2,8 @@
 //!
 //! Resolution priority:
 //! 1. Exact UUID match
-//! 2. Prefix match (hex string starting with input)
-//! 3. Fuzzy title search via SQLite FTS
+//! 2. Prefix match (hex string of ≥6 hex digits starting with input)
+//! 3. Fuzzy title match (case-insensitive substring; not SQLite FTS)
 
 use crate::id::{is_hex_prefix, is_uuid};
 
@@ -61,7 +61,7 @@ pub fn resolve(input: &str, entities: &[(String, String)]) -> ResolveResult {
         };
     }
 
-    // 3. Fuzzy title search (simple contains for now, FTS in actual use)
+    // 3. Fuzzy title match: case-insensitive substring over titles.
     let input_lower = input.to_lowercase();
     let matches: Vec<_> = entities
         .iter()
@@ -83,13 +83,12 @@ pub fn resolve(input: &str, entities: &[(String, String)]) -> ResolveResult {
 ///
 /// Returns (entity_type, id_prefix) if valid, None otherwise.
 pub fn parse_entity_reference(input: &str) -> Option<(&str, &str)> {
-    // Must be at least 3 chars: "p/" + 1 char
-    if input.len() < 3 {
-        return None;
-    }
-
-    // Check for type prefix followed by /
-    let (type_char, rest) = input.split_at(1);
+    // Split off the first character. Using `chars()` (not `split_at(1)`)
+    // avoids panicking when the input begins with a multibyte UTF-8 character
+    // — e.g. a fuzzy title query like "é bug" coming from `jjj search`.
+    let mut chars = input.chars();
+    let type_char = chars.next()?;
+    let rest = chars.as_str();
     if !rest.starts_with('/') {
         return None;
     }
@@ -100,10 +99,10 @@ pub fn parse_entity_reference(input: &str) -> Option<(&str, &str)> {
     }
 
     let entity_type = match type_char {
-        "p" => "problem",
-        "s" => "solution",
-        "c" => "critique",
-        "m" => "milestone",
+        'p' => "problem",
+        's' => "solution",
+        'c' => "critique",
+        'm' => "milestone",
         _ => return None,
     };
 
@@ -223,5 +222,15 @@ mod tests {
         assert_eq!(parse_entity_reference("p123"), None);
         assert_eq!(parse_entity_reference(""), None);
         assert_eq!(parse_entity_reference("p"), None);
+    }
+
+    #[test]
+    fn test_parse_entity_reference_multibyte_does_not_panic() {
+        // Multibyte leading characters (e.g. a fuzzy title from `jjj search`)
+        // must return None, not panic on a non-char-boundary split.
+        assert_eq!(parse_entity_reference("é bug"), None);
+        assert_eq!(parse_entity_reference("日本語"), None);
+        assert_eq!(parse_entity_reference("🦀/x"), None);
+        assert_eq!(parse_entity_reference("café"), None);
     }
 }

@@ -2,8 +2,8 @@ use crate::db::search::SimilarityResult;
 use crate::error::Result;
 use crate::jj::JjClient;
 use crate::models::{Critique, Milestone, Problem, Solution};
-use crate::ranking::borda;
 use crate::ranking::ordering;
+use crate::ranking::scoring;
 use crate::storage::MetadataStore;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{backend::Backend, Terminal};
@@ -139,7 +139,8 @@ impl ProjectData {
         })
     }
 
-    /// Compute aggregated rankings per milestone using harmonic rank + squared votes.
+    /// Compute aggregated rankings per milestone (budget-normalized harmonic
+    /// ordering + quadratic votes; see `ranking::scoring::aggregate_rankings`).
     /// Returns milestone_id -> problem_id -> (rank_position, voter_count_str).
     fn compute_rankings(
         store: &MetadataStore,
@@ -147,6 +148,9 @@ impl ProjectData {
     ) -> HashMap<String, HashMap<String, (usize, String)>> {
         let mut result = HashMap::new();
         let base = store.meta_path();
+        // Canonical problem_count must match the TUI vote-entry budget, so use
+        // the same milestone-problem count (not the max ordering length).
+        let all_problems = store.list_problems().unwrap_or_default();
 
         for milestone in milestones {
             let orderings = match ordering::load_all_orderings(base, &milestone.id) {
@@ -157,9 +161,9 @@ impl ProjectData {
                 continue;
             }
 
-            let problem_count = orderings.values().map(|o| o.order.len()).max().unwrap_or(0);
+            let problem_count = scoring::milestone_problem_count(&all_problems, &milestone.id);
 
-            let aggregated = borda::aggregate_rankings(&orderings, problem_count);
+            let aggregated = scoring::aggregate_rankings(&orderings, problem_count);
 
             let mut milestone_rankings = HashMap::new();
             for (problem_id, rank) in &aggregated {

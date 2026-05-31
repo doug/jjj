@@ -24,6 +24,14 @@ impl Database {
     /// 3. Ensure all tables and indexes exist
     pub fn open(path: &Path) -> SqliteResult<Self> {
         let conn = Connection::open(path)?;
+        // Robust multi-process access: a long-lived TUI session and a CLI
+        // invocation in another terminal routinely hit `.jj/jjj.db` at once.
+        // WAL lets readers proceed while a writer holds the DB (instead of
+        // serializing them), and busy_timeout makes a contended writer wait
+        // briefly rather than failing immediately with SQLITE_BUSY. The cache
+        // is a derived index, so WAL's relaxed durability is acceptable.
+        // execute_batch ignores the row that `PRAGMA journal_mode` returns.
+        conn.execute_batch("PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL;")?;
         let mut db = Self { conn };
         db.ensure_schema()?;
         Ok(db)

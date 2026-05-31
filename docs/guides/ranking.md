@@ -9,13 +9,13 @@ jjj includes a built-in ranking system for prioritizing problems within mileston
 
 ## How It Works
 
-Each user maintains their own **personal ordering** of problems per milestone. These orderings are aggregated into a **global ranking** using Borda count with quadratic voting boost. The result is a prioritized list that reflects the team's collective judgment.
+Each user maintains their own **personal ordering** of problems per milestone. These orderings are aggregated into a **global ranking** using harmonic rank scoring with a quadratic voting boost. The result is a prioritized list that reflects the team's collective judgment.
 
 ### The Three Layers
 
 1. **Tertiary sort** -- Quickly triage items into Top / Mid / Bottom tiers
 2. **Quadratic voting** -- Spend vote budget to emphasize specific items
-3. **Borda aggregation** -- Combine all users' orderings into one ranking
+3. **Harmonic aggregation** -- Combine all users' orderings into one ranking
 
 ## Tertiary Sort (TUI)
 
@@ -86,11 +86,11 @@ Votes appear as arrows in the tree view:
 
 ## Global Aggregation
 
-When multiple users have orderings for the same milestone, jjj aggregates them using **Borda count + QV boost**:
+When multiple users have orderings for the same milestone, jjj aggregates two signals that are deliberately kept on the **same scale** so every voter has equal baseline influence and votes act as a bounded megaphone:
 
-1. **Borda points**: Each user's ordering awards N points to their #1, N-1 to #2, etc.
-2. **QV boost**: Each vote adds its value directly to the score (positive or negative).
-3. **Harmonic weighting**: Borda points are weighted by `1/rank` for each user, giving top-ranked items proportionally more influence.
+1. **Normalized harmonic ordering**: each user's ordering points sum to the QV budget `B`, distributed by harmonic weight — rank `i` gets `B · (1/i) / H_n` where `H_n = Σ 1/k` over that user's `n` ranked items. So the #1 item gets `≈ 0.34·B`, #2 about half that, and so on. Because the points are normalized, **a user who ranks 3 items has the same total influence as one who ranks 30** — sorting is the baseline activity and everyone's sort counts equally. The harmonic shape means getting the top of your list right matters far more than the tail (which is why drilling into the top tier is the high-leverage move).
+2. **Quadratic votes**: each allocation `v` adds `sign(v)·v²`, provided the user is within their quadratic-vote budget `B = max(100, 2·problem_count)`. Votes are the "exceptional emphasis" layer — the quadratic cost makes them expensive, so to truly pin something you spend real budget. A maxed vote contributes `≈ B` (about 3× your top-ranked item), so a small vote won't override a clear #1 but a big spend will; a negative vote is the only way to drive a score *below* the pack ("anything but this").
+3. **Ties** are broken by problem ID (lexicographic) for determinism.
 
 Toggle between views with `r`:
 - **Personal view** -- Your ordering, your votes, your tiers

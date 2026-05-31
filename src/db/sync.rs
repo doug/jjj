@@ -6,8 +6,7 @@
 use rusqlite::{params, Connection};
 
 use crate::db::entities::{
-    list_critiques, list_milestones, list_problems, list_solutions,
-    populate_problem_computed_fields, populate_solution_computed_fields, upsert_critique,
+    list_critiques, list_milestones, list_problems, list_solutions, upsert_critique,
     upsert_milestone, upsert_problem, upsert_solution,
 };
 use crate::db::events::{clear_events, insert_event};
@@ -63,6 +62,10 @@ pub fn load_from_markdown(db: &Database, store: &MetadataStore) -> Result<()> {
             insert_event(conn, event)?;
         }
 
+        // Drop embeddings for entities that no longer exist (embeddings are
+        // preserved across reloads rather than wiped — see clear_all_tables).
+        prune_orphan_embeddings(conn)?;
+
         Ok(())
     })();
 
@@ -82,43 +85,14 @@ pub fn load_from_markdown(db: &Database, store: &MetadataStore) -> Result<()> {
     }
 }
 
-/// Dump all metadata from SQLite back to markdown files.
-///
-/// This writes all entities from SQLite to the shadow branch.
-/// Used when syncing local changes back to the repository.
-pub fn dump_to_markdown(db: &Database, store: &MetadataStore) -> Result<()> {
-    let conn = db.conn();
-
-    // Dump problems (with computed fields populated)
-    let mut problems = list_problems(conn)?;
-    populate_problem_computed_fields(conn, &mut problems)?;
-    for problem in &problems {
-        store.save_problem(problem)?;
-    }
-
-    // Dump solutions (with computed fields populated)
-    let mut solutions = list_solutions(conn)?;
-    populate_solution_computed_fields(conn, &mut solutions)?;
-    for solution in &solutions {
-        store.save_solution(solution)?;
-    }
-
-    // Dump critiques
-    let critiques = list_critiques(conn)?;
-    for critique in &critiques {
-        store.save_critique(critique)?;
-    }
-
-    // Dump milestones
-    let milestones = list_milestones(conn)?;
-    for milestone in &milestones {
-        store.save_milestone(milestone)?;
-    }
-
-    // Events live in commit history — nothing to dump.
-
-    Ok(())
-}
+// NOTE: there is intentionally no `dump_to_markdown` (SQLite → markdown).
+// Markdown is the single source of truth — every entity mutation writes
+// markdown first (via `MetadataStore::save`) and updates the cache second, so
+// the DB can never hold an edit the markdown lacks. Dumping the DB back over
+// the files was both redundant and dangerous: `Database::open` rebuilds a
+// dirty/interrupted DB to *empty*, and dumping that would have wiped the
+// canonical files (and pushed the wipe). Sync flows therefore only ever load
+// markdown → DB (`load_from_markdown`), never the reverse.
 
 /// Rebuild the full-text search index from all entities.
 pub fn rebuild_fts(db: &Database) -> Result<()> {
@@ -276,18 +250,14 @@ pub fn sync_milestone_to_cache(db: &Database, milestone: &Milestone) -> Result<(
 /// Remove an entity's row + FTS entry from SQLite.
 pub fn remove_entity_from_cache(db: &Database, entity_type: &str, entity_id: &str) -> Result<()> {
     let conn = db.conn();
-    let table = match entity_type {
-        "problem" => "problems",
-        "solution" => "solutions",
-        "critique" => "critiques",
-        "milestone" => "milestones",
-        other => {
-            return Err(crate::error::JjjError::Validation(format!(
+    let table = crate::entity_type::EntityType::from_singular(entity_type)
+        .map(|e| e.table())
+        .ok_or_else(|| {
+            crate::error::JjjError::Validation(format!(
                 "unknown entity_type for cache removal: {}",
-                other
-            )))
-        }
-    };
+                entity_type
+            ))
+        })?;
     conn.execute(
         &format!("DELETE FROM {} WHERE id = ?1", table),
         params![entity_id],
@@ -435,14 +405,38 @@ pub fn set_dirty(db: &Database, dirty: bool) -> Result<()> {
 
 /// Clear all entity tables (problems, solutions, critiques, milestones, events).
 fn clear_all_tables(conn: &Connection) -> Result<()> {
-    // Clear in reverse order of dependencies
-    conn.execute("DELETE FROM embeddings", [])?;
+    // Clear in reverse order of dependencies.
+    //
+    // NOTE: embeddings are intentionally NOT cleared here. They are expensive
+    // to recompute (each requires an Ollama round-trip) and this reload path
+    // does not recompute them — only `jjj db rebuild` does. Wiping them here
+    // meant every `search`/`fetch`/`list --search` silently emptied the table,
+    // permanently degrading hybrid search to FTS-only. We instead keep them
+    // across reloads and prune orphans afterward (see prune_orphan_embeddings).
     conn.execute("DELETE FROM critiques", [])?;
     conn.execute("DELETE FROM solutions", [])?;
     conn.execute("DELETE FROM problems", [])?;
     conn.execute("DELETE FROM milestones", [])?;
     clear_events(conn)?;
     conn.execute("DELETE FROM fts", [])?;
+    Ok(())
+}
+
+/// Delete embeddings whose entity no longer exists in any entity table. Run
+/// after a markdown reload so embeddings for deleted entities don't linger.
+/// (Entity IDs are UUIDs, unique across types, so matching on `entity_id`
+/// alone is sufficient.)
+fn prune_orphan_embeddings(conn: &Connection) -> Result<()> {
+    conn.execute(
+        "DELETE FROM embeddings
+         WHERE entity_id NOT IN (
+             SELECT id FROM problems
+             UNION SELECT id FROM solutions
+             UNION SELECT id FROM critiques
+             UNION SELECT id FROM milestones
+         )",
+        [],
+    )?;
     Ok(())
 }
 
@@ -544,6 +538,47 @@ mod tests {
             )
             .expect("Failed to search FTS");
         assert_eq!(match_count, 1);
+    }
+
+    #[test]
+    fn test_embeddings_survive_reload_but_orphans_are_pruned() {
+        use crate::db::embeddings::{count_embeddings, upsert_embedding};
+        use crate::db::entities::upsert_problem;
+        use crate::models::Problem;
+
+        let db = Database::open_in_memory().expect("open db");
+        let conn = db.conn();
+
+        // An entity with a (costly) embedding.
+        let problem = Problem::new("p1".to_string(), "Has embedding".to_string());
+        upsert_problem(conn, &problem).expect("insert problem");
+        upsert_embedding(conn, "problem", "p1", "test-model", &[0.1, 0.2, 0.3]).expect("embed");
+        assert_eq!(count_embeddings(conn, None).expect("count").0, 1);
+
+        // Simulate a markdown reload: clear, re-upsert the still-present
+        // entity, then prune. The embedding must NOT be wiped.
+        clear_all_tables(conn).expect("clear");
+        assert_eq!(
+            count_embeddings(conn, None).expect("count").0,
+            1,
+            "clear_all_tables must not wipe embeddings"
+        );
+        upsert_problem(conn, &problem).expect("re-insert problem");
+        prune_orphan_embeddings(conn).expect("prune");
+        assert_eq!(
+            count_embeddings(conn, None).expect("count").0,
+            1,
+            "embedding for a still-present entity must survive reload"
+        );
+
+        // Now the entity disappears from markdown (not re-upserted) → orphan.
+        clear_all_tables(conn).expect("clear");
+        prune_orphan_embeddings(conn).expect("prune");
+        assert_eq!(
+            count_embeddings(conn, None).expect("count").0,
+            0,
+            "embedding for a deleted entity must be pruned"
+        );
     }
 
     #[test]

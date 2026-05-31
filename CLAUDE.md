@@ -74,7 +74,7 @@ Per-user ordering files in `rankings/{milestone_id}/{user}.json` store problem p
 - **Votes** (+/-): pin items to top/bottom zone with magnitude (quadratic cost)
 - **Drill** (Shift+H/L): zoom into a tier for recursive refinement
 
-List order = `[positive-voted by magnitude] [unvoted in tier order] [negative-voted by magnitude]`. Global ranking aggregates all users via Borda count + QV boost.
+List order = `[positive-voted by magnitude] [unvoted in tier order] [negative-voted by magnitude]`. Global ranking aggregates all users by combining two same-scale signals: (1) **normalized harmonic ordering** — each user's ordering points sum to the QV budget `B = max(100, 2*problem_count)`, distributed by harmonic weight (rank `i` gets `B * (1/i) / H_n`, where `H_n = Σ 1/k` over that user's `n` ranked items), so every user contributes equal total ordering influence regardless of how many items they ranked, with the top of the list dominant; and (2) **quadratic votes** — each allocation `v` adds `sign(v)*v²`, budget-gated, acting as a bounded megaphone (a maxed vote ≈ `B`, ~3× the top ordinal slot; negative votes are the only sub-zero signal).
 
 ### Automation Rules
 Config-driven automation in `config.toml` fires actions on jjj events:
@@ -82,11 +82,12 @@ Config-driven automation in `config.toml` fires actions on jjj events:
 [[automation]]
 on = "solution_submitted"  # EventType (snake_case)
 action = "github_pr"       # built-in action or "shell"
-command = "echo '{{title}}'"  # required for shell actions
+command = "echo {{title}}"  # required for shell actions
 enabled = true             # optional, default true
 ```
 Built-in actions: `github_issue`, `github_pr`, `github_merge`, `github_close`, `github_sync`.
 Shell actions support `{{var}}` template expansion (`{{title}}`, `{{id}}`, `{{user}}`, `{{problem.title}}`, `{{pr_number}}`, etc.).
+Each `{{var}}` expands to a double-quoted reference to an environment variable that holds the raw value (e.g. `JJJ_VAR_TITLE`); the value is passed via the process environment, never interpolated into the command text, so untrusted entity titles cannot inject shell commands. **Do not wrap placeholders in your own quotes** — write `echo {{title}}`, not `echo '{{title}}'` (single quotes would suppress the expansion).
 
 ### Component Layers
 ```

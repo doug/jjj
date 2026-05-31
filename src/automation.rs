@@ -51,21 +51,46 @@ fn matching_rules<'a>(
         .collect()
 }
 
-/// Shell-escape a value by wrapping in single quotes and escaping internal quotes.
-fn shell_escape(s: &str) -> String {
-    format!("'{}'", s.replace('\'', "'\\''"))
+/// Convert a template variable key (e.g. `problem.title`) into a shell-safe
+/// environment variable name (e.g. `JJJ_VAR_PROBLEM_TITLE`).
+fn env_var_name(key: &str) -> String {
+    let mut name = String::from("JJJ_VAR_");
+    for ch in key.chars() {
+        if ch.is_ascii_alphanumeric() {
+            name.push(ch.to_ascii_uppercase());
+        } else {
+            name.push('_');
+        }
+    }
+    name
 }
 
-/// Replace `{{var}}` placeholders in a template string.
+/// Expand `{{var}}` placeholders into references to environment variables that
+/// carry the raw values, returning the rewritten command plus the
+/// `(name, value)` pairs the caller must export before running `sh -c`.
 ///
-/// Values are shell-escaped to prevent injection when the result is passed to `sh -c`.
-/// Unknown variables are left as-is.
-fn expand_template(template: &str, vars: &HashMap<String, String>) -> String {
+/// Untrusted values (entity titles, bodies, etc. fetched from the shared
+/// bookmark) are **never** interpolated into the command text — they travel
+/// via the environment instead, so a value like `$(rm -rf /)` or `'; rm -rf /`
+/// is inert no matter how the template quotes the placeholder. Each
+/// placeholder expands to a double-quoted reference (`"${JJJ_VAR_X}"`) so the
+/// value is also safe from word-splitting and globbing. Unknown variables are
+/// left as-is.
+fn expand_template(
+    template: &str,
+    vars: &HashMap<String, String>,
+) -> (String, Vec<(String, String)>) {
     let mut result = template.to_string();
+    let mut env: Vec<(String, String)> = Vec::new();
     for (key, value) in vars {
-        result = result.replace(&format!("{{{{{}}}}}", key), &shell_escape(value));
+        let placeholder = format!("{{{{{}}}}}", key);
+        if result.contains(&placeholder) {
+            let name = env_var_name(key);
+            result = result.replace(&placeholder, &format!("\"${{{}}}\"", name));
+            env.push((name, value.clone()));
+        }
     }
-    result
+    (result, env)
 }
 
 /// Check whether any enabled automation rule exists for the given event type.
@@ -84,11 +109,12 @@ fn execute_shell(rule: &AutomationRule, auto_ctx: &AutomationContext) -> Automat
         }
     };
 
-    let expanded = expand_template(template, &auto_ctx.vars);
+    let (expanded, env) = expand_template(template, &auto_ctx.vars);
 
     match std::process::Command::new("sh")
         .arg("-c")
         .arg(&expanded)
+        .envs(env)
         .status()
     {
         Ok(status) if status.success() => AutomationResult::Success(format!("shell: {}", expanded)),
@@ -387,46 +413,84 @@ mod tests {
         let mut vars = HashMap::new();
         vars.insert("id".to_string(), "abc123".to_string());
         vars.insert("title".to_string(), "Fix auth bug".to_string());
-        let result = expand_template("New: {{title}} ({{id}})", &vars);
-        assert_eq!(result, "New: 'Fix auth bug' ('abc123')");
+        let (result, env) = expand_template("New: {{title}} ({{id}})", &vars);
+        // Placeholders become double-quoted env references; values go in env.
+        assert_eq!(result, "New: \"${JJJ_VAR_TITLE}\" (\"${JJJ_VAR_ID}\")");
+        assert!(env.contains(&("JJJ_VAR_TITLE".to_string(), "Fix auth bug".to_string())));
+        assert!(env.contains(&("JJJ_VAR_ID".to_string(), "abc123".to_string())));
     }
 
     #[test]
     fn test_expand_template_unknown_var_kept() {
         let vars = HashMap::new();
-        let result = expand_template("Hello {{unknown}}", &vars);
+        let (result, env) = expand_template("Hello {{unknown}}", &vars);
         assert_eq!(result, "Hello {{unknown}}");
+        assert!(env.is_empty());
     }
 
     #[test]
     fn test_expand_template_no_vars() {
         let vars = HashMap::new();
-        let result = expand_template("plain text", &vars);
+        let (result, env) = expand_template("plain text", &vars);
         assert_eq!(result, "plain text");
+        assert!(env.is_empty());
     }
 
     #[test]
     fn test_expand_template_dotted_vars() {
         let mut vars = HashMap::new();
         vars.insert("problem.title".to_string(), "Auth bug".to_string());
-        let result = expand_template("On: {{problem.title}}", &vars);
-        assert_eq!(result, "On: 'Auth bug'");
+        let (result, env) = expand_template("On: {{problem.title}}", &vars);
+        assert_eq!(result, "On: \"${JJJ_VAR_PROBLEM_TITLE}\"");
+        assert_eq!(
+            env,
+            vec![("JJJ_VAR_PROBLEM_TITLE".to_string(), "Auth bug".to_string())]
+        );
     }
 
     #[test]
-    fn test_shell_escape_basic() {
-        assert_eq!(shell_escape("hello"), "'hello'");
+    fn test_shell_injection_via_command_substitution_is_inert() {
+        // A malicious title with a command substitution must NOT execute when
+        // an automation rule expands it into a shell action.
+        let tmp = tempfile::tempdir().unwrap();
+        let marker = tmp.path().join("pwned");
+        let r = AutomationRule {
+            on: EventType::ProblemCreated,
+            action: AutomationAction::Shell,
+            command: Some("echo {{title}}".to_string()),
+            enabled: true,
+        };
+        let mut auto_ctx = AutomationContext::new("problem_created");
+        auto_ctx.set("title", &format!("$(touch {})", marker.display()));
+        let result = execute_rule(&r, &auto_ctx);
+        assert!(matches!(result, AutomationResult::Success(_)));
+        assert!(
+            !marker.exists(),
+            "command substitution in an entity title must not execute"
+        );
     }
 
     #[test]
-    fn test_shell_escape_single_quotes() {
-        assert_eq!(shell_escape("it's here"), "'it'\\''s here'");
-    }
-
-    #[test]
-    fn test_shell_escape_injection() {
-        // A malicious title should be safely escaped
-        assert_eq!(shell_escape("'; rm -rf / #"), "''\\''; rm -rf / #'");
+    fn test_shell_injection_with_legacy_quoted_template_is_inert() {
+        // Even the previously-documented `'{{title}}'` quoting (which used to
+        // collapse the escaping) must now be inert — the value lives in the
+        // environment, never in the command text.
+        let tmp = tempfile::tempdir().unwrap();
+        let marker = tmp.path().join("pwned");
+        let r = AutomationRule {
+            on: EventType::ProblemCreated,
+            action: AutomationAction::Shell,
+            command: Some("echo '{{title}}'".to_string()),
+            enabled: true,
+        };
+        let mut auto_ctx = AutomationContext::new("problem_created");
+        auto_ctx.set("title", &format!("'; touch {}; '", marker.display()));
+        let result = execute_rule(&r, &auto_ctx);
+        assert!(matches!(result, AutomationResult::Success(_)));
+        assert!(
+            !marker.exists(),
+            "shell metacharacters in an entity title must not execute"
+        );
     }
 
     // ── execute_rule ──

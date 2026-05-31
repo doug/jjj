@@ -75,8 +75,7 @@ fn extract_journey_blocks(content: &str) -> Vec<JourneyBlock> {
                     });
                 }
             }
-        } else if trimmed.starts_with(">= ") {
-            let rest = &trimmed[3..];
+        } else if let Some(rest) = trimmed.strip_prefix(">= ") {
             if let Some(space_pos) = rest.find(' ') {
                 let var = rest[..space_pos].to_string();
                 let pattern = rest[space_pos + 1..].to_string();

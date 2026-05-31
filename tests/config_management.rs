@@ -143,7 +143,7 @@ action = "github_pr"
 [[automation]]
 on = "critique_raised"
 action = "shell"
-command = "echo '{{title}}'"
+command = "echo {{title}}"
 
 [[automation]]
 on = "problem_created"
@@ -159,7 +159,7 @@ enabled = false
     assert_eq!(config.automation[1].action, AutomationAction::Shell);
     assert_eq!(
         config.automation[1].command.as_deref(),
-        Some("echo '{{title}}'")
+        Some("echo {{title}}")
     );
     assert!(!config.automation[2].enabled);
 }

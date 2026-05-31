@@ -1,7 +1,7 @@
 //! Mapping between GitHub JSON responses and jjj entities.
 
 use crate::error::{JjjError, Result};
-use crate::models::{Priority, Problem};
+use crate::models::{Priority, Problem, ProblemStatus};
 use crate::sync::{ReviewInfo, ReviewState, ReviewThread};
 
 /// Convert a GitHub issue JSON object to a Problem.
@@ -16,6 +16,17 @@ pub fn issue_to_problem(json: &serde_json::Value, number: u64) -> Result<Problem
     let mut problem = Problem::new(id, title.to_string());
     problem.description = body.to_string();
     problem.github_issue = Some(number);
+
+    // Reflect the issue's state. A closed issue must NOT import as Open: the
+    // next `jjj github push` reconciliation would see (open locally, closed
+    // remotely) and reopen the deliberately-closed issue. (gh returns "open"
+    // or "closed", case varying by REST vs GraphQL — compare case-insensitively.)
+    if json["state"]
+        .as_str()
+        .is_some_and(|s| s.eq_ignore_ascii_case("closed"))
+    {
+        problem.status = ProblemStatus::Solved;
+    }
 
     // Map GitHub labels to priority
     if let Some(labels) = json["labels"].as_array() {
@@ -261,6 +272,22 @@ mod tests {
         // No priority label, so default Medium
         assert_eq!(problem.priority, Priority::Medium);
         assert_eq!(problem.status, ProblemStatus::Open);
+    }
+
+    #[test]
+    fn test_issue_to_problem_closed_imports_as_solved() {
+        // A closed issue must import as Solved so the next push doesn't reopen it.
+        for state in ["closed", "CLOSED", "Closed"] {
+            let issue = json!({ "title": "Already fixed", "number": 7, "state": state });
+            let p = issue_to_problem(&issue, 7).unwrap();
+            assert_eq!(p.status, ProblemStatus::Solved, "state {state:?} -> Solved");
+        }
+        // An open issue still imports as Open.
+        let open = json!({ "title": "Still open", "number": 8, "state": "open" });
+        assert_eq!(
+            issue_to_problem(&open, 8).unwrap().status,
+            ProblemStatus::Open
+        );
     }
 
     #[test]

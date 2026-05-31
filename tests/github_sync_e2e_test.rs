@@ -233,9 +233,9 @@ fn test_github_sync_e2e_full_flow() {
     let imported = problems_arr
         .iter()
         .find(|p| {
-            p["title"].as_str().map_or(false, |t| {
-                t.contains(&gh_issue_title) || t == gh_issue_title
-            })
+            p["title"]
+                .as_str()
+                .is_some_and(|t| t.contains(&gh_issue_title) || t == gh_issue_title)
         })
         .expect("Imported problem not found in problem list");
 
@@ -396,7 +396,7 @@ fn test_github_sync_local_problem_no_auto_push() {
 
     let local = problems_arr
         .iter()
-        .find(|p| p["title"].as_str().map_or(false, |t| t == title))
+        .find(|p| p["title"].as_str().is_some_and(|t| t == title))
         .expect("Local problem not found");
 
     let gh_issue = local.get("github_issue");

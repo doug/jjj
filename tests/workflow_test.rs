@@ -43,7 +43,7 @@ fn test_workflow_start_new_solution() {
     // Verify current change has description
     let jj_log = Command::new("jj")
         .current_dir(dir)
-        .args(&["log", "--no-graph", "-r", "@", "-T", "description"])
+        .args(["log", "--no-graph", "-r", "@", "-T", "description"])
         .output()
         .unwrap();
     if !jj_log.status.success() {
@@ -92,7 +92,7 @@ fn test_workflow_start_resume_solution() {
     // Verify change is for the solution
     let jj_log = Command::new("jj")
         .current_dir(dir)
-        .args(&["log", "--no-graph", "-r", "@", "-T", "description"])
+        .args(["log", "--no-graph", "-r", "@", "-T", "description"])
         .output()
         .unwrap();
     let desc = String::from_utf8_lossy(&jj_log.stdout);
@@ -134,20 +134,20 @@ fn test_workflow_submit_force() {
     // Create 'main' manually
     let status = Command::new("jj")
         .current_dir(dir)
-        .args(&["new", "root()", "-m", "initial"])
+        .args(["new", "root()", "-m", "initial"])
         .status()
         .unwrap();
     assert!(status.success(), "Failed to create initial commit");
     let status = Command::new("jj")
         .current_dir(dir)
-        .args(&["bookmark", "create", "main"])
+        .args(["bookmark", "create", "main"])
         .status()
         .unwrap();
     assert!(status.success());
 
     let log = Command::new("jj")
         .current_dir(dir)
-        .args(&["log", "--no-graph", "-r", "all"])
+        .args(["log", "--no-graph", "-r", "all"])
         .output()
         .unwrap();
     println!(
@@ -177,7 +177,7 @@ fn test_workflow_submit_force() {
 
     let log = Command::new("jj")
         .current_dir(dir)
-        .args(&["log", "--no-graph", "-r", "all"])
+        .args(["log", "--no-graph", "-r", "all"])
         .output()
         .unwrap();
     println!(
@@ -299,12 +299,12 @@ fn test_submit_blocked_by_critiques() {
     // Create a main bookmark so submit has something to rebase onto
     Command::new("jj")
         .current_dir(dir)
-        .args(&["new", "root()", "-m", "initial"])
+        .args(["new", "root()", "-m", "initial"])
         .status()
         .unwrap();
     Command::new("jj")
         .current_dir(dir)
-        .args(&["bookmark", "create", "main"])
+        .args(["bookmark", "create", "main"])
         .status()
         .unwrap();
 
@@ -380,7 +380,7 @@ fn test_no_stale_working_copy_after_metadata_writes() {
     let assert_not_stale = |label: &str| {
         let out = Command::new("jj")
             .current_dir(dir)
-            .args(&["status"])
+            .args(["status"])
             .output()
             .expect("Failed to run jj status");
         let stderr = String::from_utf8_lossy(&out.stderr);

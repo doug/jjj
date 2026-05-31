@@ -82,7 +82,7 @@ jjj problem tree                       # Hierarchical view
 jjj problem solve "Search is slow"     # Mark solved (requires approved solution)
 jjj problem dissolve "Search"          # Mark dissolved (false premises)
 jjj problem reopen "Search"           # Reopen a solved/dissolved problem
-jjj problem duplicate "Search" "Other" # Mark problem as duplicate
+jjj problem duplicate "Search" --of "Other" # Mark problem as duplicate of another
 ```
 
 ### Solutions

@@ -372,7 +372,7 @@ fn sync_pr(
     ctx: &CommandContext,
     provider: &GitHubProvider,
     solution_id: Option<String>,
-    _base: &str,
+    base: &str,
     dry_run: bool,
 ) -> Result<()> {
     let sol_id = match solution_id {
@@ -470,8 +470,8 @@ fn sync_pr(
     let vars = [("bookmark", branch.as_str()), ("remote", "origin")];
     ctx.jj().execute_sync_command(&push_cmd, &vars)?;
 
-    // Create the PR
-    let pr_number = provider.create_pr(&solution, &problem, &branch)?;
+    // Create the PR against the requested base branch.
+    let pr_number = provider.create_pr(&solution, &problem, &branch, base)?;
 
     // Save the PR number and branch back to the solution
     let mut updated_solution = solution.clone();

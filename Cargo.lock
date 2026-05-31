@@ -502,6 +502,7 @@ dependencies = [
  "clap",
  "clap_complete",
  "crossterm",
+ "libc",
  "pretty_assertions",
  "pulldown-cmark",
  "ratatui",

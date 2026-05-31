@@ -449,10 +449,12 @@ fn draw_detail(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     };
     let title = app.cache.selected_detail.block_title();
 
-    let text: Vec<Line> = lines
-        .into_iter()
-        .skip(app.ui.detail_scroll as usize)
-        .collect();
+    // Clamp the scroll so an over-large offset (e.g. a stale value) can never
+    // skip past every line and render a blank pane — always keep the last
+    // line visible.
+    let max_scroll = lines.len().saturating_sub(1);
+    let scroll = (app.ui.detail_scroll as usize).min(max_scroll);
+    let text: Vec<Line> = lines.into_iter().skip(scroll).collect();
 
     let detail = Paragraph::new(text)
         .block(

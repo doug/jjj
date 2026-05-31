@@ -50,6 +50,88 @@ fn parse_enum<T: std::str::FromStr + Default>(s: &str, kind: &str, default_name:
 }
 
 // ============================================================================
+// Generic CRUD scaffolding
+// ============================================================================
+
+/// Per-table data needed to drive the generic `load_one` / `list_all` /
+/// `delete_one` helpers below, removing the four-way `load_*`/`list_*`/`delete_*`
+/// boilerplate. The per-type `upsert_*` and `row_to_*` stay, since their SQL is
+/// irreducibly schema-specific.
+///
+/// `COLUMNS` MUST list columns in the exact order `from_row` decodes them.
+trait DbEntity: Sized {
+    const TABLE: &'static str;
+    const COLUMNS: &'static str;
+    fn from_row(row: &rusqlite::Row) -> SqliteResult<Self>;
+}
+
+/// Load a single entity by id (`None` if absent).
+fn load_one<T: DbEntity>(conn: &Connection, id: &str) -> SqliteResult<Option<T>> {
+    let sql = format!("SELECT {} FROM {} WHERE id = ?1", T::COLUMNS, T::TABLE);
+    let mut stmt = conn.prepare(&sql)?;
+    let mut rows = stmt.query(params![id])?;
+    match rows.next()? {
+        Some(row) => Ok(Some(T::from_row(row)?)),
+        None => Ok(None),
+    }
+}
+
+/// List all entities of a type, newest first.
+fn list_all<T: DbEntity>(conn: &Connection) -> SqliteResult<Vec<T>> {
+    let sql = format!(
+        "SELECT {} FROM {} ORDER BY created_at DESC",
+        T::COLUMNS,
+        T::TABLE
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map([], T::from_row)?;
+    rows.collect()
+}
+
+/// Delete an entity by id. Returns true if a row was removed.
+fn delete_one<T: DbEntity>(conn: &Connection, id: &str) -> SqliteResult<bool> {
+    let sql = format!("DELETE FROM {} WHERE id = ?1", T::TABLE);
+    Ok(conn.execute(&sql, params![id])? > 0)
+}
+
+impl DbEntity for Problem {
+    const TABLE: &'static str = "problems";
+    const COLUMNS: &'static str = "id, title, status, priority, confidence, parent_id, \
+        milestone_id, assignee, created_at, updated_at, description, dissolved_reason, \
+        github_issue, tags";
+    fn from_row(row: &rusqlite::Row) -> SqliteResult<Self> {
+        row_to_problem(row)
+    }
+}
+
+impl DbEntity for Solution {
+    const TABLE: &'static str = "solutions";
+    const COLUMNS: &'static str = "id, title, status, problem_id, change_ids, supersedes, \
+        assignee, force_approved, created_at, updated_at, approach, github_pr, github_branch, tags";
+    fn from_row(row: &rusqlite::Row) -> SqliteResult<Self> {
+        row_to_solution(row)
+    }
+}
+
+impl DbEntity for Critique {
+    const TABLE: &'static str = "critiques";
+    const COLUMNS: &'static str = "id, title, status, solution_id, severity, reviewer, author, \
+        file_path, line_number, created_at, updated_at, argument, replies, github_review_id";
+    fn from_row(row: &rusqlite::Row) -> SqliteResult<Self> {
+        row_to_critique(row)
+    }
+}
+
+impl DbEntity for Milestone {
+    const TABLE: &'static str = "milestones";
+    const COLUMNS: &'static str =
+        "id, title, status, target_date, assignee, created_at, updated_at, description, problem_ids";
+    fn from_row(row: &rusqlite::Row) -> SqliteResult<Self> {
+        row_to_milestone(row)
+    }
+}
+
+// ============================================================================
 // Problems
 // ============================================================================
 
@@ -94,38 +176,17 @@ pub fn upsert_problem(conn: &Connection, problem: &Problem) -> SqliteResult<()> 
 
 /// Load a problem by ID.
 pub fn load_problem(conn: &Connection, id: &str) -> SqliteResult<Option<Problem>> {
-    let mut stmt = conn.prepare(
-        "SELECT id, title, status, priority, confidence, parent_id, milestone_id, assignee,
-                created_at, updated_at, description, dissolved_reason, github_issue, tags
-         FROM problems WHERE id = ?1",
-    )?;
-
-    let mut rows = stmt.query(params![id])?;
-
-    if let Some(row) = rows.next()? {
-        Ok(Some(row_to_problem(row)?))
-    } else {
-        Ok(None)
-    }
+    load_one(conn, id)
 }
 
-/// List all problems.
+/// List all problems, newest first.
 pub fn list_problems(conn: &Connection) -> SqliteResult<Vec<Problem>> {
-    let mut stmt = conn.prepare(
-        "SELECT id, title, status, priority, confidence, parent_id, milestone_id, assignee,
-                created_at, updated_at, description, dissolved_reason, github_issue, tags
-         FROM problems ORDER BY created_at DESC",
-    )?;
-
-    let rows = stmt.query_map([], row_to_problem)?;
-
-    rows.collect()
+    list_all(conn)
 }
 
 /// Delete a problem by ID. Returns true if a row was deleted.
 pub fn delete_problem(conn: &Connection, id: &str) -> SqliteResult<bool> {
-    let changes = conn.execute("DELETE FROM problems WHERE id = ?1", params![id])?;
-    Ok(changes > 0)
+    delete_one::<Problem>(conn, id)
 }
 
 fn row_to_problem(row: &rusqlite::Row) -> SqliteResult<Problem> {
@@ -202,34 +263,12 @@ pub fn upsert_solution(conn: &Connection, solution: &Solution) -> SqliteResult<(
 
 /// Load a solution by ID.
 pub fn load_solution(conn: &Connection, id: &str) -> SqliteResult<Option<Solution>> {
-    let mut stmt = conn.prepare(
-        "SELECT id, title, status, problem_id, change_ids, supersedes, assignee,
-                force_approved, created_at, updated_at, approach,
-                github_pr, github_branch, tags
-         FROM solutions WHERE id = ?1",
-    )?;
-
-    let mut rows = stmt.query(params![id])?;
-
-    if let Some(row) = rows.next()? {
-        Ok(Some(row_to_solution(row)?))
-    } else {
-        Ok(None)
-    }
+    load_one(conn, id)
 }
 
-/// List all solutions.
+/// List all solutions, newest first.
 pub fn list_solutions(conn: &Connection) -> SqliteResult<Vec<Solution>> {
-    let mut stmt = conn.prepare(
-        "SELECT id, title, status, problem_id, change_ids, supersedes, assignee,
-                force_approved, created_at, updated_at, approach,
-                github_pr, github_branch, tags
-         FROM solutions ORDER BY created_at DESC",
-    )?;
-
-    let rows = stmt.query_map([], row_to_solution)?;
-
-    rows.collect()
+    list_all(conn)
 }
 
 /// List solutions for a specific problem.
@@ -251,8 +290,7 @@ pub fn list_solutions_for_problem(
 
 /// Delete a solution by ID. Returns true if a row was deleted.
 pub fn delete_solution(conn: &Connection, id: &str) -> SqliteResult<bool> {
-    let changes = conn.execute("DELETE FROM solutions WHERE id = ?1", params![id])?;
-    Ok(changes > 0)
+    delete_one::<Solution>(conn, id)
 }
 
 fn row_to_solution(row: &rusqlite::Row) -> SqliteResult<Solution> {
@@ -327,34 +365,12 @@ pub fn upsert_critique(conn: &Connection, critique: &Critique) -> SqliteResult<(
 
 /// Load a critique by ID.
 pub fn load_critique(conn: &Connection, id: &str) -> SqliteResult<Option<Critique>> {
-    let mut stmt = conn.prepare(
-        "SELECT id, title, status, solution_id, severity, reviewer, author, file_path,
-                line_number, created_at, updated_at, argument, replies,
-                github_review_id
-         FROM critiques WHERE id = ?1",
-    )?;
-
-    let mut rows = stmt.query(params![id])?;
-
-    if let Some(row) = rows.next()? {
-        Ok(Some(row_to_critique(row)?))
-    } else {
-        Ok(None)
-    }
+    load_one(conn, id)
 }
 
-/// List all critiques.
+/// List all critiques, newest first.
 pub fn list_critiques(conn: &Connection) -> SqliteResult<Vec<Critique>> {
-    let mut stmt = conn.prepare(
-        "SELECT id, title, status, solution_id, severity, reviewer, author, file_path,
-                line_number, created_at, updated_at, argument, replies,
-                github_review_id
-         FROM critiques ORDER BY created_at DESC",
-    )?;
-
-    let rows = stmt.query_map([], row_to_critique)?;
-
-    rows.collect()
+    list_all(conn)
 }
 
 /// List critiques for a specific solution.
@@ -376,8 +392,7 @@ pub fn list_critiques_for_solution(
 
 /// Delete a critique by ID. Returns true if a row was deleted.
 pub fn delete_critique(conn: &Connection, id: &str) -> SqliteResult<bool> {
-    let changes = conn.execute("DELETE FROM critiques WHERE id = ?1", params![id])?;
-    Ok(changes > 0)
+    delete_one::<Critique>(conn, id)
 }
 
 fn row_to_critique(row: &rusqlite::Row) -> SqliteResult<Critique> {
@@ -446,38 +461,17 @@ pub fn upsert_milestone(conn: &Connection, milestone: &Milestone) -> SqliteResul
 
 /// Load a milestone by ID.
 pub fn load_milestone(conn: &Connection, id: &str) -> SqliteResult<Option<Milestone>> {
-    let mut stmt = conn.prepare(
-        "SELECT id, title, status, target_date, assignee, created_at, updated_at,
-                description, problem_ids
-         FROM milestones WHERE id = ?1",
-    )?;
-
-    let mut rows = stmt.query(params![id])?;
-
-    if let Some(row) = rows.next()? {
-        Ok(Some(row_to_milestone(row)?))
-    } else {
-        Ok(None)
-    }
+    load_one(conn, id)
 }
 
-/// List all milestones.
+/// List all milestones, newest first.
 pub fn list_milestones(conn: &Connection) -> SqliteResult<Vec<Milestone>> {
-    let mut stmt = conn.prepare(
-        "SELECT id, title, status, target_date, assignee, created_at, updated_at,
-                description, problem_ids
-         FROM milestones ORDER BY created_at DESC",
-    )?;
-
-    let rows = stmt.query_map([], row_to_milestone)?;
-
-    rows.collect()
+    list_all(conn)
 }
 
 /// Delete a milestone by ID. Returns true if a row was deleted.
 pub fn delete_milestone(conn: &Connection, id: &str) -> SqliteResult<bool> {
-    let changes = conn.execute("DELETE FROM milestones WHERE id = ?1", params![id])?;
-    Ok(changes > 0)
+    delete_one::<Milestone>(conn, id)
 }
 
 fn row_to_milestone(row: &rusqlite::Row) -> SqliteResult<Milestone> {

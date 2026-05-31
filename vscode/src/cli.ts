@@ -15,7 +15,6 @@ export interface Problem {
   created_at: string;
   updated_at: string;
   description: string;
-  context: string;
   priority: "low" | "medium" | "high" | "critical";
   dissolved_reason: string | null;
   github_issue?: number | null;
@@ -34,7 +33,6 @@ export interface Solution {
   created_at: string;
   updated_at: string;
   approach: string;
-  tradeoffs: string;
   supersedes: string | null;
   github_pr?: number | null;
   github_branch?: string | null;
@@ -59,7 +57,6 @@ export interface Critique {
   created_at: string;
   updated_at: string;
   argument: string;
-  evidence: string;
   file_path: string | null;
   line_start: number | null;
   line_end: number | null;
@@ -79,8 +76,7 @@ export interface Milestone {
   assignee: string | null;
   created_at: string;
   updated_at: string;
-  goals: string;
-  success_criteria: string;
+  description: string;
 }
 
 export interface StatusItem {

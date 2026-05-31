@@ -148,6 +148,37 @@ pub fn validate(db: &Database) -> SqliteResult<Vec<ValidationError>> {
         }
     }
 
+    // 7. Refuse to push bodies that still contain unresolved three-way-merge
+    //    conflict markers — otherwise the `<<<<<<<` / `>>>>>>>` text is dumped
+    //    back to markdown and pushed to the shared bookmark, propagating the
+    //    conflict to every other clone. (dump_to_markdown runs before validate
+    //    in push, so the DB body here is exactly what would be pushed.)
+    for (table, body_col) in [
+        ("problems", "description"),
+        ("solutions", "approach"),
+        ("critiques", "argument"),
+        ("milestones", "description"),
+    ] {
+        let sql = format!("SELECT id, {} FROM {}", body_col, table);
+        let mut stmt = conn.prepare(&sql)?;
+        let rows = stmt.query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?))
+        })?;
+        for result in rows {
+            let (id, body) = result?;
+            if let Some(body) = body {
+                if crate::storage::merge::has_conflict_markers(&body) {
+                    errors.push(ValidationError {
+                        entity_id: id,
+                        message: "has unresolved merge conflict markers (<<<<<<< / >>>>>>>); \
+                                  resolve them before pushing"
+                            .to_string(),
+                    });
+                }
+            }
+        }
+    }
+
     Ok(errors)
 }
 
@@ -267,6 +298,28 @@ mod tests {
         assert_eq!(errors[0].entity_id, "s1");
         assert!(errors[0].message.contains("p999"));
         assert!(errors[0].message.contains("non-existent problem"));
+    }
+
+    #[test]
+    fn test_validation_catches_conflict_markers_in_body() {
+        let db = Database::open_in_memory().expect("Failed to open database");
+        let conn = db.conn();
+
+        let mut problem = Problem::new("p1".to_string(), "Conflicted".to_string());
+        problem.description =
+            "<<<<<<< local\nAlice version\n=======\nBob version\n>>>>>>> remote\n".to_string();
+        upsert_problem(conn, &problem).expect("Failed to insert problem");
+
+        let errors = validate(&db).expect("Validation failed");
+
+        assert_eq!(
+            errors.len(),
+            1,
+            "expected one conflict-marker error, got: {:?}",
+            errors
+        );
+        assert_eq!(errors[0].entity_id, "p1");
+        assert!(errors[0].message.contains("conflict marker"));
     }
 
     #[test]

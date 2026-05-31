@@ -72,12 +72,57 @@ pub struct UserOrdering {
     pub updated_at: DateTime<Utc>,
 }
 
+impl UserOrdering {
+    /// Re-sort `order` into the documented three-zone layout:
+    /// `[positive-voted by magnitude] [unvoted in tier order] [negative-voted by magnitude]`.
+    ///
+    /// Positively-voted items move to the top (descending by vote count),
+    /// unvoted items keep their existing tier order in the middle, and
+    /// negatively-voted items sink to the bottom (ascending, so the most
+    /// negative is last). Stable within each zone (equal votes keep order).
+    ///
+    /// This is the canonical home for the ranking rule — both the TUI vote
+    /// handlers and the ranking tests call it, so the algorithm and its tests
+    /// can never drift apart.
+    pub fn reorder_by_votes(&mut self) {
+        let mut positive: Vec<String> = Vec::new();
+        let mut neutral: Vec<String> = Vec::new();
+        let mut negative: Vec<String> = Vec::new();
+
+        for id in &self.order {
+            match self.votes.get(id).copied().unwrap_or(0) {
+                v if v > 0 => positive.push(id.clone()),
+                v if v < 0 => negative.push(id.clone()),
+                _ => neutral.push(id.clone()),
+            }
+        }
+
+        // Positive: descending by vote count (highest support first).
+        positive.sort_by(|a, b| {
+            let va = self.votes.get(a).copied().unwrap_or(0);
+            let vb = self.votes.get(b).copied().unwrap_or(0);
+            vb.cmp(&va)
+        });
+        // Negative: ascending by vote count (most negative last).
+        negative.sort_by(|a, b| {
+            let va = self.votes.get(a).copied().unwrap_or(0);
+            let vb = self.votes.get(b).copied().unwrap_or(0);
+            va.cmp(&vb)
+        });
+
+        self.order.clear();
+        self.order.extend(positive);
+        self.order.extend(neutral);
+        self.order.extend(negative);
+    }
+}
+
 /// Aggregated ranking result for a single problem within a milestone.
 #[derive(Debug, Clone)]
 pub struct AggregatedRank {
     /// 1-indexed rank position (1 = highest priority).
     pub position: usize,
-    /// Total aggregated score (Borda + QV boost).
+    /// Total aggregated score (budget-normalized harmonic ordering + QV boost).
     pub score: f64,
     /// Number of users who included this problem in their ordering.
     pub voter_count: usize,
@@ -98,7 +143,9 @@ pub fn save_user_ordering(
     let slug = sanitize_user(user);
     let file_path = dir.join(format!("{slug}.json"));
     let json = serde_json::to_string_pretty(ordering)?;
-    fs::write(file_path, json)?;
+    // Atomic tmp+rename so a crash or concurrent writer can't leave a
+    // truncated JSON file that fails to deserialize (dropping the ordering).
+    crate::storage::atomic_write(&file_path, json.as_bytes())?;
 
     Ok(())
 }
@@ -402,37 +449,10 @@ mod tests {
         // Bottom items stack: f (original), c, b (most recently demoted closest to bottom)
     }
 
-    /// Replicate the three-zone reorder logic for testing.
+    /// Test helper: reorder via the real `UserOrdering::reorder_by_votes`
+    /// method so the tests exercise the production implementation (no copy).
     fn reorder_by_votes(ord: &mut UserOrdering) {
-        let votes = &ord.votes;
-        let mut positive: Vec<String> = Vec::new();
-        let mut neutral: Vec<String> = Vec::new();
-        let mut negative: Vec<String> = Vec::new();
-
-        for id in &ord.order {
-            match votes.get(id).copied().unwrap_or(0) {
-                v if v > 0 => positive.push(id.clone()),
-                v if v < 0 => negative.push(id.clone()),
-                _ => neutral.push(id.clone()),
-            }
-        }
-
-        positive.sort_by(|a, b| {
-            let va = votes.get(a).copied().unwrap_or(0);
-            let vb = votes.get(b).copied().unwrap_or(0);
-            vb.cmp(&va)
-        });
-
-        negative.sort_by(|a, b| {
-            let va = votes.get(a).copied().unwrap_or(0);
-            let vb = votes.get(b).copied().unwrap_or(0);
-            va.cmp(&vb)
-        });
-
-        ord.order.clear();
-        ord.order.extend(positive);
-        ord.order.extend(neutral);
-        ord.order.extend(negative);
+        ord.reorder_by_votes();
     }
 
     #[test]

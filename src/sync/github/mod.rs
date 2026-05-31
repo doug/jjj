@@ -126,11 +126,17 @@ impl SyncProvider for GitHubProvider {
         self.client.create_issue(&problem.title, &body, &labels)
     }
 
-    fn create_pr(&self, solution: &Solution, problem: &Problem, branch: &str) -> Result<u64> {
+    fn create_pr(
+        &self,
+        solution: &Solution,
+        problem: &Problem,
+        branch: &str,
+        base: &str,
+    ) -> Result<u64> {
         let critiques = Vec::new(); // Critiques loaded separately by caller
         let body = mapping::format_pr_body(solution, problem, &critiques);
         let title = format!("{}: {}", problem.title, solution.title);
-        self.client.create_pr(&title, &body, branch, "main")
+        self.client.create_pr(&title, &body, branch, base)
     }
 
     fn merge_pr(&self, number: u64) -> Result<()> {
@@ -167,6 +173,13 @@ impl SyncProvider for GitHubProvider {
 }
 
 impl GitHubProvider {
+    /// True if the PR has already been merged. Used to make the merge action
+    /// idempotent so an approval-triggered `github_merge` automation doesn't
+    /// try to re-merge a PR that `jjj github merge` just merged.
+    pub fn pr_is_merged(&self, number: u64) -> Result<bool> {
+        Ok(self.client.pr_state(number)?.eq_ignore_ascii_case("merged"))
+    }
+
     /// Get the current body text of a PR.
     pub fn get_pr_body(&self, number: u64) -> Result<String> {
         self.client.get_pr_body(number)

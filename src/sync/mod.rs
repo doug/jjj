@@ -87,12 +87,14 @@ pub trait SyncProvider {
     /// Create a remote issue from a Problem. Returns the issue number.
     fn create_issue(&self, problem: &Problem) -> Result<u64>;
 
-    /// Create a pull request for a solution. Returns the PR number.
+    /// Create a pull request for a solution against `base`. Returns the PR
+    /// number.
     fn create_pr(
         &self,
         solution: &crate::models::Solution,
         problem: &Problem,
         branch: &str,
+        base: &str,
     ) -> Result<u64>;
 
     /// Merge a pull request.

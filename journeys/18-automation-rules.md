@@ -28,37 +28,37 @@ name = "automation-test"
 [[automation]]
 on = "problem_created"
 action = "shell"
-command = "echo 'CREATED: {{title}}' >> $REPO/.marker"
+command = "echo CREATED: {{title}} >> $REPO/.marker"
 
 [[automation]]
 on = "problem_solved"
 action = "shell"
-command = "echo 'SOLVED: {{title}}' >> $REPO/.marker"
+command = "echo SOLVED: {{title}} >> $REPO/.marker"
 
 [[automation]]
 on = "problem_dissolved"
 action = "shell"
-command = "echo 'DISSOLVED: {{title}}' >> $REPO/.marker"
+command = "echo DISSOLVED: {{title}} >> $REPO/.marker"
 
 [[automation]]
 on = "solution_submitted"
 action = "shell"
-command = "echo 'SUBMITTED: {{title}} for {{problem.title}}' >> $REPO/.marker"
+command = "echo SUBMITTED: {{title}} for {{problem.title}} >> $REPO/.marker"
 
 [[automation]]
 on = "solution_approved"
 action = "shell"
-command = "echo 'APPROVED: {{title}}' >> $REPO/.marker"
+command = "echo APPROVED: {{title}} >> $REPO/.marker"
 
 [[automation]]
 on = "critique_raised"
 action = "shell"
-command = "echo 'CRITIQUE: {{title}}' >> $REPO/.marker"
+command = "echo CRITIQUE: {{title}} >> $REPO/.marker"
 
 [[automation]]
 on = "critique_raised"
 action = "shell"
-command = "echo 'CRITIQUE2: {{title}}' >> $REPO/.marker"
+command = "echo CRITIQUE2: {{title}} >> $REPO/.marker"
 enabled = false
 TOMLEOF
 ```

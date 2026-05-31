@@ -15,17 +15,99 @@ mod solutions;
 /// Write `content` to `path` atomically by writing to a uniquely-named `.tmp`
 /// sibling first, then renaming. The temp name includes the process ID and
 /// sub-second nanoseconds so concurrent writers cannot clobber each other's
-/// temp file.
-pub(super) fn atomic_write(path: &std::path::Path, content: &[u8]) -> std::io::Result<()> {
+/// temp file. Works for any file type (entity markdown, ranking JSON, …).
+pub fn atomic_write(path: &std::path::Path, content: &[u8]) -> std::io::Result<()> {
     use std::time::{SystemTime, UNIX_EPOCH};
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.subsec_nanos())
         .unwrap_or(0);
-    let tmp = path.with_extension(format!("md.{}.{}.tmp", std::process::id(), nanos));
+    // Hidden sibling so the temp never matches an entity/ranking glob.
+    let file_name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "tmp".to_string());
+    let tmp = path.with_file_name(format!(
+        ".{}.{}.{}.tmp",
+        file_name,
+        std::process::id(),
+        nanos
+    ));
     std::fs::write(&tmp, content)?;
     std::fs::rename(&tmp, path)?;
     Ok(())
+}
+
+/// RAII guard for the repo-wide write lock.
+///
+/// Holds an flocked lock file (`unix`) so concurrent local writers serialize:
+/// without it, two processes can both load an entity, mutate it, and save —
+/// the second save clobbering the first's update (e.g. a `solution_ids`
+/// back-reference). flock is released by the kernel when the process dies, so
+/// a crashed holder can't strand the lock the way an O_EXCL pid-file would.
+///
+/// The guard always decrements the store's re-entrancy depth on drop; it only
+/// holds the actual lock file at the outermost level.
+struct WriteLockGuard<'a> {
+    depth: &'a RefCell<u32>,
+    /// `Some` only for the outermost acquisition; dropping it releases flock.
+    _file: Option<std::fs::File>,
+}
+
+impl Drop for WriteLockGuard<'_> {
+    fn drop(&mut self) {
+        let mut d = self.depth.borrow_mut();
+        *d = d.saturating_sub(1);
+        // _file (if any) is closed here, releasing the flock.
+    }
+}
+
+/// Acquire (or re-enter) the repo-wide write lock for `meta_path`.
+fn acquire_write_lock<'a>(
+    meta_path: &std::path::Path,
+    depth: &'a RefCell<u32>,
+) -> Result<WriteLockGuard<'a>> {
+    let file = {
+        let d = *depth.borrow();
+        if d == 0 {
+            Some(flock_exclusive(meta_path)?)
+        } else {
+            None
+        }
+    };
+    *depth.borrow_mut() += 1;
+    Ok(WriteLockGuard { depth, _file: file })
+}
+
+/// Open `.write.lock` under `meta_path` and take an exclusive advisory lock,
+/// blocking until any other process releases it.
+#[cfg(unix)]
+fn flock_exclusive(meta_path: &std::path::Path) -> Result<std::fs::File> {
+    use std::os::unix::io::AsRawFd;
+    std::fs::create_dir_all(meta_path)?;
+    let file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(meta_path.join(".write.lock"))?;
+    // SAFETY: `file` owns a valid open fd for the duration of the call.
+    let rc = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX) };
+    if rc != 0 {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    Ok(file)
+}
+
+/// Non-unix fallback: open the lock file without advisory locking (Windows is
+/// not a supported target; this keeps the code compiling).
+#[cfg(not(unix))]
+fn flock_exclusive(meta_path: &std::path::Path) -> Result<std::fs::File> {
+    std::fs::create_dir_all(meta_path)?;
+    Ok(std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(meta_path.join(".write.lock"))?)
 }
 
 pub const META_BOOKMARK: &str = "jjj";
@@ -82,6 +164,12 @@ pub struct MetadataStore {
     /// built yet. Wrapped in `RefCell` to allow lazy lifecycle (e.g., a
     /// caller building the DB after the store exists could install it).
     cache: RefCell<Option<crate::db::Database>>,
+
+    /// Re-entrancy depth for the repo-wide write lock held by
+    /// [`Self::with_metadata`]. Only the outermost call acquires the flock;
+    /// nested calls just increment this so a single process can't deadlock
+    /// against its own lock.
+    write_lock_depth: RefCell<u32>,
 }
 
 /// Load the global user config from ~/.config/jjj/config.toml.
@@ -372,6 +460,7 @@ impl MetadataStore {
             jj_client,
             pending_events: RefCell::new(Vec::new()),
             cache: RefCell::new(cache),
+            write_lock_depth: RefCell::new(0),
         };
 
         Ok(store)
@@ -555,11 +644,25 @@ impl MetadataStore {
     /// Other load errors (parse failures, IO problems) propagate.
     pub(super) fn load_by_ids<T: Persist>(&self, ids: Vec<String>) -> Result<Vec<T>> {
         let mut out = Vec::with_capacity(ids.len());
+        let mut failures = Vec::new();
         for id in ids {
             match self.load::<T>(&id) {
                 Ok(entity) => out.push(entity),
                 Err(e) if T::is_not_found(&e) => continue,
-                Err(e) => return Err(e),
+                // Match the FS-walk path (see `list`): a single malformed file
+                // must not abort the whole query — skip it and warn, so one
+                // bad entity another user pushed doesn't take down every list.
+                Err(e) => failures.push(format!("{}: {}", id, e)),
+            }
+        }
+        if !failures.is_empty() {
+            eprintln!(
+                "Warning: Failed to load {} {}(s) from cache index:",
+                failures.len(),
+                T::ENTITY_TYPE
+            );
+            for failure in &failures {
+                eprintln!("  {}", failure);
             }
         }
         Ok(out)
@@ -813,6 +916,11 @@ impl MetadataStore {
     where
         F: FnOnce() -> Result<R>,
     {
+        // Serialize concurrent local writers for the whole load-modify-save
+        // critical section so a back-reference update can't be lost. The guard
+        // is re-entrant: a nested with_metadata won't re-acquire (and so can't
+        // deadlock against itself).
+        let _lock = acquire_write_lock(&self.meta_path, &self.write_lock_depth)?;
         let result = operation()?;
         self.commit_changes()?;
         Ok(result)
@@ -823,6 +931,27 @@ impl MetadataStore {
 mod tests {
     use super::*;
     use crate::models::Problem;
+
+    #[test]
+    fn write_lock_is_reentrant_and_decrements() {
+        // A nested acquisition must NOT block on the outer one (same process),
+        // and depth must return to 0 once both guards drop.
+        let tmp = tempfile::tempdir().unwrap();
+        let depth = RefCell::new(0u32);
+        {
+            let _outer = acquire_write_lock(tmp.path(), &depth).unwrap();
+            assert_eq!(*depth.borrow(), 1);
+            {
+                let _inner = acquire_write_lock(tmp.path(), &depth).unwrap();
+                assert_eq!(*depth.borrow(), 2);
+            }
+            assert_eq!(*depth.borrow(), 1);
+        }
+        assert_eq!(*depth.borrow(), 0);
+        // The lock file is reusable after release.
+        let _again = acquire_write_lock(tmp.path(), &depth).unwrap();
+        assert_eq!(*depth.borrow(), 1);
+    }
 
     #[test]
     fn test_parse_frontmatter() {

@@ -44,14 +44,9 @@ impl Category {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum EntityType {
-    Problem,
-    Solution,
-    Critique,
-    Milestone,
-}
+// The canonical EntityType now lives in `crate::entity_type` so non-TUI
+// layers can use it too. Re-exported here for the TUI's existing references.
+pub use crate::entity_type::EntityType;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActionDetail {

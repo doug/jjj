@@ -10,7 +10,12 @@ env:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    # jjj supports macOS (primary) and Linux — exercise both.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable

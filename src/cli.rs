@@ -439,6 +439,10 @@ pub enum ProblemAction {
     Tree {
         /// Root problem to start from (default: all root problems)
         problem_id: Option<String>,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
     },
 
     /// Mark a problem solved (requires an approved solution or all sub-problems solved)
@@ -506,6 +510,10 @@ pub enum ProblemAction {
         /// Include solved and dissolved problems
         #[arg(long)]
         all: bool,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
     },
 }
 
@@ -725,6 +733,10 @@ pub enum SolutionAction {
     Diff {
         /// Solution ID, short prefix, or fuzzy title
         solution_id: String,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
     },
 }
 

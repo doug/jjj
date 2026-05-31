@@ -52,7 +52,7 @@ pub fn execute(ctx: &CommandContext, action: ProblemAction) -> Result<()> {
         } => edit_problem(
             ctx, problem_id, title, status, priority, parent, add_tag, remove_tag, set_tags,
         ),
-        ProblemAction::Tree { problem_id } => show_tree(ctx, problem_id),
+        ProblemAction::Tree { problem_id, json } => show_tree(ctx, problem_id, json),
         ProblemAction::Solve {
             problem_id,
             github_close,
@@ -65,7 +65,11 @@ pub fn execute(ctx: &CommandContext, action: ProblemAction) -> Result<()> {
         ProblemAction::Assign { problem_id, to } => assign_problem(ctx, problem_id, to),
         ProblemAction::Reopen { problem_id } => reopen_problem(ctx, problem_id),
         ProblemAction::Duplicate { problem_id, of } => duplicate_problem(ctx, problem_id, of),
-        ProblemAction::Graph { milestone, all } => graph_problems(ctx, milestone, all),
+        ProblemAction::Graph {
+            milestone,
+            all,
+            json,
+        } => graph_problems(ctx, milestone, all, json),
     }
 }
 
@@ -534,25 +538,51 @@ fn edit_problem(
     })
 }
 
-fn show_tree(ctx: &CommandContext, problem_input: Option<String>) -> Result<()> {
+fn show_tree(ctx: &CommandContext, problem_input: Option<String>, json: bool) -> Result<()> {
     let store = &ctx.store;
 
-    if let Some(ref input) = problem_input {
+    let roots: Vec<Problem> = if let Some(ref input) = problem_input {
         let problem_id = ctx.resolve_problem(input)?;
-        let problem = store.load_problem(&problem_id)?;
-        print_problem_tree(store, &problem, 0)?;
+        vec![store.load_problem(&problem_id)?]
     } else {
-        let root_problems = store.list_root_problems()?;
-        if root_problems.is_empty() {
-            println!("No problems found.");
-            return Ok(());
-        }
-        for problem in &root_problems {
-            print_problem_tree(store, problem, 0)?;
-        }
+        store.list_root_problems()?
+    };
+
+    if json {
+        let tree: Vec<serde_json::Value> = roots
+            .iter()
+            .map(|p| problem_tree_json(store, p))
+            .collect::<Result<_>>()?;
+        println!("{}", serde_json::to_string_pretty(&tree)?);
+        return Ok(());
+    }
+
+    if roots.is_empty() {
+        println!("No problems found.");
+        return Ok(());
+    }
+    for problem in &roots {
+        print_problem_tree(store, problem, 0)?;
     }
 
     Ok(())
+}
+
+/// Build a nested JSON node for a problem and its sub-problems (recursive).
+fn problem_tree_json(store: &MetadataStore, problem: &Problem) -> Result<serde_json::Value> {
+    let children: Vec<serde_json::Value> = store
+        .list_subproblems(&problem.id)?
+        .iter()
+        .map(|c| problem_tree_json(store, c))
+        .collect::<Result<_>>()?;
+    Ok(serde_json::json!({
+        "id": problem.id,
+        "title": problem.title,
+        "status": serde_json::to_value(&problem.status)?,
+        "priority": serde_json::to_value(&problem.priority)?,
+        "milestone_id": problem.milestone_id,
+        "children": children,
+    }))
 }
 
 fn solve_problem(ctx: &CommandContext, problem_input: String, github_close: bool) -> Result<()> {
@@ -579,20 +609,16 @@ fn solve_problem(ctx: &CommandContext, problem_input: String, github_close: bool
     crate::domain::solve_problem(store, &problem_id)?;
     println!("Problem {} marked as solved.", problem_id);
 
-    // Auto-close GitHub issue if explicitly requested or configured (CLI-specific)
-    if github_close {
-        if let Ok(problem) = store.load_problem(&problem_id) {
-            let has_rules = store
-                .load_config()
-                .ok()
-                .map(|c| {
-                    crate::automation::has_explicit_rule(&c.automation, &EventType::ProblemSolved)
-                })
-                .unwrap_or(false);
-            if !has_rules {
-                crate::sync::hooks::auto_close_issue(ctx, &problem, github_close);
-            }
-        }
+    // Auto-close the GitHub issue. Called unconditionally — auto_close_issue's
+    // own guards honor --github-close (force), github.auto_close_on_solve,
+    // github.auto_push, and skip when an explicit problem_solved rule exists.
+    if let Ok(problem) = store.load_problem(&problem_id) {
+        crate::sync::hooks::auto_close_issue(
+            ctx,
+            &problem,
+            github_close,
+            &EventType::ProblemSolved,
+        );
     }
 
     Ok(())
@@ -613,23 +639,14 @@ fn dissolve_problem(
         problem_id
     );
 
-    // Auto-close GitHub issue if explicitly requested or configured (CLI-specific)
-    if github_close {
-        if let Ok(problem) = store.load_problem(&problem_id) {
-            let has_rules = store
-                .load_config()
-                .ok()
-                .map(|c| {
-                    crate::automation::has_explicit_rule(
-                        &c.automation,
-                        &EventType::ProblemDissolved,
-                    )
-                })
-                .unwrap_or(false);
-            if !has_rules {
-                crate::sync::hooks::auto_close_issue(ctx, &problem, github_close);
-            }
-        }
+    // Auto-close the GitHub issue. Called unconditionally — see solve_problem.
+    if let Ok(problem) = store.load_problem(&problem_id) {
+        crate::sync::hooks::auto_close_issue(
+            ctx,
+            &problem,
+            github_close,
+            &EventType::ProblemDissolved,
+        );
     }
 
     Ok(())
@@ -762,6 +779,7 @@ fn graph_problems(
     ctx: &CommandContext,
     milestone_filter: Option<String>,
     show_all: bool,
+    json: bool,
 ) -> Result<()> {
     let store = &ctx.store;
 
@@ -785,13 +803,46 @@ fn graph_problems(
         problems.retain(|p| p.milestone_id.as_deref() == Some(mid.as_str()));
     }
 
+    // Build set of IDs in filtered set
+    let id_set: std::collections::HashSet<&str> = problems.iter().map(|p| p.id.as_str()).collect();
+
+    if json {
+        let nodes: Vec<serde_json::Value> = problems
+            .iter()
+            .map(|p| {
+                serde_json::json!({
+                    "id": p.id,
+                    "title": p.title,
+                    "status": serde_json::to_value(&p.status).unwrap_or(serde_json::Value::Null),
+                    "priority": serde_json::to_value(&p.priority).unwrap_or(serde_json::Value::Null),
+                    "parent_id": p.parent_id,
+                    "milestone_id": p.milestone_id,
+                })
+            })
+            .collect();
+        // Edges (parent → child) restricted to the filtered set.
+        let edges: Vec<serde_json::Value> = problems
+            .iter()
+            .filter_map(|p| {
+                p.parent_id
+                    .as_deref()
+                    .filter(|pid| id_set.contains(pid))
+                    .map(|pid| serde_json::json!({ "from": pid, "to": p.id }))
+            })
+            .collect();
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "nodes": nodes, "edges": edges,
+            }))?
+        );
+        return Ok(());
+    }
+
     if problems.is_empty() {
         println!("No problems found.");
         return Ok(());
     }
-
-    // Build set of IDs in filtered set
-    let id_set: std::collections::HashSet<&str> = problems.iter().map(|p| p.id.as_str()).collect();
 
     // Find roots: problems whose parent is None or not in the filtered set
     let roots: Vec<&Problem> = problems

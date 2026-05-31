@@ -506,3 +506,46 @@ fn test_problem_edit_set_tags() {
         stdout
     );
 }
+
+#[test]
+fn test_problem_tree_and_graph_json() {
+    if !jj_available() {
+        return;
+    }
+    let dir = setup_test_repo();
+    run_jjj_success(&dir, &["problem", "new", "Root problem", "--force"]);
+    run_jjj_success(
+        &dir,
+        &[
+            "problem",
+            "new",
+            "Child problem",
+            "--parent",
+            "Root problem",
+            "--force",
+        ],
+    );
+
+    // tree --json: nested array with a children field and both titles.
+    let tree = run_jjj_success(&dir, &["problem", "tree", "--json"]);
+    assert!(
+        tree.trim_start().starts_with('['),
+        "tree --json should be a JSON array: {tree}"
+    );
+    assert!(
+        tree.contains("\"children\""),
+        "tree --json should nest children: {tree}"
+    );
+    assert!(tree.contains("Root problem") && tree.contains("Child problem"));
+
+    // graph --json: object with nodes + edges; exactly one parent→child edge.
+    let graph = run_jjj_success(&dir, &["problem", "graph", "--json"]);
+    assert!(
+        graph.contains("\"nodes\"") && graph.contains("\"edges\""),
+        "graph --json shape: {graph}"
+    );
+    assert!(
+        graph.contains("\"from\"") && graph.contains("\"to\""),
+        "graph --json should have an edge: {graph}"
+    );
+}

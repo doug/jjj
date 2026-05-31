@@ -48,13 +48,9 @@ fn shortest_unambiguous_prefix(uuid: &str, all_uuids: &[&str]) -> String {
 
 /// Format an entity for mixed-type listings with type prefix.
 pub(crate) fn format_with_type_prefix(entity_type: &str, prefix: &str) -> String {
-    let type_char = match entity_type {
-        "problem" => "p",
-        "solution" => "s",
-        "critique" => "c",
-        "milestone" => "m",
-        _ => "?",
-    };
+    let type_char = crate::entity_type::EntityType::from_singular(entity_type)
+        .map(|e| e.prefix())
+        .unwrap_or('?');
     format!("{}/{}", type_char, prefix)
 }
 

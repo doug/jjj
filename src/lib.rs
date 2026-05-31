@@ -17,6 +17,7 @@ pub mod db;
 pub mod display;
 pub mod domain;
 pub mod embeddings;
+pub mod entity_type;
 pub mod error;
 pub mod id;
 pub mod jj;

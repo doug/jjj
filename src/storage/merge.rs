@@ -84,6 +84,17 @@ pub fn read_base_file(base_path: &Path, relative: &Path) -> Option<String> {
     fs::read_to_string(base_path.join(relative)).ok()
 }
 
+/// Remove a single file from the base snapshot, if present. Used by fetch when
+/// the remote has deleted an entity so the merge ancestor stops claiming it
+/// ever existed.
+pub fn remove_base_file(base_path: &Path, relative: &Path) -> Result<()> {
+    let p = base_path.join(relative);
+    if p.exists() {
+        fs::remove_file(&p)?;
+    }
+    Ok(())
+}
+
 /// Three-way merge for an entity markdown file.
 ///
 /// `base` is the version both sides shared before diverging (the last fetched
@@ -111,13 +122,23 @@ pub fn merge_entity_md(base: Option<&str>, local: &str, remote: &str) -> Result<
     };
 
     let prefer = pick_side(&l_yaml, &r_yaml);
-    let merged = merge_value(b_yaml.as_ref(), &l_yaml, &r_yaml, prefer);
+    let merged = merge_value(b_yaml.as_ref(), &l_yaml, &r_yaml, prefer, None);
     let merged = normalize_timestamps(merged, &l_yaml, &r_yaml);
     let merged = sort_mapping_keys(merged);
 
     let yaml_str = serde_yml::to_string(&merged).map_err(JjjError::YamlParse)?;
     let body = merge_body(b_body.as_deref(), &l_body, &r_body);
     Ok(format!("---\n{}---\n\n{}", yaml_str, body))
+}
+
+/// True if `content` contains unresolved three-way-merge conflict markers
+/// (the `<<<<<<<` / `>>>>>>>` lines [`merge_body`] emits). Used to refuse
+/// pushing a still-conflicted entity so the markers don't propagate to every
+/// other clone.
+pub fn has_conflict_markers(content: &str) -> bool {
+    content
+        .lines()
+        .any(|l| l.starts_with("<<<<<<<") || l.starts_with(">>>>>>>"))
 }
 
 /// Two-way union of events.jsonl-style files. Lines are deduped exactly.
@@ -154,6 +175,48 @@ fn extract_when(line: &str) -> Option<String> {
     serde_json::from_str::<serde_json::Value>(line)
         .ok()
         .and_then(|v| v.get("when").and_then(|w| w.as_str()).map(String::from))
+}
+
+/// Per-file last-writer-wins merge for a ranking JSON file
+/// (`rankings/{milestone}/{user}.json`).
+///
+/// Each ranking file is owned by exactly one user — the filename encodes the
+/// identity — so two collaborators never edit the *same* file in normal use.
+/// That makes a simple LWW by the JSON's `updated_at` field correct and
+/// conflict-free; no three-way merge or base snapshot is needed. When the
+/// local file is missing we adopt the remote; when a timestamp can't be parsed
+/// we keep the local copy rather than risk clobbering it.
+pub fn merge_ranking_json(local: Option<&str>, remote: &str) -> String {
+    let local = match local {
+        Some(l) => l,
+        None => return remote.to_string(),
+    };
+    if local == remote {
+        return local.to_string();
+    }
+    match (extract_updated_at(local), extract_updated_at(remote)) {
+        (Some(l), Some(r)) => {
+            if r > l {
+                remote.to_string()
+            } else {
+                local.to_string()
+            }
+        }
+        // Local unparseable but remote is valid → prefer the valid remote.
+        (None, Some(_)) => remote.to_string(),
+        // Remote unparseable (or both) → keep local.
+        _ => local.to_string(),
+    }
+}
+
+fn extract_updated_at(json: &str) -> Option<String> {
+    serde_json::from_str::<serde_json::Value>(json)
+        .ok()
+        .and_then(|v| {
+            v.get("updated_at")
+                .and_then(|w| w.as_str())
+                .map(String::from)
+        })
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -204,7 +267,23 @@ fn split_md(content: &str) -> Result<(Value, String)> {
     Ok((yaml, body))
 }
 
-fn merge_value(base: Option<&Value>, local: &Value, remote: &Value, prefer: Side) -> Value {
+/// Sequence fields whose element ORDER is semantically meaningful and must be
+/// preserved across a merge (rather than content-sorted like a set). For these,
+/// retained base items keep base order and new items are appended preferring
+/// the LWW-winning side's order — never re-sorted by content.
+fn is_ordered_sequence_key(key: Option<&str>) -> bool {
+    matches!(key, Some("change_ids") | Some("replies"))
+}
+
+/// `key` is the mapping key this value sits under (None at the document root),
+/// used to decide whether a sequence is order-significant.
+fn merge_value(
+    base: Option<&Value>,
+    local: &Value,
+    remote: &Value,
+    prefer: Side,
+    key: Option<&str>,
+) -> Value {
     if local == remote {
         return local.clone();
     }
@@ -229,7 +308,7 @@ fn merge_value(base: Option<&Value>, local: &Value, remote: &Value, prefer: Side
                 Value::Sequence(s) => Some(s),
                 _ => None,
             });
-            merge_sequence(b_seq, l, r)
+            merge_sequence(b_seq, l, r, prefer, is_ordered_sequence_key(key))
         }
         _ => match prefer {
             Side::Local => local.clone(),
@@ -249,8 +328,9 @@ fn merge_mapping(base: Option<&Mapping>, local: &Mapping, remote: &Mapping, pref
         let rv = remote.get(&key);
         let bv = base.and_then(|m| m.get(&key));
 
+        let key_str = key.as_str();
         let merged: Option<Value> = match (lv, rv, bv) {
-            (Some(lv), Some(rv), _) => Some(merge_value(bv, lv, rv, prefer)),
+            (Some(lv), Some(rv), _) => Some(merge_value(bv, lv, rv, prefer, key_str)),
             (Some(lv), None, None) => Some(lv.clone()), // new on local
             (None, Some(rv), None) => Some(rv.clone()), // new on remote
             (Some(lv), None, Some(bv)) if lv == bv => None, // remote deleted, local unchanged
@@ -267,7 +347,13 @@ fn merge_mapping(base: Option<&Mapping>, local: &Mapping, remote: &Mapping, pref
     Value::Mapping(out)
 }
 
-fn merge_sequence(base: Option<&Vec<Value>>, local: &[Value], remote: &[Value]) -> Value {
+fn merge_sequence(
+    base: Option<&Vec<Value>>,
+    local: &[Value],
+    remote: &[Value],
+    prefer: Side,
+    ordered: bool,
+) -> Value {
     let key_of = |v: &Value| serde_yml::to_string(v).unwrap_or_default();
     let base_items: Vec<&Value> = base.map(|s| s.iter().collect()).unwrap_or_default();
     let local_contains = |v: &Value| local.iter().any(|x| x == v);
@@ -283,15 +369,32 @@ fn merge_sequence(base: Option<&Vec<Value>>, local: &[Value], remote: &[Value]) 
         }
     }
 
-    // Items new on either side are appended in a content-sorted order so the
-    // merge is invariant under swapping local↔remote.
+    // Items new on either side.
     let mut additions: Vec<Value> = Vec::new();
-    for item in local.iter().chain(remote.iter()) {
-        if !base_items.contains(&item) && seen.insert(key_of(item)) {
-            additions.push(item.clone());
+    if ordered {
+        // Order-significant (e.g. change_ids, reply threads): append the
+        // LWW-winning side's new items first, in their own order, then the
+        // other side's — never re-sorted by content. Deterministic because
+        // both clones compute the same `prefer` side.
+        let (first, second): (&[Value], &[Value]) = match prefer {
+            Side::Local => (local, remote),
+            Side::Remote => (remote, local),
+        };
+        for item in first.iter().chain(second.iter()) {
+            if !base_items.contains(&item) && seen.insert(key_of(item)) {
+                additions.push(item.clone());
+            }
         }
+    } else {
+        // Set-like (tags, *_ids): content-sorted so the merge is invariant
+        // under swapping local↔remote.
+        for item in local.iter().chain(remote.iter()) {
+            if !base_items.contains(&item) && seen.insert(key_of(item)) {
+                additions.push(item.clone());
+            }
+        }
+        additions.sort_by_key(key_of);
     }
-    additions.sort_by_key(key_of);
     out.extend(additions);
 
     Value::Sequence(out)
@@ -528,6 +631,43 @@ Original body.\n";
         assert!(lines[0].contains("2026-05-01T00:00:00Z"));
         assert!(lines[1].contains("2026-05-01T12:00:00Z"));
         assert!(lines[2].contains("2026-05-02T00:00:00Z"));
+    }
+
+    #[test]
+    fn ordered_sequence_change_ids_preserves_order_not_content_sorted() {
+        // change_ids is order-significant: a later-appended id must NOT be
+        // re-sorted ahead of an earlier one by content.
+        let base =
+            "---\nid: '01'\nupdated_at: 2026-05-01T00:00:00Z\nchange_ids:\n- zzz\n---\n\nbody\n";
+        // Local appends 'aaa' (sorts before 'zzz'); remote unchanged.
+        let local = "---\nid: '01'\nupdated_at: 2026-05-02T00:00:00Z\nchange_ids:\n- zzz\n- aaa\n---\n\nbody\n";
+        let merged = merge_entity_md(Some(base), local, base).unwrap();
+        // Order preserved: zzz before aaa (content-sort would flip them).
+        let zzz = merged.find("zzz").unwrap();
+        let aaa = merged.find("aaa").unwrap();
+        assert!(zzz < aaa, "change_ids order must be preserved:\n{merged}");
+    }
+
+    #[test]
+    fn ranking_json_lww_takes_later_updated_at() {
+        let local = r#"{"order":["a"],"votes":{},"updated_at":"2026-05-01T00:00:00Z"}"#;
+        let remote = r#"{"order":["b"],"votes":{},"updated_at":"2026-05-02T00:00:00Z"}"#;
+        assert_eq!(merge_ranking_json(Some(local), remote), remote);
+        // Symmetric: older remote loses.
+        assert_eq!(merge_ranking_json(Some(remote), local), remote);
+    }
+
+    #[test]
+    fn ranking_json_adopts_remote_when_local_missing() {
+        let remote = r#"{"order":["b"],"votes":{},"updated_at":"2026-05-02T00:00:00Z"}"#;
+        assert_eq!(merge_ranking_json(None, remote), remote);
+    }
+
+    #[test]
+    fn ranking_json_keeps_local_when_remote_unparseable() {
+        let local = r#"{"order":["a"],"votes":{},"updated_at":"2026-05-01T00:00:00Z"}"#;
+        let remote = "not json";
+        assert_eq!(merge_ranking_json(Some(local), remote), local);
     }
 
     #[test]

@@ -83,7 +83,7 @@ pub fn execute(ctx: &CommandContext, action: SolutionAction) -> Result<()> {
             critique,
             body,
         } => comment_solution(ctx, solution_id, critique, body),
-        SolutionAction::Diff { solution_id } => diff_solution(ctx, solution_id),
+        SolutionAction::Diff { solution_id, json } => diff_solution(ctx, solution_id, json),
     }
 }
 
@@ -1069,16 +1069,41 @@ fn prompt_create_solution_anyway(similar: &[search::SimilarityResult]) -> Result
     Ok(input == "y" || input == "yes")
 }
 
-fn diff_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
+fn diff_solution(ctx: &CommandContext, solution_input: String, json: bool) -> Result<()> {
     let solution_id = ctx.resolve_solution(&solution_input)?;
     let solution = ctx.store.load_solution(&solution_id)?;
+
+    let jj_client = ctx.jj();
+
+    if json {
+        let changes: Vec<_> = solution
+            .change_ids
+            .iter()
+            .map(|change_id| match jj_client.show_diff(change_id) {
+                Ok(diff) => serde_json::json!({
+                    "change_id": change_id, "available": true, "diff": diff,
+                }),
+                Err(_) => serde_json::json!({
+                    "change_id": change_id, "available": false, "diff": null,
+                }),
+            })
+            .collect();
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "solution_id": solution.id,
+                "title": solution.title,
+                "changes": changes,
+            }))?
+        );
+        return Ok(());
+    }
 
     if solution.change_ids.is_empty() {
         println!("No change IDs attached to this solution.");
         return Ok(());
     }
 
-    let jj_client = ctx.jj();
     for change_id in &solution.change_ids {
         println!("=== Change: {} ===", change_id);
         match jj_client.show_diff(change_id) {

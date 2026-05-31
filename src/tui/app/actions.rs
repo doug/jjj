@@ -32,7 +32,7 @@ impl App {
 
         let id = generate_id();
         let mut problem = Problem::new(id.clone(), title.to_string());
-        problem.milestone_id = milestone_id;
+        problem.milestone_id = milestone_id.clone();
 
         let user = tui_current_user(&self.store);
         let event = Event::new(EventType::ProblemCreated, id.clone(), user);
@@ -40,7 +40,15 @@ impl App {
         self.store
             .with_metadata(&format!("Create problem: {}", title), || {
                 self.store.set_pending_event(event.clone());
-                self.store.save_problem(&problem)
+                self.store.save_problem(&problem)?;
+                // Mirror the CLI: register the problem on its milestone so
+                // milestone.problem_ids stays in sync.
+                if let Some(ref ms_id) = milestone_id {
+                    let mut ms = self.store.load_milestone(ms_id)?;
+                    ms.add_problem(id.clone());
+                    self.store.save_milestone(&ms)?;
+                }
+                Ok(())
             })?;
 
         crate::automation::run(&self.store, &event, &id);
@@ -67,7 +75,17 @@ impl App {
         self.store
             .with_metadata(&format!("Create solution: {}", title), || {
                 self.store.set_pending_event(event.clone());
-                self.store.save_solution(&solution)
+                self.store.save_solution(&solution)?;
+                // Mirror the CLI: register the back-reference and move the
+                // problem Open -> InProgress on its first solution. Without
+                // this, TUI-created solutions leave problem.solution_ids stale
+                // and the problem stuck rendering as Open.
+                let mut problem = self.store.load_problem(problem_id)?;
+                problem.add_solution(id.clone());
+                if problem.status == crate::models::ProblemStatus::Open {
+                    let _ = problem.try_set_status(crate::models::ProblemStatus::InProgress);
+                }
+                self.store.save_problem(&problem)
             })?;
 
         crate::automation::run(&self.store, &event, &id);
@@ -95,7 +113,13 @@ impl App {
         self.store
             .with_metadata(&format!("Create critique: {}", title), || {
                 self.store.set_pending_event(event.clone());
-                self.store.save_critique(&critique)
+                self.store.save_critique(&critique)?;
+                // Mirror the CLI: register the back-reference so the solution
+                // shows the READY next-action once critiques are resolved
+                // (build_next_actions keys off solution.critique_ids).
+                let mut solution = self.store.load_solution(solution_id)?;
+                solution.add_critique(id.clone());
+                self.store.save_solution(&solution)
             })?;
 
         crate::automation::run(&self.store, &event, &id);
@@ -755,8 +779,21 @@ impl App {
                         EntityType::Milestone => {
                             match (|| -> crate::error::Result<()> {
                                 let mut milestone = self.store.load_milestone(id)?;
+                                let was_completed = milestone.status == MilestoneStatus::Completed;
                                 milestone.set_status(MilestoneStatus::Completed);
-                                self.store.save_milestone(&milestone)
+                                self.store.save_milestone(&milestone)?;
+                                // Emit a completion event (matching the CLI) so
+                                // the consistency checker stays satisfied.
+                                if !was_completed {
+                                    let event = Event::new(
+                                        EventType::MilestoneCompleted,
+                                        id.clone(),
+                                        user.clone(),
+                                    );
+                                    self.store.set_pending_event(event.clone());
+                                    batch_events.push((event, id.clone()));
+                                }
+                                Ok(())
                             })() {
                                 Ok(_) => completed += 1,
                                 Err(e) => errors.push(format!("{}: {}", short_id(id), e)),
@@ -1674,20 +1711,15 @@ impl App {
     }
 
     fn adjust_vote(&mut self, delta: i32) -> Result<()> {
-        use crate::ranking::{borda, ordering};
+        use crate::ranking::{ordering, scoring};
 
         let (milestone_id, problem_id) = match self.selected_milestone_problem() {
             Some(x) => x,
             None => return Ok(()),
         };
 
-        let problem_count = self
-            .data
-            .problems
-            .iter()
-            .filter(|p| p.milestone_id.as_deref() == Some(&milestone_id))
-            .count();
-        let budget = borda::qv_budget(problem_count);
+        let problem_count = scoring::milestone_problem_count(&self.data.problems, &milestone_id);
+        let budget = scoring::qv_budget(problem_count);
 
         self.ensure_ordering(&milestone_id);
 
@@ -1702,10 +1734,10 @@ impl App {
                 .expect("ensure_ordering guarantees entry");
             current_votes = *ord.votes.get(&problem_id).unwrap_or(&0);
             new_val = current_votes + delta;
-            let new_cost = borda::vote_cost(new_val);
-            let old_cost = borda::vote_cost(current_votes);
+            let new_cost = scoring::vote_cost(new_val);
+            let old_cost = scoring::vote_cost(current_votes);
             if new_cost > old_cost {
-                let current_total = borda::total_vote_cost(&ord.votes);
+                let current_total = scoring::total_vote_cost(&ord.votes);
                 let marginal = new_cost.saturating_sub(old_cost);
                 if current_total + marginal > budget {
                     self.show_flash(&format!(
@@ -1734,10 +1766,10 @@ impl App {
 
         // Re-sort into three zones:
         // [positive votes descending] [unvoted in tier order] [negative votes ascending]
-        Self::reorder_by_votes(ord);
+        ord.reorder_by_votes();
         ordering::save_user_ordering(self.store.meta_path(), &milestone_id, &self.user, ord)?;
 
-        let new_total = borda::total_vote_cost(&ord.votes);
+        let new_total = scoring::total_vote_cost(&ord.votes);
         if new_val > 0 {
             self.show_flash(&format!("+{}▲ (budget {}/{})", new_val, new_total, budget));
         } else if new_val < 0 {
@@ -1749,48 +1781,6 @@ impl App {
         self.refresh_data()?;
         self.move_cursor_to_problem(&problem_id);
         Ok(())
-    }
-
-    /// Re-sort an ordering into three zones based on votes:
-    /// 1. Positive-voted items sorted by vote count descending (most votes first)
-    /// 2. Unvoted items in their current (tier-assigned) order
-    /// 3. Negative-voted items sorted by vote count ascending (most negative last)
-    ///
-    /// Within each zone, items with equal vote counts keep their relative order
-    /// (stable sort). This means tier assignment controls position among unvoted
-    /// items, and votes pin specific items to the top or bottom with magnitude.
-    fn reorder_by_votes(ord: &mut crate::ranking::ordering::UserOrdering) {
-        let votes = &ord.votes;
-        let mut positive: Vec<String> = Vec::new();
-        let mut neutral: Vec<String> = Vec::new();
-        let mut negative: Vec<String> = Vec::new();
-
-        for id in &ord.order {
-            match votes.get(id).copied().unwrap_or(0) {
-                v if v > 0 => positive.push(id.clone()),
-                v if v < 0 => negative.push(id.clone()),
-                _ => neutral.push(id.clone()),
-            }
-        }
-
-        // Sort positive descending by vote count (stable: equal votes keep tier order)
-        positive.sort_by(|a, b| {
-            let va = votes.get(a).copied().unwrap_or(0);
-            let vb = votes.get(b).copied().unwrap_or(0);
-            vb.cmp(&va)
-        });
-
-        // Sort negative ascending by vote count (most negative last)
-        negative.sort_by(|a, b| {
-            let va = votes.get(a).copied().unwrap_or(0);
-            let vb = votes.get(b).copied().unwrap_or(0);
-            va.cmp(&vb)
-        });
-
-        ord.order.clear();
-        ord.order.extend(positive);
-        ord.order.extend(neutral);
-        ord.order.extend(negative);
     }
 
     /// Swap the selected problem one position up in the ordering.

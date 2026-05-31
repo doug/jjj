@@ -20,7 +20,7 @@ fn create_test_repo() -> Option<TempDir> {
 
     // Initialize jj repo
     let status = Command::new("jj")
-        .args(&["git", "init", "--colocate"])
+        .args(["git", "init", "--colocate"])
         .current_dir(repo_path)
         .status()
         .ok()?;
@@ -31,13 +31,13 @@ fn create_test_repo() -> Option<TempDir> {
 
     // Configure user for the repo
     Command::new("jj")
-        .args(&["config", "set", "--repo", "user.name", "Test User"])
+        .args(["config", "set", "--repo", "user.name", "Test User"])
         .current_dir(repo_path)
         .status()
         .ok()?;
 
     Command::new("jj")
-        .args(&["config", "set", "--repo", "user.email", "test@example.com"])
+        .args(["config", "set", "--repo", "user.email", "test@example.com"])
         .current_dir(repo_path)
         .status()
         .ok()?;

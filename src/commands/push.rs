@@ -65,6 +65,32 @@ fn is_jjj_owned_file(path: &Path) -> bool {
     path.extension().and_then(|e| e.to_str()) == Some("md")
 }
 
+/// Mirror the `rankings/{milestone}/{user}.json` tree from `src` into `dst`.
+///
+/// The structure is exactly two levels deep (a directory per milestone, a JSON
+/// file per user), so a shallow recursive copy of `.json` files suffices.
+fn copy_rankings_tree(src: &Path, dst: &Path) -> Result<()> {
+    use std::fs;
+    if !src.exists() {
+        return Ok(());
+    }
+    for milestone in fs::read_dir(src)?.flatten() {
+        let m_src = milestone.path();
+        if !m_src.is_dir() {
+            continue;
+        }
+        let m_dst = dst.join(milestone.file_name());
+        fs::create_dir_all(&m_dst)?;
+        for user in fs::read_dir(&m_src)?.flatten() {
+            let u_src = user.path();
+            if u_src.extension().and_then(|e| e.to_str()) == Some("json") {
+                fs::copy(&u_src, m_dst.join(user.file_name()))?;
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Create or update the jjj bookmark from the current metadata files.
 ///
 /// Creates an on-demand workspace if needed, copies all metadata files into it,
@@ -140,6 +166,12 @@ fn sync_meta_to_bookmark(jj_client: &JjClient, store: &MetadataStore) -> Result<
         fs::copy(&events_src, sync_path.join("events.jsonl"))?;
     }
 
+    // Copy the rankings tree (rankings/{milestone}/{user}.json). These hold
+    // each collaborator's priority ordering and quadratic-vote allocations —
+    // genuine shared state that global ranking aggregation needs. Without this
+    // they never leave the machine and cross-user ranking is impossible.
+    copy_rankings_tree(&meta_path.join("rankings"), &sync_path.join("rankings"))?;
+
     // Commit and update bookmark
     sync_client.describe("jjj: sync metadata")?;
     sync_client.execute(&["new"])?;
@@ -209,15 +241,18 @@ pub fn execute(
         }
     };
 
-    // Sync SQLite to markdown and validate before pushing
+    // Validate the canonical markdown before pushing.
     let db_path = jj_client.repo_root().join(".jj").join("jjj.db");
     if db_path.exists() {
         let db = Database::open(&db_path)?;
 
-        println!("Syncing database to files...");
-        db::dump_to_markdown(&db, store)?;
-
+        // Refresh the cache FROM markdown (markdown is canonical — never dump
+        // the DB back over it). `Database::open` rebuilds a dirty/interrupted
+        // DB to *empty*; dumping that over the markdown files would wipe them
+        // and push the wipe. Loading instead makes validation check the real
+        // current content, and push copies the untouched markdown files.
         println!("Validating metadata...");
+        db::load_from_markdown(&db, store)?;
         let errors = db::validate(&db)?;
         if !errors.is_empty() {
             println!("Validation errors:");

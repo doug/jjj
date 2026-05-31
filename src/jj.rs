@@ -317,20 +317,6 @@ impl JjClient {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_jj_detection() {
-        // This test will fail if jj is not installed
-        match find_executable("jj") {
-            Some(_) => println!("jj found in PATH"),
-            None => println!("jj not found - some tests will be skipped"),
-        }
-    }
-}
-
 /// Find an executable by name on the system PATH using stdlib only.
 pub fn find_executable(name: &str) -> Option<PathBuf> {
     std::env::var_os("PATH")
@@ -353,4 +339,18 @@ fn jj_version(jj_path: &Path) -> Option<(u32, u32)> {
     let major = parts.next()?.parse().ok()?;
     let minor = parts.next()?.parse().ok()?;
     Some((major, minor))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_jj_detection() {
+        // This test will fail if jj is not installed
+        match find_executable("jj") {
+            Some(_) => println!("jj found in PATH"),
+            None => println!("jj not found - some tests will be skipped"),
+        }
+    }
 }

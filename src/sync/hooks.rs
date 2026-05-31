@@ -67,7 +67,8 @@ pub fn do_create_or_update_pr(
     let sid = short_id(&solution.id);
     let branch = format!("jjj/s-{}", sid);
 
-    let pr_number = provider.create_pr(solution, &problem, &branch)?;
+    // Auto-created PRs target the default branch.
+    let pr_number = provider.create_pr(solution, &problem, &branch, "main")?;
     solution.github_pr = Some(pr_number);
     solution.github_branch = Some(branch);
     store.with_metadata("Link GitHub PR to solution", || {
@@ -88,6 +89,13 @@ pub fn do_merge_pr(store: &MetadataStore, solution: &Solution) -> crate::error::
     let config = store.load_config()?;
     let repo_root = store.jj_client.repo_root();
     let provider = GitHubProvider::from_config(repo_root, &config.github)?;
+
+    // Idempotent: if the PR is already merged (e.g. `jjj github merge` merged
+    // it and then approval fired a github_merge automation rule), do nothing
+    // instead of erroring on a double-merge.
+    if provider.pr_is_merged(pr_number).unwrap_or(false) {
+        return Ok(());
+    }
     provider.merge_pr(pr_number)?;
 
     println!("  (auto-merged GitHub PR #{})", pr_number);
@@ -120,16 +128,26 @@ pub fn auto_create_issue(ctx: &CommandContext, problem: &mut Problem) {
     }
 }
 
-/// Auto-close a GitHub issue after a problem is solved.
+/// Auto-close a GitHub issue after a problem is solved or dissolved.
 ///
 /// Triggers when any of these are true:
 /// - `force` is set (caller passed `--github-close`)
 /// - `github.auto_close_on_solve = true` in config
 /// - `github.auto_push = true` in config (coarse-grained catch-all)
 ///
-/// Skipped if an explicit automation rule matches `problem_solved` — that
-/// rule fires the action; firing both would close the issue twice.
-pub fn auto_close_issue(ctx: &CommandContext, problem: &Problem, force: bool) {
+/// Skipped if an explicit automation rule matches `event_type` (the triggering
+/// `problem_solved` / `problem_dissolved` event) — that rule fires the action;
+/// firing both would close the issue twice.
+///
+/// Safe to call unconditionally: with `force = false` and no relevant config,
+/// it is a no-op. (It must NOT be gated behind `--github-close` at the call
+/// site, or `auto_close_on_solve`/`auto_push` would never take effect.)
+pub fn auto_close_issue(
+    ctx: &CommandContext,
+    problem: &Problem,
+    force: bool,
+    event_type: &crate::models::EventType,
+) {
     let config = match ctx.store.load_config() {
         Ok(c) => c,
         Err(_) => return,
@@ -137,12 +155,7 @@ pub fn auto_close_issue(ctx: &CommandContext, problem: &Problem, force: bool) {
     if !force && !config.github.auto_push && !config.github.auto_close_on_solve {
         return;
     }
-    if !force
-        && crate::automation::has_explicit_rule(
-            &config.automation,
-            &crate::models::EventType::ProblemSolved,
-        )
-    {
+    if !force && crate::automation::has_explicit_rule(&config.automation, event_type) {
         return;
     }
     if let Err(e) = do_close_issue(&ctx.store, problem) {
