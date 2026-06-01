@@ -369,7 +369,6 @@ impl App {
             &self.data.problems,
             &tree_ctx,
             self.ui.show_personal_ordering,
-            &self.ui.tier_drill,
         );
         super::super::annotate_tree_with_actions(
             &mut self.cache.tree_items,
@@ -440,7 +439,6 @@ impl App {
                         id
                     )
                 }
-                TreeNode::TierSeparator { .. } => String::new(),
             }
         } else {
             "No selection".to_string()
@@ -460,9 +458,9 @@ impl App {
                     .cloned()
                     .map(super::super::DetailContent::Milestone)
                     .unwrap_or(super::super::DetailContent::None),
-                TreeNode::ProjectRoot { .. }
-                | TreeNode::Backlog { .. }
-                | TreeNode::TierSeparator { .. } => super::super::DetailContent::None,
+                TreeNode::ProjectRoot { .. } | TreeNode::Backlog { .. } => {
+                    super::super::DetailContent::None
+                }
                 TreeNode::Problem { id, .. } => {
                     if let Some(problem) = self.data.problems.iter().find(|p| p.id == *id).cloned()
                     {
@@ -494,7 +492,7 @@ impl App {
         self.load_related_for_selected(); // Load related items for new selection
     }
 
-    /// Build rank/vote info for a problem from milestone rankings and personal orderings.
+    /// Build rank/gap info for a problem from milestone rankings and personal orderings.
     fn build_problem_rank_info(
         &self,
         problem: &crate::models::Problem,
@@ -512,23 +510,16 @@ impl App {
             (*pos, voter_str.parse().unwrap_or(0))
         };
 
-        // Look up current user's QV vote allocation for this problem
-        let (my_votes, budget_used, budget_total) =
-            if let Some(ordering) = self.ui.personal_orderings.get(milestone_id) {
-                let v = ordering.votes.get(&problem.id).copied().unwrap_or(0);
-                let used = crate::ranking::scoring::vote_cost(v);
-                let problem_count = ordering.order.len();
-                let total = crate::ranking::scoring::qv_budget(problem_count);
-                (v, used, total)
-            } else {
-                (0, 0, 0)
-            };
+        // Look up the gap the current user has authored *below* this problem.
+        let gap = self
+            .ui
+            .personal_orderings
+            .get(milestone_id)
+            .and_then(|ordering| ordering.gaps.get(&problem.id).copied());
 
         Some(super::super::ProblemRankInfo {
             rank: Some(rank_pos),
-            votes: my_votes,
-            budget_used,
-            budget_total,
+            gap,
         })
     }
 
@@ -602,9 +593,7 @@ impl App {
                 TreeNode::Solution { id, .. } => Some(("solution".to_string(), id.clone())),
                 TreeNode::Critique { id, .. } => Some(("critique".to_string(), id.clone())),
                 TreeNode::Milestone { id, .. } => Some(("milestone".to_string(), id.clone())),
-                TreeNode::ProjectRoot { .. }
-                | TreeNode::Backlog { .. }
-                | TreeNode::TierSeparator { .. } => None,
+                TreeNode::ProjectRoot { .. } | TreeNode::Backlog { .. } => None,
             })
     }
 }

@@ -6,16 +6,12 @@ use ratatui::{
     text::{Line, Span},
 };
 
-/// Rank and vote metadata for a problem, sourced from milestone rankings.
+/// Rank and gap metadata for a problem, sourced from milestone rankings.
 pub struct ProblemRankInfo {
     /// 1-indexed rank position within the milestone (1 = highest priority).
     pub rank: Option<usize>,
-    /// Signed vote count for this problem (positive = support, negative = opposition).
-    pub votes: i32,
-    /// QV budget spent by the current user on this problem (|v|^2).
-    pub budget_used: u32,
-    /// Total QV budget for the milestone.
-    pub budget_total: u32,
+    /// Sized gap authored *below* this item in the current user's ordering, if any.
+    pub gap: Option<crate::ranking::ordering::GapSize>,
 }
 
 pub enum DetailContent {
@@ -113,29 +109,8 @@ fn problem_lines(p: &Problem, rank_info: Option<&ProblemRankInfo>) -> Vec<Line<'
                 Some(Color::Yellow),
             ));
         }
-        if ri.votes != 0 {
-            let (vote_str, color) = if ri.votes > 0 {
-                let s = if ri.budget_total > 0 {
-                    format!(
-                        "+{}\u{25b2} (budget {}/{})",
-                        ri.votes, ri.budget_used, ri.budget_total
-                    )
-                } else {
-                    format!("+{}\u{25b2}", ri.votes)
-                };
-                (s, Color::Green)
-            } else {
-                let s = if ri.budget_total > 0 {
-                    format!(
-                        "{}\u{25bc} (budget {}/{})",
-                        ri.votes, ri.budget_used, ri.budget_total
-                    )
-                } else {
-                    format!("{}\u{25bc}", ri.votes)
-                };
-                (s, Color::Red)
-            };
-            lines.push(meta_line("Votes", &vote_str, Some(color)));
+        if let Some(gap) = ri.gap {
+            lines.push(meta_line("Gap below", gap.label(), Some(Color::Magenta)));
         }
     }
     lines.push(Line::from(""));

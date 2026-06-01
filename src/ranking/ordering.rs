@@ -59,61 +59,76 @@ fn djb2_short(bytes: &[u8]) -> u16 {
     (h & 0xFFFF) as u16
 }
 
-/// A single user's ordering and vote allocations for a milestone.
+/// Size of an authored gap *below* an item in a user's ordering.
+///
+/// A gap expresses *intensity* — how big the priority cliff is below an item —
+/// collapsing the old ordering-vs-votes split into a single signal (see
+/// `docs/design/latent-preference-ranking.md`). The absence of an entry means
+/// the implicit **unit** gap, so an un-annotated ordering scores identically to
+/// a plain ranked list. Sized gaps grow geometrically so an `XL` reads as a
+/// "different league" cliff.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GapSize {
+    S,
+    M,
+    L,
+    XL,
+}
+
+impl GapSize {
+    /// Cumulative-descent depth contributed by this gap. The implicit unit gap
+    /// (no annotation) contributes `1.0`; sized gaps grow geometrically.
+    pub fn depth(self) -> f64 {
+        match self {
+            GapSize::S => 2.0,
+            GapSize::M => 4.0,
+            GapSize::L => 8.0,
+            GapSize::XL => 16.0,
+        }
+    }
+
+    /// Short label for UI rendering.
+    pub fn label(self) -> &'static str {
+        match self {
+            GapSize::S => "S",
+            GapSize::M => "M",
+            GapSize::L => "L",
+            GapSize::XL => "XL",
+        }
+    }
+
+    /// Cycle to the next size for the single-key gap toggle:
+    /// `none → S → M → L → XL → none`.
+    pub fn cycle(current: Option<GapSize>) -> Option<GapSize> {
+        match current {
+            None => Some(GapSize::S),
+            Some(GapSize::S) => Some(GapSize::M),
+            Some(GapSize::M) => Some(GapSize::L),
+            Some(GapSize::L) => Some(GapSize::XL),
+            Some(GapSize::XL) => None,
+        }
+    }
+}
+
+/// A single user's ordering for a milestone: a sorted list with optional
+/// sized gaps expressing the priority cliffs between items.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserOrdering {
     /// Problem IDs in priority order (index 0 = highest priority).
     pub order: Vec<String>,
-    /// Quadratic vote allocations: problem_id -> signed vote count.
-    /// Positive = support, negative = opposition. Cost of v votes = |v|^2.
-    /// Budget = max(100, 2*N) where N = problems in milestone.
+    /// Gap *below* the keyed item (absent = implicit unit gap). Keyed by
+    /// problem id so a gap travels with its item across reorders and merges
+    /// field-wise on `jj git fetch` rather than as a position-fragile array.
     #[serde(default)]
-    pub votes: HashMap<String, i32>,
+    pub gaps: HashMap<String, GapSize>,
     pub updated_at: DateTime<Utc>,
 }
 
 impl UserOrdering {
-    /// Re-sort `order` into the documented three-zone layout:
-    /// `[positive-voted by magnitude] [unvoted in tier order] [negative-voted by magnitude]`.
-    ///
-    /// Positively-voted items move to the top (descending by vote count),
-    /// unvoted items keep their existing tier order in the middle, and
-    /// negatively-voted items sink to the bottom (ascending, so the most
-    /// negative is last). Stable within each zone (equal votes keep order).
-    ///
-    /// This is the canonical home for the ranking rule — both the TUI vote
-    /// handlers and the ranking tests call it, so the algorithm and its tests
-    /// can never drift apart.
-    pub fn reorder_by_votes(&mut self) {
-        let mut positive: Vec<String> = Vec::new();
-        let mut neutral: Vec<String> = Vec::new();
-        let mut negative: Vec<String> = Vec::new();
-
-        for id in &self.order {
-            match self.votes.get(id).copied().unwrap_or(0) {
-                v if v > 0 => positive.push(id.clone()),
-                v if v < 0 => negative.push(id.clone()),
-                _ => neutral.push(id.clone()),
-            }
-        }
-
-        // Positive: descending by vote count (highest support first).
-        positive.sort_by(|a, b| {
-            let va = self.votes.get(a).copied().unwrap_or(0);
-            let vb = self.votes.get(b).copied().unwrap_or(0);
-            vb.cmp(&va)
-        });
-        // Negative: ascending by vote count (most negative last).
-        negative.sort_by(|a, b| {
-            let va = self.votes.get(a).copied().unwrap_or(0);
-            let vb = self.votes.get(b).copied().unwrap_or(0);
-            va.cmp(&vb)
-        });
-
-        self.order.clear();
-        self.order.extend(positive);
-        self.order.extend(neutral);
-        self.order.extend(negative);
+    /// Depth contributed by the gap below `id` — the authored sized gap if
+    /// present, otherwise the implicit unit gap (`1.0`).
+    pub fn gap_depth(&self, id: &str) -> f64 {
+        self.gaps.get(id).map_or(1.0, |g| g.depth())
     }
 }
 
@@ -122,7 +137,7 @@ impl UserOrdering {
 pub struct AggregatedRank {
     /// 1-indexed rank position (1 = highest priority).
     pub position: usize,
-    /// Total aggregated score (budget-normalized harmonic ordering + QV boost).
+    /// Total aggregated score (budget-normalized, gap-weighted ordering).
     pub score: f64,
     /// Number of users who included this problem in their ordering.
     pub voter_count: usize,
@@ -245,14 +260,31 @@ mod tests {
     }
 
     #[test]
-    fn test_user_ordering_roundtrip() {
-        let mut votes = HashMap::new();
-        votes.insert("problem-1".to_string(), 3i32);
-        votes.insert("problem-2".to_string(), -1i32);
+    fn test_gap_cycle_wraps_through_sizes_and_back_to_none() {
+        assert_eq!(GapSize::cycle(None), Some(GapSize::S));
+        assert_eq!(GapSize::cycle(Some(GapSize::S)), Some(GapSize::M));
+        assert_eq!(GapSize::cycle(Some(GapSize::M)), Some(GapSize::L));
+        assert_eq!(GapSize::cycle(Some(GapSize::L)), Some(GapSize::XL));
+        assert_eq!(GapSize::cycle(Some(GapSize::XL)), None);
+    }
 
+    #[test]
+    fn test_gap_depth_defaults_to_unit() {
+        let ordering = UserOrdering {
+            order: vec!["p1".into(), "p2".into()],
+            gaps: HashMap::from([("p1".to_string(), GapSize::L)]),
+            updated_at: Utc::now(),
+        };
+        assert_eq!(ordering.gap_depth("p1"), 8.0); // L
+        assert_eq!(ordering.gap_depth("p2"), 1.0); // unannotated → unit
+        assert_eq!(ordering.gap_depth("missing"), 1.0);
+    }
+
+    #[test]
+    fn test_user_ordering_roundtrip() {
         let ordering = UserOrdering {
             order: vec!["problem-1".to_string(), "problem-2".to_string()],
-            votes,
+            gaps: HashMap::from([("problem-1".to_string(), GapSize::XL)]),
             updated_at: Utc::now(),
         };
 
@@ -260,13 +292,12 @@ mod tests {
         let deserialized: UserOrdering = serde_json::from_str(&json).unwrap();
 
         assert_eq!(deserialized.order, ordering.order);
-        assert_eq!(deserialized.votes.len(), 2);
-        assert_eq!(deserialized.votes["problem-1"], 3);
-        assert_eq!(deserialized.votes["problem-2"], -1);
+        assert_eq!(deserialized.gaps.len(), 1);
+        assert_eq!(deserialized.gaps["problem-1"], GapSize::XL);
     }
 
     #[test]
-    fn test_user_ordering_empty_votes_default() {
+    fn test_user_ordering_empty_gaps_default() {
         let json = r#"{
             "order": ["p1", "p2"],
             "updated_at": "2026-03-22T00:00:00Z"
@@ -275,7 +306,22 @@ mod tests {
         let ordering: UserOrdering = serde_json::from_str(json).unwrap();
 
         assert_eq!(ordering.order, vec!["p1", "p2"]);
-        assert!(ordering.votes.is_empty());
+        assert!(ordering.gaps.is_empty());
+    }
+
+    #[test]
+    fn test_legacy_votes_field_is_ignored() {
+        // Old files carried a `votes` map; the field is gone but must still
+        // parse (serde ignores unknown fields) so existing rankings load.
+        let json = r#"{
+            "order": ["p1", "p2"],
+            "votes": {"p1": 3, "p2": -1},
+            "updated_at": "2026-03-22T00:00:00Z"
+        }"#;
+
+        let ordering: UserOrdering = serde_json::from_str(json).unwrap();
+        assert_eq!(ordering.order, vec!["p1", "p2"]);
+        assert!(ordering.gaps.is_empty());
     }
 
     #[test]
@@ -283,17 +329,13 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let base = tmp.path();
 
-        let mut votes = HashMap::new();
-        votes.insert("prob-a".to_string(), 2);
-        votes.insert("prob-b".to_string(), 5);
-
         let ordering = UserOrdering {
             order: vec![
                 "prob-a".to_string(),
                 "prob-b".to_string(),
                 "prob-c".to_string(),
             ],
-            votes,
+            gaps: HashMap::from([("prob-b".to_string(), GapSize::M)]),
             updated_at: Utc::now(),
         };
 
@@ -310,9 +352,8 @@ mod tests {
             .expect("ordering should exist");
 
         assert_eq!(loaded.order, ordering.order);
-        assert_eq!(loaded.votes.len(), 2);
-        assert_eq!(loaded.votes["prob-a"], 2);
-        assert_eq!(loaded.votes["prob-b"], 5);
+        assert_eq!(loaded.gaps.len(), 1);
+        assert_eq!(loaded.gaps["prob-b"], GapSize::M);
     }
 
     #[test]
@@ -330,16 +371,13 @@ mod tests {
 
         let ordering_alice = UserOrdering {
             order: vec!["p1".to_string(), "p2".to_string()],
-            votes: HashMap::new(),
+            gaps: HashMap::new(),
             updated_at: Utc::now(),
         };
 
-        let mut bob_votes = HashMap::new();
-        bob_votes.insert("p2".to_string(), 3);
-
         let ordering_bob = UserOrdering {
             order: vec!["p2".to_string(), "p1".to_string()],
-            votes: bob_votes,
+            gaps: HashMap::from([("p2".to_string(), GapSize::S)]),
             updated_at: Utc::now(),
         };
 
@@ -357,188 +395,6 @@ mod tests {
 
         assert_eq!(all["alice"].order, vec!["p1", "p2"]);
         assert_eq!(all["bob"].order, vec!["p2", "p1"]);
-        assert_eq!(all["bob"].votes["p2"], 3);
-    }
-
-    /// Simulate the assign_tier remove/insert logic to verify index math.
-    fn simulate_assign(order: &mut Vec<&str>, current_pos: usize, target_pos: usize) {
-        let id = order.remove(current_pos);
-        let adjusted = if current_pos < target_pos {
-            target_pos - 1
-        } else {
-            target_pos
-        };
-        order.insert(adjusted, id);
-    }
-
-    #[test]
-    fn test_assign_to_top_from_middle() {
-        // 9 items, view_start=0, view_end=9
-        let mut order: Vec<&str> = vec!["a", "b", "c", "d", "e", "f", "g", "h", "i"];
-        // Shift+K on "e" (pos 4) → move to view_start (pos 0)
-        simulate_assign(&mut order, 4, 0);
-        assert_eq!(order, vec!["e", "a", "b", "c", "d", "f", "g", "h", "i"]);
-    }
-
-    #[test]
-    fn test_assign_to_top_from_bottom() {
-        let mut order: Vec<&str> = vec!["a", "b", "c", "d", "e", "f", "g", "h", "i"];
-        // Shift+K on "h" (pos 7) → move to view_start (pos 0)
-        simulate_assign(&mut order, 7, 0);
-        assert_eq!(order, vec!["h", "a", "b", "c", "d", "e", "f", "g", "i"]);
-    }
-
-    #[test]
-    fn test_assign_to_bottom_from_top() {
-        let mut order: Vec<&str> = vec!["a", "b", "c", "d", "e", "f", "g", "h", "i"];
-        // Shift+J on "b" (pos 1) → move to view_end-1 (pos 8)
-        simulate_assign(&mut order, 1, 8);
-        // After removing pos 1, target 8 becomes 7
-        assert_eq!(order, vec!["a", "c", "d", "e", "f", "g", "h", "b", "i"]);
-        // "b" at pos 7, "i" at pos 8 (items stack from bottom)
-    }
-
-    #[test]
-    fn test_assign_to_bottom_from_middle() {
-        let mut order: Vec<&str> = vec!["a", "b", "c", "d", "e", "f", "g", "h", "i"];
-        // Shift+J on "e" (pos 4) → move to view_end-1 (pos 8)
-        simulate_assign(&mut order, 4, 8);
-        assert_eq!(order, vec!["a", "b", "c", "d", "f", "g", "h", "e", "i"]);
-    }
-
-    #[test]
-    fn test_assign_with_drill_offset() {
-        // Drilled view: view_start=3, view_end=6 (the middle tier of 9)
-        let mut order: Vec<&str> = vec!["a", "b", "c", "d", "e", "f", "g", "h", "i"];
-        // Shift+K on "f" (pos 5) → move to view_start (pos 3)
-        simulate_assign(&mut order, 5, 3);
-        assert_eq!(order, vec!["a", "b", "c", "f", "d", "e", "g", "h", "i"]);
-    }
-
-    #[test]
-    fn test_assign_to_bottom_with_drill_offset() {
-        // Drilled view: view_start=3, view_end=6
-        let mut order: Vec<&str> = vec!["a", "b", "c", "d", "e", "f", "g", "h", "i"];
-        // Shift+J on "d" (pos 3) → move to view_end-1 (pos 5)
-        simulate_assign(&mut order, 3, 5);
-        // After removing pos 3, target 5 becomes 4
-        assert_eq!(order, vec!["a", "b", "c", "e", "d", "f", "g", "h", "i"]);
-    }
-
-    #[test]
-    fn test_multiple_assigns_stack_at_top() {
-        let mut order: Vec<&str> = vec!["a", "b", "c", "d", "e", "f"];
-        // Shift+K on "d" (pos 3) → moves to 0
-        simulate_assign(&mut order, 3, 0);
-        assert_eq!(order, vec!["d", "a", "b", "c", "e", "f"]);
-        // Shift+K on "f" (pos 5) → moves to 0
-        simulate_assign(&mut order, 5, 0);
-        assert_eq!(order, vec!["f", "d", "a", "b", "c", "e"]);
-        // Top two are the promoted items, in reverse order of promotion
-    }
-
-    #[test]
-    fn test_multiple_assigns_stack_at_bottom() {
-        let mut order: Vec<&str> = vec!["a", "b", "c", "d", "e", "f"];
-        // Shift+J on "b" (pos 1) → moves to 5
-        simulate_assign(&mut order, 1, 5);
-        assert_eq!(order, vec!["a", "c", "d", "e", "b", "f"]);
-        // Shift+J on "c" (now pos 1) → moves to 5
-        simulate_assign(&mut order, 1, 5);
-        assert_eq!(order, vec!["a", "d", "e", "b", "c", "f"]);
-        // Bottom items stack: f (original), c, b (most recently demoted closest to bottom)
-    }
-
-    /// Test helper: reorder via the real `UserOrdering::reorder_by_votes`
-    /// method so the tests exercise the production implementation (no copy).
-    fn reorder_by_votes(ord: &mut UserOrdering) {
-        ord.reorder_by_votes();
-    }
-
-    #[test]
-    fn test_three_zone_positive_votes_at_top() {
-        let mut ord = UserOrdering {
-            order: vec!["a".into(), "b".into(), "c".into(), "d".into()],
-            votes: HashMap::from([("c".into(), 2)]),
-            updated_at: Utc::now(),
-        };
-        reorder_by_votes(&mut ord);
-        // c (voted +2) moves to top, rest stay in tier order
-        assert_eq!(ord.order, vec!["c", "a", "b", "d"]);
-    }
-
-    #[test]
-    fn test_three_zone_negative_votes_at_bottom() {
-        let mut ord = UserOrdering {
-            order: vec!["a".into(), "b".into(), "c".into(), "d".into()],
-            votes: HashMap::from([("a".into(), -1)]),
-            updated_at: Utc::now(),
-        };
-        reorder_by_votes(&mut ord);
-        // a (voted -1) moves to bottom, rest keep tier order
-        assert_eq!(ord.order, vec!["b", "c", "d", "a"]);
-    }
-
-    #[test]
-    fn test_three_zone_mixed() {
-        let mut ord = UserOrdering {
-            order: vec!["a".into(), "b".into(), "c".into(), "d".into(), "e".into()],
-            votes: HashMap::from([("d".into(), 3), ("b".into(), 1), ("a".into(), -2)]),
-            updated_at: Utc::now(),
-        };
-        reorder_by_votes(&mut ord);
-        // Positive zone: d(3), b(1) sorted descending
-        // Neutral zone: c, e in original tier order
-        // Negative zone: a(-2)
-        assert_eq!(ord.order, vec!["d", "b", "c", "e", "a"]);
-    }
-
-    #[test]
-    fn test_three_zone_equal_positive_votes_keep_tier_order() {
-        let mut ord = UserOrdering {
-            order: vec!["a".into(), "b".into(), "c".into(), "d".into()],
-            votes: HashMap::from([("c".into(), 2), ("a".into(), 2)]),
-            updated_at: Utc::now(),
-        };
-        reorder_by_votes(&mut ord);
-        // a and c both +2, stable sort keeps original relative order (a before c)
-        assert_eq!(ord.order, vec!["a", "c", "b", "d"]);
-    }
-
-    #[test]
-    fn test_three_zone_no_votes_preserves_order() {
-        let mut ord = UserOrdering {
-            order: vec!["a".into(), "b".into(), "c".into()],
-            votes: HashMap::new(),
-            updated_at: Utc::now(),
-        };
-        reorder_by_votes(&mut ord);
-        assert_eq!(ord.order, vec!["a", "b", "c"]);
-    }
-
-    #[test]
-    fn test_three_zone_idempotent() {
-        let mut ord = UserOrdering {
-            order: vec!["a".into(), "b".into(), "c".into()],
-            votes: HashMap::from([("c".into(), 1), ("a".into(), -1)]),
-            updated_at: Utc::now(),
-        };
-        reorder_by_votes(&mut ord);
-        assert_eq!(ord.order, vec!["c", "b", "a"]);
-        reorder_by_votes(&mut ord);
-        assert_eq!(ord.order, vec!["c", "b", "a"]); // no drift
-    }
-
-    #[test]
-    fn test_three_zone_magnitude_ordering() {
-        // Item with 10 votes should always be above item with 4 votes
-        let mut ord = UserOrdering {
-            order: vec!["a".into(), "b".into(), "c".into(), "d".into()],
-            votes: HashMap::from([("c".into(), 10), ("a".into(), 4)]),
-            updated_at: Utc::now(),
-        };
-        reorder_by_votes(&mut ord);
-        assert_eq!(ord.order[0], "c"); // 10 votes first
-        assert_eq!(ord.order[1], "a"); // 4 votes second
+        assert_eq!(all["bob"].gaps["p2"], GapSize::S);
     }
 }

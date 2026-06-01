@@ -38,8 +38,9 @@ pub enum TreeNode {
         assignee: Option<String>,
         expanded: bool,
         rank: Option<usize>,
-        votes: i32,
-        /// Total ranked problems in milestone (for tier computation).
+        /// Sized gap authored *below* this item in the current user's ordering.
+        gap: Option<crate::ranking::ordering::GapSize>,
+        /// Total ranked problems in milestone (for tier-color computation).
         problem_count: usize,
     },
     Solution {
@@ -55,10 +56,6 @@ pub enum TreeNode {
         status: CritiqueStatus,
         severity: String,
     },
-    /// Visual separator between tier groups (Top/Mid/Bottom).
-    TierSeparator {
-        label: String,
-    },
 }
 
 impl TreeNode {
@@ -70,7 +67,6 @@ impl TreeNode {
             TreeNode::Problem { id, .. } => id,
             TreeNode::Solution { id, .. } => id,
             TreeNode::Critique { id, .. } => id,
-            TreeNode::TierSeparator { .. } => "tier-separator",
         }
     }
 
@@ -82,7 +78,6 @@ impl TreeNode {
             TreeNode::Problem { title, .. } => title,
             TreeNode::Solution { title, .. } => title,
             TreeNode::Critique { title, .. } => title,
-            TreeNode::TierSeparator { label } => label,
         }
     }
 
@@ -93,7 +88,7 @@ impl TreeNode {
             TreeNode::Backlog { expanded } => *expanded,
             TreeNode::Problem { expanded, .. } => *expanded,
             TreeNode::Solution { expanded, .. } => *expanded,
-            TreeNode::Critique { .. } | TreeNode::TierSeparator { .. } => false,
+            TreeNode::Critique { .. } => false,
         }
     }
 
@@ -104,15 +99,12 @@ impl TreeNode {
             TreeNode::Backlog { expanded } => *expanded = value,
             TreeNode::Problem { expanded, .. } => *expanded = value,
             TreeNode::Solution { expanded, .. } => *expanded = value,
-            TreeNode::Critique { .. } | TreeNode::TierSeparator { .. } => {}
+            TreeNode::Critique { .. } => {}
         }
     }
 
     pub fn can_expand(&self) -> bool {
-        !matches!(
-            self,
-            TreeNode::Critique { .. } | TreeNode::TierSeparator { .. }
-        )
+        !matches!(self, TreeNode::Critique { .. })
     }
 
     /// Whether this node type can be multi-selected (spacebar).
@@ -120,17 +112,14 @@ impl TreeNode {
     pub fn is_selectable(&self) -> bool {
         !matches!(
             self,
-            TreeNode::ProjectRoot { .. }
-                | TreeNode::Backlog { .. }
-                | TreeNode::TierSeparator { .. }
+            TreeNode::ProjectRoot { .. } | TreeNode::Backlog { .. }
         )
     }
 
-    /// Whether the cursor can land on this node.
-    /// Only TierSeparator is skipped — all other nodes (including ProjectRoot
-    /// and Backlog) are valid cursor targets for actions like [n]ew.
+    /// Whether the cursor can land on this node. Every node type is a valid
+    /// cursor target — separators no longer exist (tiers show via rank color).
     pub fn is_navigable(&self) -> bool {
-        !matches!(self, TreeNode::TierSeparator { .. })
+        true
     }
 }
 
@@ -155,7 +144,7 @@ pub fn build_flat_tree(
         expanded_nodes,
         personal_orderings: &std::collections::HashMap::new(),
     };
-    build_flat_tree_ranked(milestones, problems, &ctx, false, &[])
+    build_flat_tree_ranked(milestones, problems, &ctx, false)
 }
 
 pub fn build_flat_tree_ranked(
@@ -163,7 +152,6 @@ pub fn build_flat_tree_ranked(
     problems: &[Problem],
     ctx: &TreeBuildContext,
     show_personal: bool,
-    tier_drill: &[(String, usize, usize)],
 ) -> Vec<FlatTreeItem> {
     let mut items = Vec::new();
 
@@ -208,44 +196,7 @@ pub fn build_flat_tree_ranked(
                     });
                 }
             }
-            // Apply tier drill filter
-            if let Some((drill_ms, drill_start, drill_end)) = tier_drill.last() {
-                if *drill_ms == milestone.id {
-                    let ordered_ids: Vec<String> = if show_personal {
-                        ctx.personal_orderings
-                            .get(&milestone.id)
-                            .map(|o| o.order.clone())
-                            .unwrap_or_else(|| {
-                                milestone_problems.iter().map(|p| p.id.clone()).collect()
-                            })
-                    } else {
-                        milestone_problems.iter().map(|p| p.id.clone()).collect()
-                    };
-
-                    let visible_ids: std::collections::HashSet<String> = ordered_ids
-                        .iter()
-                        .skip(*drill_start)
-                        .take(drill_end - drill_start)
-                        .cloned()
-                        .collect();
-
-                    milestone_problems.retain(|p| visible_ids.contains(&p.id));
-                }
-            }
-            // When drilling, pass the drill start offset so ranks reflect global position
-            let rank_offset = tier_drill
-                .last()
-                .filter(|(ms, _, _)| *ms == milestone.id)
-                .map(|(_, start, _)| *start)
-                .unwrap_or(0);
-            add_problems(
-                &mut items,
-                &milestone_problems,
-                ctx,
-                1,
-                Some(&milestone.id),
-                rank_offset,
-            );
+            add_problems(&mut items, &milestone_problems, ctx, 1, Some(&milestone.id));
         }
     }
 
@@ -266,7 +217,7 @@ pub fn build_flat_tree_ranked(
     });
 
     if backlog_expanded {
-        add_problems(&mut items, &backlog_problems, ctx, 1, None, 0);
+        add_problems(&mut items, &backlog_problems, ctx, 1, None);
     }
 
     items
@@ -278,7 +229,6 @@ fn add_problems(
     ctx: &TreeBuildContext,
     depth: usize,
     milestone_id: Option<&str>,
-    rank_offset: usize,
 ) {
     let problem_count = problems.len();
 
@@ -290,16 +240,12 @@ fn add_problems(
             .collect();
 
         let expanded = ctx.expanded_nodes.contains(&problem.id);
-        let votes = milestone_id
+        let gap = milestone_id
             .and_then(|mid| ctx.personal_orderings.get(mid))
-            .and_then(|ord| ord.votes.get(&problem.id))
-            .copied()
-            .unwrap_or(0);
-        // Rank is 1-indexed global position within the milestone.
-        // rank_offset adjusts for drill views (e.g., drilling into mid tier
-        // starting at position 3 means first visible item is rank 4).
+            .and_then(|ord| ord.gaps.get(&problem.id).copied());
+        // Rank is the 1-indexed position within the milestone ordering.
         let rank = if milestone_id.is_some() {
-            Some(rank_offset + idx + 1)
+            Some(idx + 1)
         } else {
             None
         };
@@ -313,7 +259,7 @@ fn add_problems(
                 assignee: problem.assignee.clone(),
                 expanded,
                 rank,
-                votes,
+                gap,
                 problem_count,
             },
             depth,
@@ -961,7 +907,7 @@ mod tests {
             assignee: None,
             expanded: false,
             rank: None,
-            votes: 0,
+            gap: None,
             problem_count: 0,
         };
         assert!(!node.is_expanded());
@@ -984,19 +930,9 @@ mod tests {
     }
 
     #[test]
-    fn test_tier_separator_not_selectable() {
-        let node = TreeNode::TierSeparator {
-            label: "── Top ──".to_string(),
-        };
-        assert!(!node.is_selectable());
-        assert!(!node.can_expand());
-        assert!(!node.is_expanded());
-        assert_eq!(node.id(), "tier-separator");
-    }
-
-    #[test]
     fn test_no_tier_separators_in_tree() {
-        // Tier indication is via rank number color (green/amber/red), not separator nodes
+        // Tier indication is via rank-number color (green/amber/red), not
+        // separator nodes — the tree contains only real entities.
         let milestone = Milestone {
             id: "m1".into(),
             title: "Sprint 1".into(),
@@ -1020,11 +956,12 @@ mod tests {
 
         let items = build_flat_tree(&[milestone], &problems, &[], &[], &expanded);
 
-        let separators = items
+        // All milestone children are real Problem nodes; no separator rows.
+        let problem_nodes = items
             .iter()
-            .filter(|i| matches!(i.node, TreeNode::TierSeparator { .. }))
+            .filter(|i| matches!(i.node, TreeNode::Problem { .. }))
             .count();
-        assert_eq!(separators, 0);
+        assert_eq!(problem_nodes, 6);
     }
 
     #[test]

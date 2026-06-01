@@ -4,12 +4,6 @@ use crate::display::short_id;
 use crate::error::Result;
 use crate::storage::MetadataStore;
 
-/// Target tier for tertiary sort assignment.
-enum Tier {
-    Top,
-    Bottom,
-}
-
 /// Resolve the current user for TUI-originated events.
 ///
 /// Mirrors `domain::current_user`: never returns an empty string, so the audit
@@ -213,7 +207,7 @@ impl App {
                         solution_id: id.clone(),
                     },
                 ),
-                TreeNode::Critique { .. } | TreeNode::TierSeparator { .. } => return Ok(()),
+                TreeNode::Critique { .. } => return Ok(()),
             }
         } else {
             return Ok(());
@@ -656,7 +650,7 @@ impl App {
                         EntityType::Solution => {
                             if let Ok(mut solution) = self.store.load_solution(id) {
                                 if let Err(e) = solution.withdraw() {
-                                    eprintln!("Warning: {}", e);
+                                    crate::output::warn(&e.to_string());
                                     continue;
                                 }
                                 if self.store.save_solution(&solution).is_ok() {
@@ -1413,102 +1407,6 @@ impl App {
         self.show_flash(&format!("Showing {} ordering", view));
     }
 
-    /// Drill into the tier (top/mid/bottom third) containing the selected problem.
-    pub(super) fn tier_drill_in(&mut self) -> Result<()> {
-        let (milestone_id, problem_id) = match self.selected_milestone_problem() {
-            Some(x) => x,
-            None => return Ok(()),
-        };
-
-        let effective_order = self.get_effective_ordering(&milestone_id);
-        if effective_order.is_empty() {
-            return Ok(());
-        }
-
-        // Determine current visible range
-        let (start, end) = if let Some(last) = self.ui.tier_drill.last() {
-            if last.0 == milestone_id {
-                (last.1, last.2)
-            } else {
-                self.ui.tier_drill.clear();
-                (0, effective_order.len())
-            }
-        } else {
-            (0, effective_order.len())
-        };
-
-        let range_size = end - start;
-        if range_size <= 3 {
-            self.show_flash("Already at finest granularity");
-            return Ok(());
-        }
-
-        // Find which third the selected problem is in
-        let pos_in_order = effective_order
-            .iter()
-            .position(|id| *id == problem_id)
-            .unwrap_or(0);
-
-        let third = range_size / 3;
-        let tier_label;
-        let (new_start, new_end) = if pos_in_order < start + third {
-            tier_label = "Top";
-            (start, start + third)
-        } else if pos_in_order < start + 2 * third {
-            tier_label = "Mid";
-            (start + third, start + 2 * third)
-        } else {
-            tier_label = "Bottom";
-            (start + 2 * third, end)
-        };
-
-        self.ui.tier_drill.push((milestone_id, new_start, new_end));
-        self.show_flash(&format!(
-            "Drilled into {} tier ({} items)",
-            tier_label,
-            new_end - new_start
-        ));
-        self.refresh_data()?;
-        Ok(())
-    }
-
-    /// Zoom out one tier level.
-    pub(super) fn tier_drill_out(&mut self) {
-        if self.ui.tier_drill.pop().is_some() {
-            self.show_flash("Zoomed out");
-            self.refresh_data().ok();
-        }
-    }
-
-    /// Get the effective ordering (personal or global) for a milestone as a Vec of problem IDs.
-    fn get_effective_ordering(&self, milestone_id: &str) -> Vec<String> {
-        if self.ui.show_personal_ordering {
-            self.ui
-                .personal_orderings
-                .get(milestone_id)
-                .map(|o| o.order.clone())
-                .unwrap_or_else(|| {
-                    // Fall back to natural order
-                    self.data
-                        .problems
-                        .iter()
-                        .filter(|p| p.milestone_id.as_deref() == Some(milestone_id))
-                        .map(|p| p.id.clone())
-                        .collect()
-                })
-        } else {
-            self.data
-                .rankings
-                .get(milestone_id)
-                .map(|m| {
-                    let mut items: Vec<_> = m.iter().collect();
-                    items.sort_by_key(|(_, (pos, _))| *pos);
-                    items.into_iter().map(|(id, _)| id.clone()).collect()
-                })
-                .unwrap_or_default()
-        }
-    }
-
     /// Get (milestone_id, problem_id) if the selected tree item is a problem under a milestone.
     fn selected_milestone_problem(&self) -> Option<(String, String)> {
         let item = self.cache.tree_items.get(self.ui.tree_index)?;
@@ -1535,7 +1433,7 @@ impl App {
             .collect();
         crate::ranking::ordering::UserOrdering {
             order,
-            votes: std::collections::HashMap::new(),
+            gaps: std::collections::HashMap::new(),
             updated_at: chrono::Utc::now(),
         }
     }
@@ -1581,229 +1479,89 @@ impl App {
         }
     }
 
-    /// Assign the selected problem to the top of the current drill view.
-    pub(super) fn assign_top_tier(&mut self) -> Result<()> {
-        self.assign_tier(Tier::Top)
-    }
-
-    /// Assign the selected problem to the bottom of the current drill view.
-    pub(super) fn assign_bottom_tier(&mut self) -> Result<()> {
-        self.assign_tier(Tier::Bottom)
-    }
-
-    /// Move the selected problem into the specified tier of the current drill view.
-    fn assign_tier(&mut self, tier: Tier) -> Result<()> {
-        let (milestone_id, problem_id) = match self.selected_milestone_problem() {
-            Some(x) => x,
-            None => {
-                self.show_flash("Select a milestone problem to reorder");
-                return Ok(());
-            }
-        };
+    /// Ensure personal-ordering view is active before a reorder, returning the
+    /// selected (milestone_id, problem_id) and the item's current position.
+    fn prepare_reorder(&mut self) -> Option<(String, String, usize)> {
+        let (milestone_id, problem_id) = self.selected_milestone_problem()?;
 
         if !self.ui.show_personal_ordering {
             self.ui.show_personal_ordering = true;
         }
-
         self.ensure_ordering(&milestone_id);
 
-        // All guards use immutable borrows, checked before undo snapshot
-        let (current_pos, target_pos, label) = {
-            let ordering = self
-                .ui
-                .personal_orderings
-                .get(&milestone_id)
-                .expect("ensure_ordering guarantees entry");
-
-            let (view_start, view_end) =
-                if let Some((drill_ms, start, end)) = self.ui.tier_drill.last() {
-                    if *drill_ms == milestone_id {
-                        (*start, (*end).min(ordering.order.len()))
-                    } else {
-                        (0, ordering.order.len())
-                    }
-                } else {
-                    (0, ordering.order.len())
-                };
-
-            let view_size = view_end.saturating_sub(view_start);
-            if view_size < 2 {
-                self.show_flash("Too few items to reorder");
-                return Ok(());
-            }
-
-            let current_pos = match ordering.order.iter().position(|id| *id == problem_id) {
-                Some(p) => p,
-                None => return Ok(()),
-            };
-
-            if current_pos < view_start || current_pos >= view_end {
-                self.show_flash("Item is outside the current drill view");
-                return Ok(());
-            }
-
-            let (target_pos, label) = match tier {
-                Tier::Top => {
-                    if current_pos == view_start {
-                        self.show_flash("Already at top");
-                        return Ok(());
-                    }
-                    (view_start, "Top")
-                }
-                Tier::Bottom => {
-                    if current_pos == view_end - 1 {
-                        self.show_flash("Already at bottom");
-                        return Ok(());
-                    }
-                    (view_end - 1, "Bottom")
-                }
-            };
-
-            (current_pos, target_pos, label)
-        };
-
-        // All guards passed — snapshot for undo, then mutate
-        self.push_ordering_undo(&milestone_id);
-        let ordering = self
-            .ui
-            .personal_orderings
-            .get_mut(&milestone_id)
-            .expect("ensure_ordering guarantees entry");
-
-        // Remove from current position and insert at target.
-        // When removing from before the target, the target shifts down by 1.
-        let id = ordering.order.remove(current_pos);
-        let adjusted_target = if current_pos < target_pos {
-            target_pos - 1
-        } else {
-            target_pos
-        };
-        ordering.order.insert(adjusted_target, id);
-        ordering.updated_at = chrono::Utc::now();
-
-        crate::ranking::ordering::save_user_ordering(
-            self.store.meta_path(),
-            &milestone_id,
-            &self.user,
-            ordering,
-        )?;
-
-        self.show_flash(&format!("→ {} tier", label));
-        self.refresh_data()?;
-        // When promoting to top, the item leaves its position and items between
-        // [target, cursor) shift down by 1. The cursor stays at the same index,
-        // which now shows the item that was ABOVE. Advance by 1 so the cursor
-        // lands on the next untriaged item (the one that was below).
-        if matches!(tier, Tier::Top) {
-            self.navigate_down();
-        }
-        self.update_selected_detail();
-        Ok(())
-    }
-
-    /// Adjust the vote count on the selected problem by `delta` (+1 or -1).
-    pub(super) fn add_vote(&mut self) -> Result<()> {
-        self.adjust_vote(1)
-    }
-
-    pub(super) fn remove_vote(&mut self) -> Result<()> {
-        self.adjust_vote(-1)
-    }
-
-    fn adjust_vote(&mut self, delta: i32) -> Result<()> {
-        use crate::ranking::{ordering, scoring};
-
-        let (milestone_id, problem_id) = match self.selected_milestone_problem() {
-            Some(x) => x,
-            None => return Ok(()),
-        };
-
-        let problem_count = scoring::milestone_problem_count(&self.data.problems, &milestone_id);
-        let budget = scoring::qv_budget(problem_count);
-
-        self.ensure_ordering(&milestone_id);
-
-        // Budget check (immutable borrow, released before undo push)
-        let current_votes;
-        let new_val;
-        {
-            let ord = self
-                .ui
-                .personal_orderings
-                .get(&milestone_id)
-                .expect("ensure_ordering guarantees entry");
-            current_votes = *ord.votes.get(&problem_id).unwrap_or(&0);
-            new_val = current_votes + delta;
-            let new_cost = scoring::vote_cost(new_val);
-            let old_cost = scoring::vote_cost(current_votes);
-            if new_cost > old_cost {
-                let current_total = scoring::total_vote_cost(&ord.votes);
-                let marginal = new_cost.saturating_sub(old_cost);
-                if current_total + marginal > budget {
-                    self.show_flash(&format!(
-                        "No budget remaining ({}/{})",
-                        current_total, budget
-                    ));
-                    return Ok(());
-                }
-            }
-        }
-
-        // Budget OK — snapshot for undo, then mutate
-        self.push_ordering_undo(&milestone_id);
-        let ord = self
-            .ui
-            .personal_orderings
-            .get_mut(&milestone_id)
-            .expect("ensure_ordering guarantees entry");
-
-        if new_val == 0 {
-            ord.votes.remove(&problem_id);
-        } else {
-            *ord.votes.entry(problem_id.clone()).or_insert(0) = new_val;
-        }
-        ord.updated_at = chrono::Utc::now();
-
-        // Re-sort into three zones:
-        // [positive votes descending] [unvoted in tier order] [negative votes ascending]
-        ord.reorder_by_votes();
-        ordering::save_user_ordering(self.store.meta_path(), &milestone_id, &self.user, ord)?;
-
-        let new_total = scoring::total_vote_cost(&ord.votes);
-        if new_val > 0 {
-            self.show_flash(&format!("+{}▲ (budget {}/{})", new_val, new_total, budget));
-        } else if new_val < 0 {
-            self.show_flash(&format!("{}▼ (budget {}/{})", new_val, new_total, budget));
-        } else {
-            self.show_flash(&format!("Vote cleared (budget {}/{})", new_total, budget));
-        }
-
-        self.refresh_data()?;
-        self.move_cursor_to_problem(&problem_id);
-        Ok(())
-    }
-
-    /// Swap the selected problem one position up in the ordering.
-    pub(super) fn bubble_up(&mut self) -> Result<()> {
-        let (milestone_id, problem_id) = match self.selected_milestone_problem() {
-            Some(x) => x,
-            None => return Ok(()),
-        };
-
-        self.ensure_ordering(&milestone_id);
-        let ordering = self
+        let pos = self
             .ui
             .personal_orderings
             .get(&milestone_id)
-            .expect("ensure_ordering guarantees entry");
-        let pos = match ordering.order.iter().position(|id| *id == problem_id) {
-            Some(p) if p > 0 => p,
-            _ => {
-                self.show_flash("Already at top");
-                return Ok(());
-            }
-        };
+            .and_then(|o| o.order.iter().position(|id| *id == problem_id))?;
+        Some((milestone_id, problem_id, pos))
+    }
 
+    /// Persist a milestone's personal ordering and refresh the view, keeping the
+    /// cursor on the moved problem.
+    fn save_personal_ordering(&mut self, milestone_id: &str, problem_id: &str) -> Result<()> {
+        let ordering = self
+            .ui
+            .personal_orderings
+            .get(milestone_id)
+            .expect("ensure_ordering guarantees entry");
+        crate::ranking::ordering::save_user_ordering(
+            self.store.meta_path(),
+            milestone_id,
+            &self.user,
+            ordering,
+        )?;
+        self.refresh_data()?;
+        self.move_cursor_to_problem(problem_id);
+        Ok(())
+    }
+
+    /// Handle Shift+K: tap nudges up one slot; a second Shift+K within 400ms
+    /// flings the item to the top.
+    pub(super) fn rank_shift_up(&mut self) -> Result<()> {
+        use super::RankMoveDir;
+        let now = std::time::Instant::now();
+        let double_tap = matches!(
+            self.ui.last_rank_move,
+            Some((RankMoveDir::Up, t)) if now.duration_since(t) < std::time::Duration::from_millis(400)
+        );
+        if double_tap {
+            self.ui.last_rank_move = None;
+            self.send_to_top()
+        } else {
+            self.ui.last_rank_move = Some((RankMoveDir::Up, now));
+            self.nudge_up()
+        }
+    }
+
+    /// Handle Shift+J: tap nudges down one slot; a second Shift+J within 400ms
+    /// flings the item to the bottom.
+    pub(super) fn rank_shift_down(&mut self) -> Result<()> {
+        use super::RankMoveDir;
+        let now = std::time::Instant::now();
+        let double_tap = matches!(
+            self.ui.last_rank_move,
+            Some((RankMoveDir::Down, t)) if now.duration_since(t) < std::time::Duration::from_millis(400)
+        );
+        if double_tap {
+            self.ui.last_rank_move = None;
+            self.send_to_bottom()
+        } else {
+            self.ui.last_rank_move = Some((RankMoveDir::Down, now));
+            self.nudge_down()
+        }
+    }
+
+    /// Nudge the selected problem one slot up in the personal ordering.
+    pub(super) fn nudge_up(&mut self) -> Result<()> {
+        let (milestone_id, problem_id, pos) = match self.prepare_reorder() {
+            Some(x) => x,
+            None => return Ok(()),
+        };
+        if pos == 0 {
+            self.show_flash("Already at top");
+            return Ok(());
+        }
         self.push_ordering_undo(&milestone_id);
         let ordering = self
             .ui
@@ -1812,41 +1570,25 @@ impl App {
             .expect("ensure_ordering guarantees entry");
         ordering.order.swap(pos, pos - 1);
         ordering.updated_at = chrono::Utc::now();
-
-        crate::ranking::ordering::save_user_ordering(
-            self.store.meta_path(),
-            &milestone_id,
-            &self.user,
-            ordering,
-        )?;
-
-        self.refresh_data()?;
-        self.move_cursor_to_problem(&problem_id);
-        Ok(())
+        self.save_personal_ordering(&milestone_id, &problem_id)
     }
 
-    /// Swap the selected problem one position down in the ordering.
-    pub(super) fn bubble_down(&mut self) -> Result<()> {
-        let (milestone_id, problem_id) = match self.selected_milestone_problem() {
+    /// Nudge the selected problem one slot down in the personal ordering.
+    pub(super) fn nudge_down(&mut self) -> Result<()> {
+        let (milestone_id, problem_id, pos) = match self.prepare_reorder() {
             Some(x) => x,
             None => return Ok(()),
         };
-
-        self.ensure_ordering(&milestone_id);
-        let ordering = self
+        let len = self
             .ui
             .personal_orderings
             .get(&milestone_id)
-            .expect("ensure_ordering guarantees entry");
-        let len = ordering.order.len();
-        let pos = match ordering.order.iter().position(|id| *id == problem_id) {
-            Some(p) if p + 1 < len => p,
-            _ => {
-                self.show_flash("Already at bottom");
-                return Ok(());
-            }
-        };
-
+            .map(|o| o.order.len())
+            .unwrap_or(0);
+        if pos + 1 >= len {
+            self.show_flash("Already at bottom");
+            return Ok(());
+        }
         self.push_ordering_undo(&milestone_id);
         let ordering = self
             .ui
@@ -1855,16 +1597,100 @@ impl App {
             .expect("ensure_ordering guarantees entry");
         ordering.order.swap(pos, pos + 1);
         ordering.updated_at = chrono::Utc::now();
+        self.save_personal_ordering(&milestone_id, &problem_id)
+    }
 
-        crate::ranking::ordering::save_user_ordering(
-            self.store.meta_path(),
-            &milestone_id,
-            &self.user,
-            ordering,
-        )?;
+    /// Send the selected problem to the top of the personal ordering ("fling up").
+    pub(super) fn send_to_top(&mut self) -> Result<()> {
+        let (milestone_id, problem_id, pos) = match self.prepare_reorder() {
+            Some(x) => x,
+            None => return Ok(()),
+        };
+        if pos == 0 {
+            self.show_flash("Already at top");
+            return Ok(());
+        }
+        self.push_ordering_undo(&milestone_id);
+        let ordering = self
+            .ui
+            .personal_orderings
+            .get_mut(&milestone_id)
+            .expect("ensure_ordering guarantees entry");
+        let id = ordering.order.remove(pos);
+        ordering.order.insert(0, id);
+        ordering.updated_at = chrono::Utc::now();
+        self.save_personal_ordering(&milestone_id, &problem_id)?;
+        self.show_flash("→ Top");
+        Ok(())
+    }
 
-        self.refresh_data()?;
-        self.move_cursor_to_problem(&problem_id);
+    /// Send the selected problem to the bottom of the personal ordering ("fling down").
+    pub(super) fn send_to_bottom(&mut self) -> Result<()> {
+        let (milestone_id, problem_id, pos) = match self.prepare_reorder() {
+            Some(x) => x,
+            None => return Ok(()),
+        };
+        let len = self
+            .ui
+            .personal_orderings
+            .get(&milestone_id)
+            .map(|o| o.order.len())
+            .unwrap_or(0);
+        if pos + 1 >= len {
+            self.show_flash("Already at bottom");
+            return Ok(());
+        }
+        self.push_ordering_undo(&milestone_id);
+        let ordering = self
+            .ui
+            .personal_orderings
+            .get_mut(&milestone_id)
+            .expect("ensure_ordering guarantees entry");
+        let id = ordering.order.remove(pos);
+        ordering.order.push(id);
+        ordering.updated_at = chrono::Utc::now();
+        self.save_personal_ordering(&milestone_id, &problem_id)?;
+        self.show_flash("→ Bottom");
+        Ok(())
+    }
+
+    /// Cycle the sized gap *below* the selected problem: none → S → M → L → XL → none.
+    pub(super) fn cycle_gap(&mut self) -> Result<()> {
+        use crate::ranking::ordering::GapSize;
+
+        let (milestone_id, problem_id, _pos) = match self.prepare_reorder() {
+            Some(x) => x,
+            None => return Ok(()),
+        };
+
+        self.push_ordering_undo(&milestone_id);
+        let ordering = self
+            .ui
+            .personal_orderings
+            .get_mut(&milestone_id)
+            .expect("ensure_ordering guarantees entry");
+
+        let current = ordering.gaps.get(&problem_id).copied();
+        let next = GapSize::cycle(current);
+        match next {
+            Some(g) => {
+                ordering.gaps.insert(problem_id.clone(), g);
+            }
+            None => {
+                ordering.gaps.remove(&problem_id);
+            }
+        }
+        ordering.updated_at = chrono::Utc::now();
+        self.save_personal_ordering(&milestone_id, &problem_id)?;
+
+        match next {
+            Some(g) => self.show_flash(&format!(
+                "Gap below {}: {}",
+                short_id(&problem_id),
+                g.label()
+            )),
+            None => self.show_flash(&format!("Gap below {} cleared", short_id(&problem_id))),
+        }
         Ok(())
     }
 

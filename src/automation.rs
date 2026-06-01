@@ -111,12 +111,17 @@ fn execute_shell(rule: &AutomationRule, auto_ctx: &AutomationContext) -> Automat
 
     let (expanded, env) = expand_template(template, &auto_ctx.vars);
 
-    match std::process::Command::new("sh")
-        .arg("-c")
-        .arg(&expanded)
-        .envs(env)
-        .status()
-    {
+    let mut cmd = std::process::Command::new("sh");
+    cmd.arg("-c").arg(&expanded).envs(env);
+    if crate::output::tui_active() {
+        // The TUI owns the alternate screen; a child inheriting our
+        // stdout/stderr would scroll/corrupt it. Silence the child's output
+        // while the TUI is active (the action still runs).
+        cmd.stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null());
+    }
+
+    match cmd.status() {
         Ok(status) if status.success() => AutomationResult::Success(format!("shell: {}", expanded)),
         Ok(status) => AutomationResult::Failure(format!(
             "shell exited {}: {}",
@@ -149,7 +154,7 @@ pub fn run(store: &MetadataStore, event: &Event, entity_id: &str) {
     let config = match store.load_config() {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("Warning: automation disabled (config error: {})", e);
+            crate::output::warn(&format!("automation disabled (config error: {})", e));
             return;
         }
     };
@@ -178,9 +183,9 @@ pub fn run(store: &MetadataStore, event: &Event, entity_id: &str) {
         };
 
         match result {
-            AutomationResult::Success(msg) => println!("  (auto: {})", msg),
+            AutomationResult::Success(msg) => crate::output::notify(&format!("  (auto: {})", msg)),
             AutomationResult::Failure(msg) => {
-                eprintln!("  Warning: automation '{:?}' failed: {}", rule.action, msg);
+                crate::output::warn(&format!("  automation '{:?}' failed: {}", rule.action, msg));
                 record_failure(store, event, &rule.action, &msg);
             }
             AutomationResult::Skipped(_) => {}

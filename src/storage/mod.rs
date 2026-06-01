@@ -557,12 +557,12 @@ impl MetadataStore {
 
         if let Some(ref db) = *self.cache() {
             if let Err(e) = entity.sync_to_cache(db) {
-                eprintln!(
-                    "Warning: cache sync failed for {} {}: {}",
+                crate::output::warn(&format!(
+                    "cache sync failed for {} {}: {}",
                     T::ENTITY_TYPE,
                     entity.id(),
                     e
-                );
+                ));
             }
         }
 
@@ -600,13 +600,13 @@ impl MetadataStore {
         }
 
         if !failures.is_empty() {
-            eprintln!(
-                "Warning: Failed to load {} {}(s):",
+            crate::output::warn(&format!(
+                "Failed to load {} {}(s):",
                 failures.len(),
                 T::ENTITY_TYPE
-            );
+            ));
             for failure in &failures {
-                eprintln!("  {}", failure);
+                crate::output::warn(&format!("  {}", failure));
             }
         }
 
@@ -626,12 +626,12 @@ impl MetadataStore {
         fs::remove_file(path)?;
         if let Some(ref db) = *self.cache() {
             if let Err(e) = crate::db::sync::remove_entity_from_cache(db, T::ENTITY_TYPE, id) {
-                eprintln!(
-                    "Warning: cache removal failed for {} {}: {}",
+                crate::output::warn(&format!(
+                    "cache removal failed for {} {}: {}",
                     T::ENTITY_TYPE,
                     id,
                     e
-                );
+                ));
             }
         }
         Ok(())
@@ -656,13 +656,13 @@ impl MetadataStore {
             }
         }
         if !failures.is_empty() {
-            eprintln!(
-                "Warning: Failed to load {} {}(s) from cache index:",
+            crate::output::warn(&format!(
+                "Failed to load {} {}(s) from cache index:",
                 failures.len(),
                 T::ENTITY_TYPE
-            );
+            ));
             for failure in &failures {
-                eprintln!("  {}", failure);
+                crate::output::warn(&format!("  {}", failure));
             }
         }
         Ok(out)
@@ -878,7 +878,7 @@ impl MetadataStore {
                     buf.push('\n');
                 }
                 Err(err) => {
-                    eprintln!("Warning: failed to serialize event: {}", err);
+                    crate::output::warn(&format!("failed to serialize event: {}", err));
                     return Err(JjjError::JsonParse(err));
                 }
             }

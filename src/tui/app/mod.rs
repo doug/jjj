@@ -179,6 +179,13 @@ impl ProjectData {
     }
 }
 
+/// Direction of the last ranking-move key, for Shift+J/K double-tap detection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RankMoveDir {
+    Up,
+    Down,
+}
+
 /// All transient UI state: selection, scroll position, expansion, input mode.
 ///
 /// Distinct from [`ProjectData`] (authoritative storage snapshot) and
@@ -224,11 +231,12 @@ pub struct UiState {
     /// The current user's personal orderings per milestone (loaded on startup).
     /// milestone_id -> UserOrdering
     pub personal_orderings: HashMap<String, crate::ranking::ordering::UserOrdering>,
-    /// Tier drilling state: stack of (milestone_id, start_index, end_index).
-    /// Empty = showing all items. Each entry narrows to a third of the parent range.
-    pub tier_drill: Vec<(String, usize, usize)>,
     /// Undo stack for ordering operations: (milestone_id, previous_ordering).
     pub ordering_undo: std::collections::VecDeque<(String, crate::ranking::ordering::UserOrdering)>,
+    /// Last Shift+J/K ranking-move direction + timestamp, for double-tap
+    /// detection (tap nudges one slot, tap-again within 400ms flings to the end).
+    /// In-memory only — never persisted.
+    pub last_rank_move: Option<(RankMoveDir, std::time::Instant)>,
 }
 
 impl Default for UiState {
@@ -259,8 +267,8 @@ impl UiState {
             related_rx: None,
             show_personal_ordering: true,
             personal_orderings: HashMap::new(),
-            tier_drill: Vec::new(),
             ordering_undo: std::collections::VecDeque::new(),
+            last_rank_move: None,
         }
     }
 }
@@ -348,7 +356,6 @@ impl App {
             &data.problems,
             &tree_ctx,
             ui.show_personal_ordering,
-            &ui.tier_drill,
         );
 
         let mut cache = RenderCache {
@@ -458,41 +465,21 @@ impl App {
             KeyCode::Tab => {
                 self.ui.focused_pane = FocusedPane::Detail;
             }
-            KeyCode::Up if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.bubble_up()?;
-            }
-            KeyCode::Char('k') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.bubble_up()?;
-            }
-            KeyCode::Down if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.bubble_down()?;
-            }
-            KeyCode::Char('j') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.bubble_down()?;
-            }
+            // Shift+K / Shift+J: nudge up/down one slot; double-tap within 400ms
+            // flings to top/bottom. Crossterm reports Shift+letter as the
+            // uppercase char, so both the modifier guard and the bare uppercase
+            // arm route to the same handler.
             KeyCode::Up if key.modifiers.contains(KeyModifiers::SHIFT) => {
-                self.assign_top_tier()?;
+                self.rank_shift_up()?;
             }
             KeyCode::Char('K') => {
-                self.assign_top_tier()?;
+                self.rank_shift_up()?;
             }
             KeyCode::Down if key.modifiers.contains(KeyModifiers::SHIFT) => {
-                self.assign_bottom_tier()?;
+                self.rank_shift_down()?;
             }
             KeyCode::Char('J') => {
-                self.assign_bottom_tier()?;
-            }
-            KeyCode::Left if key.modifiers.contains(KeyModifiers::SHIFT) => {
-                self.tier_drill_out();
-            }
-            KeyCode::Char('H') => {
-                self.tier_drill_out();
-            }
-            KeyCode::Right if key.modifiers.contains(KeyModifiers::SHIFT) => {
-                self.tier_drill_in()?;
-            }
-            KeyCode::Char('L') => {
-                self.tier_drill_in()?;
+                self.rank_shift_down()?;
             }
             KeyCode::Up | KeyCode::Char('k') => self.navigate_up(),
             KeyCode::Down | KeyCode::Char('j') => self.navigate_down(),
@@ -524,11 +511,11 @@ impl App {
             KeyCode::Char('x') => self.start_delete()?,
             KeyCode::Char('c') => self.cycle_confidence()?,
             KeyCode::Char('r') => self.toggle_ordering_view(),
+            // Cycle the sized gap below the selected item: none→S→M→L→XL→none.
+            KeyCode::Char('p') => self.cycle_gap()?,
             KeyCode::Char('m') => self.start_move_to_milestone()?,
             KeyCode::Char('b') => self.page_detail_up(),
             KeyCode::Char('?') => self.toggle_help(),
-            KeyCode::Char('+') | KeyCode::Char('=') => self.add_vote()?,
-            KeyCode::Char('-') => self.remove_vote()?,
             KeyCode::Esc => self.clear_selection(),
             _ => {}
         }

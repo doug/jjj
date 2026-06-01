@@ -6,7 +6,7 @@ use crate::cli::RankAction;
 use crate::context::CommandContext;
 use crate::error::Result;
 use crate::ranking::ordering::load_all_orderings;
-use crate::ranking::scoring::{aggregate_rankings, qv_budget, total_vote_cost};
+use crate::ranking::scoring::aggregate_rankings;
 use crate::utils::truncate;
 
 /// Dispatch a `jjj rank` subcommand.
@@ -99,13 +99,12 @@ struct UserOrderingEntry {
     rank: usize,
     problem_id: String,
     title: String,
-    votes: i32,
+    /// Gap *below* this item ("S"/"M"/"L"/"XL"), or empty for the implicit unit gap.
+    gap: String,
 }
 
 #[derive(Serialize)]
 struct UserBreakdown {
-    budget: u32,
-    budget_used: u32,
     ordering: Vec<UserOrderingEntry>,
 }
 
@@ -187,23 +186,18 @@ fn show(ctx: &CommandContext, milestone: Option<String>, by_user: bool, json: bo
 fn show_by_user(
     orderings: &HashMap<String, crate::ranking::ordering::UserOrdering>,
     problem_ids: &[String],
-    problem_count: usize,
+    _problem_count: usize,
     titles: &HashMap<String, String>,
     json: bool,
 ) -> Result<()> {
     let mut users: Vec<&String> = orderings.keys().collect();
     users.sort();
 
-    // Budget uses the canonical milestone problem count (matches the TUI and
-    // the aggregate view); problem_ids is only the open subset shown below.
-    let budget = qv_budget(problem_count);
-
     if json {
         let mut all_data: HashMap<&str, UserBreakdown> = HashMap::new();
 
         for user in &users {
             let ordering = &orderings[*user];
-            let budget_used = total_vote_cost(&ordering.votes);
 
             let entries: Vec<UserOrderingEntry> = ordering
                 .order
@@ -214,29 +208,24 @@ fn show_by_user(
                     rank: i + 1,
                     problem_id: id.clone(),
                     title: titles.get(id).cloned().unwrap_or_default(),
-                    votes: ordering.votes.get(id).copied().unwrap_or(0),
+                    gap: ordering
+                        .gaps
+                        .get(id)
+                        .map(|g| g.label().to_string())
+                        .unwrap_or_default(),
                 })
                 .collect();
 
-            all_data.insert(
-                user.as_str(),
-                UserBreakdown {
-                    budget,
-                    budget_used,
-                    ordering: entries,
-                },
-            );
+            all_data.insert(user.as_str(), UserBreakdown { ordering: entries });
         }
 
         println!("{}", serde_json::to_string_pretty(&all_data)?);
     } else {
         for user in &users {
             let ordering = &orderings[*user];
-            let budget_used = total_vote_cost(&ordering.votes);
-            println!("\n--- {} ---", user);
-            println!("  QV budget: {}/{} used\n", budget_used, budget);
+            println!("\n--- {} ---\n", user);
 
-            println!("  {:<5} {:<45} {:>5}", "Rank", "Problem", "Votes");
+            println!("  {:<5} {:<45} {:>5}", "Rank", "Problem", "Gap");
             println!("  {}", "-".repeat(57));
             for (i, id) in ordering
                 .order
@@ -245,20 +234,8 @@ fn show_by_user(
                 .enumerate()
             {
                 let title = titles.get(id).cloned().unwrap_or_default();
-                let votes = ordering.votes.get(id).copied().unwrap_or(0);
-                let votes_str = if votes > 0 {
-                    format!("+{}", votes)
-                } else if votes < 0 {
-                    format!("{}", votes)
-                } else {
-                    String::new()
-                };
-                println!(
-                    "  {:<5} {:<45} {:>5}",
-                    i + 1,
-                    truncate(&title, 44),
-                    votes_str,
-                );
+                let gap_str = ordering.gaps.get(id).map(|g| g.label()).unwrap_or("");
+                println!("  {:<5} {:<45} {:>5}", i + 1, truncate(&title, 44), gap_str,);
             }
         }
     }

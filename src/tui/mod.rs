@@ -25,6 +25,10 @@ pub fn launch() -> Result<()> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+    // The TUI now owns the terminal. Suppress direct stdout/stderr writes from
+    // shared code paths (automation, storage warnings, domain hooks) that would
+    // otherwise scroll the alt-screen and visibly stack the footer/status bar.
+    crate::output::set_tui_active(true);
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
@@ -37,6 +41,8 @@ pub fn launch() -> Result<()> {
         LeaveAlternateScreen,
         DisableMouseCapture
     )?;
+    // Real terminal restored: direct writes are safe again.
+    crate::output::set_tui_active(false);
     terminal.show_cursor()?;
 
     res

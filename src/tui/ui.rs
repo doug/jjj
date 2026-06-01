@@ -149,50 +149,11 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     use super::tree::TreeNode;
 
     // Apply filter if enabled
-    let mut display_items: Vec<_> = if app.ui.filter_actions_only {
+    let display_items: Vec<_> = if app.ui.filter_actions_only {
         super::filter_tree_to_actions(&app.cache.tree_items)
     } else {
         app.cache.tree_items.clone()
     };
-
-    // When tier drill is active, only show the drilled milestone and its children.
-    // Problems from other milestones and the backlog are hidden.
-    if let Some((drill_ms, _, _)) = app.ui.tier_drill.last() {
-        // Collect problem IDs belonging to the drilled milestone
-        let drilled_problem_ids: std::collections::HashSet<&str> = app
-            .data
-            .problems
-            .iter()
-            .filter(|p| p.milestone_id.as_deref() == Some(drill_ms.as_str()))
-            .map(|p| p.id.as_str())
-            .collect();
-
-        display_items.retain(|item| match &item.node {
-            TreeNode::Milestone { id, .. } => id == drill_ms,
-            TreeNode::Problem { id, .. } => drilled_problem_ids.contains(id.as_str()),
-            TreeNode::Solution { id, .. } => {
-                // Keep solutions whose parent problem is in the drilled milestone
-                app.data
-                    .solutions
-                    .iter()
-                    .find(|s| s.id == *id)
-                    .map(|s| drilled_problem_ids.contains(s.problem_id.as_str()))
-                    .unwrap_or(false)
-            }
-            TreeNode::Critique { id, .. } => {
-                // Keep critiques whose parent solution's problem is in the drilled milestone
-                app.data
-                    .critiques
-                    .iter()
-                    .find(|c| c.id == *id)
-                    .and_then(|c| app.data.solutions.iter().find(|s| s.id == c.solution_id))
-                    .map(|s| drilled_problem_ids.contains(s.problem_id.as_str()))
-                    .unwrap_or(false)
-            }
-            TreeNode::TierSeparator { .. } => true, // separators already scoped by tree builder
-            TreeNode::ProjectRoot { .. } | TreeNode::Backlog { .. } => false,
-        });
-    }
 
     let border_color = if app.ui.focused_pane == super::app::FocusedPane::Tree {
         Color::Cyan
@@ -201,17 +162,7 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     };
     let border_style = Style::default().fg(border_color);
 
-    // Build title with tier breadcrumbs when drilling
-    let title: String = if !app.ui.tier_drill.is_empty() {
-        let (_, start, end) = app.ui.tier_drill.last().unwrap();
-        let depth = app.ui.tier_drill.len();
-        format!(
-            "Tier Drill [{} deep] items {}-{} [S+\u{2190} to zoom out]",
-            depth,
-            start + 1,
-            end
-        )
-    } else if app.ui.filter_actions_only {
+    let title: String = if app.ui.filter_actions_only {
         "Project Tree [Actions]".to_string()
     } else {
         "Project Tree".to_string()
@@ -297,9 +248,6 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                     status_color_critique(status),
                     false,
                 ),
-                TreeNode::TierSeparator { label } => {
-                    (format!("{}{}", indent, label), Color::DarkGray, true)
-                }
             };
 
             let style = if dim {
@@ -350,7 +298,7 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
             }
             spans.push(Span::styled(label, style));
             if let TreeNode::Problem {
-                votes, confidence, ..
+                gap, confidence, ..
             } = &item.node
             {
                 // RAG confidence dot
@@ -363,16 +311,11 @@ fn draw_project_tree(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                 if let Some(c) = rag_color {
                     spans.push(Span::styled(" ●", Style::default().fg(c)));
                 }
-                // Vote arrows
-                if *votes > 0 {
+                // Sized-gap marker: the priority cliff authored *below* this item.
+                if let Some(g) = gap {
                     spans.push(Span::styled(
-                        format!(" {}", "▲".repeat((*votes).min(10) as usize)),
-                        Style::default().fg(Color::Green),
-                    ));
-                } else if *votes < 0 {
-                    spans.push(Span::styled(
-                        format!(" {}", "▼".repeat((votes.unsigned_abs()).min(10) as usize)),
-                        Style::default().fg(Color::Red),
+                        format!(" ▾{}", g.label()),
+                        Style::default().fg(Color::DarkGray),
                     ));
                 }
             }
@@ -708,9 +651,7 @@ fn get_context_actions(app: &App) -> Vec<Line<'static>> {
             TreeNode::Solution { .. } => Some(EntityType::Solution),
             TreeNode::Critique { .. } => Some(EntityType::Critique),
             TreeNode::Milestone { .. } => Some(EntityType::Milestone),
-            TreeNode::ProjectRoot { .. }
-            | TreeNode::Backlog { .. }
-            | TreeNode::TierSeparator { .. } => None,
+            TreeNode::ProjectRoot { .. } | TreeNode::Backlog { .. } => None,
         });
 
     match entity_type {
