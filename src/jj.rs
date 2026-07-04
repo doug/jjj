@@ -19,6 +19,16 @@ pub struct JjClient {
 /// Minimum supported jj version (major, minor).
 pub const MIN_JJ_VERSION: (u32, u32) = (0, 25);
 
+/// Context size passed to `jj diff --git` for the delta-fetch content primitive.
+///
+/// jj caps the emitted context at each file's length, so any value larger than
+/// the longest metadata file forces whole-file hunks (both sides reconstructable
+/// by [`crate::storage::delta`]). A million lines comfortably exceeds any real
+/// entity file while costing nothing — jj never pads beyond the file.
+const FULL_CONTEXT_LINES: &str = "1000000";
+
+use crate::storage::sync_state::BOOKMARK_PREFIX;
+
 impl JjClient {
     /// Create a new JjClient, discovering the jj executable and repo root.
     ///
@@ -226,6 +236,124 @@ impl JjClient {
     /// Get file contents at a specific revision
     pub fn file_at_revision(&self, revision: &str, path: &str) -> Result<String> {
         self.execute(&["file", "show", "-r", revision, path])
+    }
+
+    /// Resolve a revision to its full commit id, or `None` when the revision
+    /// is unreachable (GC'd, rewritten, or never existed).
+    ///
+    /// Used by the delta-fetch state machine to decide between a delta
+    /// (`last_synced_rev` still reachable) and a cold-start full reconcile (it
+    /// isn't). Distinguishes "no such revision" from real jj failures by
+    /// inspecting stderr — auth/corruption errors propagate.
+    pub fn resolve_commit(&self, revision: &str) -> Result<Option<String>> {
+        match self.execute(&["log", "--no-graph", "-r", revision, "-T", "commit_id"]) {
+            Ok(out) => Ok(Some(out.trim().to_string())),
+            Err(crate::error::JjjError::JjCommandFailed { ref stderr, .. })
+                if stderr.contains("No such revision")
+                    || stderr.contains("doesn't exist")
+                    || stderr.contains("does not exist")
+                    || stderr.contains("unknown revision")
+                    || stderr.contains("Revision") =>
+            {
+                Ok(None)
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Resolve the head commit ids of every metadata bookmark (`jjj`, `jjj/*`),
+    /// **including remote-tracking refs** (`jjj/*@origin`).
+    ///
+    /// These are the per-pod single-writer refs (Break #5): fetch reads them
+    /// all and unions their deltas. A freshly fetched pod bookmark arrives as a
+    /// remote-tracking ref before it is tracked locally, so the union must span
+    /// both `bookmarks()` and `remote_bookmarks()` — otherwise a clone that has
+    /// never pushed sees "no jjj bookmark" right after fetching one. `heads(...)`
+    /// drops any ref that is an ancestor of another (e.g. a stale shared `jjj`
+    /// base under newer pod refs), so the result is exactly the set of distinct
+    /// tips to merge.
+    ///
+    /// Returns an empty vec when no metadata bookmark exists yet (fresh remote).
+    pub fn meta_head_commits(&self) -> Result<Vec<String>> {
+        let glob = format!("{}*", BOOKMARK_PREFIX);
+        let revset = format!(
+            "heads(bookmarks(glob:{0:?}) | remote_bookmarks(glob:{0:?}))",
+            glob
+        );
+        let out = self.execute(&[
+            "log",
+            "--no-graph",
+            "-r",
+            &revset,
+            "-T",
+            r#"commit_id ++ "\n""#,
+        ])?;
+        Ok(out
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty())
+            .map(String::from)
+            .collect())
+    }
+
+    /// Greatest common ancestor of two revisions — the **true** three-way merge
+    /// base for a delta fetch.
+    ///
+    /// ⚠️ Keystone correctness (highest-risk, audit 0.1). With per-pod bookmarks
+    /// each pod advances its own parallel branch, so `last_synced_rev` (this
+    /// pod's last-pushed commit) is **not** an ancestor of another pod's head.
+    /// Diffing straight from `last_synced_rev` would reconstruct a base that
+    /// already folds in *our own* unpushed edits, and the merge would then
+    /// silently revert them to the other pod's stale value. The merge base must
+    /// be the genuine common ancestor of the two tips: `heads(::a & ::b)`.
+    ///
+    /// Returns `None` when the two share no reachable ancestor (e.g. an
+    /// unreachable `last_synced_rev`); callers fall back to `root()`, which is
+    /// always a safe — if more verbose — ancestor (every file shows as changed
+    /// and is three-way merged, never lost).
+    pub fn merge_base(&self, a: &str, b: &str) -> Result<Option<String>> {
+        let revset = format!("heads(::{} & ::{})", a, b);
+        match self.execute(&[
+            "log",
+            "--no-graph",
+            "-r",
+            &revset,
+            "-T",
+            r#"commit_id ++ "\n""#,
+        ]) {
+            Ok(out) => Ok(out
+                .lines()
+                .map(str::trim)
+                .find(|l| !l.is_empty())
+                .map(String::from)),
+            // An unreachable operand makes the revset itself fail to resolve;
+            // treat that as "no common ancestor" so the caller cold-starts.
+            Err(crate::error::JjjError::JjCommandFailed { .. }) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Full-context git diff between two revisions — the delta-fetch content
+    /// primitive (Pillar 1, keystone).
+    ///
+    /// One subprocess returns every changed file's *entire* content on both
+    /// sides: `--context <huge>` forces jj to emit whole-file hunks, so
+    /// [`crate::storage::delta::parse_git_diff`] can reconstruct the base side
+    /// (context + `-` lines) and the remote side (context + `+` lines) for a
+    /// per-file three-way merge — no per-file `jj file show` loop (which
+    /// measured ~94ms/file @25K and re-resolves the whole tree each call).
+    /// Adds and deletes are explicit in the same diff.
+    pub fn delta_git(&self, from: &str, to: &str) -> Result<String> {
+        self.execute(&[
+            "diff",
+            "--from",
+            from,
+            "--to",
+            to,
+            "--git",
+            "--context",
+            FULL_CONTEXT_LINES,
+        ])
     }
 
     /// Squash current change into parent.

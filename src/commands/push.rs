@@ -3,7 +3,7 @@ use crate::db::{self, Database};
 use crate::error::{JjjError, Result};
 use crate::jj::JjClient;
 use crate::models::CritiqueStatus;
-use crate::storage::merge::snapshot_base;
+use crate::storage::sync_state::SyncState;
 use crate::storage::MetadataStore;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -91,16 +91,27 @@ fn copy_rankings_tree(src: &Path, dst: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Create or update the jjj bookmark from the current metadata files.
+/// Create or update a metadata bookmark from the current metadata files,
+/// returning the commit id it now points at.
 ///
 /// Creates an on-demand workspace if needed, copies all metadata files into it,
-/// commits, and updates the bookmark. This is the only place that creates jj
+/// commits, and updates `bookmark`. This is the only place that creates jj
 /// commits for metadata — all local operations use plain files.
+///
+/// The new commit is created as a child of **every** current per-pod head
+/// (`jjj`, `jjj/*`), i.e. a merge of them. This keeps the per-pod branches
+/// joined so that on the next fetch `GCA(last_synced_rev, other_head)` resolves
+/// to a real recent ancestor; without it, parallel per-pod branches would share
+/// only `root()` and every entity would re-merge from an empty base, fabricating
+/// spurious conflicts.
 ///
 /// Holds a PidLock for the duration so two concurrent pushes can't race on
 /// the workspace.
-fn sync_meta_to_bookmark(jj_client: &JjClient, store: &MetadataStore) -> Result<()> {
-    use crate::storage::META_BOOKMARK;
+fn sync_meta_to_bookmark(
+    jj_client: &JjClient,
+    store: &MetadataStore,
+    bookmark: &str,
+) -> Result<String> {
     use std::fs;
 
     let sync_config = store.load_config().unwrap_or_default().sync;
@@ -115,8 +126,8 @@ fn sync_meta_to_bookmark(jj_client: &JjClient, store: &MetadataStore) -> Result<
             .to_str()
             .ok_or_else(|| crate::error::JjjError::PathError(sync_path.clone()))?;
 
-        let revision = if jj_client.bookmark_exists(META_BOOKMARK)? {
-            META_BOOKMARK
+        let revision = if jj_client.bookmark_exists(bookmark)? {
+            bookmark
         } else {
             "root()"
         };
@@ -128,6 +139,19 @@ fn sync_meta_to_bookmark(jj_client: &JjClient, store: &MetadataStore) -> Result<
     let sync_client = JjClient::with_root(sync_path.clone())?;
     let ws_prefix = Some(sync_config.workspace_prefix());
     let _ = sync_client.execute_workspace(ws_prefix, "update-stale", &[]);
+
+    // Re-base the working commit onto a merge of all current metadata heads, so
+    // the commit we are about to create descends from every pod's pushed state
+    // (see the doc comment). With one head this is a plain linear child; with
+    // none (first push ever) it is a child of root().
+    let heads = jj_client.meta_head_commits()?;
+    let mut new_args: Vec<&str> = vec!["new"];
+    if heads.is_empty() {
+        new_args.push("root()");
+    } else {
+        new_args.extend(heads.iter().map(String::as_str));
+    }
+    sync_client.execute(&new_args)?;
 
     // Copy all metadata files into the sync workspace
     for dir in &["problems", "solutions", "critiques", "milestones"] {
@@ -181,12 +205,12 @@ fn sync_meta_to_bookmark(jj_client: &JjClient, store: &MetadataStore) -> Result<
         .trim()
         .to_string();
 
-    if jj_client.bookmark_exists(META_BOOKMARK)? {
+    if jj_client.bookmark_exists(bookmark)? {
         jj_client.execute(&[
             "--ignore-working-copy",
             "bookmark",
             "set",
-            META_BOOKMARK,
+            bookmark,
             "-r",
             &commit_id,
             "--allow-backwards",
@@ -196,13 +220,13 @@ fn sync_meta_to_bookmark(jj_client: &JjClient, store: &MetadataStore) -> Result<
             "--ignore-working-copy",
             "bookmark",
             "create",
-            META_BOOKMARK,
+            bookmark,
             "-r",
             &commit_id,
         ])?;
     }
 
-    Ok(())
+    Ok(commit_id)
 }
 
 fn prompt_yes_no(message: &str) -> bool {
@@ -269,16 +293,21 @@ pub fn execute(
         store.commit_changes()?;
     }
 
-    // Create/update the jjj bookmark from the metadata files.
-    // This creates an on-demand workspace, copies files in, and commits.
-    sync_meta_to_bookmark(jj_client, store)?;
+    // This pod's single-writer push target: `jjj/{pod}` when a pod id is set,
+    // else the bare `jjj` bookmark (single-writer / back-compat).
+    let mut state = SyncState::load(store.meta_path());
+    let push_bookmark = state.push_bookmark();
+
+    // Create/update the metadata bookmark from the metadata files. This creates
+    // an on-demand workspace, copies files in, and commits a merge of all heads.
+    let pushed_commit = sync_meta_to_bookmark(jj_client, store, &push_bookmark)?;
 
     if dry_run {
         println!("Would push to {}:", remote);
         for b in &bookmarks {
             println!("  {}", b);
         }
-        println!("  jjj");
+        println!("  {}", push_bookmark);
         return Ok(());
     }
 
@@ -293,9 +322,9 @@ pub fn execute(
         }
     }
 
-    // 2. Always push jjj bookmark
-    println!("Pushing jjj...");
-    let vars = [("bookmark", "jjj"), ("remote", remote)];
+    // 2. Always push this pod's metadata bookmark
+    println!("Pushing {}...", push_bookmark);
+    let vars = [("bookmark", push_bookmark.as_str()), ("remote", remote)];
     if jj_client.execute_sync_command(&push_cmd, &vars).is_err() {
         let retry = format!("{} --allow-new", push_cmd);
         jj_client.execute_sync_command(&retry, &vars)?;
@@ -303,11 +332,11 @@ pub fn execute(
 
     println!("Pushed to {}.", remote);
 
-    // The pushed state is now the shared baseline. Snapshot it so the next
-    // fetch can three-way merge against the correct ancestor.
-    let base_path = store.base_path();
-    std::fs::create_dir_all(&base_path)?;
-    snapshot_base(store.meta_path(), &base_path)?;
+    // State-machine invariant (audit 0.1): advance the merge-base pointer ONLY
+    // now that the push has succeeded, to the just-pushed commit (which already
+    // contains the merged remote + local state). Never before the push.
+    state.advance(pushed_commit);
+    state.save(store.meta_path())?;
 
     // Clear dirty flag after successful push
     if db_path.exists() {

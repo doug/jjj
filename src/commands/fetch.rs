@@ -1,100 +1,249 @@
-use std::collections::HashSet;
+//! Incremental delta-fetch (Pillar 1 + 2 of the agent-swarm scaling design).
+//!
+//! The legacy fetch enumerated *every* remote file and `jj file show`'d it one
+//! at a time against a full `jjj-meta-base/` mirror — O(total corpus) per fetch
+//! (~10 min @25K). This path is O(delta):
+//!
+//! 1. `jj git fetch` brings the remote per-pod bookmarks (`jjj`, `jjj/*`) local.
+//! 2. Resolve their head commits ([`JjClient::meta_head_commits`]) — the
+//!    fetch-union set (Break #5: each pod is a single-writer ref).
+//! 3. For each head `H`, three-way merge against the **true** common ancestor:
+//!    `base = GCA(last_synced_rev, H)` ([`JjClient::merge_base`]) — NOT
+//!    `last_synced_rev` itself, which on parallel per-pod branches would
+//!    reconstruct a base containing our own unpushed edits and silently revert
+//!    them (audit 0.1). One full-context [`JjClient::delta_git`] returns every
+//!    changed file's whole content on both sides; [`parse_git_diff`]
+//!    reconstructs base + remote per file for [`merge_entity_md`].
+//! 4. Apply each file delta to the working set and upsert the affected entity
+//!    into the SQLite cache incrementally (Pillar 2) — no full DB rebuild on
+//!    the hot path.
+//!
+//! The merge base is a **revision**, not a directory tree: there is no
+//! `base/` mirror in this path. `last_synced_rev` advances only on a
+//! successful push (see [`SyncState::advance`]); fetch never moves it.
+//!
+//! Cold start (no `last_synced_rev`, or it is unreachable) falls back to
+//! `base = root()`, so every file shows as added and is adopted, followed by a
+//! full DB rebuild — the common fresh-clone onboarding path.
+
+use std::collections::BTreeSet;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::context::CommandContext;
+use crate::db::events::{clear_events, insert_event};
 use crate::db::{self, Database};
 use crate::error::Result;
+use crate::storage::delta::{parse_git_diff, DeltaKind, FileDelta};
 use crate::storage::merge::{
-    merge_entity_md, merge_events_jsonl, merge_ranking_json, read_base_file, remove_base_file,
-    write_base_file,
+    has_conflict_markers, merge_entity_md, merge_events_jsonl, merge_ranking_json,
 };
+use crate::storage::sync_state::SyncState;
 use crate::storage::MetadataStore;
 
-/// Merge a single remote entity file into the local copy using a three-way
-/// merge against the base snapshot.
-///
-/// Returns true when the merged result differs from the existing local file
-/// (i.e. the file changed as a result of the fetch).
-fn merge_entity_into_local(
-    base_path: &Path,
-    local_path: &Path,
-    relative: &Path,
-    remote_content: &str,
-) -> Result<bool> {
-    let local_full = local_path.join(relative);
-    let local_existing = fs::read_to_string(&local_full).ok();
-    let base_existing = read_base_file(base_path, relative);
-
-    let merged = match local_existing.as_deref() {
-        // No local file → adopt the remote version as-is.
-        None => remote_content.to_string(),
-        Some(local) => merge_entity_md(base_existing.as_deref(), local, remote_content)?,
-    };
-
-    let changed = local_existing.as_deref() != Some(merged.as_str());
-
-    if changed {
-        if let Some(parent) = local_full.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        fs::write(&local_full, &merged)?;
-    }
-
-    // Advance the ancestor for the next fetch to the remote content we just
-    // observed — NOT the merged result. The merge base must be the last state
-    // common to both sides; that is the raw remote, since local == remote plus
-    // our local-only edits. (Writing the merged result here would make those
-    // local-only edits look like part of the base and silently lose them on a
-    // subsequent fetch.)
-    write_base_file(base_path, relative, remote_content)?;
-    Ok(changed)
+/// What a changed path maps to in the working set. Entity files three-way
+/// merge and feed the DB; the others have their own union rules and never
+/// touch the entity tables.
+enum Target {
+    /// One of the four entity dirs; carries the DB singular type name.
+    Entity { singular: &'static str },
+    /// `rankings/{milestone}/{user}.json` — per-file LWW union.
+    Ranking,
+    /// `config.toml` — last-fetch-wins.
+    Config,
+    /// `events.jsonl` — append-only line union.
+    Events,
+    /// Anything else (e.g. the local-only `.sync_state.json`, never synced).
+    Skip,
 }
 
-/// Reconcile entities deleted on the remote for a single directory.
-///
-/// The merge loop only visits files the remote still has. A file present
-/// locally but absent from `remote_files` was either deleted on the remote or
-/// created locally since the last sync. We tell them apart via the base
-/// snapshot:
-/// - in base and unchanged locally → the remote deleted it; remove it locally.
-/// - in base but edited locally → delete/edit conflict; keep local, report it.
-/// - not in base → purely local creation not yet pushed; keep it.
-fn reconcile_remote_deletions(
-    meta_path: &Path,
-    base_path: &Path,
-    dir: &str,
-    remote_files: &HashSet<PathBuf>,
-    delete_conflicts: &mut Vec<String>,
-) -> Result<()> {
-    let local_dir = meta_path.join(dir);
-    if !local_dir.exists() {
-        return Ok(());
+/// The four entity dirs paired with their DB singular type name.
+const ENTITY_KINDS: &[(&str, &str)] = &[
+    ("problems", "problem"),
+    ("solutions", "solution"),
+    ("critiques", "critique"),
+    ("milestones", "milestone"),
+];
+
+fn classify(path: &str) -> Target {
+    for &(dir, singular) in ENTITY_KINDS {
+        if path.starts_with(dir)
+            && path.as_bytes().get(dir.len()) == Some(&b'/')
+            && path.ends_with(".md")
+        {
+            return Target::Entity { singular };
+        }
     }
-    for entry in fs::read_dir(&local_dir)?.flatten() {
-        let path = entry.path();
-        if path.extension().and_then(|e| e.to_str()) != Some("md") {
-            continue;
+    if path.starts_with("rankings/") && path.ends_with(".json") {
+        return Target::Ranking;
+    }
+    match path {
+        "config.toml" => Target::Config,
+        "events.jsonl" => Target::Events,
+        _ => Target::Skip,
+    }
+}
+
+/// The action a single entity file delta resolves to once the local copy is
+/// known. Pure (no I/O) so the three-way decision table is unit-testable
+/// without a repo or DB.
+#[derive(Debug, PartialEq, Eq)]
+enum EntityAction {
+    /// Write this merged content (it differs from local).
+    Write(String),
+    /// Remote deleted it and local matched the base — remove locally.
+    Delete,
+    /// No change relative to local.
+    Keep,
+    /// Remote deleted it but local was edited since the base — keep local,
+    /// surface a delete/edit conflict.
+    DeleteConflict,
+}
+
+/// Resolve one reconstructed entity delta against the current local content.
+///
+/// `delta.base` is the GCA-side content (the true merge ancestor); `delta.remote`
+/// is the head-side content. For an add, base is `None`; for a delete, remote is
+/// `None`.
+fn resolve_entity_delta(delta: &FileDelta, local: Option<&str>) -> Result<EntityAction> {
+    match delta.kind {
+        DeltaKind::Added | DeltaKind::Modified => {
+            let remote = delta.remote.as_deref().unwrap_or_default();
+            let merged = match local {
+                // No local file → adopt the remote version as-is.
+                None => remote.to_string(),
+                Some(l) => merge_entity_md(delta.base.as_deref(), l, remote)?,
+            };
+            if Some(merged.as_str()) == local {
+                Ok(EntityAction::Keep)
+            } else {
+                Ok(EntityAction::Write(merged))
+            }
         }
-        let relative = Path::new(dir).join(entry.file_name());
-        if remote_files.contains(&relative) {
-            continue; // still on the remote — already handled by the merge loop
+        DeltaKind::Deleted => {
+            let base = delta.base.as_deref().unwrap_or_default();
+            match local {
+                None => Ok(EntityAction::Keep), // already gone locally
+                // Untouched since the base → accept the remote deletion.
+                Some(l) if l == base => Ok(EntityAction::Delete),
+                // Edited locally since the base → keep ours, flag the conflict.
+                Some(_) => Ok(EntityAction::DeleteConflict),
+            }
         }
-        let base_existing = match read_base_file(base_path, &relative) {
-            Some(b) => b,
-            None => continue, // never shared → purely local, keep it
-        };
-        let local_existing = fs::read_to_string(&path).unwrap_or_default();
-        if local_existing == base_existing {
-            // Remote deleted it and we didn't touch it → delete locally.
-            let _ = fs::remove_file(&path);
-            remove_base_file(base_path, &relative)?;
-        } else {
-            // We edited a file the remote deleted → conflict; keep ours.
-            delete_conflicts.push(relative.display().to_string());
+    }
+}
+
+/// Accumulates everything one fetch needs to report and to apply to the DB.
+#[derive(Default)]
+struct FetchOutcome {
+    /// Entity files whose merged result still carries conflict markers.
+    merge_conflicts: Vec<String>,
+    /// Entity files the remote deleted but we kept because they were edited.
+    delete_conflicts: Vec<String>,
+    /// `(singular, id)` of entities to incrementally upsert into the DB.
+    changed: BTreeSet<(String, String)>,
+    /// `(singular, id)` of entities to remove from the DB.
+    deleted: BTreeSet<(String, String)>,
+    /// True if `events.jsonl` changed (drives a DB events refresh).
+    events_changed: bool,
+}
+
+/// Apply one already-parsed file delta to the working set under `meta_path`,
+/// recording follow-up work in `outcome`. The DB is touched later, in bulk,
+/// from `outcome`.
+fn apply_file_delta(meta_path: &Path, delta: &FileDelta, outcome: &mut FetchOutcome) -> Result<()> {
+    match classify(&delta.path) {
+        Target::Entity { singular, .. } => {
+            let local_full = meta_path.join(&delta.path);
+            let local = fs::read_to_string(&local_full).ok();
+            let id = Path::new(&delta.path)
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or_default()
+                .to_string();
+
+            match resolve_entity_delta(delta, local.as_deref())? {
+                EntityAction::Write(merged) => {
+                    if let Some(parent) = local_full.parent() {
+                        fs::create_dir_all(parent)?;
+                    }
+                    fs::write(&local_full, &merged)?;
+                    if has_conflict_markers(&merged) {
+                        // Conflicted markdown won't parse cleanly; leave the DB
+                        // alone until the user resolves it (markdown canonical).
+                        outcome.merge_conflicts.push(delta.path.clone());
+                    } else {
+                        outcome.changed.insert((singular.to_string(), id));
+                    }
+                }
+                EntityAction::Delete => {
+                    let _ = fs::remove_file(&local_full);
+                    outcome.deleted.insert((singular.to_string(), id));
+                }
+                EntityAction::DeleteConflict => {
+                    outcome.delete_conflicts.push(delta.path.clone());
+                }
+                EntityAction::Keep => {}
+            }
         }
+        Target::Ranking => {
+            // Per-user file, LWW by updated_at. A deletion is honored only when
+            // local still matches the base (same rule as entities).
+            let local_full = meta_path.join(&delta.path);
+            let local = fs::read_to_string(&local_full).ok();
+            match delta.kind {
+                DeltaKind::Added | DeltaKind::Modified => {
+                    let remote = delta.remote.as_deref().unwrap_or_default();
+                    let merged = merge_ranking_json(local.as_deref(), remote);
+                    if local.as_deref() != Some(merged.as_str()) {
+                        if let Some(parent) = local_full.parent() {
+                            fs::create_dir_all(parent)?;
+                        }
+                        fs::write(&local_full, &merged)?;
+                    }
+                }
+                DeltaKind::Deleted => {
+                    if local.as_deref() == delta.base.as_deref() {
+                        let _ = fs::remove_file(&local_full);
+                    }
+                }
+            }
+        }
+        Target::Config => {
+            // config.toml: last-fetch-wins; never delete on a remote removal.
+            if let Some(remote) = delta.remote.as_deref() {
+                fs::write(meta_path.join("config.toml"), remote)?;
+            }
+        }
+        Target::Events => {
+            // events.jsonl: append-only line union with the local log.
+            if let Some(remote) = delta.remote.as_deref() {
+                let local_full = meta_path.join("events.jsonl");
+                let local = fs::read_to_string(&local_full).unwrap_or_default();
+                let merged = merge_events_jsonl(&local, remote);
+                if merged != local {
+                    fs::write(&local_full, &merged)?;
+                    outcome.events_changed = true;
+                }
+            }
+        }
+        Target::Skip => {}
     }
     Ok(())
+}
+
+/// Reload an entity from disk by id and upsert it into the DB cache.
+fn upsert_entity(db: &Database, store: &MetadataStore, singular: &str, id: &str) -> Result<()> {
+    match singular {
+        "problem" => db::sync_problem_to_cache(db, &store.load_problem(id)?),
+        "solution" => db::sync_solution_to_cache(db, &store.load_solution(id)?),
+        "critique" => db::sync_critique_to_cache(db, &store.load_critique(id)?),
+        "milestone" => db::sync_milestone_to_cache(db, &store.load_milestone(id)?),
+        other => Err(crate::error::JjjError::Validation(format!(
+            "unknown entity type for upsert: {}",
+            other
+        ))),
+    }
 }
 
 pub fn execute(ctx: &CommandContext, remote: &str) -> Result<()> {
@@ -102,7 +251,6 @@ pub fn execute(ctx: &CommandContext, remote: &str) -> Result<()> {
     let sync_config = ctx.store.load_config().unwrap_or_default().sync;
     let has_git = jj_client.has_git_backend();
 
-    // Resolve sync commands: explicit config > git default > skip
     let fetch_cmd = match sync_config.resolve_fetch(has_git) {
         Some(cmd) => cmd,
         None => {
@@ -112,182 +260,146 @@ pub fn execute(ctx: &CommandContext, remote: &str) -> Result<()> {
         }
     };
 
-    // NOTE: we deliberately do NOT dump the DB to markdown here. Markdown is
-    // canonical (entity saves write it first), and `Database::open` rebuilds a
-    // dirty/interrupted DB to *empty* — dumping that over the markdown would
-    // wipe it. The DB is rebuilt from markdown at the end of the fetch anyway.
-    let db_path = jj_client.repo_root().join(".jj").join("jjj.db");
+    let repo_root = jj_client.repo_root().to_path_buf();
+    let meta_path = repo_root.join(".jj").join("jjj-meta");
+    let db_path = repo_root.join(".jj").join("jjj.db");
 
-    // Snapshot counts before fetch
-    let solutions_before = ctx.store.list_solutions().unwrap_or_default().len();
-    let critiques_before = ctx.store.list_critiques().unwrap_or_default().len();
-
-    // 1. Fetch from remote using configured or default command.
+    // 1. Fetch from the remote (brings per-pod bookmarks local), then track.
     println!("Fetching from {}...", remote);
     let vars = [("remote", remote), ("bookmark", "jjj")];
     jj_client.execute_sync_command(&fetch_cmd, &vars)?;
-
-    // Track the jjj bookmark from the remote if it exists
     if let Some(track_cmd) = sync_config.resolve_track(has_git) {
         let _ = jj_client.execute_sync_command(&track_cmd, &vars);
     }
 
-    // 2. Extract updated files from the fetched jjj bookmark and three-way
-    //    merge them into the local working set.
-    let meta_path = jj_client.repo_root().join(".jj").join("jjj-meta");
-    let base_path = ctx.store.base_path();
-    let mut merge_conflicts: Vec<String> = Vec::new();
-    let mut delete_conflicts: Vec<String> = Vec::new();
-    if jj_client.bookmark_exists("jjj")? {
-        fs::create_dir_all(&meta_path)?;
-        fs::create_dir_all(&base_path)?;
-
-        for dir in &["problems", "solutions", "critiques", "milestones"] {
-            fs::create_dir_all(meta_path.join(dir))?;
-            let mut remote_files: HashSet<PathBuf> = HashSet::new();
-            if let Ok(listing) =
-                jj_client.execute(&["file", "list", "-r", "jjj", &format!("{}/", dir)])
-            {
-                for file_path in listing.lines().filter(|l| !l.trim().is_empty()) {
-                    let remote = match jj_client.execute(&["file", "show", "-r", "jjj", file_path])
-                    {
-                        Ok(c) => c,
-                        Err(_) => continue,
-                    };
-                    let relative = Path::new(file_path);
-                    remote_files.insert(relative.to_path_buf());
-                    match merge_entity_into_local(&base_path, &meta_path, relative, &remote) {
-                        Ok(_) => {
-                            // Detect any conflict markers we emitted so we can
-                            // surface them to the user once at the end.
-                            let local_full = meta_path.join(relative);
-                            if let Ok(content) = fs::read_to_string(&local_full) {
-                                if content.contains("<<<<<<< local") {
-                                    merge_conflicts.push(file_path.to_string());
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            eprintln!("  Warning: merge failed for {}: {}", file_path, e);
-                        }
-                    }
-                }
-            }
-
-            // Remove (or flag) entities the remote deleted. The per-file base
-            // is advanced inside merge_entity_into_local; this is the only
-            // place the base learns about deletions now that the wholesale
-            // snapshot_base pass is gone.
-            reconcile_remote_deletions(
-                &meta_path,
-                &base_path,
-                dir,
-                &remote_files,
-                &mut delete_conflicts,
-            )?;
-        }
-
-        // rankings/{milestone}/{user}.json: per-file last-writer-wins union.
-        // Each file is owned by one user, so there is no cross-user conflict;
-        // we adopt any remote file we don't have and keep the newer of the two
-        // when both exist. No base snapshot needed (this is not a three-way
-        // merge).
-        if let Ok(listing) = jj_client.execute(&["file", "list", "-r", "jjj", "rankings/"]) {
-            for file_path in listing.lines().filter(|l| !l.trim().is_empty()) {
-                let remote = match jj_client.execute(&["file", "show", "-r", "jjj", file_path]) {
-                    Ok(c) => c,
-                    Err(_) => continue,
-                };
-                let local_full = meta_path.join(file_path);
-                let local = fs::read_to_string(&local_full).ok();
-                let merged = merge_ranking_json(local.as_deref(), &remote);
-                if local.as_deref() != Some(merged.as_str()) {
-                    if let Some(parent) = local_full.parent() {
-                        fs::create_dir_all(parent)?;
-                    }
-                    fs::write(&local_full, &merged)?;
-                }
-            }
-        }
-
-        // config.toml: last-fetch-wins (rarely a hot conflict surface).
-        if let Ok(content) = jj_client.execute(&["file", "show", "-r", "jjj", "config.toml"]) {
-            let _ = fs::write(meta_path.join("config.toml"), &content);
-        }
-
-        // events.jsonl: append-only line union. Base not needed.
-        if let Ok(remote_events) = jj_client.execute(&["file", "show", "-r", "jjj", "events.jsonl"])
-        {
-            let local_events_path = meta_path.join("events.jsonl");
-            let local_events = fs::read_to_string(&local_events_path).unwrap_or_default();
-            let merged = merge_events_jsonl(&local_events, &remote_events);
-            if merged != local_events {
-                let _ = fs::write(&local_events_path, &merged);
-            }
-        }
-
-        // NOTE: the per-file ancestor is advanced inside
-        // merge_entity_into_local (to the raw remote content) and pruned in
-        // reconcile_remote_deletions. We deliberately do NOT re-snapshot the
-        // merged working set here — doing so would fold local-only edits into
-        // the base and silently drop them on the next fetch.
+    // 2. Resolve the per-pod head commits to merge.
+    let heads = jj_client.meta_head_commits()?;
+    if heads.is_empty() {
+        println!("Fetched from {}.", remote);
+        println!("  No jjj bookmark on the remote yet.");
+        return Ok(());
     }
 
-    // 3. Update working copy to avoid stale workspace errors
+    // 3. Decide delta vs cold start. Cold start = no recorded merge base, or a
+    //    base that is no longer reachable (GC'd/rewritten).
+    let state = SyncState::load(&meta_path);
+    let cold_start = match state.last_synced_rev.as_deref() {
+        None => true,
+        Some(rev) => jj_client.resolve_commit(rev)?.is_none(),
+    };
+
+    fs::create_dir_all(&meta_path)?;
+    let mut outcome = FetchOutcome::default();
+
+    // 4. Union every head's delta into the working set. For each head the merge
+    //    base is the TRUE common ancestor of our last-synced state and that
+    //    head — falling back to root() at cold start or when no shared ancestor
+    //    is reachable.
+    for head in &heads {
+        let base = if cold_start {
+            "root()".to_string()
+        } else {
+            let lsr = state.last_synced_rev.as_deref().unwrap();
+            jj_client
+                .merge_base(lsr, head)?
+                .unwrap_or_else(|| "root()".to_string())
+        };
+
+        let diff = jj_client.delta_git(&base, head)?;
+        let deltas = parse_git_diff(&diff)?;
+        for delta in &deltas {
+            if let Err(e) = apply_file_delta(&meta_path, delta, &mut outcome) {
+                eprintln!("  Warning: merge failed for {}: {}", delta.path, e);
+            }
+        }
+    }
+
+    // 5. Update the working copy so later commands don't hit a stale workspace.
     let ws_prefix = sync_config.workspace.as_deref();
     let _ = jj_client.execute_workspace(ws_prefix, "update-stale", &[]);
 
-    // 4. Rebuild database from updated markdown files
-    println!("Rebuilding database...");
-    if db_path.exists() {
-        fs::remove_file(&db_path)?;
-        // Also drop the WAL sidecars so a fresh DB doesn't inherit a stale
-        // write-ahead log from the old inode.
-        for suffix in ["-wal", "-shm"] {
-            let mut sidecar = db_path.clone().into_os_string();
-            sidecar.push(suffix);
-            let _ = fs::remove_file(std::path::PathBuf::from(sidecar));
+    // 6. Reconcile the SQLite cache. Cold start rebuilds in full (the slow
+    //    onboarding path); a delta upserts only what changed (Pillar 2).
+    let store_after = MetadataStore::new(jj_client.clone())?;
+    if cold_start {
+        println!("Rebuilding database...");
+        if db_path.exists() {
+            fs::remove_file(&db_path)?;
+            for suffix in ["-wal", "-shm"] {
+                let mut sidecar = db_path.clone().into_os_string();
+                sidecar.push(suffix);
+                let _ = fs::remove_file(std::path::PathBuf::from(sidecar));
+            }
+        }
+        let db = Database::open(&db_path)?;
+        db::load_from_markdown(&db, &store_after)?;
+    } else if let Some(db) = db::open_cache_if_present(&repo_root) {
+        for (singular, id) in &outcome.deleted {
+            if let Err(e) = db::remove_entity_from_cache(&db, singular, id) {
+                eprintln!("  Warning: DB remove failed for {} {}: {}", singular, id, e);
+            }
+        }
+        for (singular, id) in &outcome.changed {
+            if let Err(e) = upsert_entity(&db, &store_after, singular, id) {
+                eprintln!("  Warning: DB upsert failed for {} {}: {}", singular, id, e);
+            }
+        }
+        // Events have no incremental shard yet (Pillar 3 / M2): when the log
+        // changed, refresh the events table from the merged file so insights
+        // and timeline stay correct. Bounded and infrequent relative to the
+        // entity hot path.
+        if outcome.events_changed {
+            let conn = db.conn();
+            clear_events(conn)?;
+            for event in &store_after.list_events()? {
+                insert_event(conn, event)?;
+            }
         }
     }
-    let db = Database::open(&db_path)?;
-    let store_after = MetadataStore::new(jj_client.clone())?;
-    db::load_from_markdown(&db, &store_after)?;
 
-    // 4. Show summary - store_after already created above
-    let solutions_after = store_after.list_solutions().unwrap_or_default().len();
-    let critiques_after = store_after.list_critiques().unwrap_or_default().len();
-
-    let new_solutions = solutions_after.saturating_sub(solutions_before);
-    let new_critiques = critiques_after.saturating_sub(critiques_before);
+    // 7. Summary + conflict reporting.
+    let new_solutions = outcome
+        .changed
+        .iter()
+        .filter(|(s, _)| s == "solution")
+        .count();
+    let new_critiques = outcome
+        .changed
+        .iter()
+        .filter(|(s, _)| s == "critique")
+        .count();
 
     println!("Fetched from {}.", remote);
+    if cold_start {
+        println!("  Cold start — full reconcile + DB rebuild.");
+    }
     if new_solutions > 0 {
-        println!("  {} new solution(s)", new_solutions);
+        println!("  {} solution(s) added/updated", new_solutions);
     }
     if new_critiques > 0 {
-        println!("  {} new critique(s)", new_critiques);
+        println!("  {} critique(s) added/updated", new_critiques);
     }
-    if new_solutions == 0 && new_critiques == 0 {
+    if !cold_start && outcome.changed.is_empty() && outcome.deleted.is_empty() {
         println!("  No new jjj changes.");
     }
 
-    if !merge_conflicts.is_empty() {
+    if !outcome.merge_conflicts.is_empty() {
         eprintln!(
             "\nMerge conflicts in {} file(s) — both sides edited the same body:",
-            merge_conflicts.len()
+            outcome.merge_conflicts.len()
         );
-        for path in &merge_conflicts {
+        for path in &outcome.merge_conflicts {
             eprintln!("  {}", path);
         }
         eprintln!("Open each file, resolve the <<<<<<< / >>>>>>> markers, then save.");
     }
 
-    if !delete_conflicts.is_empty() {
+    if !outcome.delete_conflicts.is_empty() {
         eprintln!(
             "\nDelete/edit conflict in {} file(s) — deleted on the remote but edited locally (kept your copy):",
-            delete_conflicts.len()
+            outcome.delete_conflicts.len()
         );
-        for path in &delete_conflicts {
+        for path in &outcome.delete_conflicts {
             eprintln!("  {}", path);
         }
         eprintln!("Re-delete with `jjj <type> delete` to accept the removal, or push to keep it.");
@@ -307,149 +419,210 @@ mod tests {
         )
     }
 
-    /// Regression for the critical silent-data-loss bug: after a fetch the
-    /// per-file merge ancestor must advance to the RAW REMOTE content, not the
-    /// merged-local result. Otherwise a local-only edit looks like part of the
-    /// base on the next fetch and a divergent remote silently reverts it.
+    fn modified(base: &str, remote: &str) -> FileDelta {
+        FileDelta {
+            path: "problems/01.md".to_string(),
+            kind: DeltaKind::Modified,
+            base: Some(base.to_string()),
+            remote: Some(remote.to_string()),
+        }
+    }
+
     #[test]
-    fn fetch_base_advances_to_remote_so_local_edit_survives_next_fetch() {
-        let tmp = tempfile::tempdir().unwrap();
-        let meta = tmp.path().join("meta");
-        let base = tmp.path().join("base");
-        let rel = Path::new("problems/01.md");
-        fs::create_dir_all(meta.join("problems")).unwrap();
-        fs::create_dir_all(&base).unwrap();
+    fn classify_routes_each_family() {
+        assert!(matches!(
+            classify("problems/01.md"),
+            Target::Entity {
+                singular: "problem",
+                ..
+            }
+        ));
+        assert!(matches!(
+            classify("milestones/x.md"),
+            Target::Entity {
+                singular: "milestone",
+                ..
+            }
+        ));
+        assert!(matches!(classify("rankings/m/u.json"), Target::Ranking));
+        assert!(matches!(classify("config.toml"), Target::Config));
+        assert!(matches!(classify("events.jsonl"), Target::Events));
+        assert!(matches!(classify(".sync_state.json"), Target::Skip));
+        // A problems-prefixed path that isn't actually under problems/.
+        assert!(matches!(classify("problems_01.md"), Target::Skip));
+    }
 
-        // Shared starting point (status: open) recorded as base + local.
-        let initial = md("open", "Original", "2026-05-01T00:00:00Z");
-        fs::write(meta.join(rel), &initial).unwrap();
-        write_base_file(&base, rel, &initial).unwrap();
-
-        // Local-only edit: open -> in_progress. Never pushed.
-        let local_v2 = md("in_progress", "Original", "2026-05-02T00:00:00Z");
-        fs::write(meta.join(rel), &local_v2).unwrap();
-
-        // Round 1 fetch: remote is still the initial (open) state.
-        merge_entity_into_local(&base, &meta, rel, &initial).unwrap();
-        let after1 = fs::read_to_string(meta.join(rel)).unwrap();
-        assert!(
-            after1.contains("status: in_progress"),
-            "round 1 must keep the local in_progress edit:\n{after1}"
-        );
-
-        // Round 2 fetch: remote edits a DIFFERENT field (title), status stays
-        // open with a later timestamp.
-        let remote_v2 = md("open", "Remote Title", "2026-05-03T00:00:00Z");
-        merge_entity_into_local(&base, &meta, rel, &remote_v2).unwrap();
-        let after2 = fs::read_to_string(meta.join(rel)).unwrap();
-
-        assert!(
-            after2.contains("status: in_progress"),
-            "DATA LOSS: the local in_progress edit was silently reverted:\n{after2}"
-        );
-        assert!(
-            after2.contains("Remote Title"),
-            "the remote's title edit should merge in:\n{after2}"
+    #[test]
+    fn added_with_no_local_is_adopted() {
+        let remote = md("open", "New", "2026-05-01T00:00:00Z");
+        let delta = FileDelta {
+            path: "problems/01.md".to_string(),
+            kind: DeltaKind::Added,
+            base: None,
+            remote: Some(remote.clone()),
+        };
+        assert_eq!(
+            resolve_entity_delta(&delta, None).unwrap(),
+            EntityAction::Write(remote)
         );
     }
 
     #[test]
-    fn fetch_adopts_remote_when_no_local_file() {
-        let tmp = tempfile::tempdir().unwrap();
-        let meta = tmp.path().join("meta");
-        let base = tmp.path().join("base");
-        let rel = Path::new("problems/01.md");
-        fs::create_dir_all(meta.join("problems")).unwrap();
-        fs::create_dir_all(&base).unwrap();
+    fn modified_only_remote_changed_takes_remote() {
+        let base = md("open", "Orig", "2026-05-01T00:00:00Z");
+        let remote = md("open", "Remote Title", "2026-05-03T00:00:00Z");
+        // local still equals base → adopt remote.
+        let action = resolve_entity_delta(&modified(&base, &remote), Some(&base)).unwrap();
+        match action {
+            EntityAction::Write(m) => assert!(m.contains("Remote Title")),
+            other => panic!("expected Write, got {:?}", other),
+        }
+    }
 
-        let remote = md("open", "Brand New", "2026-05-01T00:00:00Z");
-        let changed = merge_entity_into_local(&base, &meta, rel, &remote).unwrap();
-        assert!(changed);
-        let local = fs::read_to_string(meta.join(rel)).unwrap();
-        assert!(local.contains("Brand New"));
-        // Base advanced so a re-fetch of the same content is a no-op.
-        assert_eq!(read_base_file(&base, rel).as_deref(), Some(remote.as_str()));
+    /// The keystone no-data-loss case: a local-only edit (open→in_progress) must
+    /// survive when the remote changed a *different* field, given the correct
+    /// (GCA) base.
+    #[test]
+    fn local_only_edit_survives_with_true_base() {
+        let base = md("open", "Orig", "2026-05-01T00:00:00Z");
+        let local = md("in_progress", "Orig", "2026-05-02T00:00:00Z");
+        let remote = md("open", "Remote Title", "2026-05-03T00:00:00Z");
+        let action = resolve_entity_delta(&modified(&base, &remote), Some(&local)).unwrap();
+        match action {
+            EntityAction::Write(m) => {
+                assert!(m.contains("status: in_progress"), "local edit lost:\n{m}");
+                assert!(m.contains("Remote Title"), "remote edit lost:\n{m}");
+            }
+            other => panic!("expected Write, got {:?}", other),
+        }
     }
 
     #[test]
-    fn reconcile_deletes_remote_removed_file_when_local_unchanged() {
-        let tmp = tempfile::tempdir().unwrap();
-        let meta = tmp.path().join("meta");
-        let base = tmp.path().join("base");
-        let rel = Path::new("problems/01.md");
-        fs::create_dir_all(meta.join("problems")).unwrap();
-        fs::create_dir_all(base.join("problems")).unwrap();
+    fn identical_remote_is_keep() {
+        let base = md("open", "Orig", "2026-05-01T00:00:00Z");
+        let local = md("in_progress", "Orig", "2026-05-02T00:00:00Z");
+        // remote equals local exactly → nothing to do.
+        let action = resolve_entity_delta(&modified(&base, &local), Some(&local)).unwrap();
+        assert_eq!(action, EntityAction::Keep);
+    }
 
-        let content = md("open", "Doomed", "2026-05-01T00:00:00Z");
-        fs::write(meta.join(rel), &content).unwrap();
-        write_base_file(&base, rel, &content).unwrap();
-
-        // Remote listing is empty for this dir → the file was deleted remotely.
-        let remote_files: HashSet<PathBuf> = HashSet::new();
-        let mut conflicts = Vec::new();
-        reconcile_remote_deletions(&meta, &base, "problems", &remote_files, &mut conflicts)
-            .unwrap();
-
-        assert!(
-            !meta.join(rel).exists(),
-            "remote-deleted file should be removed locally"
+    #[test]
+    fn delete_when_local_matches_base() {
+        let base = md("open", "Doomed", "2026-05-01T00:00:00Z");
+        let delta = FileDelta {
+            path: "problems/01.md".to_string(),
+            kind: DeltaKind::Deleted,
+            base: Some(base.clone()),
+            remote: None,
+        };
+        assert_eq!(
+            resolve_entity_delta(&delta, Some(&base)).unwrap(),
+            EntityAction::Delete
         );
-        assert!(
-            read_base_file(&base, rel).is_none(),
-            "base entry should be pruned"
+        // Already gone locally → keep (idempotent).
+        assert_eq!(
+            resolve_entity_delta(&delta, None).unwrap(),
+            EntityAction::Keep
         );
-        assert!(conflicts.is_empty());
     }
 
     #[test]
-    fn reconcile_keeps_locally_edited_file_the_remote_deleted_and_flags_conflict() {
-        let tmp = tempfile::tempdir().unwrap();
-        let meta = tmp.path().join("meta");
-        let base = tmp.path().join("base");
-        let rel = Path::new("problems/01.md");
-        fs::create_dir_all(meta.join("problems")).unwrap();
-        fs::create_dir_all(base.join("problems")).unwrap();
-
-        let base_content = md("open", "Original", "2026-05-01T00:00:00Z");
-        write_base_file(&base, rel, &base_content).unwrap();
-        // Local edited it since the base.
-        let local_edited = md("in_progress", "Original", "2026-05-02T00:00:00Z");
-        fs::write(meta.join(rel), &local_edited).unwrap();
-
-        let remote_files: HashSet<PathBuf> = HashSet::new();
-        let mut conflicts = Vec::new();
-        reconcile_remote_deletions(&meta, &base, "problems", &remote_files, &mut conflicts)
-            .unwrap();
-
-        assert!(meta.join(rel).exists(), "locally-edited file must be kept");
-        assert_eq!(conflicts, vec!["problems/01.md".to_string()]);
+    fn delete_when_local_edited_is_conflict() {
+        let base = md("open", "Orig", "2026-05-01T00:00:00Z");
+        let local = md("in_progress", "Orig", "2026-05-02T00:00:00Z");
+        let delta = FileDelta {
+            path: "problems/01.md".to_string(),
+            kind: DeltaKind::Deleted,
+            base: Some(base),
+            remote: None,
+        };
+        assert_eq!(
+            resolve_entity_delta(&delta, Some(&local)).unwrap(),
+            EntityAction::DeleteConflict
+        );
     }
 
     #[test]
-    fn reconcile_keeps_purely_local_file_not_in_base() {
+    fn apply_writes_and_records_changed_entity() {
         let tmp = tempfile::tempdir().unwrap();
-        let meta = tmp.path().join("meta");
-        let base = tmp.path().join("base");
-        let rel = Path::new("problems/01.md");
-        fs::create_dir_all(meta.join("problems")).unwrap();
-        fs::create_dir_all(base.join("problems")).unwrap();
+        let meta = tmp.path();
+        let remote = md("open", "New", "2026-05-01T00:00:00Z");
+        let delta = FileDelta {
+            path: "problems/01.md".to_string(),
+            kind: DeltaKind::Added,
+            base: None,
+            remote: Some(remote),
+        };
+        let mut outcome = FetchOutcome::default();
+        apply_file_delta(meta, &delta, &mut outcome).unwrap();
+        assert!(meta.join("problems/01.md").exists());
+        assert!(outcome
+            .changed
+            .contains(&("problem".to_string(), "01".to_string())));
+    }
 
-        // Local-created file the remote has never seen (not in base).
+    #[test]
+    fn apply_conflict_markers_skip_db_and_are_reported() {
+        let tmp = tempfile::tempdir().unwrap();
+        let meta = tmp.path();
+        // Both sides edited the body differently → conflict markers.
+        let base = md("open", "Orig", "2026-05-01T00:00:00Z");
+        let local = base.replace("body", "alice body");
+        fs::create_dir_all(meta.join("problems")).unwrap();
+        fs::write(meta.join("problems/01.md"), &local).unwrap();
+        let remote = base.replace("body", "bob body");
+        let delta = modified(&base, &remote);
+
+        let mut outcome = FetchOutcome::default();
+        apply_file_delta(meta, &delta, &mut outcome).unwrap();
+
+        let written = fs::read_to_string(meta.join("problems/01.md")).unwrap();
+        assert!(written.contains("<<<<<<< local"));
+        assert_eq!(outcome.merge_conflicts, vec!["problems/01.md".to_string()]);
+        // Conflicted entity must NOT be queued for a DB upsert.
+        assert!(outcome.changed.is_empty());
+    }
+
+    #[test]
+    fn apply_delete_removes_file_and_records_deletion() {
+        let tmp = tempfile::tempdir().unwrap();
+        let meta = tmp.path();
+        let base = md("open", "Doomed", "2026-05-01T00:00:00Z");
+        fs::create_dir_all(meta.join("problems")).unwrap();
+        fs::write(meta.join("problems/01.md"), &base).unwrap();
+        let delta = FileDelta {
+            path: "problems/01.md".to_string(),
+            kind: DeltaKind::Deleted,
+            base: Some(base),
+            remote: None,
+        };
+        let mut outcome = FetchOutcome::default();
+        apply_file_delta(meta, &delta, &mut outcome).unwrap();
+        assert!(!meta.join("problems/01.md").exists());
+        assert!(outcome
+            .deleted
+            .contains(&("problem".to_string(), "01".to_string())));
+    }
+
+    #[test]
+    fn apply_events_union_sets_changed_flag() {
+        let tmp = tempfile::tempdir().unwrap();
+        let meta = tmp.path();
         fs::write(
-            meta.join(rel),
-            md("open", "Fresh local", "2026-05-01T00:00:00Z"),
+            meta.join("events.jsonl"),
+            "{\"when\":\"2026-05-01T00:00:00Z\",\"by\":\"a\"}\n",
         )
         .unwrap();
-
-        let remote_files: HashSet<PathBuf> = HashSet::new();
-        let mut conflicts = Vec::new();
-        reconcile_remote_deletions(&meta, &base, "problems", &remote_files, &mut conflicts)
-            .unwrap();
-
-        assert!(
-            meta.join(rel).exists(),
-            "purely-local new file must not be deleted"
-        );
-        assert!(conflicts.is_empty());
+        let delta = FileDelta {
+            path: "events.jsonl".to_string(),
+            kind: DeltaKind::Modified,
+            base: Some("{\"when\":\"2026-05-01T00:00:00Z\",\"by\":\"a\"}\n".to_string()),
+            remote: Some("{\"when\":\"2026-05-02T00:00:00Z\",\"by\":\"b\"}\n".to_string()),
+        };
+        let mut outcome = FetchOutcome::default();
+        apply_file_delta(meta, &delta, &mut outcome).unwrap();
+        assert!(outcome.events_changed);
+        let merged = fs::read_to_string(meta.join("events.jsonl")).unwrap();
+        assert_eq!(merged.lines().count(), 2);
     }
 }
