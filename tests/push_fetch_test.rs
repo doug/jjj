@@ -366,6 +366,67 @@ fn test_push_validates_before_pushing() {
     );
 }
 
+/// Residual-race insurance: two clones misconfigured with the SAME pod id
+/// contend on `jjj/dup`. The loser's push is rejected non-fast-forward; the
+/// bounded backoff loop must re-fetch (three-way merging the winner's content
+/// into local), rebuild the merge commit, and re-push to success — with NO data
+/// loss on either side. Exercises `push_meta_bookmark_with_retry` +
+/// `track_meta_bookmarks`.
+#[test]
+fn test_push_retry_recovers_from_same_pod_contention() {
+    if jjj::jj::find_executable("jj").is_none() {
+        eprintln!("Skipping test: jj not found");
+        return;
+    }
+
+    let remote_dir = create_bare_remote();
+
+    // Two clones, both (mis)configured as pod "dup".
+    let c1 = setup_repo_with_remote(remote_dir.path());
+    run_jjj(c1.path(), &["init"]);
+    set_pod(c1.path(), "dup");
+    let c2 = setup_repo_with_remote(remote_dir.path());
+    run_jjj(c2.path(), &["init"]);
+    set_pod(c2.path(), "dup");
+
+    // c1 wins the race: creates P1 and pushes jjj/dup first.
+    run_jjj(c1.path(), &["problem", "new", "P1 from c1", "--force"]);
+    let out = run_jjj(c1.path(), &["push", "--remote", "origin"]);
+    assert!(
+        out.status.success(),
+        "c1 push: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    // c2 creates P2 WITHOUT fetching, then pushes to the same jjj/dup → the
+    // first attempt is rejected; the retry loop must reconcile and succeed.
+    run_jjj(c2.path(), &["problem", "new", "P2 from c2", "--force"]);
+    let out = run_jjj(c2.path(), &["push", "--remote", "origin", "--no-prompt"]);
+    assert!(
+        out.status.success(),
+        "c2 push must recover via retry loop. stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    // c2's re-fetch must have merged c1's P1 into its own working set.
+    let list = run_jjj(c2.path(), &["problem", "list"]);
+    let stdout = String::from_utf8_lossy(&list.stdout);
+    assert!(
+        stdout.contains("P1 from c1") && stdout.contains("P2 from c2"),
+        "both problems must survive the contended push on c2. Got:\n{stdout}"
+    );
+
+    // And c1, fetching afterwards, sees both — nothing was lost on the wire.
+    run_jjj(c1.path(), &["fetch", "--remote", "origin"]);
+    let list = run_jjj(c1.path(), &["problem", "list"]);
+    let stdout = String::from_utf8_lossy(&list.stdout);
+    assert!(
+        stdout.contains("P1 from c1") && stdout.contains("P2 from c2"),
+        "c1 must receive c2's merged push. Got:\n{stdout}"
+    );
+}
+
 /// Force a pod identity into a clone's local sync state so it pushes to its own
 /// single-writer bookmark `jjj/{pod}` (parallel per-pod branches). Written
 /// before the first push, mirroring what the future `jjj sync` identity wiring

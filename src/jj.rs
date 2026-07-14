@@ -149,6 +149,21 @@ impl JjClient {
         Ok(())
     }
 
+    /// Track every metadata bookmark (bare `jjj` and per-pod `jjj/*`) from
+    /// `remote`, so their remote counterparts are local-tracking.
+    ///
+    /// A freshly fetched bookmark is *non-tracking* by default, and jj refuses
+    /// to `git push -b jjj/{pod}` when the local ref doesn't track the remote
+    /// one that already exists (it would "unexpectedly" move it). Tracking the
+    /// whole `jjj*` glob makes this pod's own push fast-forward and is a
+    /// harmless no-op for bookmarks already tracked or absent. Best-effort: a
+    /// failure here is not fatal to the fetch.
+    pub fn track_meta_bookmarks(&self, remote: &str) -> Result<()> {
+        let glob = format!("glob:{}*", BOOKMARK_PREFIX);
+        self.execute(&["bookmark", "track", &glob, "--remote", remote])?;
+        Ok(())
+    }
+
     /// Checkout a specific revision
     pub fn checkout(&self, revision: &str) -> Result<()> {
         self.execute(&["new", revision])?;

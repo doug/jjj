@@ -268,8 +268,14 @@ pub fn execute(ctx: &CommandContext, remote: &str) -> Result<()> {
     println!("Fetching from {}...", remote);
     let vars = [("remote", remote), ("bookmark", "jjj")];
     jj_client.execute_sync_command(&fetch_cmd, &vars)?;
-    if let Some(track_cmd) = sync_config.resolve_track(has_git) {
-        let _ = jj_client.execute_sync_command(&track_cmd, &vars);
+    // Track every metadata bookmark (bare `jjj` + per-pod `jjj/*`) so this pod's
+    // own push fast-forwards. Honor an explicit custom track command from config
+    // (which uses `{bookmark}`); otherwise track the whole `jjj*` glob, which
+    // the config default's single-bookmark form would miss.
+    if let Some(track_cmd) = sync_config.track.as_deref() {
+        let _ = jj_client.execute_sync_command(track_cmd, &vars);
+    } else if has_git {
+        let _ = jj_client.track_meta_bookmarks(remote);
     }
 
     // 2. Resolve the per-pod head commits to merge.

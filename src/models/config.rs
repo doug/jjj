@@ -151,16 +151,11 @@ impl SyncConfig {
         None
     }
 
-    /// Resolve the track command: explicit config > git default > None.
-    pub fn resolve_track(&self, has_git: bool) -> Option<String> {
-        if let Some(ref cmd) = self.track {
-            return Some(cmd.clone());
-        }
-        if has_git {
-            return Some("bookmark track {bookmark} --remote {remote}".to_string());
-        }
-        None
-    }
+    // NOTE: bookmark tracking is no longer resolved through a command template.
+    // With per-pod bookmarks fetch must track the whole `jjj*` glob (bare +
+    // per-pod refs), which a single-`{bookmark}` template can't express, so
+    // `commands::fetch` calls `JjClient::track_meta_bookmarks` directly and
+    // honors an explicit `sync.track` command only as an override.
 
     /// Resolve the workspace prefix: explicit config > "workspace".
     pub fn workspace_prefix(&self) -> &str {

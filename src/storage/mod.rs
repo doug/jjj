@@ -119,15 +119,6 @@ pub(super) const SOLUTIONS_DIR: &str = "solutions";
 pub(super) const CRITIQUES_DIR: &str = "critiques";
 pub(super) const MILESTONES_DIR: &str = "milestones";
 
-/// Subdirectory next to `.jj/jjj-meta/` that holds a snapshot of metadata
-/// files as of the last successful fetch or push. Acts as the merge ancestor
-/// during the next fetch: a file's "base" is whatever was here when the
-/// remote diverged from us.
-pub const META_BASE_DIR_NAME: &str = "jjj-meta-base";
-
-/// Entity directories that participate in three-way merge.
-pub const ENTITY_DIRS: &[&str] = &[PROBLEMS_DIR, SOLUTIONS_DIR, CRITIQUES_DIR, MILESTONES_DIR];
-
 /// The core storage abstraction for jjj metadata.
 ///
 /// Manages reading/writing Problems, Solutions, Critiques, and Milestones as
@@ -345,6 +336,26 @@ pub trait Persist: serde::Serialize + serde::de::DeserializeOwned + Sized {
 
     /// Best-effort sync of this entity to the SQLite cache row + FTS index.
     fn sync_to_cache(&self, db: &crate::db::Database) -> Result<()>;
+
+    /// Whether the SQLite cache is a **faithful** index for this type — i.e. a
+    /// DB row reconstructs to an entity byte-identical to a markdown load, so a
+    /// DB-primary list (Pillar 2) is safe.
+    ///
+    /// `true` for problems, solutions, milestones (every persisted field is a
+    /// column, or a derived back-reference [`Self::list_from_cache`] repopulates).
+    /// `false` for critiques: the DB row is a deliberately-lossy query/FTS
+    /// projection that omits the bulky `code_context` / `context_before` /
+    /// `context_after` fields and collapses `line_start`/`line_end`, so those
+    /// reads must stay on the authoritative filesystem walk. (Closing this would
+    /// mean widening the critiques table — deferred to the Pillar 4 rework.)
+    const CACHE_FAITHFUL: bool;
+
+    /// List every instance of this type from the SQLite cache, repopulating any
+    /// derived back-reference fields so the result matches a markdown load.
+    ///
+    /// Only invoked by [`MetadataStore::list`] when [`Self::CACHE_FAITHFUL`] is
+    /// true and the cache is clean.
+    fn list_from_cache(db: &crate::db::Database) -> Result<Vec<Self>>;
 }
 
 impl Persist for crate::models::Problem {
@@ -369,6 +380,15 @@ impl Persist for crate::models::Problem {
     }
     fn sync_to_cache(&self, db: &crate::db::Database) -> Result<()> {
         crate::db::sync::sync_problem_to_cache(db, self)
+    }
+    const CACHE_FAITHFUL: bool = true;
+    fn list_from_cache(db: &crate::db::Database) -> Result<Vec<Self>> {
+        let conn = db.conn();
+        let mut problems = crate::db::entities::list_problems(conn)?;
+        // solution_ids is a derived back-reference (persisted in markdown, not a
+        // column) — rebuild it so the DB read matches a filesystem load.
+        crate::db::entities::populate_problem_computed_fields(conn, &mut problems)?;
+        Ok(problems)
     }
 }
 
@@ -395,6 +415,14 @@ impl Persist for crate::models::Solution {
     fn sync_to_cache(&self, db: &crate::db::Database) -> Result<()> {
         crate::db::sync::sync_solution_to_cache(db, self)
     }
+    const CACHE_FAITHFUL: bool = true;
+    fn list_from_cache(db: &crate::db::Database) -> Result<Vec<Self>> {
+        let conn = db.conn();
+        let mut solutions = crate::db::entities::list_solutions(conn)?;
+        // critique_ids is a derived back-reference — rebuild it (see Problem).
+        crate::db::entities::populate_solution_computed_fields(conn, &mut solutions)?;
+        Ok(solutions)
+    }
 }
 
 impl Persist for crate::models::Critique {
@@ -420,6 +448,14 @@ impl Persist for crate::models::Critique {
     fn sync_to_cache(&self, db: &crate::db::Database) -> Result<()> {
         crate::db::sync::sync_critique_to_cache(db, self)
     }
+    // The DB critique row omits code_context/context_*/line_end (query-only
+    // projection), so critiques are NOT served from the cache — see the trait
+    // const docs. `list_from_cache` is still provided for completeness but is
+    // never invoked while CACHE_FAITHFUL is false.
+    const CACHE_FAITHFUL: bool = false;
+    fn list_from_cache(db: &crate::db::Database) -> Result<Vec<Self>> {
+        Ok(crate::db::entities::list_critiques(db.conn())?)
+    }
 }
 
 impl Persist for crate::models::Milestone {
@@ -444,6 +480,11 @@ impl Persist for crate::models::Milestone {
     }
     fn sync_to_cache(&self, db: &crate::db::Database) -> Result<()> {
         crate::db::sync::sync_milestone_to_cache(db, self)
+    }
+    // problem_ids is stored as a JSON column, so the DB row is faithful as-is.
+    const CACHE_FAITHFUL: bool = true;
+    fn list_from_cache(db: &crate::db::Database) -> Result<Vec<Self>> {
+        Ok(crate::db::entities::list_milestones(db.conn())?)
     }
 }
 
@@ -497,19 +538,6 @@ impl MetadataStore {
     /// Get the path to the metadata directory
     pub fn meta_path(&self) -> &std::path::Path {
         &self.meta_path
-    }
-
-    /// Path to the merge-ancestor snapshot directory (`.jj/jjj-meta-base/`).
-    ///
-    /// This sibling of [`Self::meta_path`] holds a frozen copy of every
-    /// metadata file as of the last successful fetch or push. Fetch uses
-    /// these as the "base" input to three-way merges so concurrent edits
-    /// can be reconciled without data loss.
-    pub fn base_path(&self) -> std::path::PathBuf {
-        self.meta_path
-            .parent()
-            .unwrap_or_else(|| std::path::Path::new("."))
-            .join(META_BASE_DIR_NAME)
     }
 
     // =========================================================================
@@ -571,12 +599,40 @@ impl MetadataStore {
         Ok(())
     }
 
-    /// List every entity of a given type by walking the directory.
+    /// List every entity of a given type.
     ///
-    /// Files that fail to parse are skipped with a per-file warning; the
-    /// rest of the directory is returned. This matches the behavior of the
-    /// previous per-entity `list_*` implementations.
+    /// DB-primary (Pillar 2): when the SQLite cache is present and not dirty it
+    /// is an always-current index of the canonical markdown — every
+    /// save/delete/fetch upserts it synchronously — so list reads are served
+    /// from it in O(query) rather than walking and re-parsing the whole entity
+    /// directory. A missing DB (never built) or a dirty one (an interrupted
+    /// bulk load, which `Database::open` would rebuild to empty) falls back to
+    /// the authoritative filesystem walk below.
+    ///
+    /// In the FS path, files that fail to parse are skipped with a per-file
+    /// warning; the rest of the directory is returned.
     pub(super) fn list<T: Persist>(&self) -> Result<Vec<T>> {
+        if T::CACHE_FAITHFUL {
+            if let Some(ref db) = *self.cache() {
+                // `unwrap_or(true)`: if the dirty check itself errors, treat the
+                // DB as untrustworthy and fall back to the filesystem.
+                if !crate::db::sync::is_dirty(db).unwrap_or(true) {
+                    return T::list_from_cache(db);
+                }
+            }
+        }
+        self.list_fs::<T>()
+    }
+
+    /// List every entity of a given type by walking the filesystem directly,
+    /// bypassing the DB-primary path.
+    ///
+    /// This is the authoritative canonical read. [`Self::list`] uses it as the
+    /// fallback when the cache is absent/dirty/unfaithful, and the DB rebuild
+    /// (`db::load_from_markdown`) MUST use it directly — reading markdown → DB
+    /// via the DB-primary [`Self::list`] would read from the very DB being
+    /// rebuilt (empty), losing every entity.
+    pub(crate) fn list_fs<T: Persist>(&self) -> Result<Vec<T>> {
         self.ensure_meta_checkout()?;
 
         let dir = self.meta_path.join(T::DIR);

@@ -244,6 +244,85 @@ fn prompt_yes_no(message: &str) -> bool {
     input.is_empty() || input == "y" || input == "yes"
 }
 
+/// Bounded number of push attempts for the pod metadata bookmark under
+/// contention. Per-pod refs make same-ref contention near-impossible, so this
+/// is a small insurance cap for a residual race — not a hot loop.
+const MAX_PUSH_ATTEMPTS: u32 = 5;
+
+/// Push one bookmark, tolerating jj version differences in new-bookmark
+/// handling.
+///
+/// Newer jj (≥0.32) auto-creates a bookmark on first push; older jj needs
+/// `--allow-new`. We try the plain command first, then the `--allow-new`
+/// variant — but always surface the **original** error if both fail. jj that
+/// doesn't know `--allow-new` rejects it with an arg-parse error, which would
+/// otherwise mask the real rejection (e.g. a non-fast-forward under contention).
+fn push_one_bookmark(
+    jj_client: &JjClient,
+    push_cmd: &str,
+    bookmark: &str,
+    remote: &str,
+) -> Result<()> {
+    let vars = [("bookmark", bookmark), ("remote", remote)];
+    match jj_client.execute_sync_command(push_cmd, &vars) {
+        Ok(_) => Ok(()),
+        Err(first) => {
+            let retry = format!("{} --allow-new", push_cmd);
+            jj_client
+                .execute_sync_command(&retry, &vars)
+                .map(|_| ())
+                .map_err(|_| first)
+        }
+    }
+}
+
+/// Push this pod's metadata bookmark, retrying under contention with bounded
+/// exponential backoff. Returns the just-pushed commit id.
+///
+/// Per-pod bookmarks make same-ref contention near-impossible by construction
+/// (one writer per `jjj/{pod}`), so this loop is insurance for a residual race
+/// — a misconfigured duplicate pod id, or a transient rejection. On a rejected
+/// push we **re-fetch** (which three-way merges the remote's advance into our
+/// local files, preserving the other writer's content) and **rebuild** the
+/// merge commit before retrying. Rebuilding is essential: the pushed tree is
+/// built from our local files, so merely re-parenting without re-merging would
+/// drop the other writer's content. Without a fetch command we can't reconcile,
+/// so we surface the first rejection immediately.
+fn push_meta_bookmark_with_retry(
+    ctx: &CommandContext,
+    push_cmd: &str,
+    fetch_cmd: Option<&str>,
+    bookmark: &str,
+    remote: &str,
+) -> Result<String> {
+    let store = &ctx.store;
+    let jj_client = ctx.jj();
+    let mut delay = std::time::Duration::from_millis(50);
+    let mut attempt = 0u32;
+    loop {
+        attempt += 1;
+        // (Re)build the merge commit of all current heads and set the local
+        // bookmark; a re-fetch below feeds newly-observed heads into this.
+        let pushed = sync_meta_to_bookmark(jj_client, store, bookmark)?;
+        match push_one_bookmark(jj_client, push_cmd, bookmark, remote) {
+            Ok(()) => return Ok(pushed),
+            Err(e) if fetch_cmd.is_none() || attempt >= MAX_PUSH_ATTEMPTS => return Err(e),
+            Err(e) => {
+                eprintln!(
+                    "  {} push rejected (attempt {}/{}): {}. Re-syncing and retrying...",
+                    bookmark, attempt, MAX_PUSH_ATTEMPTS, e
+                );
+                // Re-fetch + three-way merge the remote's advance into our local
+                // working set so the rebuilt commit descends from it
+                // (non-fast-forward → fast-forward) and keeps both writers' work.
+                crate::commands::fetch::execute(ctx, remote)?;
+                std::thread::sleep(delay);
+                delay = (delay * 2).min(std::time::Duration::from_secs(1));
+            }
+        }
+    }
+}
+
 pub fn execute(
     ctx: &CommandContext,
     bookmarks: Vec<String>,
@@ -298,11 +377,9 @@ pub fn execute(
     let mut state = SyncState::load(store.meta_path());
     let push_bookmark = state.push_bookmark();
 
-    // Create/update the metadata bookmark from the metadata files. This creates
-    // an on-demand workspace, copies files in, and commits a merge of all heads.
-    let pushed_commit = sync_meta_to_bookmark(jj_client, store, &push_bookmark)?;
-
     if dry_run {
+        // Build the merge commit (exercises the workspace path) but push nothing.
+        let _ = sync_meta_to_bookmark(jj_client, store, &push_bookmark)?;
         println!("Would push to {}:", remote);
         for b in &bookmarks {
             println!("  {}", b);
@@ -311,24 +388,23 @@ pub fn execute(
         return Ok(());
     }
 
-    // 1. Push specified bookmarks
+    // 1. Push any caller-specified (code) bookmarks. These never contend with
+    //    metadata, so a single attempt each suffices.
     for bookmark in &bookmarks {
         println!("Pushing {}...", bookmark);
-        let vars = [("bookmark", bookmark.as_str()), ("remote", remote)];
-        if jj_client.execute_sync_command(&push_cmd, &vars).is_err() {
-            // Retry with --allow-new for new bookmarks
-            let retry = format!("{} --allow-new", push_cmd);
-            jj_client.execute_sync_command(&retry, &vars)?;
-        }
+        push_one_bookmark(jj_client, &push_cmd, bookmark, remote)?;
     }
 
-    // 2. Always push this pod's metadata bookmark
+    // 2. Push this pod's metadata bookmark, retrying under any residual race.
     println!("Pushing {}...", push_bookmark);
-    let vars = [("bookmark", push_bookmark.as_str()), ("remote", remote)];
-    if jj_client.execute_sync_command(&push_cmd, &vars).is_err() {
-        let retry = format!("{} --allow-new", push_cmd);
-        jj_client.execute_sync_command(&retry, &vars)?;
-    }
+    let fetch_cmd = sync_config.resolve_fetch(has_git);
+    let pushed_commit = push_meta_bookmark_with_retry(
+        ctx,
+        &push_cmd,
+        fetch_cmd.as_deref(),
+        &push_bookmark,
+        remote,
+    )?;
 
     println!("Pushed to {}.", remote);
 

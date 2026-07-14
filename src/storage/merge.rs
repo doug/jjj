@@ -30,70 +30,14 @@
 use crate::error::{JjjError, Result};
 use serde_yml::{Mapping, Value};
 use std::collections::HashSet;
-use std::fs;
-use std::path::Path;
 
-use super::ENTITY_DIRS;
-
-/// Mirror the current contents of `meta_path` into `base_path` for every
-/// entity file, replacing whatever was previously in `base_path`.
-///
-/// Called after a successful push (the just-pushed state becomes the merge
-/// ancestor for the next fetch) and after a fetch has reconciled remote
-/// changes into the local working set.
-pub fn snapshot_base(meta_path: &Path, base_path: &Path) -> Result<()> {
-    if base_path.exists() {
-        // Wipe entity dirs to handle deletions; leave anything else alone.
-        for dir in ENTITY_DIRS {
-            let p = base_path.join(dir);
-            if p.exists() {
-                fs::remove_dir_all(&p)?;
-            }
-        }
-    }
-    for dir in ENTITY_DIRS {
-        let src = meta_path.join(dir);
-        if !src.exists() {
-            continue;
-        }
-        let dst = base_path.join(dir);
-        fs::create_dir_all(&dst)?;
-        for entry in fs::read_dir(&src)?.flatten() {
-            let file_name = entry.file_name();
-            let dst_file = dst.join(&file_name);
-            fs::copy(entry.path(), &dst_file)?;
-        }
-    }
-    Ok(())
-}
-
-/// Write a single file into the base snapshot at the given path relative to
-/// the entity-meta root (e.g. `problems/01.md`). Used by fetch to advance
-/// the ancestor as each remote file is reconciled.
-pub fn write_base_file(base_path: &Path, relative: &Path, content: &str) -> Result<()> {
-    let dst = base_path.join(relative);
-    if let Some(parent) = dst.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    fs::write(&dst, content)?;
-    Ok(())
-}
-
-/// Read the base copy of an entity file, if it exists.
-pub fn read_base_file(base_path: &Path, relative: &Path) -> Option<String> {
-    fs::read_to_string(base_path.join(relative)).ok()
-}
-
-/// Remove a single file from the base snapshot, if present. Used by fetch when
-/// the remote has deleted an entity so the merge ancestor stops claiming it
-/// ever existed.
-pub fn remove_base_file(base_path: &Path, relative: &Path) -> Result<()> {
-    let p = base_path.join(relative);
-    if p.exists() {
-        fs::remove_file(&p)?;
-    }
-    Ok(())
-}
+// NOTE: the on-disk `base/` mirror (`snapshot_base`/`write_base_file`/
+// `read_base_file`/`remove_base_file`) was removed with the M1 delta-fetch
+// rewrite. The three-way merge base is now a jj *revision*
+// (`GCA(last_synced_rev, head)`), and the base content for each file is
+// reconstructed from a single full-context `jj diff --git` — no parallel
+// directory tree to keep in sync. See `commands/fetch.rs` and
+// `docs/design/scaling-for-agent-swarms.md` (Pillar 1).
 
 /// Three-way merge for an entity markdown file.
 ///
@@ -677,60 +621,5 @@ Original body.\n";
         let b = r#"{"when":"2026-05-02T00:00:00Z","by":"bob"}
 "#;
         assert_eq!(merge_events_jsonl(a, b), merge_events_jsonl(b, a));
-    }
-
-    #[test]
-    fn snapshot_base_mirrors_entity_dirs() {
-        let tmp = tempfile::tempdir().unwrap();
-        let meta = tmp.path().join("meta");
-        let base = tmp.path().join("base");
-        fs::create_dir_all(meta.join("problems")).unwrap();
-        fs::create_dir_all(meta.join("solutions")).unwrap();
-        fs::write(meta.join("problems/01.md"), "alpha").unwrap();
-        fs::write(meta.join("solutions/02.md"), "beta").unwrap();
-
-        snapshot_base(&meta, &base).unwrap();
-
-        assert_eq!(
-            fs::read_to_string(base.join("problems/01.md")).unwrap(),
-            "alpha"
-        );
-        assert_eq!(
-            fs::read_to_string(base.join("solutions/02.md")).unwrap(),
-            "beta"
-        );
-    }
-
-    #[test]
-    fn snapshot_base_handles_deletions_in_entity_dirs() {
-        let tmp = tempfile::tempdir().unwrap();
-        let meta = tmp.path().join("meta");
-        let base = tmp.path().join("base");
-        fs::create_dir_all(meta.join("problems")).unwrap();
-        fs::create_dir_all(base.join("problems")).unwrap();
-        // base had a stale file that no longer exists in meta
-        fs::write(base.join("problems/STALE.md"), "old").unwrap();
-        fs::write(meta.join("problems/01.md"), "fresh").unwrap();
-
-        snapshot_base(&meta, &base).unwrap();
-
-        assert!(!base.join("problems/STALE.md").exists());
-        assert_eq!(
-            fs::read_to_string(base.join("problems/01.md")).unwrap(),
-            "fresh"
-        );
-    }
-
-    #[test]
-    fn write_and_read_base_file_roundtrip() {
-        let tmp = tempfile::tempdir().unwrap();
-        let base = tmp.path().to_path_buf();
-        let relative = Path::new("problems/01.md");
-        write_base_file(&base, relative, "hello").unwrap();
-        assert_eq!(read_base_file(&base, relative).as_deref(), Some("hello"));
-        assert_eq!(
-            read_base_file(&base, Path::new("problems/missing.md")),
-            None
-        );
     }
 }

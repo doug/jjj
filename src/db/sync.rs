@@ -32,26 +32,32 @@ pub fn load_from_markdown(db: &Database, store: &MetadataStore) -> Result<()> {
         // Clear all tables
         clear_all_tables(conn)?;
 
+        // Read directly from the filesystem, NOT via the DB-primary `list_*`
+        // methods (Pillar 2): those would read from the very DB we are
+        // rebuilding — which we just cleared — and load nothing. Markdown is
+        // canonical; the rebuild must walk it.
+        use crate::models::{Critique, Milestone, Problem, Solution};
+
         // Load milestones first (problems reference milestones via FK)
-        let milestones = store.list_milestones()?;
+        let milestones = store.list_fs::<Milestone>()?;
         for milestone in &milestones {
             upsert_milestone(conn, milestone)?;
         }
 
         // Load problems (solutions reference problems via FK)
-        let problems = store.list_problems()?;
+        let problems = store.list_fs::<Problem>()?;
         for problem in &problems {
             upsert_problem(conn, problem)?;
         }
 
         // Load solutions (critiques reference solutions via FK)
-        let solutions = store.list_solutions()?;
+        let solutions = store.list_fs::<Solution>()?;
         for solution in &solutions {
             upsert_solution(conn, solution)?;
         }
 
         // Load critiques
-        let critiques = store.list_critiques()?;
+        let critiques = store.list_fs::<Critique>()?;
         for critique in &critiques {
             upsert_critique(conn, critique)?;
         }
