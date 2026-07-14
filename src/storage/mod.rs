@@ -614,10 +614,25 @@ impl MetadataStore {
     pub(super) fn list<T: Persist>(&self) -> Result<Vec<T>> {
         if T::CACHE_FAITHFUL {
             if let Some(ref db) = *self.cache() {
-                // `unwrap_or(true)`: if the dirty check itself errors, treat the
-                // DB as untrustworthy and fall back to the filesystem.
-                if !crate::db::sync::is_dirty(db).unwrap_or(true) {
-                    return T::list_from_cache(db);
+                match crate::db::sync::is_dirty(db) {
+                    // Clean cache → serve directly (the O(query) hot path).
+                    Ok(false) => return T::list_from_cache(db),
+                    // Present-but-dirty cache: an interrupted bulk load or a
+                    // schema/version rebuild emptied it, so it can no longer be
+                    // trusted (it would report zero entities). Heal it once from
+                    // canonical markdown — the Pillar 2 "next command rebuilds"
+                    // recovery — then serve from the now-clean cache. If the
+                    // rebuild fails or doesn't clear the flag, fall through to the
+                    // authoritative filesystem walk below.
+                    Ok(true) => {
+                        if crate::db::sync::load_from_markdown(db, self).is_ok()
+                            && !crate::db::sync::is_dirty(db).unwrap_or(true)
+                        {
+                            return T::list_from_cache(db);
+                        }
+                    }
+                    // Dirty check itself errored → distrust the cache, use FS.
+                    Err(_) => {}
                 }
             }
         }

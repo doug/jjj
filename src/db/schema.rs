@@ -124,6 +124,15 @@ impl Database {
             }
         }
 
+        // Distinguish a brand-new DB (no prior schema → empty is *correct*) from a
+        // destructive rebuild of a DB that previously held data (dirty flag, or a
+        // schema version mismatch). In the latter case `drop_all_tables` throws
+        // away rows that canonical markdown still holds, so the freshly-emptied
+        // cache must NOT masquerade as clean: DB-primary reads (Pillar 2) would
+        // trust it and report zero entities. Keep it dirty so reads fall back to
+        // the filesystem (and heal from markdown) until a real rebuild repopulates.
+        let had_prior_schema = self.get_schema_version().is_ok();
+
         // Full rebuild: drop all tables and recreate
         self.drop_all_tables()?;
         self.conn.execute_batch(include_str!("schema.sql"))?;
@@ -131,6 +140,9 @@ impl Database {
             "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', ?1)",
             [SCHEMA_VERSION.to_string()],
         )?;
+        if had_prior_schema {
+            self.set_dirty(true)?;
+        }
 
         Ok(())
     }
@@ -208,6 +220,57 @@ mod tests {
         // Clear dirty
         db.set_dirty(false).expect("Failed to clear dirty flag");
         assert!(!db.is_dirty());
+    }
+
+    /// Regression: reopening a *dirty* file-backed DB must leave it dirty.
+    ///
+    /// `ensure_schema` drops and recreates every table (including `meta`, which
+    /// holds the dirty flag) when the DB was interrupted mid-load. If the fresh
+    /// schema looked clean, the DB-primary read path (Pillar 2) would trust an
+    /// empty cache and report zero entities even though markdown is intact. The
+    /// flag must survive so reads fall back to the filesystem until a real
+    /// markdown rebuild repopulates and clears it.
+    #[test]
+    fn test_dirty_survives_reopen() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let path = tmp.path().join("jjj.db");
+
+        // First open: fresh DB, insert a row, then mark dirty (simulating an
+        // interrupted bulk load that never finished/cleared the flag).
+        {
+            let db = Database::open(&path).expect("open");
+            db.conn
+                .execute(
+                    "INSERT INTO problems (id, title, status, priority, created_at, updated_at) \
+                     VALUES ('p1', 't', 'open', 'medium', '2026-01-01', '2026-01-01')",
+                    [],
+                )
+                .expect("insert");
+            db.set_dirty(true).expect("set dirty");
+        }
+
+        // Reopen: the destructive rebuild empties the tables but MUST keep dirty.
+        let db = Database::open(&path).expect("reopen");
+        assert!(
+            db.is_dirty(),
+            "a reopened dirty DB must stay dirty so reads don't trust the emptied cache"
+        );
+        assert!(db.needs_rebuild(), "dirty DB must report needs_rebuild");
+        let rows: i64 = db
+            .conn
+            .query_row("SELECT COUNT(*) FROM problems", [], |r| r.get(0))
+            .expect("count");
+        assert_eq!(rows, 0, "destructive rebuild empties the cache");
+    }
+
+    /// A brand-new DB (no prior schema) is correctly empty and must NOT be dirty.
+    #[test]
+    fn test_fresh_db_is_clean() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let path = tmp.path().join("fresh.db");
+        let db = Database::open(&path).expect("open");
+        assert!(!db.is_dirty(), "a brand-new DB is empty-by-truth, not dirty");
+        assert!(!db.needs_rebuild());
     }
 
     #[test]

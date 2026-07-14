@@ -70,8 +70,7 @@ fn setup_repo_with_remote(remote_path: &std::path::Path) -> TempDir {
 
 #[test]
 fn test_push_to_bare_remote() {
-    if jjj::jj::find_executable("jj").is_none() {
-        eprintln!("Skipping test: jj not found");
+    if !test_helpers::jj_available() {
         return;
     }
 
@@ -144,8 +143,7 @@ fn test_push_to_bare_remote() {
 
 #[test]
 fn test_fetch_from_remote() {
-    if jjj::jj::find_executable("jj").is_none() {
-        eprintln!("Skipping test: jj not found");
+    if !test_helpers::jj_available() {
         return;
     }
 
@@ -211,8 +209,7 @@ fn test_fetch_from_remote() {
 
 #[test]
 fn test_push_fetch_roundtrip() {
-    if jjj::jj::find_executable("jj").is_none() {
-        eprintln!("Skipping test: jj not found");
+    if !test_helpers::jj_available() {
         return;
     }
 
@@ -283,8 +280,7 @@ fn test_push_fetch_roundtrip() {
 
 #[test]
 fn test_push_dry_run() {
-    if jjj::jj::find_executable("jj").is_none() {
-        eprintln!("Skipping test: jj not found");
+    if !test_helpers::jj_available() {
         return;
     }
 
@@ -325,8 +321,7 @@ fn test_push_dry_run() {
 
 #[test]
 fn test_push_validates_before_pushing() {
-    if jjj::jj::find_executable("jj").is_none() {
-        eprintln!("Skipping test: jj not found");
+    if !test_helpers::jj_available() {
         return;
     }
 
@@ -374,8 +369,7 @@ fn test_push_validates_before_pushing() {
 /// `track_meta_bookmarks`.
 #[test]
 fn test_push_retry_recovers_from_same_pod_contention() {
-    if jjj::jj::find_executable("jj").is_none() {
-        eprintln!("Skipping test: jj not found");
+    if !test_helpers::jj_available() {
         return;
     }
 
@@ -483,8 +477,7 @@ fn edit_problem_scalar(dir: &std::path::Path, from: &str, to: &str, updated_at: 
 /// regression: both edits must survive.
 #[test]
 fn test_two_writer_parallel_branches_no_data_loss() {
-    if jjj::jj::find_executable("jj").is_none() {
-        eprintln!("Skipping test: jj not found");
+    if !test_helpers::jj_available() {
         return;
     }
 
@@ -599,8 +592,7 @@ fn test_two_writer_parallel_branches_no_data_loss() {
 /// receives it on fetch.
 #[test]
 fn test_rankings_sync_roundtrip() {
-    if jjj::jj::find_executable("jj").is_none() {
-        eprintln!("Skipping test: jj not found");
+    if !test_helpers::jj_available() {
         return;
     }
 
@@ -657,8 +649,7 @@ fn test_rankings_sync_roundtrip() {
 /// pushing the wipe). Push must instead load markdown→DB, leaving files intact.
 #[test]
 fn test_push_does_not_wipe_markdown_when_cache_is_dirty() {
-    if jjj::jj::find_executable("jj").is_none() {
-        eprintln!("Skipping test: jj not found");
+    if !test_helpers::jj_available() {
         return;
     }
 
@@ -704,4 +695,351 @@ fn test_push_does_not_wipe_markdown_when_cache_is_dirty() {
         md_count >= 1,
         "problem markdown file should survive the push"
     );
+}
+
+/// Replace the markdown body (everything after the closing `---`) of the single
+/// problem file, bumping `updated_at` so scalar LWW is deterministic.
+fn edit_problem_body(dir: &std::path::Path, new_body: &str, updated_at: &str) {
+    let path = only_problem_file(dir);
+    let content = std::fs::read_to_string(&path).expect("read problem");
+    // Frontmatter is the block between the opening `---` and the next `\n---`.
+    let rest = content.strip_prefix("---").expect("leading ---");
+    let end = rest.find("\n---").expect("frontmatter close");
+    let front = rest[..end]
+        .lines()
+        .map(|l| {
+            if l.starts_with("updated_at:") {
+                format!("updated_at: '{}'", updated_at)
+            } else {
+                l.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    // `front` begins with the empty segment before the first newline, so joining
+    // reproduces the leading newline; add the closing fence + body explicitly.
+    std::fs::write(&path, format!("---{}\n---\n\n{}\n", front, new_body)).expect("write problem");
+}
+
+/// Bring `n` writers to a shared ancestor, then fan out: the merge of ALL heads
+/// (`jj new head1 head2 head3 ...`) is only exercised with 2 heads elsewhere.
+/// Three pods each add a DISTINCT problem on parallel branches; a fourth, empty
+/// clone must cold-start and receive all three — proving `meta_head_commits`
+/// unions 3+ refs and the per-head base loop merges them all without loss.
+#[test]
+fn test_three_writer_fanout_merges_all() {
+    if !test_helpers::jj_available() {
+        return;
+    }
+    let remote_dir = create_bare_remote();
+
+    // Seed: alice creates the shared problem and pushes jjj/alice.
+    let alice = setup_repo_with_remote(remote_dir.path());
+    run_jjj(alice.path(), &["init"]);
+    set_pod(alice.path(), "alice");
+    run_jjj(alice.path(), &["problem", "new", "Shared root", "--force"]);
+    assert!(
+        run_jjj(alice.path(), &["push", "--remote", "origin"])
+            .status
+            .success(),
+        "alice seed push"
+    );
+
+    // bob and carol each fetch the shared root, add their own problem, and push
+    // to their own single-writer bookmark — three parallel heads on the remote.
+    for (pod, title) in [("bob", "Bob problem"), ("carol", "Carol problem")] {
+        let clone = setup_repo_with_remote(remote_dir.path());
+        run_jjj(clone.path(), &["init"]);
+        set_pod(clone.path(), pod);
+        assert!(
+            run_jjj(clone.path(), &["fetch", "--remote", "origin"])
+                .status
+                .success(),
+            "{pod} fetch"
+        );
+        run_jjj(clone.path(), &["problem", "new", title, "--force"]);
+        assert!(
+            run_jjj(clone.path(), &["push", "--remote", "origin"])
+                .status
+                .success(),
+            "{pod} push"
+        );
+    }
+
+    // A fresh fourth clone cold-starts and must see ALL three problems.
+    let dave = setup_repo_with_remote(remote_dir.path());
+    run_jjj(dave.path(), &["init"]);
+    assert!(
+        run_jjj(dave.path(), &["fetch", "--remote", "origin"])
+            .status
+            .success(),
+        "dave cold fetch"
+    );
+    let list = run_jjj(dave.path(), &["problem", "list"]);
+    let stdout = String::from_utf8_lossy(&list.stdout);
+    for expect in ["Shared root", "Bob problem", "Carol problem"] {
+        assert!(
+            stdout.contains(expect),
+            "3-writer fanout lost {expect:?}. Got:\n{stdout}"
+        );
+    }
+}
+
+/// Genuine same-field divergence: two pods edit the SAME problem BODY to
+/// different text. The three-way merge cannot auto-resolve, so conflict markers
+/// land in the file — and the next push MUST be blocked by validation (audit
+/// 0.4) so `<<<<<<<` text is never propagated to other clones.
+#[test]
+fn test_body_conflict_blocks_push() {
+    if !test_helpers::jj_available() {
+        return;
+    }
+    let remote_dir = create_bare_remote();
+
+    let alice = setup_repo_with_remote(remote_dir.path());
+    run_jjj(alice.path(), &["init"]);
+    set_pod(alice.path(), "alice");
+    run_jjj(alice.path(), &["problem", "new", "Shared", "--force"]);
+    assert!(
+        run_jjj(alice.path(), &["push", "--remote", "origin"])
+            .status
+            .success(),
+        "alice seed push"
+    );
+
+    let bob = setup_repo_with_remote(remote_dir.path());
+    run_jjj(bob.path(), &["init"]);
+    set_pod(bob.path(), "bob");
+    assert!(
+        run_jjj(bob.path(), &["fetch", "--remote", "origin"])
+            .status
+            .success(),
+        "bob fetch"
+    );
+    assert!(
+        run_jjj(bob.path(), &["push", "--remote", "origin"])
+            .status
+            .success(),
+        "bob seed push"
+    );
+    run_jjj(alice.path(), &["fetch", "--remote", "origin"]);
+
+    // Divergent BODY edits, no fetch between — a true conflict.
+    edit_problem_body(alice.path(), "Alice's analysis of root cause.", "2026-05-02T00:00:00Z");
+    edit_problem_body(bob.path(), "Bob's completely different take.", "2026-05-03T00:00:00Z");
+    assert!(
+        run_jjj(alice.path(), &["push", "--remote", "origin"])
+            .status
+            .success(),
+        "alice body push"
+    );
+    assert!(
+        run_jjj(bob.path(), &["push", "--remote", "origin"])
+            .status
+            .success(),
+        "bob body push"
+    );
+
+    // Alice fetches bob's parallel branch → conflict markers in the body.
+    run_jjj(alice.path(), &["fetch", "--remote", "origin"]);
+    let merged = std::fs::read_to_string(only_problem_file(alice.path())).expect("read merged");
+    assert!(
+        merged.contains("<<<<<<<"),
+        "same-body divergence must produce conflict markers. Got:\n{merged}"
+    );
+
+    // The conflicted markdown must NOT be pushable — validation blocks it.
+    let out = run_jjj(alice.path(), &["push", "--remote", "origin"]);
+    assert!(
+        !out.status.success(),
+        "push of conflict-marked markdown must be blocked. stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        combined.to_lowercase().contains("conflict"),
+        "blocked push should explain the conflict. Got:\n{combined}"
+    );
+}
+
+/// Delete/edit conflict: the remote deletes an entity while we edited it locally
+/// since the shared base. The fetch must KEEP our copy and surface the conflict,
+/// never silently drop the local edit.
+#[test]
+fn test_delete_edit_conflict_keeps_local_copy() {
+    if !test_helpers::jj_available() {
+        return;
+    }
+    let remote_dir = create_bare_remote();
+
+    let alice = setup_repo_with_remote(remote_dir.path());
+    run_jjj(alice.path(), &["init"]);
+    set_pod(alice.path(), "alice");
+    run_jjj(alice.path(), &["problem", "new", "Contested", "--force"]);
+    assert!(
+        run_jjj(alice.path(), &["push", "--remote", "origin"])
+            .status
+            .success(),
+        "alice seed push"
+    );
+
+    let bob = setup_repo_with_remote(remote_dir.path());
+    run_jjj(bob.path(), &["init"]);
+    set_pod(bob.path(), "bob");
+    assert!(
+        run_jjj(bob.path(), &["fetch", "--remote", "origin"])
+            .status
+            .success(),
+        "bob fetch"
+    );
+    assert!(
+        run_jjj(bob.path(), &["push", "--remote", "origin"])
+            .status
+            .success(),
+        "bob seed push"
+    );
+    run_jjj(alice.path(), &["fetch", "--remote", "origin"]);
+
+    // alice deletes the file; bob edits a scalar. Both push their branches.
+    std::fs::remove_file(only_problem_file(alice.path())).expect("delete problem file");
+    assert!(
+        run_jjj(alice.path(), &["push", "--remote", "origin"])
+            .status
+            .success(),
+        "alice delete push"
+    );
+    edit_problem_scalar(
+        bob.path(),
+        "status: open",
+        "status: in_progress",
+        "2026-05-04T00:00:00Z",
+    );
+    assert!(
+        run_jjj(bob.path(), &["push", "--remote", "origin"])
+            .status
+            .success(),
+        "bob edit push"
+    );
+
+    // bob fetches alice's deletion → delete/edit conflict → keep bob's edited copy.
+    let out = run_jjj(bob.path(), &["fetch", "--remote", "origin"]);
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let list = run_jjj(bob.path(), &["problem", "list"]);
+    let stdout = String::from_utf8_lossy(&list.stdout);
+    assert!(
+        stdout.contains("Contested"),
+        "delete/edit conflict must KEEP the locally-edited entity. Got:\n{stdout}"
+    );
+    assert!(
+        combined.to_lowercase().contains("delete") || combined.to_lowercase().contains("conflict"),
+        "fetch should report the delete/edit conflict. Got:\n{combined}"
+    );
+}
+
+/// Pillar 2 read parity: reads served from the clean DB (`list<T>`) must return
+/// the same entities as the FS walk (`list_fs<T>`, used when the DB is dirty).
+/// A regression here means the DB-primary path shows a different world than the
+/// canonical markdown.
+#[test]
+fn test_db_primary_and_fs_reads_agree() {
+    if !test_helpers::jj_available() {
+        return;
+    }
+    let repo = test_helpers::setup_test_repo();
+    let path = repo.path();
+
+    run_jjj(path, &["problem", "new", "Alpha problem", "--force"]);
+    run_jjj(path, &["problem", "new", "Beta problem", "--force"]);
+    run_jjj(
+        path,
+        &["solution", "new", "Fix alpha", "--problem", "Alpha problem", "--force"],
+    );
+
+    // DB-primary read (cache is clean after the writes' synchronous upserts).
+    let db_list = String::from_utf8_lossy(&run_jjj(path, &["problem", "list"]).stdout).into_owned();
+
+    // Force the FS-walk fallback by marking the cache dirty.
+    let db_path = path.join(".jj").join("jjj.db");
+    {
+        let db = jjj::db::Database::open(&db_path).expect("open db");
+        jjj::db::set_dirty(&db, true).expect("set dirty");
+    }
+    let fs_list = String::from_utf8_lossy(&run_jjj(path, &["problem", "list"]).stdout).into_owned();
+
+    for expect in ["Alpha problem", "Beta problem"] {
+        assert!(
+            db_list.contains(expect) && fs_list.contains(expect),
+            "DB-primary and FS reads must agree on {expect:?}.\nDB:\n{db_list}\nFS:\n{fs_list}"
+        );
+    }
+}
+
+/// Scale smoke: a cold-start fetch of a mid-sized corpus must complete and adopt
+/// every entity. Catches O(n²) surprises in the delta loop / DB rebuild that a
+/// handful-of-entities test cannot. Kept modest so it runs in normal CI; the
+/// full 25K/100K validation lives in `tools/bench/`.
+#[test]
+fn test_scale_cold_start_fetch_smoke() {
+    if !test_helpers::jj_available() {
+        return;
+    }
+    const N: usize = 400;
+    let remote_dir = create_bare_remote();
+
+    // Alice: write N problem markdown files directly into the meta tree, then push.
+    let alice = setup_repo_with_remote(remote_dir.path());
+    run_jjj(alice.path(), &["init"]);
+    let problems = alice
+        .path()
+        .join(".jj")
+        .join("jjj-meta")
+        .join("problems");
+    std::fs::create_dir_all(&problems).expect("create problems dir");
+    for i in 0..N {
+        // UUID7-shaped ids so listing/sorting behaves as in production.
+        let id = format!("01957d3e-a8b2-7def-8c3a-{:012x}", i);
+        let md = format!(
+            "---\nid: '{id}'\ntitle: Scale problem {i}\nstatus: open\npriority: medium\ncreated_at: '2026-05-01T00:00:00Z'\nupdated_at: '2026-05-01T00:00:00Z'\n---\n\nGenerated scale-smoke problem number {i}.\n"
+        );
+        std::fs::write(problems.join(format!("{id}.md")), md).expect("write problem");
+    }
+    // Rebuild alice's DB from the freshly-written markdown, then push.
+    assert!(
+        run_jjj(alice.path(), &["db", "rebuild"]).status.success(),
+        "alice db rebuild"
+    );
+    assert!(
+        run_jjj(alice.path(), &["push", "--remote", "origin"])
+            .status
+            .success(),
+        "alice scale push"
+    );
+
+    // Bob cold-starts and must adopt all N.
+    let bob = setup_repo_with_remote(remote_dir.path());
+    run_jjj(bob.path(), &["init"]);
+    let out = run_jjj(bob.path(), &["fetch", "--remote", "origin"]);
+    assert!(
+        out.status.success(),
+        "bob cold fetch of {N} entities: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    // Spot-check a few across the range rather than parsing the whole list.
+    let list =
+        String::from_utf8_lossy(&run_jjj(bob.path(), &["problem", "list"]).stdout).into_owned();
+    for i in [0usize, N / 2, N - 1] {
+        assert!(
+            list.contains(&format!("Scale problem {i}")),
+            "cold-start scale fetch dropped 'Scale problem {i}'"
+        );
+    }
 }

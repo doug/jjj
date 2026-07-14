@@ -63,7 +63,23 @@ pub fn run_jjj_success(dir: impl AsRef<Path>, args: &[&str]) -> String {
     String::from_utf8_lossy(&output.stdout).into_owned()
 }
 
-/// Check if jj is available; tests should skip if not
+/// Check if jj is available; tests should skip if not.
+///
+/// Locally, a missing `jj` returns `false` so the suite still runs on a machine
+/// without jujutsu installed. In CI this silent-skip is a trap: the sync/data-loss
+/// integration tests would report "passed" having executed nothing. Set
+/// `JJJ_REQUIRE_JJ=1` (the CI does) to turn a missing `jj` into a hard failure so
+/// those guards can never masquerade as green.
 pub fn jj_available() -> bool {
-    jjj::jj::find_executable("jj").is_some()
+    if jjj::jj::find_executable("jj").is_some() {
+        return true;
+    }
+    if std::env::var_os("JJJ_REQUIRE_JJ").is_some() {
+        panic!(
+            "jj binary not found but JJJ_REQUIRE_JJ is set: the jj-backed \
+             integration tests must run here, not silently skip. Install jujutsu \
+             (jj) on this runner."
+        );
+    }
+    false
 }
