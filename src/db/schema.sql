@@ -63,6 +63,13 @@ CREATE TABLE IF NOT EXISTS critiques (
     argument TEXT DEFAULT '',
     replies TEXT DEFAULT '[]',  -- JSON array
     github_review_id INTEGER,
+    -- Full-fidelity code-location fields so the critique row is lossless and
+    -- the cache is authoritative for reads (Pillar 4). `line_number` above holds
+    -- line_start for backward compatibility; line_end is stored separately.
+    line_end INTEGER,
+    code_context TEXT DEFAULT '[]',    -- JSON array
+    context_before TEXT DEFAULT '[]',  -- JSON array
+    context_after TEXT DEFAULT '[]',   -- JSON array
     FOREIGN KEY (solution_id) REFERENCES solutions(id)
 );
 

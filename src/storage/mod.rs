@@ -350,13 +350,11 @@ pub trait Persist: serde::Serialize + serde::de::DeserializeOwned + Clone + Size
     /// DB row reconstructs to an entity byte-identical to a markdown load, so a
     /// DB-primary list (Pillar 2) is safe.
     ///
-    /// `true` for problems, solutions, milestones (every persisted field is a
-    /// column, or a derived back-reference [`Self::list_from_cache`] repopulates).
-    /// `false` for critiques: the DB row is a deliberately-lossy query/FTS
-    /// projection that omits the bulky `code_context` / `context_before` /
-    /// `context_after` fields and collapses `line_start`/`line_end`, so those
-    /// reads must stay on the authoritative filesystem walk. (Closing this would
-    /// mean widening the critiques table — deferred to the Pillar 4 rework.)
+    /// `true` for every entity type: the critiques table now stores the full
+    /// code-location fields (`line_end`, `code_context`, `context_before`,
+    /// `context_after`) as of schema v10, so a critique row reconstructs
+    /// losslessly — the last type that was forced onto the filesystem walk is
+    /// now cache-faithful too.
     const CACHE_FAITHFUL: bool;
 
     /// List every instance of this type from the SQLite cache, repopulating any
@@ -458,11 +456,10 @@ impl Persist for crate::models::Critique {
     fn sync_to_cache(&self, db: &crate::db::Database) -> Result<()> {
         crate::db::sync::sync_critique_to_cache(db, self)
     }
-    // The DB critique row omits code_context/context_*/line_end (query-only
-    // projection), so critiques are NOT served from the cache — see the trait
-    // const docs. `list_from_cache` is still provided for completeness but is
-    // never invoked while CACHE_FAITHFUL is false.
-    const CACHE_FAITHFUL: bool = false;
+    // Faithful as of schema v10: the critiques table stores line_end and the
+    // code_context/context_before/context_after JSON arrays, so a row
+    // reconstructs byte-identically to a markdown load.
+    const CACHE_FAITHFUL: bool = true;
     fn list_from_cache(db: &crate::db::Database) -> Result<Vec<Self>> {
         Ok(crate::db::entities::list_critiques(db.conn())?)
     }

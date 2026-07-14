@@ -117,6 +117,20 @@ pub fn all_migrations() -> Vec<Migration> {
             requires_rebuild: true,
             up: |_conn| Ok(()),
         },
+        Migration {
+            version: 10,
+            description: "Add full-fidelity critique columns (line_end, code_context, context_before/after) so critiques are cache-faithful",
+            requires_rebuild: false,
+            up: |conn| {
+                conn.execute_batch(
+                    "ALTER TABLE critiques ADD COLUMN line_end INTEGER;
+                     ALTER TABLE critiques ADD COLUMN code_context TEXT DEFAULT '[]';
+                     ALTER TABLE critiques ADD COLUMN context_before TEXT DEFAULT '[]';
+                     ALTER TABLE critiques ADD COLUMN context_after TEXT DEFAULT '[]';",
+                )?;
+                Ok(())
+            },
+        },
     ]
 }
 

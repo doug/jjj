@@ -116,7 +116,8 @@ impl DbEntity for Solution {
 impl DbEntity for Critique {
     const TABLE: &'static str = "critiques";
     const COLUMNS: &'static str = "id, title, status, solution_id, severity, reviewer, author, \
-        file_path, line_number, created_at, updated_at, argument, replies, github_review_id";
+        file_path, line_number, created_at, updated_at, argument, replies, github_review_id, \
+        line_end, code_context, context_before, context_after";
     fn from_row(row: &rusqlite::Row) -> SqliteResult<Self> {
         row_to_critique(row)
     }
@@ -337,12 +338,19 @@ pub fn upsert_critique(conn: &Connection, critique: &Critique) -> SqliteResult<(
     let replies_json =
         serde_json::to_string(&critique.replies).unwrap_or_else(|_| "[]".to_string());
 
+    let code_context_json =
+        serde_json::to_string(&critique.code_context).unwrap_or_else(|_| "[]".to_string());
+    let context_before_json =
+        serde_json::to_string(&critique.context_before).unwrap_or_else(|_| "[]".to_string());
+    let context_after_json =
+        serde_json::to_string(&critique.context_after).unwrap_or_else(|_| "[]".to_string());
+
     conn.execute(
         "INSERT OR REPLACE INTO critiques (
             id, title, status, solution_id, severity, reviewer, author, file_path,
             line_number, created_at, updated_at, argument, replies,
-            github_review_id
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+            github_review_id, line_end, code_context, context_before, context_after
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
         params![
             critique.id,
             critique.title,
@@ -358,6 +366,10 @@ pub fn upsert_critique(conn: &Connection, critique: &Critique) -> SqliteResult<(
             critique.argument,
             replies_json,
             critique.github_review_id.map(|n| n as i64),
+            critique.line_end.map(|n| n as i64),
+            code_context_json,
+            context_before_json,
+            context_after_json,
         ],
     )?;
     Ok(())
@@ -381,7 +393,7 @@ pub fn list_critiques_for_solution(
     let mut stmt = conn.prepare(
         "SELECT id, title, status, solution_id, severity, reviewer, author, file_path,
                 line_number, created_at, updated_at, argument, replies,
-                github_review_id
+                github_review_id, line_end, code_context, context_before, context_after
          FROM critiques WHERE solution_id = ?1 ORDER BY created_at DESC",
     )?;
 
@@ -399,13 +411,29 @@ fn row_to_critique(row: &rusqlite::Row) -> SqliteResult<Critique> {
     // Column order: id(0), title(1), status(2), solution_id(3), severity(4),
     //   reviewer(5), author(6), file_path(7), line_number(8),
     //   created_at(9), updated_at(10), argument(11), replies(12),
-    //   github_review_id(13)
+    //   github_review_id(13), line_end(14), code_context(15),
+    //   context_before(16), context_after(17)
     let status_str: String = row.get(2)?;
     let severity_str: String = row.get(4)?;
     let created_at_str: String = row.get(9)?;
     let updated_at_str: String = row.get(10)?;
     let replies_json: String = row
         .get::<_, Option<String>>(12)?
+        .unwrap_or_else(|| "[]".to_string());
+    let line_start = row.get::<_, Option<i64>>(8)?.map(|n| n as usize);
+    // line_end falls back to line_start for rows written before the column existed.
+    let line_end = row
+        .get::<_, Option<i64>>(14)?
+        .map(|n| n as usize)
+        .or(line_start);
+    let code_context_json: String = row
+        .get::<_, Option<String>>(15)?
+        .unwrap_or_else(|| "[]".to_string());
+    let context_before_json: String = row
+        .get::<_, Option<String>>(16)?
+        .unwrap_or_else(|| "[]".to_string());
+    let context_after_json: String = row
+        .get::<_, Option<String>>(17)?
         .unwrap_or_else(|| "[]".to_string());
 
     Ok(Critique {
@@ -417,14 +445,14 @@ fn row_to_critique(row: &rusqlite::Row) -> SqliteResult<Critique> {
         reviewer: row.get(5)?,
         author: row.get(6)?,
         file_path: row.get(7)?,
-        line_start: row.get::<_, Option<i64>>(8)?.map(|n| n as usize),
-        line_end: row.get::<_, Option<i64>>(8)?.map(|n| n as usize), // DB only stores one line number
+        line_start,
+        line_end,
         created_at: parse_datetime(&created_at_str, "created_at", "critique"),
         updated_at: parse_datetime(&updated_at_str, "updated_at", "critique"),
         argument: row.get::<_, Option<String>>(11)?.unwrap_or_default(),
-        code_context: Vec::new(),   // Not stored in DB
-        context_before: Vec::new(), // Not stored in DB
-        context_after: Vec::new(),  // Not stored in DB
+        code_context: parse_json_vec(&code_context_json, "code_context"),
+        context_before: parse_json_vec(&context_before_json, "context_before"),
+        context_after: parse_json_vec(&context_after_json, "context_after"),
         replies: parse_json_vec(&replies_json, "replies"),
         github_review_id: row.get::<_, Option<i64>>(13)?.map(|n| n as u64),
     })
@@ -671,6 +699,12 @@ mod tests {
         critique.reviewer = Some("charlie".to_string());
         critique.file_path = Some("src/main.rs".to_string());
         critique.line_start = Some(42);
+        // Full-fidelity code-location fields (schema v10) — the cache must now
+        // round-trip these losslessly so critiques are CACHE_FAITHFUL.
+        critique.line_end = Some(48);
+        critique.code_context = vec!["let x = 1;".to_string(), "let y = 2;".to_string()];
+        critique.context_before = vec!["fn main() {".to_string()];
+        critique.context_after = vec!["}".to_string()];
 
         upsert_critique(conn, &critique).expect("Failed to upsert critique");
 
@@ -687,6 +721,14 @@ mod tests {
         assert_eq!(loaded.reviewer, Some("charlie".to_string()));
         assert_eq!(loaded.file_path, Some("src/main.rs".to_string()));
         assert_eq!(loaded.line_start, Some(42));
+        // The previously-dropped fidelity fields survive the DB round-trip.
+        assert_eq!(loaded.line_end, Some(48));
+        assert_eq!(
+            loaded.code_context,
+            vec!["let x = 1;".to_string(), "let y = 2;".to_string()]
+        );
+        assert_eq!(loaded.context_before, vec!["fn main() {".to_string()]);
+        assert_eq!(loaded.context_after, vec!["}".to_string()]);
         assert_eq!(loaded.status, CritiqueStatus::Open);
 
         // Update with reply
