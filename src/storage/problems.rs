@@ -7,7 +7,7 @@
 
 use super::{MetadataStore, CRITIQUES_DIR, SOLUTIONS_DIR};
 use crate::error::Result;
-use crate::models::Problem;
+use crate::models::{Problem, Solution};
 use std::fs;
 
 impl MetadataStore {
@@ -16,7 +16,13 @@ impl MetadataStore {
     /// Use [`MetadataStore::list_subproblems`] to get the children of a problem;
     /// children are derived from `parent_id` references, never stored.
     pub fn load_problem(&self, problem_id: &str) -> Result<Problem> {
-        self.load::<Problem>(problem_id)
+        let mut problem = self.load::<Problem>(problem_id)?;
+        problem.solution_ids = self.reverse_ids_for::<Solution, _>(
+            "SELECT id FROM solutions WHERE problem_id = ?1",
+            problem_id,
+            |s| s.problem_id == problem_id,
+        )?;
+        Ok(problem)
     }
 
     /// Save a problem.
@@ -24,9 +30,19 @@ impl MetadataStore {
         self.save(problem)
     }
 
-    /// List all problems.
+    /// List all problems, with the derived `solution_ids` back-reference
+    /// attached (Pillar 4 — never stored, always derived from
+    /// `Solution::problem_id`).
     pub fn list_problems(&self) -> Result<Vec<Problem>> {
-        self.list::<Problem>()
+        let mut problems = self.list::<Problem>()?;
+        let mut by_problem = self
+            .reverse_ids_batch::<Solution, _>("SELECT problem_id, id FROM solutions", |s| {
+                s.problem_id.clone()
+            })?;
+        for problem in &mut problems {
+            problem.solution_ids = by_problem.remove(&problem.id).unwrap_or_default();
+        }
+        Ok(problems)
     }
 
     /// Generate the next problem ID (UUID7).
@@ -39,9 +55,12 @@ impl MetadataStore {
     /// This will:
     /// - Orphan child problems (remove their parent_id)
     /// - Delete associated solutions and their critiques
-    /// - Remove the problem from its milestone
+    ///
+    /// Derived back-references (a milestone's `problem_ids`, a parent problem's
+    /// `solution_ids`) need no cleanup — they follow the deleted files (Pillar 4).
     pub fn delete_problem(&self, problem_id: &str) -> Result<()> {
-        let problem = self.load_problem(problem_id)?;
+        // Validate existence up front so we error before orphaning children.
+        self.load_problem(problem_id)?;
 
         // Orphan child problems
         match self.list_subproblems(problem_id) {
@@ -108,21 +127,9 @@ impl MetadataStore {
             ),
         }
 
-        // Remove from milestone
-        if let Some(ref milestone_id) = problem.milestone_id {
-            match self.load_milestone(milestone_id) {
-                Ok(mut milestone) => {
-                    milestone.remove_problem(problem_id);
-                    if let Err(e) = self.save_milestone(&milestone) {
-                        eprintln!(
-                            "Warning: failed to update milestone {}: {}",
-                            milestone_id, e
-                        );
-                    }
-                }
-                Err(e) => eprintln!("Warning: failed to load milestone {}: {}", milestone_id, e),
-            }
-        }
+        // No milestone rewrite: the milestone's `problem_ids` derives from this
+        // problem's forward `milestone_id` (Pillar 4), so deleting the problem
+        // file removes it from the derived list automatically.
 
         self.delete_file_and_cache::<Problem>(problem_id)
     }

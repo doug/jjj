@@ -7,13 +7,19 @@
 
 use super::{MetadataStore, CRITIQUES_DIR};
 use crate::error::Result;
-use crate::models::Solution;
+use crate::models::{Critique, Solution};
 use std::fs;
 
 impl MetadataStore {
-    /// Load a solution by ID.
+    /// Load a solution by ID, with the derived `critique_ids` attached.
     pub fn load_solution(&self, solution_id: &str) -> Result<Solution> {
-        self.load::<Solution>(solution_id)
+        let mut solution = self.load::<Solution>(solution_id)?;
+        solution.critique_ids = self.reverse_ids_for::<Critique, _>(
+            "SELECT id FROM critiques WHERE solution_id = ?1",
+            solution_id,
+            |c| c.solution_id == solution_id,
+        )?;
+        Ok(solution)
     }
 
     /// Save a solution.
@@ -21,9 +27,18 @@ impl MetadataStore {
         self.save(solution)
     }
 
-    /// List all solutions.
+    /// List all solutions, with the derived `critique_ids` back-reference
+    /// attached (Pillar 4 — derived from `Critique::solution_id`).
     pub fn list_solutions(&self) -> Result<Vec<Solution>> {
-        self.list::<Solution>()
+        let mut solutions = self.list::<Solution>()?;
+        let mut by_solution = self
+            .reverse_ids_batch::<Critique, _>("SELECT solution_id, id FROM critiques", |c| {
+                c.solution_id.clone()
+            })?;
+        for solution in &mut solutions {
+            solution.critique_ids = by_solution.remove(&solution.id).unwrap_or_default();
+        }
+        Ok(solutions)
     }
 
     /// Generate the next solution ID (UUID7).
@@ -31,15 +46,13 @@ impl MetadataStore {
         Ok(crate::id::generate_id())
     }
 
-    /// Delete a solution and clean up references.
+    /// Delete a solution and its critiques.
     ///
-    /// This will:
-    /// - Delete associated critiques
-    /// - Remove the solution from its parent problem's solution_ids
+    /// The parent problem's `solution_ids` is a derived back-reference (Pillar
+    /// 4), so removing the solution file is all that's needed — there is no
+    /// parent to rewrite.
     pub fn delete_solution(&self, solution_id: &str) -> Result<()> {
-        let solution = self.load_solution(solution_id)?;
-
-        // Delete associated critiques
+        // Delete associated critiques (their forward ref points here).
         if let Ok(critiques) = self.list_critiques_for_solution(solution_id) {
             for critique in critiques {
                 if let Err(e) = fs::remove_file(
@@ -49,17 +62,6 @@ impl MetadataStore {
                 ) {
                     eprintln!("Warning: failed to delete critique {}: {}", critique.id, e);
                 }
-            }
-        }
-
-        // Remove from parent problem's solution_ids
-        if let Ok(mut problem) = self.load_problem(&solution.problem_id) {
-            problem.remove_solution(solution_id);
-            if let Err(e) = self.save_problem(&problem) {
-                eprintln!(
-                    "Warning: failed to update problem {}: {}",
-                    solution.problem_id, e
-                );
             }
         }
 

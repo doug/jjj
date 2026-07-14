@@ -24,7 +24,12 @@ pub struct Solution {
     /// Current status
     pub status: SolutionStatus,
 
-    /// Critique IDs - critiques of this solution
+    /// Critique IDs - critiques of this solution.
+    ///
+    /// Derived back-reference (Pillar 4): the forward reference
+    /// `Critique::solution_id` is the single source of truth. Populated at read
+    /// time and included in `--json`, but stripped before the markdown write
+    /// (`clear_derived_fields`) so it is never stored.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub critique_ids: Vec<String>,
 

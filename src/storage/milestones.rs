@@ -6,12 +6,18 @@
 
 use super::MetadataStore;
 use crate::error::Result;
-use crate::models::Milestone;
+use crate::models::{Milestone, Problem};
 
 impl MetadataStore {
-    /// Load a milestone by ID.
+    /// Load a milestone by ID, with the derived `problem_ids` attached.
     pub fn load_milestone(&self, milestone_id: &str) -> Result<Milestone> {
-        self.load::<Milestone>(milestone_id)
+        let mut milestone = self.load::<Milestone>(milestone_id)?;
+        milestone.problem_ids = self.reverse_ids_for::<Problem, _>(
+            "SELECT id FROM problems WHERE milestone_id = ?1",
+            milestone_id,
+            |p| p.milestone_id.as_deref() == Some(milestone_id),
+        )?;
+        Ok(milestone)
     }
 
     /// Save a milestone.
@@ -19,9 +25,18 @@ impl MetadataStore {
         self.save(milestone)
     }
 
-    /// List all milestones.
+    /// List all milestones, with the derived `problem_ids` back-reference
+    /// attached (Pillar 4 — derived from `Problem::milestone_id`).
     pub fn list_milestones(&self) -> Result<Vec<Milestone>> {
-        self.list::<Milestone>()
+        let mut milestones = self.list::<Milestone>()?;
+        let mut by_milestone = self.reverse_ids_batch::<Problem, _>(
+            "SELECT milestone_id, id FROM problems WHERE milestone_id IS NOT NULL",
+            |p| p.milestone_id.clone().unwrap_or_default(),
+        )?;
+        for milestone in &mut milestones {
+            milestone.problem_ids = by_milestone.remove(&milestone.id).unwrap_or_default();
+        }
+        Ok(milestones)
     }
 
     /// Generate the next milestone ID (UUID7).

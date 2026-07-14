@@ -269,7 +269,10 @@ mod tests {
         let tmp = tempfile::tempdir().expect("tempdir");
         let path = tmp.path().join("fresh.db");
         let db = Database::open(&path).expect("open");
-        assert!(!db.is_dirty(), "a brand-new DB is empty-by-truth, not dirty");
+        assert!(
+            !db.is_dirty(),
+            "a brand-new DB is empty-by-truth, not dirty"
+        );
         assert!(!db.needs_rebuild());
     }
 

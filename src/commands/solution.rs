@@ -233,21 +233,18 @@ fn new_solution(
             critique.severity = severity;
             critique.author = solution.assignee.clone();
             store.save_critique(&critique)?;
-            solution.critique_ids.push(critique_id);
+            // critique_ids is derived from Critique::solution_id (Pillar 4) — no
+            // need to record the id back on the solution or re-save it.
         }
 
-        // Re-save solution with critique IDs if we added any
-        if !reviewer_critiques.is_empty() {
-            store.save_solution(&solution)?;
-        }
-
-        // Update problem
+        // Move the problem into progress. `solution_ids` is a derived
+        // back-reference, so creating a solution touches only the solution file
+        // (plus this status change) — no parent-rewrite to append the id.
         let mut problem = store.load_problem(&problem_id)?;
-        problem.add_solution(solution_id.clone());
         if problem.status == ProblemStatus::Open {
             let _ = problem.try_set_status(ProblemStatus::InProgress);
+            store.save_problem(&problem)?;
         }
-        store.save_problem(&problem)?;
 
         println!("Created solution {} ({})", solution.id, solution.title);
         println!("  Addresses: {} - {}", problem.id, problem.title);

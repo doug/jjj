@@ -4,9 +4,9 @@
 //! values emit a `Warning:` to stderr and fall back to a safe default rather
 //! than failing.
 //!
-//! Computed fields (`solution_ids`, `critique_ids`) are left empty by the
-//! individual `row_to_*` functions and must be populated afterwards via
-//! [`populate_problem_computed_fields`] / [`populate_solution_computed_fields`].
+//! Derived back-references (`solution_ids`, `critique_ids`, `problem_ids`) are
+//! left empty by the `row_to_*` functions; the storage wrappers attach them from
+//! forward references at read time (Pillar 4), not this layer.
 //!
 //! This module provides functions to store, retrieve, and delete
 //! Problems, Solutions, Critiques, and Milestones from the SQLite database.
@@ -220,7 +220,7 @@ fn row_to_problem(row: &rusqlite::Row) -> SqliteResult<Problem> {
         dissolved_reason: row.get(11)?,
         github_issue: row.get::<_, Option<i64>>(12)?.map(|n| n as u64),
         tags: parse_json_vec(&tags_json, "tags"),
-        // Computed field — leave empty, populated by populate_problem_computed_fields.
+        // Derived back-reference — left empty; attached by the storage wrapper.
         solution_ids: Vec::new(),
     })
 }
@@ -323,7 +323,7 @@ fn row_to_solution(row: &rusqlite::Row) -> SqliteResult<Solution> {
         github_pr: row.get::<_, Option<i64>>(11)?.map(|n| n as u64),
         github_branch: row.get(12)?,
         tags: parse_json_vec(&tags_json, "tags"),
-        // Computed field - leave empty, will be populated by relationships
+        // Derived back-reference — left empty; attached by the storage wrapper.
         critique_ids: Vec::new(),
     })
 }
@@ -501,64 +501,10 @@ fn row_to_milestone(row: &rusqlite::Row) -> SqliteResult<Milestone> {
     })
 }
 
-// ============================================================================
-// Computed field population
-// ============================================================================
-
-/// Populate computed fields on problems (solution_ids) from DB relationships.
-pub fn populate_problem_computed_fields(
-    conn: &Connection,
-    problems: &mut [Problem],
-) -> SqliteResult<()> {
-    // Build solution_ids: problem_id -> [solution_id]
-    let mut stmt = conn.prepare("SELECT problem_id, id FROM solutions ORDER BY created_at")?;
-    let mut solution_map: std::collections::HashMap<String, Vec<String>> =
-        std::collections::HashMap::new();
-    let mut rows = stmt.query([])?;
-    while let Some(row) = rows.next()? {
-        let problem_id: String = row.get(0)?;
-        let solution_id: String = row.get(1)?;
-        solution_map
-            .entry(problem_id)
-            .or_default()
-            .push(solution_id);
-    }
-
-    for problem in problems.iter_mut() {
-        if let Some(sids) = solution_map.remove(&problem.id) {
-            problem.solution_ids = sids;
-        }
-    }
-
-    Ok(())
-}
-
-/// Populate computed fields on solutions (critique_ids) from DB relationships.
-pub fn populate_solution_computed_fields(
-    conn: &Connection,
-    solutions: &mut [Solution],
-) -> SqliteResult<()> {
-    let mut stmt = conn.prepare("SELECT solution_id, id FROM critiques ORDER BY created_at")?;
-    let mut critique_map: std::collections::HashMap<String, Vec<String>> =
-        std::collections::HashMap::new();
-    let mut rows = stmt.query([])?;
-    while let Some(row) = rows.next()? {
-        let solution_id: String = row.get(0)?;
-        let critique_id: String = row.get(1)?;
-        critique_map
-            .entry(solution_id)
-            .or_default()
-            .push(critique_id);
-    }
-
-    for solution in solutions.iter_mut() {
-        if let Some(cids) = critique_map.remove(&solution.id) {
-            solution.critique_ids = cids;
-        }
-    }
-
-    Ok(())
-}
+// Derived back-references (`solution_ids`, `critique_ids`, `problem_ids`) are no
+// longer populated here: the storage wrappers (`list_problems`/`load_problem`
+// etc.) attach them uniformly for both the DB and filesystem read paths via
+// `MetadataStore::reverse_ids_batch` / `reverse_ids_for` (Pillar 4).
 
 // ============================================================================
 // Tests

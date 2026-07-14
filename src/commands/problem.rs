@@ -166,14 +166,11 @@ fn new_problem(
             problem.set_parent(Some(parent_id.clone()));
         }
 
-        // Set milestone
+        // Set milestone (forward ref). The milestone's `problem_ids` is a
+        // derived back-reference (Pillar 4), so there is no milestone file to
+        // rewrite — setting `problem.milestone_id` is the whole operation.
         if let Some(ref milestone_id) = resolved_milestone {
             problem.set_milestone(Some(milestone_id.clone()));
-
-            // Update milestone's problem_ids
-            let mut ms = store.load_milestone(milestone_id)?;
-            ms.add_problem(problem_id.clone());
-            store.save_milestone(&ms)?;
         }
 
         // Create event for decision log

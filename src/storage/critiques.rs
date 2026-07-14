@@ -30,22 +30,11 @@ impl MetadataStore {
         Ok(crate::id::generate_id())
     }
 
-    /// Delete a critique and clean up references.
+    /// Delete a critique.
     ///
-    /// Removes the critique from its parent solution's `critique_ids`.
+    /// The parent solution's `critique_ids` is a derived back-reference (Pillar
+    /// 4), so removing the critique file is all that's needed.
     pub fn delete_critique(&self, critique_id: &str) -> Result<()> {
-        let critique = self.load_critique(critique_id)?;
-
-        if let Ok(mut solution) = self.load_solution(&critique.solution_id) {
-            solution.remove_critique(critique_id);
-            if let Err(e) = self.save_solution(&solution) {
-                eprintln!(
-                    "Warning: failed to update solution {}: {}",
-                    critique.solution_id, e
-                );
-            }
-        }
-
         self.delete_file_and_cache::<Critique>(critique_id)
     }
 
@@ -85,12 +74,14 @@ impl MetadataStore {
     /// walks the filesystem.
     pub fn has_valid_critiques(&self, solution_id: &str) -> Result<bool> {
         if let Some(ref db) = *self.cache() {
-            let count: i64 = db.conn().query_row(
-                "SELECT COUNT(*) FROM critiques WHERE solution_id = ?1 AND status = 'valid'",
-                rusqlite::params![solution_id],
-                |row| row.get(0),
-            )?;
-            return Ok(count > 0);
+            if !crate::db::sync::is_dirty(db).unwrap_or(true) {
+                let count: i64 = db.conn().query_row(
+                    "SELECT COUNT(*) FROM critiques WHERE solution_id = ?1 AND status = 'valid'",
+                    rusqlite::params![solution_id],
+                    |row| row.get(0),
+                )?;
+                return Ok(count > 0);
+            }
         }
         let critiques = self.list_critiques_for_solution(solution_id)?;
         Ok(critiques.iter().any(|c| c.status == CritiqueStatus::Valid))

@@ -306,12 +306,10 @@ fn add_problem(ctx: &CommandContext, milestone_input: String, problem_input: Str
     store.with_metadata(
         &format!("Add problem {} to milestone {}", problem_id, milestone_id),
         || {
-            let mut milestone = store.load_milestone(&milestone_id)?;
+            // Membership is the problem's forward `milestone_id`; the milestone's
+            // `problem_ids` derives from it (Pillar 4). Setting the problem is the
+            // whole operation — no milestone-file rewrite.
             let mut problem = store.load_problem(&problem_id)?;
-
-            milestone.add_problem(problem_id.clone());
-            store.save_milestone(&milestone)?;
-
             problem.set_milestone(Some(milestone_id.clone()));
             store.save_problem(&problem)?;
 
@@ -336,12 +334,9 @@ fn remove_problem(
             problem_id, milestone_id
         ),
         || {
-            let mut milestone = store.load_milestone(&milestone_id)?;
+            // Clearing the problem's forward `milestone_id` removes it from the
+            // derived `problem_ids` — no milestone-file rewrite (Pillar 4).
             let mut problem = store.load_problem(&problem_id)?;
-
-            milestone.remove_problem(&problem_id);
-            store.save_milestone(&milestone)?;
-
             if problem.milestone_id.as_deref() == Some(&milestone_id) {
                 problem.set_milestone(None);
                 store.save_problem(&problem)?;

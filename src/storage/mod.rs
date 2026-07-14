@@ -304,7 +304,7 @@ fn to_markdown_strip<T: serde::Serialize>(
 /// near-identical CRUD blocks the storage layer used to have. Concrete
 /// `load_problem` / `save_solution` / etc. methods on `MetadataStore` are
 /// thin delegates over the generic methods so callers don't need turbofish.
-pub trait Persist: serde::Serialize + serde::de::DeserializeOwned + Sized {
+pub trait Persist: serde::Serialize + serde::de::DeserializeOwned + Clone + Sized {
     /// Directory under `.jj/jjj-meta/` where instances of this type live.
     const DIR: &'static str;
 
@@ -324,6 +324,15 @@ pub trait Persist: serde::Serialize + serde::de::DeserializeOwned + Sized {
     /// Set the markdown-body field, used by `load` after parsing the YAML
     /// frontmatter and reading the body section.
     fn set_body(&mut self, body: String);
+
+    /// Clear derived back-reference fields before the markdown write (Pillar 4).
+    ///
+    /// These fields (e.g. `Problem::solution_ids`) are populated at read time
+    /// from forward references and appear in `--json` output, but must never be
+    /// persisted — storing them re-introduces parent-rewrite amplification and
+    /// merge conflicts. Default is a no-op; types with derived back-refs
+    /// override it. `save` calls this on a clone just before serializing.
+    fn clear_derived_fields(&mut self) {}
 
     /// Construct the appropriate `EntityNotFound` error for this type.
     fn not_found(id: &str) -> JjjError;
@@ -372,6 +381,9 @@ impl Persist for crate::models::Problem {
     fn set_body(&mut self, body: String) {
         self.description = body;
     }
+    fn clear_derived_fields(&mut self) {
+        self.solution_ids.clear();
+    }
     fn not_found(id: &str) -> JjjError {
         JjjError::ProblemNotFound(id.to_string())
     }
@@ -383,12 +395,9 @@ impl Persist for crate::models::Problem {
     }
     const CACHE_FAITHFUL: bool = true;
     fn list_from_cache(db: &crate::db::Database) -> Result<Vec<Self>> {
-        let conn = db.conn();
-        let mut problems = crate::db::entities::list_problems(conn)?;
-        // solution_ids is a derived back-reference (persisted in markdown, not a
-        // column) — rebuild it so the DB read matches a filesystem load.
-        crate::db::entities::populate_problem_computed_fields(conn, &mut problems)?;
-        Ok(problems)
+        // Bare rows only. The derived back-reference `solution_ids` is attached
+        // uniformly (DB or filesystem) by `list_problems`/`load_problem`.
+        Ok(crate::db::entities::list_problems(db.conn())?)
     }
 }
 
@@ -406,6 +415,9 @@ impl Persist for crate::models::Solution {
     fn set_body(&mut self, body: String) {
         self.approach = body;
     }
+    fn clear_derived_fields(&mut self) {
+        self.critique_ids.clear();
+    }
     fn not_found(id: &str) -> JjjError {
         JjjError::SolutionNotFound(id.to_string())
     }
@@ -417,11 +429,9 @@ impl Persist for crate::models::Solution {
     }
     const CACHE_FAITHFUL: bool = true;
     fn list_from_cache(db: &crate::db::Database) -> Result<Vec<Self>> {
-        let conn = db.conn();
-        let mut solutions = crate::db::entities::list_solutions(conn)?;
-        // critique_ids is a derived back-reference — rebuild it (see Problem).
-        crate::db::entities::populate_solution_computed_fields(conn, &mut solutions)?;
-        Ok(solutions)
+        // Bare rows only; `critique_ids` is attached by `list_solutions`/
+        // `load_solution` (see Problem).
+        Ok(crate::db::entities::list_solutions(db.conn())?)
     }
 }
 
@@ -471,6 +481,9 @@ impl Persist for crate::models::Milestone {
     }
     fn set_body(&mut self, body: String) {
         self.description = body;
+    }
+    fn clear_derived_fields(&mut self) {
+        self.problem_ids.clear();
     }
     fn not_found(id: &str) -> JjjError {
         JjjError::MilestoneNotFound(id.to_string())
@@ -581,7 +594,10 @@ impl MetadataStore {
         } else {
             format!("{}\n", entity.body())
         };
-        let content = to_markdown_strip(entity, &body, T::BODY_FIELD)?;
+        // Strip derived back-references so they never reach disk (Pillar 4).
+        let mut for_disk = entity.clone();
+        for_disk.clear_derived_fields();
+        let content = to_markdown_strip(&for_disk, &body, T::BODY_FIELD)?;
         let path = dir.join(format!("{}.md", entity.id()));
         atomic_write(&path, content.as_bytes())?;
 
@@ -758,15 +774,111 @@ impl MetadataStore {
         P: rusqlite::Params,
         F: FnOnce() -> Result<Vec<T>>,
     {
+        // Only trust the cache when it is present AND clean; a dirty cache is
+        // empty/stale (see `list`) and would return no ids.
         if let Some(ref db) = *self.cache() {
-            let mut stmt = db.conn().prepare(sql)?;
-            let ids: Vec<String> = stmt
-                .query_map(params, |row| row.get::<_, String>(0))?
-                .collect::<std::result::Result<Vec<_>, _>>()?;
-            self.load_by_ids::<T>(ids)
-        } else {
-            fallback()
+            if !crate::db::sync::is_dirty(db).unwrap_or(true) {
+                let mut stmt = db.conn().prepare(sql)?;
+                let ids: Vec<String> = stmt
+                    .query_map(params, |row| row.get::<_, String>(0))?
+                    .collect::<std::result::Result<Vec<_>, _>>()?;
+                return self.load_by_ids::<T>(ids);
+            }
         }
+        fallback()
+    }
+
+    /// Batch-derive back-reference id lists keyed by a forward-reference parent
+    /// (Pillar 4). DB-clean → one indexed projection `SELECT <parent_col>, id
+    /// FROM <table>`; otherwise a one-pass filesystem group-by over the
+    /// children's forward refs. Values are sorted by id so the DB and FS paths
+    /// return identical results.
+    pub(super) fn reverse_ids_batch<T, F>(
+        &self,
+        projection_sql: &str,
+        forward_key: F,
+    ) -> Result<std::collections::HashMap<String, Vec<String>>>
+    where
+        T: Persist,
+        F: Fn(&T) -> String,
+    {
+        use std::collections::HashMap;
+        let mut map: HashMap<String, Vec<String>> = HashMap::new();
+
+        let served_by_db = if let Some(ref db) = *self.cache() {
+            if crate::db::sync::is_dirty(db).unwrap_or(true) {
+                false
+            } else {
+                let mut stmt = db.conn().prepare(projection_sql)?;
+                let mut rows = stmt.query([])?;
+                while let Some(row) = rows.next()? {
+                    let parent: String = row.get(0)?;
+                    let child: String = row.get(1)?;
+                    map.entry(parent).or_default().push(child);
+                }
+                true
+            }
+        } else {
+            false
+        };
+
+        if !served_by_db {
+            for child in self.list_fs::<T>()? {
+                map.entry(forward_key(&child))
+                    .or_default()
+                    .push(child.id().to_string());
+            }
+        }
+
+        for ids in map.values_mut() {
+            ids.sort();
+        }
+        Ok(map)
+    }
+
+    /// Single-parent variant of [`Self::reverse_ids_batch`]: the derived
+    /// back-reference id list for one parent. `query_sql` selects the child ids
+    /// for a `?1`-bound parent; `matches` is the filesystem-fallback predicate.
+    pub(super) fn reverse_ids_for<T, M>(
+        &self,
+        query_sql: &str,
+        parent_id: &str,
+        matches: M,
+    ) -> Result<Vec<String>>
+    where
+        T: Persist,
+        M: Fn(&T) -> bool,
+    {
+        let mut ids: Vec<String> = Vec::new();
+        let served_by_db = {
+            let cache = self.cache();
+            match *cache {
+                Some(ref db) if !crate::db::sync::is_dirty(db).unwrap_or(true) => {
+                    let mut stmt = db.conn().prepare(query_sql)?;
+                    let rows = stmt.query_map([parent_id], |row| row.get::<_, String>(0))?;
+                    for id in rows {
+                        ids.push(id?);
+                    }
+                    true
+                }
+                _ => false,
+            }
+        };
+        if !served_by_db {
+            ids = self.fs_child_ids::<T>(matches)?;
+        }
+        ids.sort();
+        Ok(ids)
+    }
+
+    /// Filesystem-walk child ids matching a forward-ref predicate.
+    fn fs_child_ids<T: Persist>(&self, matches: impl Fn(&T) -> bool) -> Result<Vec<String>> {
+        Ok(self
+            .list_fs::<T>()?
+            .into_iter()
+            .filter(|c| matches(c))
+            .map(|c| c.id().to_string())
+            .collect())
     }
 
     /// Initialize the metadata store (create directory structure)

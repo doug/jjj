@@ -36,7 +36,14 @@ pub struct Problem {
     #[serde(default, skip_serializing_if = "is_confidence_unknown")]
     pub confidence: Confidence,
 
-    /// Solution IDs attempting to address this problem
+    /// Solution IDs attempting to address this problem.
+    ///
+    /// Derived back-reference (Pillar 4): the forward reference
+    /// `Solution::problem_id` is the single source of truth. Populated at read
+    /// time by the storage layer (`load_problem`/`list_problems`) from a DB
+    /// index query or a filesystem group-by, and included in `--json` output —
+    /// but stripped before the markdown write (`clear_derived_fields`) so it is
+    /// never stored, avoiding parent-rewrite amplification and merge conflicts.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub solution_ids: Vec<String>,
 

@@ -825,8 +825,16 @@ fn test_body_conflict_blocks_push() {
     run_jjj(alice.path(), &["fetch", "--remote", "origin"]);
 
     // Divergent BODY edits, no fetch between — a true conflict.
-    edit_problem_body(alice.path(), "Alice's analysis of root cause.", "2026-05-02T00:00:00Z");
-    edit_problem_body(bob.path(), "Bob's completely different take.", "2026-05-03T00:00:00Z");
+    edit_problem_body(
+        alice.path(),
+        "Alice's analysis of root cause.",
+        "2026-05-02T00:00:00Z",
+    );
+    edit_problem_body(
+        bob.path(),
+        "Bob's completely different take.",
+        "2026-05-03T00:00:00Z",
+    );
     assert!(
         run_jjj(alice.path(), &["push", "--remote", "origin"])
             .status
@@ -961,7 +969,14 @@ fn test_db_primary_and_fs_reads_agree() {
     run_jjj(path, &["problem", "new", "Beta problem", "--force"]);
     run_jjj(
         path,
-        &["solution", "new", "Fix alpha", "--problem", "Alpha problem", "--force"],
+        &[
+            "solution",
+            "new",
+            "Fix alpha",
+            "--problem",
+            "Alpha problem",
+            "--force",
+        ],
     );
 
     // DB-primary read (cache is clean after the writes' synchronous upserts).
@@ -998,11 +1013,7 @@ fn test_scale_cold_start_fetch_smoke() {
     // Alice: write N problem markdown files directly into the meta tree, then push.
     let alice = setup_repo_with_remote(remote_dir.path());
     run_jjj(alice.path(), &["init"]);
-    let problems = alice
-        .path()
-        .join(".jj")
-        .join("jjj-meta")
-        .join("problems");
+    let problems = alice.path().join(".jj").join("jjj-meta").join("problems");
     std::fs::create_dir_all(&problems).expect("create problems dir");
     for i in 0..N {
         // UUID7-shaped ids so listing/sorting behaves as in production.

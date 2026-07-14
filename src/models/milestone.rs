@@ -23,7 +23,12 @@ pub struct Milestone {
     /// Current status
     pub status: MilestoneStatus,
 
-    /// Problems we aim to solve this cycle
+    /// Problems we aim to solve this cycle.
+    ///
+    /// Derived back-reference (Pillar 4): the forward reference
+    /// `Problem::milestone_id` is the single source of truth. Populated at read
+    /// time and included in `--json`, but stripped before the markdown write
+    /// (`clear_derived_fields`) so it is never stored.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub problem_ids: Vec<String>,
 

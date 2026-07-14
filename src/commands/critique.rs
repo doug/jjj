@@ -157,10 +157,10 @@ fn new_critique(
 
             store.save_critique(&critique)?;
 
-            // Update solution's critique_ids
-            let mut solution = store.load_solution(&solution_id)?;
-            solution.add_critique(critique_id.clone());
-            store.save_solution(&solution)?;
+            // critique_ids on the solution is a derived back-reference (Pillar
+            // 4) — the critique's own `solution_id` is the source of truth, so
+            // creating a critique touches exactly one new file (no parent
+            // rewrite, no hot-solution contention).
 
             println!(
                 "Created critique {} ({}) on solution {}",
