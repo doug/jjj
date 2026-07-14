@@ -13,7 +13,7 @@ covers:
   - "events --json structured output"
   - "events rebuild"
   - "events validate"
-  - "Events stored in events.jsonl"
+  - "Events stored in per-user shards (events/{user}.jsonl)"
   - "Approve emits two events in one commit"
 tags: [events, audit, filtering, rebuild, validate]
 ---
@@ -233,13 +233,17 @@ events validate
 
 Events validate confirms the event log is internally consistent -- useful in CI.
 
-## Step 11: Events stored in events.jsonl
+## Step 11: Events stored in per-user shards
 
-Events are stored as NDJSON (one JSON object per line) in `events.jsonl`. On sync, events are merged by deduplicating identical lines.
+Events are stored as NDJSON (one JSON object per line) in per-user shards under
+`events/{user}.jsonl` — each pod writes only its own shard, so parallel writers
+never contend and shards never conflict on sync (they merge by adopting new
+lines). The legacy single `events.jsonl` is still read for backward
+compatibility but is no longer written.
 
 ```shell
-test -f .jj/jjj-meta/events.jsonl && echo "events.jsonl exists"
-> events.jsonl exists
+ls .jj/jjj-meta/events/*.jsonl >/dev/null 2>&1 && echo "event shard exists"
+> event shard exists
 ```
 
 Events are readable via the events command:

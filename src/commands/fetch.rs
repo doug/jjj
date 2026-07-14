@@ -31,12 +31,12 @@ use std::fs;
 use std::path::Path;
 
 use crate::context::CommandContext;
-use crate::db::events::{clear_events, insert_event};
 use crate::db::{self, Database};
 use crate::error::Result;
 use crate::storage::delta::{parse_git_diff, DeltaKind, FileDelta};
 use crate::storage::merge::{
-    has_conflict_markers, merge_entity_md, merge_events_jsonl, merge_ranking_json,
+    has_conflict_markers, merge_entity_md, merge_event_shard, merge_events_jsonl,
+    merge_ranking_json,
 };
 use crate::storage::sync_state::SyncState;
 use crate::storage::MetadataStore;
@@ -51,9 +51,12 @@ enum Target {
     Ranking,
     /// `config.toml` — last-fetch-wins.
     Config,
-    /// `events.jsonl` — append-only line union.
+    /// Legacy `events.jsonl` — sorted append-only line union.
     Events,
-    /// Anything else (e.g. the local-only `.sync_state.json`, never synced).
+    /// Per-user event shard `events/{user}.jsonl` — append-only union (Pillar 3).
+    EventShard,
+    /// Anything else (e.g. the local-only `.sync_state.json` /
+    /// `.events_offsets.json`, never synced).
     Skip,
 }
 
@@ -76,6 +79,9 @@ fn classify(path: &str) -> Target {
     }
     if path.starts_with("rankings/") && path.ends_with(".json") {
         return Target::Ranking;
+    }
+    if path.starts_with("events/") && path.ends_with(".jsonl") {
+        return Target::EventShard;
     }
     match path {
         "config.toml" => Target::Config,
@@ -216,12 +222,28 @@ fn apply_file_delta(meta_path: &Path, delta: &FileDelta, outcome: &mut FetchOutc
             }
         }
         Target::Events => {
-            // events.jsonl: append-only line union with the local log.
+            // Legacy events.jsonl: sorted append-only line union with the local log.
             if let Some(remote) = delta.remote.as_deref() {
                 let local_full = meta_path.join("events.jsonl");
                 let local = fs::read_to_string(&local_full).unwrap_or_default();
                 let merged = merge_events_jsonl(&local, remote);
                 if merged != local {
+                    fs::write(&local_full, &merged)?;
+                    outcome.events_changed = true;
+                }
+            }
+        }
+        Target::EventShard => {
+            // Per-user shard: append-only union so local bytes stay stable and
+            // the DB ingest only reads the newly-appended tail (Pillar 3).
+            if let Some(remote) = delta.remote.as_deref() {
+                let local_full = meta_path.join(&delta.path);
+                let local = fs::read_to_string(&local_full).unwrap_or_default();
+                let merged = merge_event_shard(&local, remote);
+                if merged != local {
+                    if let Some(parent) = local_full.parent() {
+                        fs::create_dir_all(parent)?;
+                    }
                     fs::write(&local_full, &merged)?;
                     outcome.events_changed = true;
                 }
@@ -339,6 +361,9 @@ pub fn execute(ctx: &CommandContext, remote: &str) -> Result<()> {
         }
         let db = Database::open(&db_path)?;
         db::load_from_markdown(&db, &store_after)?;
+        // The rebuild ingested every event; record the current shard lengths so
+        // the next fetch ingests only what's newly appended (Pillar 3).
+        let _ = store_after.reset_event_offsets();
     } else if let Some(db) = db::open_cache_if_present(&repo_root) {
         for (singular, id) in &outcome.deleted {
             if let Err(e) = db::remove_entity_from_cache(&db, singular, id) {
@@ -350,15 +375,11 @@ pub fn execute(ctx: &CommandContext, remote: &str) -> Result<()> {
                 eprintln!("  Warning: DB upsert failed for {} {}: {}", singular, id, e);
             }
         }
-        // Events have no incremental shard yet (Pillar 3 / M2): when the log
-        // changed, refresh the events table from the merged file so insights
-        // and timeline stay correct. Bounded and infrequent relative to the
-        // entity hot path.
+        // Incrementally ingest only the newly-appended events (per-shard byte
+        // offsets, Pillar 3) instead of clearing and reloading the whole log.
         if outcome.events_changed {
-            let conn = db.conn();
-            clear_events(conn)?;
-            for event in &store_after.list_events()? {
-                insert_event(conn, event)?;
+            if let Err(e) = store_after.ingest_events_incremental(&db) {
+                eprintln!("  Warning: event ingest failed: {}", e);
             }
         }
     }

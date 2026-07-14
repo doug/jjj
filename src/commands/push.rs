@@ -69,6 +69,24 @@ fn is_jjj_owned_file(path: &Path) -> bool {
 ///
 /// The structure is exactly two levels deep (a directory per milestone, a JSON
 /// file per user), so a shallow recursive copy of `.json` files suffices.
+/// Copy the per-user event shards (`events/{user}.jsonl`) into the sync
+/// workspace. Only `.jsonl` files are copied — the local-only offset index is a
+/// dotfile and is intentionally excluded.
+fn copy_event_shards(src: &Path, dst: &Path) -> Result<()> {
+    use std::fs;
+    if !src.exists() {
+        return Ok(());
+    }
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src)?.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) == Some("jsonl") {
+            fs::copy(&path, dst.join(entry.file_name()))?;
+        }
+    }
+    Ok(())
+}
+
 fn copy_rankings_tree(src: &Path, dst: &Path) -> Result<()> {
     use std::fs;
     if !src.exists() {
@@ -189,6 +207,10 @@ fn sync_meta_to_bookmark(
     if events_src.exists() {
         fs::copy(&events_src, sync_path.join("events.jsonl"))?;
     }
+    // Copy per-user event shards (events/{user}.jsonl, Pillar 3). Single-writer
+    // files, so they travel as-is; the local-only offset index (.events_offsets
+    // .json) is deliberately NOT in this whitelist and never leaves the machine.
+    copy_event_shards(&meta_path.join("events"), &sync_path.join("events"))?;
 
     // Copy the rankings tree (rankings/{milestone}/{user}.json). These hold
     // each collaborator's priority ordering and quadratic-vote allocations —

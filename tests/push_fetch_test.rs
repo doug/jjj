@@ -1054,3 +1054,88 @@ fn test_scale_cold_start_fetch_smoke() {
         );
     }
 }
+
+/// M2 (Pillar 3): two pods each emit events into their own per-user shard. On
+/// sync the shards travel independently and merge with no conflict — the log
+/// never becomes an append-contention or merge-conflict point — and each side
+/// ends up seeing BOTH pods' events.
+#[test]
+fn test_event_shards_sync_without_conflict() {
+    if !test_helpers::jj_available() {
+        return;
+    }
+    let remote_dir = create_bare_remote();
+
+    // Alice creates a problem (emits an event) and pushes.
+    let alice = setup_repo_with_remote(remote_dir.path());
+    run_jjj(alice.path(), &["init"]);
+    set_pod(alice.path(), "alice");
+    run_jjj(
+        alice.path(),
+        &["problem", "new", "Alice problem", "--force"],
+    );
+    assert!(
+        run_jjj(alice.path(), &["push", "--remote", "origin"])
+            .status
+            .success(),
+        "alice push"
+    );
+
+    // Bob fetches, creates his own problem (own shard), and pushes.
+    let bob = setup_repo_with_remote(remote_dir.path());
+    run_jjj(bob.path(), &["init"]);
+    set_pod(bob.path(), "bob");
+    assert!(
+        run_jjj(bob.path(), &["fetch", "--remote", "origin"])
+            .status
+            .success(),
+        "bob fetch"
+    );
+    run_jjj(bob.path(), &["problem", "new", "Bob problem", "--force"]);
+    assert!(
+        run_jjj(bob.path(), &["push", "--remote", "origin"])
+            .status
+            .success(),
+        "bob push"
+    );
+
+    // Alice fetches Bob's shard — no conflict, and her event log now shows both.
+    let out = run_jjj(alice.path(), &["fetch", "--remote", "origin"]);
+    assert!(
+        out.status.success(),
+        "alice final fetch: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let events =
+        String::from_utf8_lossy(&run_jjj(alice.path(), &["events", "--json"]).stdout).into_owned();
+    // Events carry entity ids + type, not titles — both pods' problem_created
+    // events must be in alice's unioned log (one from each shard).
+    let created = events.matches("problem_created").count();
+    assert!(
+        created >= 2,
+        "alice's unioned event log must contain both pods' events (>=2 problem_created), got {created}:\n{events}"
+    );
+
+    // Distinct shards exist for each pod — writers never shared a file.
+    let shard_dir = alice.path().join(".jj").join("jjj-meta").join("events");
+    let names: Vec<String> = std::fs::read_dir(&shard_dir)
+        .expect("events dir")
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .collect();
+    assert!(
+        names.iter().any(|n| n.contains("alice")) && names.iter().any(|n| n.contains("bob")),
+        "expected per-pod shards for alice and bob, got: {names:?}"
+    );
+    // The local-only offset index drives incremental ingest; it lives at the meta
+    // root (a dotfile, never in the pushed whitelist) — confirm the machinery ran.
+    assert!(
+        alice
+            .path()
+            .join(".jj")
+            .join("jjj-meta")
+            .join(".events_offsets.json")
+            .exists(),
+        "incremental-ingest offset index should exist after a fetch"
+    );
+}

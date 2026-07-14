@@ -273,10 +273,10 @@ fn test_events_filter_by_type() {
 }
 
 #[test]
-fn test_events_no_jsonl_file() {
-    // Events are embedded in jjj commit descriptions, not written to a file.
-    // events.jsonl must never be created — its absence is what makes merges
-    // conflict-free.
+fn test_events_written_to_per_user_shard() {
+    // Events are appended to per-user shards (events/{user}.jsonl, Pillar 3),
+    // NOT the legacy top-level events.jsonl — single-writer shards are what make
+    // the log append-contention-free and conflict-free on sync.
     if !jj_available() {
         return;
     }
@@ -302,14 +302,28 @@ fn test_events_no_jsonl_file() {
     );
     assert!(output.status.success());
 
-    // events.jsonl stores all events
-    let events_file = dir.join(".jj").join("jjj-meta").join("events.jsonl");
+    // Events land in a per-user shard under events/, not the legacy file.
+    let events_dir = dir.join(".jj").join("jjj-meta").join("events");
+    let shard_count = std::fs::read_dir(&events_dir)
+        .map(|rd| {
+            rd.flatten()
+                .filter(|e| e.path().extension().and_then(|x| x.to_str()) == Some("jsonl"))
+                .count()
+        })
+        .unwrap_or(0);
     assert!(
-        events_file.exists(),
-        "events.jsonl must exist — events are stored as NDJSON lines"
+        shard_count >= 1,
+        "at least one per-user event shard must exist under events/"
+    );
+    assert!(
+        !dir.join(".jj")
+            .join("jjj-meta")
+            .join("events.jsonl")
+            .exists(),
+        "new events must not be written to the legacy events.jsonl"
     );
 
-    // Events are readable from events.jsonl
+    // Events are readable through the unioned log.
     let output = run_jjj(dir, &["events", "--json"]);
     assert!(output.status.success(), "events --json failed");
     let stdout = String::from_utf8_lossy(&output.stdout);

@@ -85,6 +85,37 @@ pub fn has_conflict_markers(content: &str) -> bool {
         .any(|l| l.starts_with("<<<<<<<") || l.starts_with(">>>>>>>"))
 }
 
+/// Append-only union for a single-writer event shard (`events/{user}.jsonl`,
+/// Pillar 3). Local lines are preserved verbatim and in order — so already-
+/// ingested byte offsets stay valid — and remote lines not already present are
+/// appended after them. No sorting: a shard is chronological by construction,
+/// and keeping the local prefix byte-stable is what lets the fetch ingest only
+/// the newly-appended tail.
+pub fn merge_event_shard(local: &str, remote: &str) -> String {
+    let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
+    let mut out = String::new();
+    for line in local.lines() {
+        let trimmed = line.trim_end();
+        if trimmed.is_empty() {
+            continue;
+        }
+        seen.insert(trimmed);
+        out.push_str(trimmed);
+        out.push('\n');
+    }
+    for line in remote.lines() {
+        let trimmed = line.trim_end();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if seen.insert(trimmed) {
+            out.push_str(trimmed);
+            out.push('\n');
+        }
+    }
+    out
+}
+
 /// Two-way union of events.jsonl-style files. Lines are deduped exactly.
 /// Output is sorted by the `when` field of each event (ascending), with
 /// tiebreak by raw line bytes for determinism. Unparseable lines are kept
@@ -575,6 +606,27 @@ Original body.\n";
         assert!(lines[0].contains("2026-05-01T00:00:00Z"));
         assert!(lines[1].contains("2026-05-01T12:00:00Z"));
         assert!(lines[2].contains("2026-05-02T00:00:00Z"));
+    }
+
+    #[test]
+    fn event_shard_union_is_append_only() {
+        // Local prefix must be preserved byte-for-byte (offset stability), with
+        // remote-only lines appended after — never reordered.
+        let local = "{\"e\":1}\n{\"e\":2}\n";
+        let remote = "{\"e\":1}\n{\"e\":3}\n";
+        let merged = merge_event_shard(local, remote);
+        assert_eq!(merged, "{\"e\":1}\n{\"e\":2}\n{\"e\":3}\n");
+        // The local content is an exact byte prefix of the merge.
+        assert!(merged.starts_with(local), "local prefix must be stable");
+    }
+
+    #[test]
+    fn event_shard_union_no_new_remote_is_noop() {
+        // The pod's own shard: remote is a subset of local → unchanged (so the
+        // ingest offset stays valid and nothing is re-read).
+        let local = "{\"e\":1}\n{\"e\":2}\n";
+        let remote = "{\"e\":1}\n";
+        assert_eq!(merge_event_shard(local, remote), local);
     }
 
     #[test]

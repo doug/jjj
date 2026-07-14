@@ -11,33 +11,40 @@ impl MetadataStore {
         self.pending_events.borrow_mut().push(event);
     }
 
-    /// Load all events from events.jsonl.
+    /// Load all events, unioning the legacy `events.jsonl` with every per-user
+    /// shard (`events/{user}.jsonl`, Pillar 3).
     ///
-    /// Events are stored as one JSON object per line (NDJSON format).
-    /// Sorted chronologically by `when`.
+    /// Events are one JSON object per line (NDJSON). Lines are deduped exactly
+    /// (a fetched shard may overlap a locally-seen one) and sorted
+    /// chronologically by `when`.
     pub fn list_events(&self) -> Result<Vec<Event>> {
         self.ensure_meta_dirs()?;
 
-        if !self.events_path.exists() {
-            return Ok(vec![]);
-        }
-
-        let content = std::fs::read_to_string(&self.events_path)?;
         let mut events: Vec<Event> = Vec::new();
+        let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
         let mut skipped = 0usize;
-        for line in content.lines().filter(|l| !l.trim().is_empty()) {
-            match serde_json::from_str::<Event>(line) {
-                Ok(e) => events.push(e),
-                // Don't silently drop: a malformed line or an event type from a
-                // newer jjj version would otherwise vanish without a trace.
-                Err(_) => skipped += 1,
+
+        for (_rel, path) in self.event_files() {
+            let content = match std::fs::read_to_string(&path) {
+                Ok(c) => c,
+                Err(_) => continue,
+            };
+            for line in content.lines() {
+                let trimmed = line.trim();
+                if trimmed.is_empty() || !seen.insert(trimmed.to_string()) {
+                    continue;
+                }
+                match serde_json::from_str::<Event>(trimmed) {
+                    Ok(e) => events.push(e),
+                    // Don't silently drop: a malformed line or an event type from
+                    // a newer jjj version would otherwise vanish without a trace.
+                    Err(_) => skipped += 1,
+                }
             }
         }
+
         if skipped > 0 {
-            eprintln!(
-                "Warning: skipped {} unparseable line(s) in events.jsonl",
-                skipped
-            );
+            eprintln!("Warning: skipped {} unparseable event line(s)", skipped);
         }
 
         events.sort_by_key(|e| e.when);

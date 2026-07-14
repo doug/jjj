@@ -7,6 +7,7 @@ use std::path::PathBuf;
 
 mod critiques;
 pub mod delta;
+mod event_shards;
 mod events;
 pub mod merge;
 mod milestones;
@@ -142,13 +143,10 @@ pub struct MetadataStore {
     /// Path to the metadata directory (.jj/jjj-meta/)
     meta_path: PathBuf,
 
-    /// Path to the events log file (.jj/jjj-meta/events.jsonl)
-    events_path: PathBuf,
-
     /// JJ client for interacting with the repository
     pub jj_client: JjClient,
 
-    /// Events to append to events.jsonl on the next flush
+    /// Events to append to the current writer's shard on the next flush
     pending_events: RefCell<Vec<Event>>,
 
     /// Long-lived SQLite cache, if present.
@@ -503,13 +501,11 @@ impl MetadataStore {
     pub fn new(jj_client: JjClient) -> Result<Self> {
         let repo_root = jj_client.repo_root().to_path_buf();
         let meta_path = repo_root.join(".jj").join("jjj-meta");
-        let events_path = meta_path.join("events.jsonl");
 
         let cache = crate::db::sync::open_cache_if_present(&repo_root);
 
         let store = Self {
             meta_path,
-            events_path,
             jj_client,
             pending_events: RefCell::new(Vec::new()),
             cache: RefCell::new(cache),
@@ -1033,48 +1029,21 @@ impl MetadataStore {
     // Commit Operations
     // =========================================================================
 
-    /// Flush pending events to events.jsonl.
+    /// Flush pending events to the current writer's per-user shard (Pillar 3).
     ///
-    /// All pending events are serialized into a single buffer first; only if
-    /// serialization and the entire append succeed are the events drained from
-    /// `pending_events`. If any step fails, the pending queue is left intact
-    /// so the caller (or a later flush) can retry without losing events.
-    ///
-    /// A trailing serialization error on one event will still abort the flush
-    /// — partial writes are not durable here.
+    /// Events append to `events/{author}.jsonl` — a single-writer file, so
+    /// parallel pods never contend and the shards never conflict on sync. The
+    /// pending queue is drained only after the whole append succeeds, so a
+    /// failure leaves it intact for a retry.
     pub fn commit_changes(&self) -> Result<()> {
-        use std::io::Write;
-
         let pending = self.pending_events.borrow();
         if pending.is_empty() {
             return Ok(());
         }
-
-        // Serialize all events first; if any one fails we abort without
-        // touching the file or draining the queue.
-        let mut buf = String::new();
-        for event in pending.iter() {
-            match event.to_json_line() {
-                Ok(line) => {
-                    buf.push_str(&line);
-                    buf.push('\n');
-                }
-                Err(err) => {
-                    crate::output::warn(&format!("failed to serialize event: {}", err));
-                    return Err(JjjError::JsonParse(err));
-                }
-            }
-        }
+        let events: Vec<_> = pending.clone();
         drop(pending);
 
-        let mut file = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&self.events_path)
-            .map_err(JjjError::Io)?;
-
-        file.write_all(buf.as_bytes()).map_err(JjjError::Io)?;
-        file.sync_data().map_err(JjjError::Io)?;
+        self.append_events_to_shards(&events)?;
 
         // Only drain after a fully successful write.
         self.pending_events.borrow_mut().clear();
