@@ -282,6 +282,7 @@ fn populate_entity_vars(
         // Listed explicitly so adding a new EventType variant produces a compile error.
         EventType::MilestoneCreated
         | EventType::MilestoneCompleted
+        | EventType::ConflictResolved
         | EventType::GithubIssueCreated
         | EventType::GithubIssueImported
         | EventType::GithubIssueClosed

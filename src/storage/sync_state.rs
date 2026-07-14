@@ -98,16 +98,26 @@ impl SyncState {
     /// recoverable by re-reconciling against the remote, so we never let a bad
     /// state file block a command.
     pub fn load(meta_path: &Path) -> Self {
-        let raw = match std::fs::read_to_string(Self::path(meta_path)) {
-            Ok(s) => s,
-            Err(_) => return Self::default(),
+        let mut state = match std::fs::read_to_string(Self::path(meta_path)) {
+            Ok(raw) => match serde_json::from_str::<SyncState>(&raw) {
+                // A future/unknown version → cold start instead of trusting a
+                // pointer whose semantics we can't guarantee.
+                Ok(state) if state.version == CURRENT_VERSION => state,
+                _ => Self::default(),
+            },
+            Err(_) => Self::default(),
         };
-        match serde_json::from_str::<SyncState>(&raw) {
-            // A future/unknown version → cold start instead of trusting a
-            // pointer whose semantics we can't guarantee.
-            Ok(state) if state.version == CURRENT_VERSION => state,
-            _ => Self::default(),
+        // Per-process pod override (coordination): an agent sets `JJJ_POD` to run
+        // as a distinct single-writer pod without editing the state file. This
+        // only steers *its own* push bookmark / event shard; `last_synced_rev`
+        // (the merge base) still comes from the file.
+        if let Some(pod) = std::env::var("JJJ_POD")
+            .ok()
+            .filter(|p| !p.trim().is_empty())
+        {
+            state.pod = Some(pod);
         }
+        state
     }
 
     /// Persist the sync state atomically (write-tmp-then-rename) so a crash

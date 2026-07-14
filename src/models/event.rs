@@ -28,6 +28,9 @@ pub enum EventType {
     MilestoneCreated,
     MilestoneCompleted,
 
+    // Coordination events
+    ConflictResolved,
+
     // GitHub sync events
     GithubIssueCreated,
     GithubIssueImported,
@@ -56,6 +59,7 @@ impl EventType {
             Self::CritiqueReplied => "critique_replied",
             Self::MilestoneCreated => "milestone_created",
             Self::MilestoneCompleted => "milestone_completed",
+            Self::ConflictResolved => "conflict_resolved",
             Self::GithubIssueCreated => "github_issue_created",
             Self::GithubIssueImported => "github_issue_imported",
             Self::GithubIssueClosed => "github_issue_closed",

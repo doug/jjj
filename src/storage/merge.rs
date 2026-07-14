@@ -85,6 +85,57 @@ pub fn has_conflict_markers(content: &str) -> bool {
         .any(|l| l.starts_with("<<<<<<<") || l.starts_with(">>>>>>>"))
 }
 
+/// Which side of a conflict block to keep when resolving.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConflictSide {
+    /// The local (`<<<<<<< local` … `=======`) hunk — this clone's edit.
+    Local,
+    /// The remote (`=======` … `>>>>>>> remote`) hunk — the fetched edit.
+    Remote,
+}
+
+/// Deterministically resolve every conflict block in `content` by keeping one
+/// side, dropping the marker lines. The inverse of [`merge_body`]'s wrapping:
+/// each `<<<<<<< / ======= / >>>>>>>` run collapses to the chosen hunk so an
+/// agent can resolve non-interactively (`jjj resolve <id> --ours/--theirs`)
+/// instead of hand-editing markers. Text outside conflict blocks is preserved
+/// verbatim. Idempotent on marker-free input (returns it unchanged).
+pub fn resolve_conflict_markers(content: &str, side: ConflictSide) -> String {
+    let mut out = String::new();
+    // States while walking blocks: outside any block, inside the local hunk
+    // (before `=======`), inside the remote hunk (after it).
+    let mut in_local = false;
+    let mut in_remote = false;
+    for line in content.lines() {
+        if line.starts_with("<<<<<<<") {
+            in_local = true;
+            in_remote = false;
+            continue;
+        }
+        if in_local && line.starts_with("=======") {
+            in_local = false;
+            in_remote = true;
+            continue;
+        }
+        if in_remote && line.starts_with(">>>>>>>") {
+            in_remote = false;
+            continue;
+        }
+        let keep = if in_local {
+            side == ConflictSide::Local
+        } else if in_remote {
+            side == ConflictSide::Remote
+        } else {
+            true
+        };
+        if keep {
+            out.push_str(line);
+            out.push('\n');
+        }
+    }
+    out
+}
+
 /// Append-only union for a single-writer event shard (`events/{user}.jsonl`,
 /// Pillar 3). Local lines are preserved verbatim and in order — so already-
 /// ingested byte offsets stay valid — and remote lines not already present are
@@ -673,5 +724,54 @@ Original body.\n";
         let b = r#"{"when":"2026-05-02T00:00:00Z","by":"bob"}
 "#;
         assert_eq!(merge_events_jsonl(a, b), merge_events_jsonl(b, a));
+    }
+
+    /// A conflicted body from `merge_body`, resolved to each side and to a no-op
+    /// on marker-free input.
+    #[test]
+    fn resolve_conflict_markers_picks_a_side() {
+        let conflicted = merge_body(Some("base"), "my body", "their body");
+        assert!(has_conflict_markers(&conflicted));
+
+        let ours = resolve_conflict_markers(&conflicted, ConflictSide::Local);
+        assert_eq!(ours.trim(), "my body");
+        assert!(!has_conflict_markers(&ours));
+
+        let theirs = resolve_conflict_markers(&conflicted, ConflictSide::Remote);
+        assert_eq!(theirs.trim(), "their body");
+        assert!(!has_conflict_markers(&theirs));
+    }
+
+    #[test]
+    fn resolve_conflict_markers_preserves_surrounding_text() {
+        let content =
+            "Intro line.\n<<<<<<< local\nmine\n=======\ntheirs\n>>>>>>> remote\nOutro line.\n";
+        let ours = resolve_conflict_markers(content, ConflictSide::Local);
+        assert_eq!(ours, "Intro line.\nmine\nOutro line.\n");
+    }
+
+    #[test]
+    fn resolve_conflict_markers_is_noop_without_markers() {
+        let clean = "Just a body.\nNo markers.\n";
+        assert_eq!(resolve_conflict_markers(clean, ConflictSide::Local), clean);
+    }
+
+    #[test]
+    fn resolve_conflict_markers_handles_multiple_blocks() {
+        let content = "\
+<<<<<<< local
+a-mine
+=======
+a-theirs
+>>>>>>> remote
+middle
+<<<<<<< local
+b-mine
+=======
+b-theirs
+>>>>>>> remote
+";
+        let theirs = resolve_conflict_markers(content, ConflictSide::Remote);
+        assert_eq!(theirs, "a-theirs\nmiddle\nb-theirs\n");
     }
 }

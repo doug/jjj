@@ -269,6 +269,41 @@ pub enum Commands {
     #[command(display_order = 50)]
     Init,
 
+    /// Show the resolved coordination identity: actor, pod, and push bookmark
+    #[command(display_order = 52)]
+    Whoami {
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// List entities left with unresolved merge-conflict markers after a fetch
+    #[command(display_order = 44)]
+    Conflicts {
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Resolve a conflicted entity by choosing a side (strips conflict markers)
+    #[command(display_order = 45)]
+    Resolve {
+        /// Entity id (full UUID or 6+ char prefix) of the conflicted entity
+        id: String,
+
+        /// Keep this clone's local edit
+        #[arg(long, conflicts_with = "theirs")]
+        ours: bool,
+
+        /// Keep the fetched remote edit
+        #[arg(long)]
+        theirs: bool,
+
+        /// Optional note recorded on the conflict_resolved event
+        #[arg(long)]
+        rationale: Option<String>,
+    },
+
     /// Manage the local SQLite cache (full-text search index and embeddings)
     #[command(display_order = 51)]
     Db {

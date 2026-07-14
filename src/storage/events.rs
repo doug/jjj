@@ -60,8 +60,24 @@ impl MetadataStore {
         self.list_events()
     }
 
-    /// Get the current user name from jj config
+    /// Resolve the current actor identity used for event authorship, claim
+    /// assignment, and ranking (coordination decision 9 — one namespaced id).
+    ///
+    /// Resolution order: `JJJ_USER` env override → the pod id (so a pod that
+    /// sets only `JJJ_POD` still gets a stable identity) → the jj user name.
     pub fn get_current_user(&self) -> Result<String> {
+        if let Some(user) = std::env::var("JJJ_USER")
+            .ok()
+            .filter(|u| !u.trim().is_empty())
+        {
+            return Ok(user);
+        }
+        if let Some(pod) = super::sync_state::SyncState::load(self.meta_path())
+            .pod
+            .filter(|p| !p.trim().is_empty())
+        {
+            return Ok(pod);
+        }
         self.jj_client.user_name()
     }
 }

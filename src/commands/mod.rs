@@ -1,4 +1,5 @@
 pub mod completion;
+pub mod conflicts;
 pub mod critique;
 pub mod db;
 pub mod events;
@@ -18,6 +19,7 @@ pub mod sync;
 pub mod tags;
 pub mod timeline;
 pub mod ui;
+pub mod whoami;
 
 use crate::cli::{Cli, Commands};
 use crate::context::CommandContext;
@@ -102,6 +104,31 @@ fn execute_with_context(ctx: &CommandContext, command: Commands) -> Result<()> {
 
         // GitHub bridge
         Commands::Github { action, dry_run } => sync::execute(ctx, action, dry_run),
+
+        // Coordination identity
+        Commands::Whoami { json } => whoami::execute(ctx, json),
+
+        // Conflict discovery + resolution
+        Commands::Conflicts { json } => conflicts::list(ctx, json),
+        Commands::Resolve {
+            id,
+            ours,
+            theirs,
+            rationale,
+        } => {
+            use crate::storage::merge::ConflictSide;
+            let side = if theirs {
+                ConflictSide::Remote
+            } else if ours {
+                ConflictSide::Local
+            } else {
+                return Err(crate::error::JjjError::Validation(
+                    "Specify which side to keep: --ours (your local edit) or --theirs (the fetched edit)."
+                        .to_string(),
+                ));
+            };
+            conflicts::resolve(ctx, &id, side, rationale.as_deref())
+        }
 
         // These are handled by execute() before calling this function
         Commands::Init | Commands::Ui | Commands::Completion { .. } => {

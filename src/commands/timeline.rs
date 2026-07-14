@@ -109,6 +109,7 @@ fn format_event_description(event: &Event) -> String {
         EventType::SolutionSubmitted => format!("{} moved to review", event.entity),
         EventType::MilestoneCreated => format!("{} created", event.entity),
         EventType::MilestoneCompleted => format!("{} completed", event.entity),
+        EventType::ConflictResolved => format!("{} conflict resolved", event.entity),
         EventType::GithubIssueCreated => {
             let num = event
                 .extra

@@ -155,6 +155,7 @@ fn parse_event_type(s: &str) -> EventType {
         "critique_replied" => EventType::CritiqueReplied,
         "milestone_created" => EventType::MilestoneCreated,
         "milestone_completed" => EventType::MilestoneCompleted,
+        "conflict_resolved" => EventType::ConflictResolved,
         other => {
             eprintln!(
                 "Warning: unknown event type '{}', defaulting to ProblemCreated",

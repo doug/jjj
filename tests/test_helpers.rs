@@ -51,6 +51,20 @@ pub fn run_jjj(dir: impl AsRef<Path>, args: &[&str]) -> Output {
         .expect("Failed to run jjj command")
 }
 
+/// Run jjj with extra environment variables set on the child process only.
+///
+/// Env-based identity (`JJJ_POD` / `JJJ_USER`) is process-scoped by design, so
+/// tests exercise it through a spawned binary rather than mutating the test
+/// process's own environment (which would race across parallel test threads).
+pub fn run_jjj_env(dir: impl AsRef<Path>, envs: &[(&str, &str)], args: &[&str]) -> Output {
+    let mut cmd = Command::new(jjj_binary());
+    cmd.args(args).current_dir(dir.as_ref());
+    for (k, v) in envs {
+        cmd.env(k, v);
+    }
+    cmd.output().expect("Failed to run jjj command")
+}
+
 pub fn run_jjj_success(dir: impl AsRef<Path>, args: &[&str]) -> String {
     let output = run_jjj(dir.as_ref(), args);
     assert!(
