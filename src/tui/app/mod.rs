@@ -139,8 +139,8 @@ impl ProjectData {
         })
     }
 
-    /// Compute aggregated rankings per milestone (budget-normalized harmonic
-    /// ordering + quadratic votes; see `ranking::scoring::aggregate_rankings`).
+    /// Compute aggregated rankings per milestone (budget-normalized, gap-weighted
+    /// ordering; see `ranking::scoring::aggregate_rankings`).
     /// Returns milestone_id -> problem_id -> (rank_position, voter_count_str).
     fn compute_rankings(
         store: &MetadataStore,
@@ -148,8 +148,8 @@ impl ProjectData {
     ) -> HashMap<String, HashMap<String, (usize, String)>> {
         let mut result = HashMap::new();
         let base = store.meta_path();
-        // Canonical problem_count must match the TUI vote-entry budget, so use
-        // the same milestone-problem count (not the max ordering length).
+        // Canonical problem_count must match the budget used everywhere else, so
+        // use the same milestone-problem count (not the max ordering length).
         let all_problems = store.list_problems().unwrap_or_default();
 
         for milestone in milestones {
@@ -517,6 +517,13 @@ impl App {
             KeyCode::Char('b') => self.page_detail_up(),
             KeyCode::Char('?') => self.toggle_help(),
             KeyCode::Esc => self.clear_selection(),
+            // Migration hint: votes were replaced by sized gaps. Catch the old
+            // vote keys and point users at the new control instead of no-op.
+            KeyCode::Char('+') | KeyCode::Char('=') | KeyCode::Char('-') => {
+                self.show_flash(
+                    "Votes are now sized gaps — press 'p' to set the gap below an item",
+                );
+            }
             _ => {}
         }
         Ok(())

@@ -68,13 +68,13 @@ Entity files use YAML frontmatter + markdown body. Each entity has one free-form
 Previously separate fields (`context`, `tradeoffs`, `evidence`, `goals`, `success_criteria`) have been removed — all free-form content belongs in the body.
 
 ### Ranking & Ordering
-Per-user ordering files in `rankings/{milestone_id}/{user}.json` store problem priority and vote allocations. The TUI provides:
-- **Tier sort** (Shift+K/J): move items to top/bottom of view for fast triage
-- **Bubble** (Ctrl+K/J): swap one position for fine adjustment
-- **Votes** (+/-): pin items to top/bottom zone with magnitude (quadratic cost)
-- **Drill** (Shift+H/L): zoom into a tier for recursive refinement
+Per-user ordering files in `rankings/{milestone_id}/{user}.json` store a problem priority list plus per-item **sized gaps** (intensity). The TUI provides:
+- **Nudge/fling** (Shift+K/J or Shift+↑/↓): move the selected item up/down one slot; double-tap within 400ms flings it to top/bottom — fast triage.
+- **Gap** (`p`): cycle the sized gap *below* the selected item (none → S → M → L → XL → none). Order (direction) and gap (intensity) are one authored signal — there are no separate votes.
+- **Undo** (Ctrl+Z): revert the last ordering change.
+- Tier is shown by rank-number color (top/mid/bottom third), not separator rows.
 
-List order = `[positive-voted by magnitude] [unvoted in tier order] [negative-voted by magnitude]`. Global ranking aggregates all users by combining two same-scale signals: (1) **normalized harmonic ordering** — each user's ordering points sum to the QV budget `B = max(100, 2*problem_count)`, distributed by harmonic weight (rank `i` gets `B * (1/i) / H_n`, where `H_n = Σ 1/k` over that user's `n` ranked items), so every user contributes equal total ordering influence regardless of how many items they ranked, with the top of the list dominant; and (2) **quadratic votes** — each allocation `v` adds `sign(v)*v²`, budget-gated, acting as a bounded megaphone (a maxed vote ≈ `B`, ~3× the top ordinal slot; negative votes are the only sub-zero signal).
+Global ranking aggregates all users as a **budget-normalized, gap-weighted ordering**: walking each user's list top-to-bottom, item `k` sits at cumulative descent `depth_k` (each gap adds 1/2/4/8/16 for none/S/M/L/XL) and gets harmonic weight `1/(1+depth_k)`; weights are scaled so every user's points sum to the budget `B = max(100, 2*problem_count)`, giving equal influence regardless of list length, with the top of the list dominant. With no gaps this is exactly the harmonic sequence `1, 1/2, …, 1/n`, so an un-annotated list is backward-compatible; a large gap (e.g. an `XL` above the bottom item) is the "must not win" signal. Ties break by `problem_id`. (Legacy quadratic-vote data in older ranking files is ignored on load.) See `docs/design/latent-preference-ranking.md` for the rationale.
 
 ### Automation Rules
 Config-driven automation in `config.toml` fires actions on jjj events:
@@ -139,11 +139,9 @@ TUI (src/tui/)               # Ratatui-based interactive UI
 - `Tab`: Switch panes, `q`/`Ctrl+C`: quit
 - `j/k` or arrows: navigate tree / scroll detail
 - `h/l` or left/right: collapse/expand tree nodes
-- `Shift+K/J` or `Shift+Up/Down`: assign to top/bottom tier
-- `Ctrl+K/J` or `Ctrl+Up/Down`: bubble one position
-- `Shift+H/L` or `Shift+Left/Right`: drill into/out of tier
-- `+/-`: add/remove vote (pins to top/bottom zone)
-- `Ctrl+Z`: undo tier/vote change
+- `Shift+K/J` or `Shift+Up/Down`: nudge selection up/down one slot (double-tap within 400ms: fling to top/bottom)
+- `p`: cycle the sized gap below the selected item (none → S → M → L → XL → none)
+- `Ctrl+Z`: undo the last ordering change
 - `r`: toggle personal/global ordering view
 - `Space`: toggle selection (`✓`), `Ctrl+A`: select all
 - `n`: new item, `e`: edit title, `E`: open in editor

@@ -1,113 +1,82 @@
 ---
 title: Ranking & Group Decision Making
-description: How to prioritize problems using tertiary sort, quadratic voting, and multi-user aggregation
+description: How to prioritize problems with ordered lists, sized gaps, and multi-user aggregation
 ---
 
 # Ranking & Group Decision Making
 
-jjj includes a built-in ranking system for prioritizing problems within milestones. It's designed for teams that need to reach consensus on what to work on next, without requiring meetings or centralized planning tools.
+jjj includes a built-in ranking system for prioritizing problems within milestones. It's designed for teams that need to reach consensus on what to work on next, without meetings or a centralized planning tool.
 
 ## How It Works
 
-Each user maintains their own **personal ordering** of problems per milestone. These orderings are aggregated into a **global ranking** using harmonic rank scoring with a quadratic voting boost. The result is a prioritized list that reflects the team's collective judgment.
+Each user maintains their own **personal ordering** of problems per milestone: a sorted list in which you can mark a **sized gap** below any item to say "there's a big priority cliff right here." Order expresses *direction* (what beats what); gaps express *intensity* (by how much). These per-user orderings are aggregated into a **global ranking** that reflects the team's collective judgment.
 
-### The Three Layers
+Direction and intensity are a single authored signal — there are no separate "votes." (Earlier versions used quadratic votes and Top/Mid/Bottom tiers; those were replaced by gaps. Any vote data in older ranking files is ignored on load.)
 
-1. **Tertiary sort** -- Quickly triage items into Top / Mid / Bottom tiers
-2. **Quadratic voting** -- Spend vote budget to emphasize specific items
-3. **Harmonic aggregation** -- Combine all users' orderings into one ranking
-
-## Tertiary Sort (TUI)
-
-The primary way to rank problems is through the TUI's tier-based sorting:
+## Ranking in the TUI
 
 ```
 jjj ui
 ```
 
-Navigate to a milestone's expanded problem list. You'll see tier separators dividing problems into thirds:
-
-```
-▼ Sprint 1
-  ── Top ──
-  #1 Critical auth bug
-  #2 Payment validation
-  ── Mid ──
-  #3 Improve error messages
-  #4 Add CSV export
-  ── Bottom ──
-  #5 Update dependencies
-  #6 Refactor logging
-```
+Expand a milestone's problem list. The number beside each problem is its rank; its color marks which third it falls in — green (top), amber (mid), red (bottom).
 
 ### Keybindings
 
 | Key | Action |
 |-----|--------|
-| `Shift+K` / `Shift+Up` | Assign to **top** tier |
-| `Shift+J` / `Shift+Down` | Assign to **bottom** tier |
-| `Shift+L` / `Shift+Right` | **Drill into** the tier containing the cursor |
-| `Shift+H` / `Shift+Left` | **Drill out** one level |
-| `+` / `=` | Add a vote to the selected problem |
-| `-` | Remove a vote |
-| `r` | Toggle between personal and global view |
+| `Shift+K` / `Shift+↑` | Nudge selection **up** one slot (double-tap within 400 ms: fling to top) |
+| `Shift+J` / `Shift+↓` | Nudge selection **down** one slot (double-tap: fling to bottom) |
+| `p` | Cycle the sized **gap** below the selected item: none → S → M → L → XL → none |
+| `r` | Toggle between **personal** and **global** view |
+| `Ctrl+Z` | Undo the last ordering change |
 
-### The Sorting Workflow
+### The Workflow
 
-1. **First pass** -- Scan all items. Press `Shift+K` for things that matter most, `Shift+J` for things that can wait. Items you skip stay in the middle.
+1. **Triage fast.** Press `Shift+K`/`Shift+J` to nudge a problem up or down one slot. Double-tap to fling it straight to the top or bottom. Get a rough order in seconds.
 
-2. **Drill in** -- Move cursor to a top-tier item and press `Shift+L`. Now you see only the top third, split again into Top/Mid/Bottom. Repeat the triage.
+2. **Mark the cliffs.** Where priority drops sharply between two items, put the cursor on the upper one and press `p` to insert a gap (cycling S → M → L → XL). A `▾XL` marker means "everything below this is a different league." A big gap just above the bottom item is the "**must not win**" signal.
 
-3. **Drill out** -- Press `Shift+H` to zoom back out.
+3. **Compare with the team.** Press `r` to see how your ordering combines into the global ranking — a good way to spot disagreements worth discussing.
 
-4. **Add votes** -- For items you feel strongly about, press `+` to add emphasis. Votes cost quadratically (1 vote = 1 cost, 2 votes = 4 cost, 3 votes = 9 cost), so you can't dump all your budget on one item.
+Gaps and order are saved automatically and sync with the rest of your jjj metadata.
 
-This recursive process gives you O(N log N) sorting with O(N) key presses per pass.
+## Sized Gaps
 
-## Quadratic Voting
+A gap sits *below* an item and stretches the distance to the next one. The implicit (unmarked) gap is one unit; sized gaps grow geometrically:
 
-Each user has a vote budget per milestone: `max(100, 2 * problem_count)`. Votes can be positive (boost) or negative (suppress).
+| Gap | Depth it adds |
+|-----|---------------|
+| (none) | 1 |
+| S | 2 |
+| M | 4 |
+| L | 8 |
+| XL | 16 |
 
-The cost of K votes on one problem is K². This means:
-
-- 1 vote costs 1
-- 2 votes cost 4
-- 3 votes cost 9
-- 10 votes cost 100 (the entire default budget)
-
-This forces you to spread your influence across multiple problems rather than concentrating it all on one.
-
-Votes appear as arrows in the tree view:
-
-```
-  #3 Improve error messages ▲▲
-  #5 Update dependencies ▼
-```
+An item's scoring weight is `1 / (1 + cumulative depth above it)`. With **no** gaps marked, the weights are exactly the harmonic sequence `1, ½, ⅓, …` — so an un-annotated list ranks identically to a plain ordered list. Marking gaps simply stretches the cliffs you care about; everything stays backward-compatible.
 
 ## Global Aggregation
 
-When multiple users have orderings for the same milestone, jjj aggregates two signals that are deliberately kept on the **same scale** so every voter has equal baseline influence and votes act as a bounded megaphone:
+When multiple users have orderings for the same milestone, jjj combines them:
 
-1. **Normalized harmonic ordering**: each user's ordering points sum to the QV budget `B`, distributed by harmonic weight — rank `i` gets `B · (1/i) / H_n` where `H_n = Σ 1/k` over that user's `n` ranked items. So the #1 item gets `≈ 0.34·B`, #2 about half that, and so on. Because the points are normalized, **a user who ranks 3 items has the same total influence as one who ranks 30** — sorting is the baseline activity and everyone's sort counts equally. The harmonic shape means getting the top of your list right matters far more than the tail (which is why drilling into the top tier is the high-leverage move).
-2. **Quadratic votes**: each allocation `v` adds `sign(v)·v²`, provided the user is within their quadratic-vote budget `B = max(100, 2·problem_count)`. Votes are the "exceptional emphasis" layer — the quadratic cost makes them expensive, so to truly pin something you spend real budget. A maxed vote contributes `≈ B` (about 3× your top-ranked item), so a small vote won't override a clear #1 but a big spend will; a negative vote is the only way to drive a score *below* the pack ("anything but this").
+1. **Budget-normalized influence.** Each user's gap-weighted points are scaled so they sum to a fixed budget `B = max(100, 2 × problem_count)`. A user who ranks 3 items has the same total influence as one who ranks 30 — sorting is the baseline activity and everyone's counts equally. The harmonic shape means getting the **top** of your list right matters far more than the tail.
+2. **Gaps create real cliffs.** A large gap (for example an `XL` above the bottom item) drives that item well below the pack — the "anything but this" signal, with no need for a separate negative-vote channel.
 3. **Ties** are broken by problem ID (lexicographic) for determinism.
 
-Toggle between views with `r`:
-- **Personal view** -- Your ordering, your votes, your tiers
-- **Global view** -- Aggregated ranking across all users
+Toggle the view with `r`:
+- **Personal view** — your ordering and your gaps.
+- **Global view** — the aggregated ranking across all users.
 
 ## CLI Commands
 
-### View rankings
-
 ```bash
-# Show aggregated rankings for the first active milestone
+# Aggregated rankings for the first active milestone
 jjj rank show
 
-# Show rankings for a specific milestone
+# A specific milestone
 jjj rank show "Sprint 1"
 
-# Per-user breakdown
+# Per-user breakdown (shows each user's ordering and gaps)
 jjj rank show --by-user
 
 # JSON output for scripting
@@ -117,31 +86,31 @@ jjj rank show --json
 ### Example output
 
 ```
-Rankings for: Sprint 1 (6 problems, 2 voters)
+Rankings for milestone: Sprint 1
 
-  Rank  Problem                                    Score  Voters
-  ─────────────────────────────────────────────────────────────
-  #1    Critical auth bug                          12.5   2
-  #2    Payment validation                          9.3   2
-  #3    Improve error messages                      7.1   1
-  #4    Add CSV export                              4.0   2
-  #5    Update dependencies                         2.5   1
-  #6    Refactor logging                            1.2   1
+  Rank  Problem                                        Score  Voters
+  ──────────────────────────────────────────────────────────────────
+  #1    Critical auth bug                               48.1   2
+  #2    Payment validation                              22.7   2
+  #3    Improve error messages                          14.0   1
+  #4    Add CSV export                                   9.6   2
 ```
+
+(`Voters` is the number of users who ranked the problem.)
 
 ## Storage
 
-Personal orderings are stored as JSON files in the jjj metadata branch:
+Personal orderings are stored as JSON in the jjj metadata branch:
 
 ```
 rankings/{milestone_id}/{user-slug}.json
 ```
 
-Each file contains the ordered problem list and vote allocations. They sync with `jj git push` like all other jjj metadata.
+Each file holds the ordered problem list and a per-item map of sized gaps. Each file is owned by exactly one user, so on `jj git fetch` they merge per file (last writer wins per file) — no three-way merge needed. They sync with `jj git push` like all other jjj metadata.
 
 ## Tips
 
-- **Start rough, refine later.** The first pass through tertiary sort takes 30 seconds for 20 items. Drill in only where precision matters.
-- **Negative votes are useful.** If something keeps bubbling up that you think is low priority, vote it down.
-- **Check global view after sorting.** Press `r` to see how your ordering combines with the team's. You might discover disagreements worth discussing.
-- **Re-sort after scope changes.** When problems are added or solved, your ordering updates automatically (new items go to the end).
+- **Start rough, refine later.** Nudge items into a rough order first; mark gaps only where the priority cliffs actually matter.
+- **A big bottom gap means "must not win."** Use it for things that should stay decisively last.
+- **Check the global view after ordering.** Press `r` to see how your judgment combines with the team's.
+- **Scope changes are handled for you.** New problems are appended to your ordering automatically; solved or removed ones are pruned.
