@@ -17,10 +17,33 @@ pub fn execute(
     let repo_root = jj_client.repo_root();
     let db_path = repo_root.join(".jj").join("jjj.db");
 
-    // Always sync from markdown before searching to ensure results are fresh,
-    // since entity creation commands write to markdown but not the DB.
-    let db = Database::open(&db_path)?;
-    db::load_from_markdown(&db, &ctx.store)?;
+    // Serve from the store's cache when present and clean (Pillar 2): every
+    // save/delete/fetch upserts both the entity row and its FTS entry
+    // synchronously, so results are already fresh. The full markdown rebuild
+    // that used to run here was O(corpus) per query — ~10s at 25K entities.
+    // A missing or dirty cache is rebuilt once from markdown as before.
+    let use_store_cache = {
+        let cache = ctx.store.cache();
+        matches!(*cache, Some(ref db) if !db::sync::is_dirty(db).unwrap_or(true))
+    };
+    let rebuilt: Option<Database> = if use_store_cache {
+        None
+    } else {
+        let db = Database::open(&db_path)?;
+        db::load_from_markdown(&db, &ctx.store)?;
+        Some(db)
+    };
+    let cache_guard = ctx.store.cache();
+    let db: &Database = match rebuilt {
+        Some(ref d) => d,
+        None => {
+            let db = cache_guard.as_ref().expect("cache presence checked above");
+            // Events reach the DB only at ingest time — top up the tail so
+            // event search sees locally-appended events (O(delta)).
+            let _ = ctx.store.sync_events_cache(db);
+            db
+        }
+    };
 
     // Load local config and try to get embedding client
     let local_config = LocalConfig::load(repo_root);
@@ -32,11 +55,11 @@ pub fn execute(
 
     // Check if query is an entity reference (e.g., "p/01957d")
     if let Some((ref_type, ref_id)) = parse_entity_reference(query) {
-        return execute_similarity_search(&db, ref_type, ref_id, entity_type, json);
+        return execute_similarity_search(db, ref_type, ref_id, entity_type, json);
     }
 
     // Hybrid text search
-    execute_hybrid_search(&db, query, entity_type, embedding_client.as_ref(), json)
+    execute_hybrid_search(db, query, entity_type, embedding_client.as_ref(), json)
 }
 
 fn execute_similarity_search(

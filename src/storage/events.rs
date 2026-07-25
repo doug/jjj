@@ -74,12 +74,7 @@ impl MetadataStore {
         if let Some(ref db) = *self.cache() {
             match crate::db::sync::is_dirty(db) {
                 Ok(false) => {
-                    let ingested = {
-                        let _lock =
-                            super::acquire_write_lock(self.meta_path(), &self.write_lock_depth)?;
-                        self.ingest_events_incremental(db)
-                    };
-                    if ingested.is_ok() {
+                    if self.sync_events_cache(db).is_ok() {
                         if let Ok(events) = crate::db::events::list_events_chronological(db.conn())
                         {
                             return Ok(events);
@@ -103,6 +98,14 @@ impl MetadataStore {
             }
         }
         self.list_events()
+    }
+
+    /// Top up the SQLite events table with any locally-appended shard tail
+    /// (O(delta) via the offset index). Runs under the re-entrant write lock so
+    /// two concurrent processes can't double-ingest the same tail.
+    pub(crate) fn sync_events_cache(&self, db: &crate::db::Database) -> Result<()> {
+        let _lock = super::acquire_write_lock(self.meta_path(), &self.write_lock_depth)?;
+        self.ingest_events_incremental(db)
     }
 
     /// Resolve the current actor identity used for event authorship, claim
