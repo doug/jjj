@@ -166,6 +166,26 @@ cargo install --path .
 jjj completion bash > ~/.local/share/bash-completion/completions/jjj
 ```
 
+### Semantic search (optional)
+
+`jjj search` always works via SQLite full-text search. For semantic
+similarity on top of it, build with the `semantic` feature — embeddings are
+computed **in-process** (candle BERT); no server, fully offline:
+
+```bash
+cargo install jjj --features semantic
+
+# One-time model download (~90MB):
+huggingface-cli download sentence-transformers/all-MiniLM-L6-v2 \
+  config.json tokenizer.json model.safetensors \
+  --local-dir ~/.cache/jjj/models/all-MiniLM-L6-v2
+
+jjj db rebuild   # backfill embeddings for existing entities
+```
+
+Point at a different model dir with `model_path` under `[embeddings]` in
+`.jj/jjj.toml`, or `JJJ_EMBEDDINGS_MODEL_PATH`.
+
 ## VS Code Extension
 
 A VS Code extension provides sidebar views for Next Actions and Project Tree:

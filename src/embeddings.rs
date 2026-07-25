@@ -1,271 +1,337 @@
-//! Embedding client for computing vector embeddings via the Ollama API.
+//! In-process embedding client (Pillar 6 — "offline / no server" made true).
 //!
-//! Uses stdlib TcpStream to talk directly to a local Ollama endpoint
-//! (default: localhost:11434). No external HTTP client dependency needed.
+//! With the `semantic` cargo feature, embeddings are computed by an in-process
+//! BERT-family sentence encoder via candle: tokenize → forward → mean-pool →
+//! L2-normalize. The model (`config.json`, `tokenizer.json`,
+//! `model.safetensors`) is loaded from a runtime path — never compiled into
+//! the binary — so the repo and default build stay lean:
+//!
+//! ```text
+//! ~/.cache/jjj/models/all-MiniLM-L6-v2/     # default location
+//! ```
+//!
+//! Download once with e.g.:
+//!
+//! ```text
+//! huggingface-cli download sentence-transformers/all-MiniLM-L6-v2 \
+//!   config.json tokenizer.json model.safetensors \
+//!   --local-dir ~/.cache/jjj/models/all-MiniLM-L6-v2
+//! ```
+//!
+//! Without the feature, `EmbeddingClient::from_config` always returns `None`
+//! and search runs FTS-only. (The previous Ollama HTTP backend is gone — the
+//! external-server dependency was exactly what Pillar 6 set out to remove.)
 
 use crate::local_config::LocalConfig;
-use serde::{Deserialize, Serialize};
-use std::io::{BufRead, BufReader, Write};
-use std::net::TcpStream;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-/// Default Ollama host and port
-const DEFAULT_HOST: &str = "localhost";
-const DEFAULT_PORT: u16 = 11434;
-const DEFAULT_PATH: &str = "/v1/embeddings";
-const DEFAULT_MODEL: &str = "qwen3-embedding:8b";
-const DEFAULT_DIMENSIONS: usize = 4096;
+/// Default model directory name under `~/.cache/jjj/models/`.
+#[cfg_attr(not(feature = "semantic"), allow(dead_code))]
+const DEFAULT_MODEL_NAME: &str = "all-MiniLM-L6-v2";
 
-/// Track if we've already warned about connection failure this session
+/// Track if we've already warned about embedding unavailability this session
 static WARNED_THIS_SESSION: AtomicBool = AtomicBool::new(false);
-
-/// Request body for the OpenAI-compatible embeddings API
-#[derive(Debug, Serialize)]
-struct EmbeddingRequest<'a> {
-    model: &'a str,
-    input: Vec<&'a str>,
-}
-
-/// Response from the embeddings API
-#[derive(Debug, Deserialize)]
-struct EmbeddingResponse {
-    data: Vec<EmbeddingData>,
-}
-
-#[derive(Debug, Deserialize)]
-struct EmbeddingData {
-    embedding: Vec<f32>,
-}
 
 /// Error type for embedding operations
 #[derive(Debug, thiserror::Error)]
 pub enum EmbeddingError {
-    #[error("HTTP request failed: {0}")]
-    Http(#[from] std::io::Error),
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
 
-    #[error("API returned error status {status}: {body}")]
-    Api { status: u16, body: String },
-
-    #[error("Failed to parse embedding response: {0}")]
-    Parse(String),
+    #[error("Model error: {0}")]
+    Model(String),
 
     #[error("Dimension mismatch: expected {expected}, got {actual}")]
     DimensionMismatch { expected: usize, actual: usize },
 
-    #[error("Empty response from API")]
+    #[error("Empty response from model")]
     EmptyResponse,
+
+    #[error("jjj was built without the `semantic` feature")]
+    Disabled,
 }
 
-/// Client for computing embeddings via a local Ollama instance.
-pub struct EmbeddingClient {
-    host: String,
-    port: u16,
-    path: String,
-    model: String,
-    dimensions: usize,
+/// Resolve the model directory: explicit config/env path, else the default
+/// cache location for the configured (or default) model name.
+#[cfg_attr(not(feature = "semantic"), allow(dead_code))]
+fn model_dir(config: &LocalConfig) -> std::path::PathBuf {
+    if let Some(ref p) = config.embeddings.model_path {
+        return std::path::PathBuf::from(shellexpand_home(p));
+    }
+    let name = config
+        .embeddings
+        .model
+        .clone()
+        .unwrap_or_else(|| DEFAULT_MODEL_NAME.to_string());
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+    std::path::PathBuf::from(home)
+        .join(".cache")
+        .join("jjj")
+        .join("models")
+        .join(name)
 }
 
-impl EmbeddingClient {
-    /// Create a new embedding client from config.
-    ///
-    /// Tests the connection immediately. Returns None if the service is unavailable.
-    pub fn from_config(config: &LocalConfig, warn_on_error: bool) -> Option<Self> {
-        // Parse host/port from base_url if provided, otherwise use defaults
-        let (host, port, path) = if let Some(ref base_url) = config.embeddings.base_url {
-            parse_base_url(base_url)
-        } else {
-            (
-                DEFAULT_HOST.to_string(),
-                DEFAULT_PORT,
-                DEFAULT_PATH.to_string(),
-            )
-        };
+/// Expand a leading `~/` to `$HOME` (config files are written by hand).
+#[cfg_attr(not(feature = "semantic"), allow(dead_code))]
+fn shellexpand_home(path: &str) -> String {
+    if let Some(rest) = path.strip_prefix("~/") {
+        if let Ok(home) = std::env::var("HOME") {
+            return format!("{}/{}", home, rest);
+        }
+    }
+    path.to_string()
+}
 
-        let model = config
-            .embeddings
-            .model
-            .clone()
-            .unwrap_or_else(|| DEFAULT_MODEL.to_string());
-        let dimensions = config.embeddings.dimensions.unwrap_or(DEFAULT_DIMENSIONS);
+fn warn_once(msg: &str) {
+    if !WARNED_THIS_SESSION.swap(true, Ordering::SeqCst) {
+        eprintln!("Warning: {}", msg);
+        eprintln!("Semantic search features will be disabled.");
+    }
+}
 
-        let client = Self {
-            host: host.clone(),
-            port,
-            path,
-            model,
-            dimensions,
-        };
+// ============================================================================
+// Backend: in-process candle BERT (feature = "semantic")
+// ============================================================================
 
-        // Test connection
-        match client.embed("test") {
-            Ok(_) => Some(client),
-            Err(e) => {
-                if warn_on_error && !WARNED_THIS_SESSION.swap(true, Ordering::SeqCst) {
-                    eprintln!(
-                        "Warning: Embedding service unavailable at {}:{}: {}",
-                        host, port, e
-                    );
-                    eprintln!("Semantic search features will be disabled.");
+#[cfg(feature = "semantic")]
+mod bert {
+    use super::*;
+    use candle_core::{Device, Tensor};
+    use candle_nn::VarBuilder;
+    use candle_transformers::models::bert::{BertModel, Config, DTYPE};
+    use tokenizers::{PaddingParams, Tokenizer, TruncationParams};
+
+    /// In-process sentence-embedding client: BERT forward → mean-pool over the
+    /// attention mask → L2-normalize.
+    pub struct EmbeddingClient {
+        model: BertModel,
+        tokenizer: Tokenizer,
+        device: Device,
+        model_name: String,
+        dimensions: usize,
+    }
+
+    impl EmbeddingClient {
+        /// Load the model from the configured runtime path.
+        ///
+        /// Returns `None` (optionally with a one-time warning) if the model
+        /// files are missing or fail to load — search then runs FTS-only.
+        pub fn from_config(config: &LocalConfig, warn_on_error: bool) -> Option<Self> {
+            let dir = super::model_dir(config);
+            match Self::load(&dir, config) {
+                Ok(client) => Some(client),
+                Err(e) => {
+                    if warn_on_error {
+                        super::warn_once(&format!(
+                            "embedding model unavailable at {}: {}\n  Download it with:\n  \
+                             huggingface-cli download sentence-transformers/{} \
+                             config.json tokenizer.json model.safetensors --local-dir {}",
+                            dir.display(),
+                            e,
+                            super::DEFAULT_MODEL_NAME,
+                            dir.display(),
+                        ));
+                    }
+                    None
                 }
-                None
             }
         }
+
+        fn load(dir: &std::path::Path, config: &LocalConfig) -> Result<Self, EmbeddingError> {
+            let config_path = dir.join("config.json");
+            let tokenizer_path = dir.join("tokenizer.json");
+            let weights_path = dir.join("model.safetensors");
+            for p in [&config_path, &tokenizer_path, &weights_path] {
+                if !p.exists() {
+                    return Err(EmbeddingError::Model(format!("missing {}", p.display())));
+                }
+            }
+
+            let bert_config: Config = serde_json::from_str(&std::fs::read_to_string(&config_path)?)
+                .map_err(|e| EmbeddingError::Model(format!("bad config.json: {}", e)))?;
+            let dimensions = bert_config.hidden_size;
+
+            // A user-configured dimension that disagrees with the model is a
+            // misconfiguration worth failing loudly on — silently embedding at
+            // the wrong width would poison the vector table.
+            if let Some(want) = config.embeddings.dimensions {
+                if want != dimensions {
+                    return Err(EmbeddingError::DimensionMismatch {
+                        expected: want,
+                        actual: dimensions,
+                    });
+                }
+            }
+
+            let mut tokenizer = Tokenizer::from_file(&tokenizer_path)
+                .map_err(|e| EmbeddingError::Model(format!("bad tokenizer.json: {}", e)))?;
+            // Pad to the longest sequence in each batch; truncate to the
+            // model's positional capacity.
+            tokenizer.with_padding(Some(PaddingParams::default()));
+            tokenizer
+                .with_truncation(Some(TruncationParams {
+                    max_length: bert_config.max_position_embeddings,
+                    ..Default::default()
+                }))
+                .map_err(|e| EmbeddingError::Model(format!("tokenizer truncation: {}", e)))?;
+
+            let device = Device::Cpu;
+            let vb = unsafe {
+                VarBuilder::from_mmaped_safetensors(&[&weights_path], DTYPE, &device)
+                    .map_err(|e| EmbeddingError::Model(format!("bad safetensors: {}", e)))?
+            };
+            let model = BertModel::load(vb, &bert_config)
+                .map_err(|e| EmbeddingError::Model(format!("model load: {}", e)))?;
+
+            let model_name = config
+                .embeddings
+                .model
+                .clone()
+                .or_else(|| dir.file_name().map(|n| n.to_string_lossy().into_owned()))
+                .unwrap_or_else(|| super::DEFAULT_MODEL_NAME.to_string());
+
+            Ok(Self {
+                model,
+                tokenizer,
+                device,
+                model_name,
+                dimensions,
+            })
+        }
+
+        /// Get the model name.
+        pub fn model(&self) -> &str {
+            &self.model_name
+        }
+
+        /// Get the embedding dimensions.
+        pub fn dimensions(&self) -> usize {
+            self.dimensions
+        }
+
+        /// Compute embedding for a single text.
+        pub fn embed(&self, text: &str) -> Result<Vec<f32>, EmbeddingError> {
+            let embeddings = self.embed_batch(&[text])?;
+            embeddings
+                .into_iter()
+                .next()
+                .ok_or(EmbeddingError::EmptyResponse)
+        }
+
+        /// Compute embeddings for multiple texts in one forward pass.
+        pub fn embed_batch(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>, EmbeddingError> {
+            if texts.is_empty() {
+                return Ok(Vec::new());
+            }
+
+            let err =
+                |what: &'static str| move |e| EmbeddingError::Model(format!("{}: {}", what, e));
+
+            let encodings = self
+                .tokenizer
+                .encode_batch(texts.to_vec(), true)
+                .map_err(|e| EmbeddingError::Model(format!("tokenize: {}", e)))?;
+
+            let ids: Vec<Vec<u32>> = encodings.iter().map(|e| e.get_ids().to_vec()).collect();
+            let mask: Vec<Vec<u32>> = encodings
+                .iter()
+                .map(|e| e.get_attention_mask().to_vec())
+                .collect();
+
+            let input_ids = Tensor::new(ids, &self.device).map_err(err("input_ids"))?;
+            let attention_mask = Tensor::new(mask, &self.device).map_err(err("mask"))?;
+            let token_type_ids = input_ids.zeros_like().map_err(err("token_type_ids"))?;
+
+            // (batch, seq, hidden)
+            let hidden = self
+                .model
+                .forward(&input_ids, &token_type_ids, Some(&attention_mask))
+                .map_err(err("forward"))?;
+
+            // Mean-pool over real (unmasked) tokens.
+            let mask_f = attention_mask
+                .to_dtype(DTYPE)
+                .map_err(err("mask dtype"))?
+                .unsqueeze(2)
+                .map_err(err("mask shape"))?; // (batch, seq, 1)
+            let summed = hidden
+                .broadcast_mul(&mask_f)
+                .map_err(err("mask mul"))?
+                .sum(1)
+                .map_err(err("sum"))?; // (batch, hidden)
+            let counts = mask_f.sum(1).map_err(err("mask sum"))?; // (batch, 1)
+            let mean = summed.broadcast_div(&counts).map_err(err("mean"))?;
+
+            // L2-normalize each row.
+            let norm = mean
+                .sqr()
+                .map_err(err("sqr"))?
+                .sum_keepdim(1)
+                .map_err(err("norm sum"))?
+                .sqrt()
+                .map_err(err("sqrt"))?;
+            let normalized = mean.broadcast_div(&norm).map_err(err("normalize"))?;
+
+            let out: Vec<Vec<f32>> = normalized.to_vec2().map_err(err("to_vec"))?;
+            if let Some(first) = out.first() {
+                if first.len() != self.dimensions {
+                    return Err(EmbeddingError::DimensionMismatch {
+                        expected: self.dimensions,
+                        actual: first.len(),
+                    });
+                }
+            }
+            Ok(out)
+        }
+    }
+}
+
+#[cfg(feature = "semantic")]
+pub use bert::EmbeddingClient;
+
+// ============================================================================
+// Backend: none (default build) — semantic search disabled
+// ============================================================================
+
+#[cfg(not(feature = "semantic"))]
+pub struct EmbeddingClient {
+    _private: (),
+}
+
+#[cfg(not(feature = "semantic"))]
+impl EmbeddingClient {
+    /// Always `None`: this build has no embedding backend. Warns once when the
+    /// user explicitly enabled embeddings so the silence is explained.
+    pub fn from_config(_config: &LocalConfig, warn_on_error: bool) -> Option<Self> {
+        if warn_on_error {
+            warn_once(
+                "this jjj build has no embedding backend — rebuild with \
+                 `cargo install --features semantic` (or `cargo build --features semantic`)",
+            );
+        }
+        None
     }
 
-    /// Get the model name.
     pub fn model(&self) -> &str {
-        &self.model
+        ""
     }
 
-    /// Get the embedding dimensions.
     pub fn dimensions(&self) -> usize {
-        self.dimensions
+        0
     }
 
-    /// Compute embedding for a single text.
-    pub fn embed(&self, text: &str) -> Result<Vec<f32>, EmbeddingError> {
-        let embeddings = self.embed_batch(&[text])?;
-        embeddings
-            .into_iter()
-            .next()
-            .ok_or(EmbeddingError::EmptyResponse)
+    pub fn embed(&self, _text: &str) -> Result<Vec<f32>, EmbeddingError> {
+        Err(EmbeddingError::Disabled)
     }
 
-    /// Compute embeddings for multiple texts in a single API call.
-    pub fn embed_batch(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>, EmbeddingError> {
-        if texts.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        let request = EmbeddingRequest {
-            model: &self.model,
-            input: texts.to_vec(),
-        };
-        let body =
-            serde_json::to_string(&request).map_err(|e| EmbeddingError::Parse(e.to_string()))?;
-
-        let response_body = self.http_post(&body)?;
-
-        let response: EmbeddingResponse = serde_json::from_str(&response_body)
-            .map_err(|e| EmbeddingError::Parse(format!("{}: {}", e, response_body)))?;
-
-        // Validate dimensions of first result
-        if let Some(data) = response.data.first() {
-            if data.embedding.len() != self.dimensions {
-                return Err(EmbeddingError::DimensionMismatch {
-                    expected: self.dimensions,
-                    actual: data.embedding.len(),
-                });
-            }
-        }
-
-        Ok(response.data.into_iter().map(|d| d.embedding).collect())
-    }
-
-    /// Send a raw HTTP POST to the Ollama endpoint and return the response body.
-    fn http_post(&self, body: &str) -> Result<String, EmbeddingError> {
-        let addr = format!("{}:{}", self.host, self.port);
-        let mut stream = TcpStream::connect(&addr)?;
-        stream.set_read_timeout(Some(std::time::Duration::from_secs(30)))?;
-
-        let request = format!(
-            "POST {} HTTP/1.1\r\nHost: {}:{}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-            self.path, self.host, self.port, body.len(), body
-        );
-        stream.write_all(request.as_bytes())?;
-
-        // Read response
-        let mut reader = BufReader::new(stream);
-        let mut status_line = String::new();
-        reader.read_line(&mut status_line)?;
-
-        let status_code = parse_status_code(&status_line);
-
-        // Parse headers — extract Content-Length if present
-        let mut content_length: Option<usize> = None;
-        loop {
-            let mut header = String::new();
-            reader.read_line(&mut header)?;
-            if header == "\r\n" || header.is_empty() {
-                break;
-            }
-            if let Some(value) = header
-                .strip_prefix("Content-Length:")
-                .or_else(|| header.strip_prefix("content-length:"))
-            {
-                content_length = value.trim().parse().ok();
-            }
-        }
-
-        // Read body — use Content-Length if available (handles chunked TE safely),
-        // otherwise fall back to read_to_string (works with Connection: close).
-        use std::io::Read;
-        let mut response_body = String::new();
-        if let Some(len) = content_length {
-            let mut buf = vec![0u8; len];
-            reader.read_exact(&mut buf)?;
-            response_body = String::from_utf8(buf)
-                .map_err(|e| EmbeddingError::Parse(format!("invalid UTF-8 in response: {}", e)))?;
-        } else {
-            reader.read_to_string(&mut response_body)?;
-        }
-
-        if status_code != 200 {
-            return Err(EmbeddingError::Api {
-                status: status_code,
-                body: response_body,
-            });
-        }
-
-        Ok(response_body)
+    pub fn embed_batch(&self, _texts: &[&str]) -> Result<Vec<Vec<f32>>, EmbeddingError> {
+        Err(EmbeddingError::Disabled)
     }
 }
 
-/// Parse host, port, and path from a base URL string like "http://localhost:11434/v1".
-fn parse_base_url(base_url: &str) -> (String, u16, String) {
-    // Reject HTTPS — we use raw TcpStream without TLS
-    if base_url.starts_with("https://") {
-        eprintln!(
-            "Warning: HTTPS is not supported for embeddings (no TLS). Treating as HTTP: {}",
-            base_url
-        );
-    }
-
-    // Strip scheme
-    let without_scheme = base_url
-        .strip_prefix("http://")
-        .or_else(|| base_url.strip_prefix("https://"))
-        .unwrap_or(base_url);
-
-    // Split host:port from path
-    let (host_port, path) = if let Some(idx) = without_scheme.find('/') {
-        let path = format!(
-            "{}/embeddings",
-            &without_scheme[idx..].trim_end_matches('/')
-        );
-        (&without_scheme[..idx], path)
-    } else {
-        (without_scheme, DEFAULT_PATH.to_string())
-    };
-
-    // Split host and port
-    if let Some(colon) = host_port.rfind(':') {
-        let host = host_port[..colon].to_string();
-        let port = host_port[colon + 1..].parse().unwrap_or(DEFAULT_PORT);
-        (host, port, path)
-    } else {
-        (host_port.to_string(), DEFAULT_PORT, path)
-    }
-}
-
-/// Extract the HTTP status code from a status line like "HTTP/1.1 200 OK".
-fn parse_status_code(status_line: &str) -> u16 {
-    status_line
-        .split_whitespace()
-        .nth(1)
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(0)
-}
+// ============================================================================
+// Shared helpers (backend-independent)
+// ============================================================================
 
 /// Compute cosine similarity between two vectors.
 pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
@@ -380,27 +446,50 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_base_url_default() {
-        let (host, port, path) = parse_base_url("http://localhost:11434/v1");
-        assert_eq!(host, "localhost");
-        assert_eq!(port, 11434);
-        assert_eq!(path, "/v1/embeddings");
+    fn test_shellexpand_home() {
+        std::env::var("HOME").expect("HOME set in test env");
+        let expanded = shellexpand_home("~/models/x");
+        assert!(!expanded.starts_with('~'));
+        assert!(expanded.ends_with("/models/x"));
+        assert_eq!(shellexpand_home("/abs/path"), "/abs/path");
     }
 
+    /// Real end-to-end embedding test. Runs only with the `semantic` feature
+    /// AND a model present at the default/configured path — skips otherwise,
+    /// so CI without the model stays green.
+    #[cfg(feature = "semantic")]
     #[test]
-    fn test_parse_base_url_custom_port() {
-        let (host, port, _) = parse_base_url("http://localhost:9999/v1");
-        assert_eq!(host, "localhost");
-        assert_eq!(port, 9999);
-    }
+    fn test_bert_embed_end_to_end() {
+        let config = LocalConfig::default();
+        let Some(client) = EmbeddingClient::from_config(&config, false) else {
+            eprintln!("skipping: no embedding model at default path");
+            return;
+        };
 
-    #[test]
-    fn test_parse_status_code() {
-        assert_eq!(parse_status_code("HTTP/1.1 200 OK\r\n"), 200);
-        assert_eq!(parse_status_code("HTTP/1.1 404 Not Found\r\n"), 404);
-        assert_eq!(
-            parse_status_code("HTTP/1.1 500 Internal Server Error\r\n"),
-            500
+        let vecs = client
+            .embed_batch(&[
+                "the authentication service rejects valid tokens",
+                "login fails even with a correct password",
+                "the dishwasher needs a new rinse aid dispenser",
+            ])
+            .expect("embed_batch");
+        assert_eq!(vecs.len(), 3);
+        assert_eq!(vecs[0].len(), client.dimensions());
+
+        // L2-normalized: unit norm
+        for v in &vecs {
+            let norm: f32 = v.iter().map(|x| x * x).sum::<f32>().sqrt();
+            assert!((norm - 1.0).abs() < 0.01, "norm was {}", norm);
+        }
+
+        // Related texts must beat the unrelated one
+        let related = cosine_similarity(&vecs[0], &vecs[1]);
+        let unrelated = cosine_similarity(&vecs[0], &vecs[2]);
+        assert!(
+            related > unrelated,
+            "related {} <= unrelated {}",
+            related,
+            unrelated
         );
     }
 }

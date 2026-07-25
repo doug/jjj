@@ -13,13 +13,20 @@ pub struct EmbeddingsConfig {
     #[serde(default)]
     pub enabled: Option<bool>,
 
-    /// Base URL for the embedding API (default: http://localhost:11434/v1)
+    /// Base URL for a remote embedding API. Unused by the in-process
+    /// `semantic` backend; kept so old config files still parse.
     #[serde(default)]
     pub base_url: Option<String>,
 
-    /// Model name (e.g., "qwen3-embedding:8b")
+    /// Model name label (e.g., "all-MiniLM-L6-v2")
     #[serde(default)]
     pub model: Option<String>,
+
+    /// Directory holding the local embedding model files
+    /// (`config.json`, `tokenizer.json`, `model.safetensors`).
+    /// Default: `~/.cache/jjj/models/all-MiniLM-L6-v2`.
+    #[serde(default)]
+    pub model_path: Option<String>,
 
     /// Embedding dimensions
     #[serde(default)]
@@ -85,6 +92,9 @@ impl LocalConfig {
         }
         if let Ok(val) = std::env::var("JJJ_EMBEDDINGS_MODEL") {
             self.embeddings.model = Some(val);
+        }
+        if let Ok(val) = std::env::var("JJJ_EMBEDDINGS_MODEL_PATH") {
+            self.embeddings.model_path = Some(val);
         }
         if let Ok(val) = std::env::var("JJJ_EMBEDDINGS_DIMENSIONS") {
             if let Ok(dims) = val.parse() {
