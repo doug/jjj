@@ -1,8 +1,57 @@
-# M0 — scale probes & bench harness
+# Bench — repeatable harness & M0 scale probes
 
 Validation tooling for the agent-swarm scaling work (see
-`docs/design/scaling-for-agent-swarms.md`). M0's job: **get numbers on the
-design's riskiest assumptions before writing M1.**
+`docs/design/scaling-for-agent-swarms.md`).
+
+## Repeatable harness (`bench.py`) — the release gate
+
+Times real jjj commands end-to-end against a generated corpus so regressions
+in the read/write/sync paths show up before a release:
+
+```bash
+cargo build --release            # harness uses target/release/jjj
+python3 bench.py                 # quick run: 2K corpus, includes sync benches
+python3 bench.py --count 25000 --json baseline-25k.json   # release gate
+```
+
+Covers the design's bench matrix: cold list (FS walk), `db rebuild`, warm
+list/status/next, FTS search, events listing (cold ingest + warm DB-primary),
+write throughput under N concurrent `JJJ_POD` writers, and cold push / cold
+fetch / warm 100-file delta-fetch against a local bare remote. Everything runs
+in an isolated tempdir with its own jj/git identity. `--json` records results
+plus the jjj git rev for comparison across runs.
+
+Before cutting a release: run the 25K gate on a quiet machine and compare
+against the baseline below; flag anything that moved >2x.
+
+### Recorded baseline — 25K corpus (2026-07-25, M2 Mac, rev fa71165)
+
+| bench | median |
+|---|---|
+| cold_list (no DB, FS walk) | 1.06s |
+| db_rebuild | 8.1s |
+| warm_list (DB) | 0.096s |
+| status | 0.136s |
+| next_top5 | 0.109s |
+| search_fts | 0.078s |
+| events_cold_ingest | 1.77s |
+| events_warm (DB-primary) | 0.054s |
+| write_throughput (10 pods × 5) | 2.07s (~24 ops/s incl. process spawn) |
+| cold_push (full corpus) | 18.3s |
+| cold_fetch (full corpus) | 8.4s |
+| delta_push (100 files) | 12.5s |
+| warm_delta_fetch (100 files) | 6.9s |
+
+All DB-backed reads meet the design's <200ms @ 25K acceptance. **Known
+gap:** sync (`delta_push` / `warm_delta_fetch`) is far above the design's
+sub-second target — the first run of this harness caught two O(n²)/O(n)
+read regressions (fixed in eeacd0f, e752095); the sync latencies are the
+remaining open finding.
+
+## M0 probes (historical validation gate)
+
+M0's job was to **get numbers on the design's riskiest assumptions before
+writing M1** — these probes measure raw jj primitives, not jjj itself.
 
 ## Build
 
