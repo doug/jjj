@@ -91,6 +91,19 @@ export interface StatusItem {
   priority_sort: number;
 }
 
+export interface Whoami {
+  actor: string;
+  pod: string | null;
+  push_bookmark: string;
+}
+
+export interface ConflictInfo {
+  entity_type: "problem" | "solution" | "critique" | "milestone";
+  id: string;
+  title: string;
+  path: string;
+}
+
 export interface StatusResult {
   active_solution: { id: string; title: string; problem_id: string; status: string } | null;
   items: StatusItem[];
@@ -293,6 +306,42 @@ export class JjjCli {
 
   async listTags(): Promise<{tag: string; count: number}[]> {
     return this.execJson<{tag: string; count: number}[]>(["tags"]);
+  }
+
+  // --- Coordination ---
+
+  async whoami(): Promise<Whoami> {
+    return this.execJson<Whoami>(["whoami"]);
+  }
+
+  async listConflicts(): Promise<ConflictInfo[]> {
+    return this.execJson<ConflictInfo[]>(["conflicts"]);
+  }
+
+  async resolveConflict(id: string, side: "ours" | "theirs", rationale?: string): Promise<string> {
+    const args = ["resolve", id, `--${side}`];
+    if (rationale) {
+      args.push("--rationale", rationale);
+    }
+    return this.exec(args);
+  }
+
+  async claimNext(): Promise<string> {
+    return this.exec(["next", "--claim"]);
+  }
+
+  // --- Metadata Sync ---
+
+  async sync(): Promise<string> {
+    return this.exec(["sync"]);
+  }
+
+  async fetch(): Promise<string> {
+    return this.exec(["fetch"]);
+  }
+
+  async push(): Promise<string> {
+    return this.exec(["push"]);
   }
 
   // --- GitHub Sync ---

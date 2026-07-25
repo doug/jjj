@@ -10,7 +10,7 @@ function makeProblem(overrides: Partial<Problem> = {}): Problem {
     id: "p1", title: "Search is slow", parent_id: null, status: "open",
     solution_ids: ["s1"], child_ids: [], milestone_id: "m1",
     assignee: "doug", created_at: "", updated_at: "",
-    description: "Search queries take 3+ seconds", context: "",
+    description: "Search queries take 3+ seconds",
     priority: "medium", dissolved_reason: null, tags: [],
     ...overrides,
   };
@@ -22,7 +22,7 @@ function makeSolution(overrides: Partial<Solution> = {}): Solution {
     critique_ids: ["c1"], change_ids: ["kxq2p"],
     assignee: "doug",
     force_approved: false, created_at: "", updated_at: "",
-    approach: "Add a B-tree index", tradeoffs: "Extra storage",
+    approach: "Add a B-tree index",
     supersedes: null, tags: [],
     ...overrides,
   };
@@ -32,7 +32,7 @@ function makeCritique(overrides: Partial<Critique> = {}): Critique {
   return {
     id: "c1", title: "SQL injection risk", solution_id: "s1", status: "open",
     severity: "high", author: "alice", reviewer: "alice", created_at: "", updated_at: "",
-    argument: "The query concatenates user input", evidence: "See line 42",
+    argument: "The query concatenates user input",
     file_path: "src/db.rs", line_start: 42, line_end: null,
     code_context: [], replies: [
       { id: "R-1", author: "bob", body: "Good catch", created_at: "2025-01-25T10:30:00Z" },
@@ -45,7 +45,7 @@ function makeMilestone(overrides: Partial<Milestone> = {}): Milestone {
   return {
     id: "m1", title: "v0.2 Release", target_date: "2025-03-01", status: "active",
     problem_ids: ["p1"], assignee: "doug", created_at: "", updated_at: "",
-    goals: "Ship search improvements", success_criteria: "Sub-second queries",
+    description: "Ship search improvements",
     ...overrides,
   };
 }
@@ -213,7 +213,7 @@ describe("EntityDocumentProvider", () => {
       assert.ok(content.includes("0/1 solved"));
     });
 
-    it("includes goals", () => {
+    it("includes description", () => {
       const uri = vscode.Uri.parse("jjj:///milestone/m1.md");
       const content = provider.provideTextDocumentContent(uri);
       assert.ok(content.includes("Ship search improvements"));

@@ -314,4 +314,59 @@ describe("JjjCli", () => {
         ["critique", "new", "s1", "Issue", "--severity", "high", "--file", "src/foo.rs", "--line", "10", "--reviewer", "alice"]);
     });
   });
+
+  describe("coordination", () => {
+    it("whoami requests JSON", async () => {
+      execStub.resolves('{"actor":"alice","pod":null,"push_bookmark":"jjj"}');
+      const who = await cli.whoami();
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["whoami", "--json"]);
+      assert.strictEqual(who.actor, "alice");
+      assert.strictEqual(who.pod, null);
+    });
+
+    it("listConflicts requests JSON", async () => {
+      execStub.resolves("[]");
+      await cli.listConflicts();
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["conflicts", "--json"]);
+    });
+
+    it("resolveConflict passes side flag", async () => {
+      execStub.resolves("ok");
+      await cli.resolveConflict("abc123", "ours");
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["resolve", "abc123", "--ours"]);
+    });
+
+    it("resolveConflict passes theirs and rationale", async () => {
+      execStub.resolves("ok");
+      await cli.resolveConflict("abc123", "theirs", "remote was fresher");
+      assert.deepStrictEqual(execStub.firstCall.args[0],
+        ["resolve", "abc123", "--theirs", "--rationale", "remote was fresher"]);
+    });
+
+    it("claimNext uses next --claim", async () => {
+      execStub.resolves("ok");
+      await cli.claimNext();
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["next", "--claim"]);
+    });
+  });
+
+  describe("metadata sync", () => {
+    it("sync passes through", async () => {
+      execStub.resolves("ok");
+      await cli.sync();
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["sync"]);
+    });
+
+    it("fetch passes through", async () => {
+      execStub.resolves("ok");
+      await cli.fetch();
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["fetch"]);
+    });
+
+    it("push passes through", async () => {
+      execStub.resolves("ok");
+      await cli.push();
+      assert.deepStrictEqual(execStub.firstCall.args[0], ["push"]);
+    });
+  });
 });

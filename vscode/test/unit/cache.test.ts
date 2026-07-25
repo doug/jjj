@@ -7,7 +7,7 @@ function makeProblem(overrides: Partial<Problem> = {}): Problem {
   return {
     id: "p1", title: "Test problem", parent_id: null, status: "open",
     solution_ids: [], child_ids: [], milestone_id: null,
-    assignee: null, created_at: "", updated_at: "", description: "", context: "",
+    assignee: null, created_at: "", updated_at: "", description: "",
     priority: "medium", dissolved_reason: null, tags: [],
     ...overrides,
   };
@@ -18,7 +18,7 @@ function makeSolution(overrides: Partial<Solution> = {}): Solution {
     id: "s1", title: "Test solution", problem_id: "p1", status: "proposed",
     critique_ids: [], change_ids: [], assignee: null,
     force_approved: false,
-    created_at: "", updated_at: "", approach: "", tradeoffs: "",
+    created_at: "", updated_at: "", approach: "",
     supersedes: null, tags: [],
     ...overrides,
   };
@@ -28,7 +28,7 @@ function makeCritique(overrides: Partial<Critique> = {}): Critique {
   return {
     id: "c1", title: "Test critique", solution_id: "s1", status: "open",
     severity: "medium", author: null, created_at: "", updated_at: "",
-    argument: "", evidence: "", file_path: null, line_start: null,
+    argument: "", file_path: null, line_start: null,
     line_end: null, code_context: [], replies: [],
     ...overrides,
   };
@@ -38,7 +38,7 @@ function makeMilestone(overrides: Partial<Milestone> = {}): Milestone {
   return {
     id: "m1", title: "Test milestone", target_date: null, status: "active",
     problem_ids: [], assignee: null, created_at: "", updated_at: "",
-    goals: "", success_criteria: "",
+    description: "",
     ...overrides,
   };
 }

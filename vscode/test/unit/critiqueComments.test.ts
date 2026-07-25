@@ -19,7 +19,7 @@ function makeCritique(overrides: Partial<Critique> = {}): Critique {
     created_at: "2024-01-01T00:00:00Z",
     updated_at: "2024-01-01T00:00:00Z",
     argument: "Something is wrong",
-    evidence: "",
+   
     file_path: "src/foo.rs",
     line_start: 10,
     line_end: null,
@@ -42,7 +42,7 @@ function makeSolution(overrides: Partial<Solution> = {}): Solution {
     created_at: "",
     updated_at: "",
     approach: "",
-    tradeoffs: "",
+   
     supersedes: null, tags: [],
     ...overrides,
   };

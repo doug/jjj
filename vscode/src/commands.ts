@@ -267,6 +267,75 @@ export function registerCommands(
     vscode.window.showInformationMessage(result);
   });
 
+  // --- Metadata Sync (fetch + push of the jjj shadow graph) ---
+
+  register("jjj.sync", async () => {
+    const result = await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: "JJJ: syncing metadata…" },
+      () => cli.sync(),
+    );
+    vscode.window.showInformationMessage(result.split("\n").pop() || "Sync complete");
+
+    // A fetch can leave entities with conflict markers; surface them right away.
+    const conflicts = await cli.listConflicts();
+    if (conflicts.length > 0) {
+      const act = await vscode.window.showWarningMessage(
+        `JJJ: ${conflicts.length} entity conflict(s) after sync.`,
+        "Resolve…",
+      );
+      if (act === "Resolve…") {
+        await vscode.commands.executeCommand("jjj.resolveConflicts");
+      }
+    }
+  });
+
+  // --- Coordination ---
+
+  register("jjj.whoami", async () => {
+    const who = await cli.whoami();
+    vscode.window.showInformationMessage(
+      `JJJ identity — actor: ${who.actor} · pod: ${who.pod ?? "(none)"} · pushes to: ${who.push_bookmark}`,
+    );
+  });
+
+  register("jjj.claimNext", async () => {
+    const result = await cli.claimNext();
+    vscode.window.showInformationMessage(result || "No claimable work items.");
+  });
+
+  register("jjj.resolveConflicts", async () => {
+    const conflicts = await cli.listConflicts();
+    if (conflicts.length === 0) {
+      vscode.window.showInformationMessage("No unresolved conflicts.");
+      return;
+    }
+    const pick = await vscode.window.showQuickPick(
+      conflicts.map(c => ({
+        label: c.title,
+        description: `${c.entity_type} ${c.id.slice(0, 8)}`,
+        conflict: c,
+      })),
+      { placeHolder: `${conflicts.length} conflicted entit${conflicts.length === 1 ? "y" : "ies"} — pick one to resolve` },
+    );
+    if (!pick) { return; }
+
+    const side = await vscode.window.showQuickPick(
+      [
+        { label: "$(repo) Keep ours (local edit)", side: "ours" as const },
+        { label: "$(cloud-download) Keep theirs (fetched remote edit)", side: "theirs" as const },
+      ],
+      { placeHolder: `Resolve "${pick.conflict.title}" by keeping which side?` },
+    );
+    if (!side) { return; }
+
+    const rationale = await vscode.window.showInputBox({
+      prompt: "Rationale (optional, recorded on the conflict_resolved event)",
+    });
+
+    const result = await cli.resolveConflict(pick.conflict.id, side.side, rationale || undefined);
+    vscode.window.showInformationMessage(result);
+  });
+
   // --- GitHub Sync Commands ---
 
   register("jjj.syncGithub", async () => {

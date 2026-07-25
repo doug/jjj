@@ -224,6 +224,27 @@
         "command": "jjj.editSolutionTags",
         "title": "Edit Solution Tags",
         "category": "JJJ"
+      },
+      {
+        "command": "jjj.sync",
+        "title": "Sync Metadata (Fetch + Push)",
+        "category": "JJJ",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "jjj.whoami",
+        "title": "Show Identity (whoami)",
+        "category": "JJJ"
+      },
+      {
+        "command": "jjj.claimNext",
+        "title": "Claim Next Work Item",
+        "category": "JJJ"
+      },
+      {
+        "command": "jjj.resolveConflicts",
+        "title": "Resolve Conflicts...",
+        "category": "JJJ"
       }
     ],
     "viewsContainers": {
