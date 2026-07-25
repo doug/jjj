@@ -43,7 +43,7 @@ fn list_events(
 ) -> Result<()> {
     let store = &ctx.store;
 
-    let mut events = store.list_events()?;
+    let mut events = store.list_events_cached()?;
 
     // Resolve --problem and --solution inputs to IDs (fuzzy title/prefix/UUID)
     let problem = match problem {

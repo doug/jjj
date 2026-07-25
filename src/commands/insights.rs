@@ -30,7 +30,7 @@ fn format_duration(seconds: f64) -> String {
 
 pub fn execute(ctx: &CommandContext, json: bool) -> Result<()> {
     let store = &ctx.store;
-    let events = store.list_events()?;
+    let events = store.list_events_cached()?;
 
     if events.is_empty() {
         if json {

@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 /// Event types for decision logging
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, strum::EnumIter)]
 #[serde(rename_all = "snake_case")]
 pub enum EventType {
     // Problem events
@@ -67,6 +67,14 @@ impl EventType {
             Self::GithubPrMerged => "github_pr_merged",
             Self::GithubReviewImported => "github_review_imported",
         }
+    }
+
+    /// Parse the snake_case string produced by [`Self::as_str`] back to a
+    /// variant. The single inverse used by every DB row decoder — iterating
+    /// the enum means a new variant can never be forgotten here.
+    pub fn parse(s: &str) -> Option<Self> {
+        use strum::IntoEnumIterator;
+        Self::iter().find(|t| t.as_str() == s)
     }
 }
 
@@ -179,5 +187,24 @@ impl Event {
     /// Format for commit message suffix
     pub fn to_commit_suffix(&self) -> Result<String, serde_json::Error> {
         Ok(format!("jjj: {}", self.to_json_line()?))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use strum::IntoEnumIterator;
+
+    #[test]
+    fn every_event_type_round_trips_through_parse() {
+        for t in EventType::iter() {
+            assert_eq!(
+                EventType::parse(t.as_str()),
+                Some(t.clone()),
+                "EventType::{:?} does not round-trip via as_str/parse",
+                t
+            );
+        }
+        assert_eq!(EventType::parse("not_a_real_event"), None);
     }
 }

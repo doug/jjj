@@ -60,6 +60,51 @@ impl MetadataStore {
         self.list_events()
     }
 
+    /// List all events, DB-primary (Pillar 3).
+    ///
+    /// The SQLite events table only sees appends at ingest time (fetch or
+    /// rebuild), so a clean cache is first topped up with any locally-appended
+    /// shard tail — an O(delta) read thanks to the offset index — and then
+    /// serves the listing in O(query) instead of re-parsing every shard. The
+    /// ingest runs under the (re-entrant) write lock so two concurrent
+    /// processes can't double-ingest the same tail. A dirty cache is healed
+    /// from markdown exactly like [`super::MetadataStore::list`]; any failure
+    /// falls back to the authoritative file union [`Self::list_events`].
+    pub fn list_events_cached(&self) -> Result<Vec<Event>> {
+        if let Some(ref db) = *self.cache() {
+            match crate::db::sync::is_dirty(db) {
+                Ok(false) => {
+                    let ingested = {
+                        let _lock =
+                            super::acquire_write_lock(self.meta_path(), &self.write_lock_depth)?;
+                        self.ingest_events_incremental(db)
+                    };
+                    if ingested.is_ok() {
+                        if let Ok(events) = crate::db::events::list_events_chronological(db.conn())
+                        {
+                            return Ok(events);
+                        }
+                    }
+                }
+                Ok(true) => {
+                    // Present-but-dirty: heal once from canonical markdown
+                    // (which also reloads every event and fast-forwards the
+                    // ingest offsets), then serve from the now-clean cache.
+                    if crate::db::sync::load_from_markdown(db, self).is_ok()
+                        && !crate::db::sync::is_dirty(db).unwrap_or(true)
+                    {
+                        if let Ok(events) = crate::db::events::list_events_chronological(db.conn())
+                        {
+                            return Ok(events);
+                        }
+                    }
+                }
+                Err(_) => {}
+            }
+        }
+        self.list_events()
+    }
+
     /// Resolve the current actor identity used for event authorship, claim
     /// assignment, and ranking (coordination decision 9 — one namespaced id).
     ///

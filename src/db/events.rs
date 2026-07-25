@@ -91,6 +91,19 @@ pub fn list_events_for_timeline(conn: &Connection, entity_id: &str) -> SqliteRes
     rows.collect()
 }
 
+/// List every event in chronological (timestamp ASC) order — the DB-primary
+/// equivalent of `MetadataStore::list_events`'s file union. Timestamps are
+/// stored as RFC3339 UTC strings, so lexicographic order is chronological;
+/// rowid breaks ties in insertion order.
+pub fn list_events_chronological(conn: &Connection) -> SqliteResult<Vec<Event>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, timestamp, event_type, entity_id, actor, rationale, refs, extra
+         FROM events ORDER BY timestamp ASC, id ASC",
+    )?;
+    let rows = stmt.query_map([], row_to_event)?;
+    rows.collect()
+}
+
 /// Delete all events from the database (for rebuild).
 pub fn clear_events(conn: &Connection) -> SqliteResult<()> {
     conn.execute("DELETE FROM events", [])?;
@@ -139,31 +152,13 @@ fn row_to_event(row: &rusqlite::Row) -> SqliteResult<Event> {
 
 /// Parse event_type string back to EventType enum.
 fn parse_event_type(s: &str) -> EventType {
-    match s {
-        "problem_created" => EventType::ProblemCreated,
-        "problem_solved" => EventType::ProblemSolved,
-        "problem_dissolved" => EventType::ProblemDissolved,
-        "problem_reopened" => EventType::ProblemReopened,
-        "solution_created" => EventType::SolutionCreated,
-        "solution_submitted" => EventType::SolutionSubmitted,
-        "solution_approved" => EventType::SolutionApproved,
-        "solution_withdrawn" => EventType::SolutionWithdrawn,
-        "critique_raised" => EventType::CritiqueRaised,
-        "critique_addressed" => EventType::CritiqueAddressed,
-        "critique_dismissed" => EventType::CritiqueDismissed,
-        "critique_validated" => EventType::CritiqueValidated,
-        "critique_replied" => EventType::CritiqueReplied,
-        "milestone_created" => EventType::MilestoneCreated,
-        "milestone_completed" => EventType::MilestoneCompleted,
-        "conflict_resolved" => EventType::ConflictResolved,
-        other => {
-            eprintln!(
-                "Warning: unknown event type '{}', defaulting to ProblemCreated",
-                other
-            );
-            EventType::ProblemCreated
-        }
-    }
+    EventType::parse(s).unwrap_or_else(|| {
+        eprintln!(
+            "Warning: unknown event type '{}', defaulting to ProblemCreated",
+            s
+        );
+        EventType::ProblemCreated
+    })
 }
 
 // ============================================================================

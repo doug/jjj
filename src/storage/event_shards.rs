@@ -143,20 +143,57 @@ impl MetadataStore {
     /// sort-merged on a back-compat fetch), fall back to a full events rebuild
     /// so the cache can never drift.
     pub(crate) fn ingest_events_incremental(&self, db: &Database) -> Result<()> {
+        use std::io::{Read, Seek, SeekFrom};
+
         let meta = self.meta_path();
         let mut offsets = load_offsets(meta);
         let files = self.event_files();
 
-        // Read each file once; decide append-only vs. needs-full.
-        let mut contents: Vec<(String, String)> = Vec::with_capacity(files.len());
+        // Read only each file's appended tail (O(delta), not O(all-time)):
+        // seek to the recorded offset and read from there, checking that the
+        // preceding byte is a newline so the offset still lands on a line
+        // boundary. Any non-append change falls back to the full rebuild.
+        let mut tails: Vec<(String, String, u64)> = Vec::with_capacity(files.len());
         let mut need_full = false;
         for (rel, path) in &files {
-            let data = fs::read_to_string(path).unwrap_or_default();
-            let off = *offsets.get(rel).unwrap_or(&0) as usize;
-            if off > data.len() || (off > 0 && data.as_bytes().get(off - 1) != Some(&b'\n')) {
+            let off = *offsets.get(rel).unwrap_or(&0);
+            let mut file = match fs::File::open(path) {
+                Ok(f) => f,
+                // Vanished mid-scan: with history already ingested this is a
+                // non-append change; a never-seen file is just empty.
+                Err(_) => {
+                    if off > 0 {
+                        need_full = true;
+                        break;
+                    }
+                    continue;
+                }
+            };
+            let len = file.metadata().map(|m| m.len()).unwrap_or(0);
+            if off > len {
                 need_full = true;
+                break;
             }
-            contents.push((rel.clone(), data));
+            if off > 0 {
+                let mut boundary = [0u8; 1];
+                if file.seek(SeekFrom::Start(off - 1)).is_err()
+                    || file.read_exact(&mut boundary).is_err()
+                    || boundary[0] != b'\n'
+                {
+                    need_full = true;
+                    break;
+                }
+            }
+            let mut tail = String::new();
+            if file.read_to_string(&mut tail).is_err() {
+                need_full = true;
+                break;
+            }
+            // Record the bytes actually consumed (not the pre-read length):
+            // a writer appending between stat and read must not leave the
+            // offset short, or the next ingest would replay those lines.
+            let consumed = off + tail.len() as u64;
+            tails.push((rel.clone(), tail, consumed));
         }
 
         if need_full {
@@ -165,24 +202,18 @@ impl MetadataStore {
             for event in &self.list_events()? {
                 insert_event(conn, event)?;
             }
-            let full: Offsets = contents
-                .iter()
-                .map(|(rel, data)| (rel.clone(), data.len() as u64))
-                .collect();
-            save_offsets(meta, &full)?;
-            return Ok(());
+            return self.reset_event_offsets();
         }
 
         let conn = db.conn();
-        for (rel, data) in &contents {
-            let off = *offsets.get(rel).unwrap_or(&0) as usize;
-            for line in data[off..].lines().filter(|l| !l.trim().is_empty()) {
+        for (rel, tail, consumed) in &tails {
+            for line in tail.lines().filter(|l| !l.trim().is_empty()) {
                 // list_events surfaces unparseable lines; silently skip here.
                 if let Ok(event) = serde_json::from_str::<Event>(line) {
                     insert_event(conn, &event)?;
                 }
             }
-            offsets.insert(rel.clone(), data.len() as u64);
+            offsets.insert(rel.clone(), *consumed);
         }
         save_offsets(meta, &offsets)?;
         Ok(())

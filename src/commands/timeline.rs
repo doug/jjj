@@ -12,7 +12,7 @@ pub fn execute(ctx: &CommandContext, problem_input: String, json: bool) -> Resul
     let problem = store.load_problem(&problem_id)?;
 
     // Get all events related to this problem
-    let all_events = store.list_events()?;
+    let all_events = store.list_events_cached()?;
 
     // Find related entity IDs (solutions and critiques for this problem)
     let solutions = store.list_solutions_for_problem(&problem_id)?;

@@ -462,28 +462,10 @@ fn row_to_event(row: &rusqlite::Row) -> SqliteResult<Event> {
 fn parse_event_type(s: &str) -> crate::models::EventType {
     use crate::models::EventType;
 
-    match s {
-        "problem_created" => EventType::ProblemCreated,
-        "problem_solved" => EventType::ProblemSolved,
-        "problem_dissolved" => EventType::ProblemDissolved,
-        "problem_reopened" => EventType::ProblemReopened,
-        "solution_created" => EventType::SolutionCreated,
-        "solution_submitted" => EventType::SolutionSubmitted,
-        "solution_approved" => EventType::SolutionApproved,
-        "solution_withdrawn" => EventType::SolutionWithdrawn,
-        "critique_raised" => EventType::CritiqueRaised,
-        "critique_addressed" => EventType::CritiqueAddressed,
-        "critique_dismissed" => EventType::CritiqueDismissed,
-        "critique_validated" => EventType::CritiqueValidated,
-        "critique_replied" => EventType::CritiqueReplied,
-        "milestone_created" => EventType::MilestoneCreated,
-        "milestone_completed" => EventType::MilestoneCompleted,
-        "conflict_resolved" => EventType::ConflictResolved,
-        other => {
-            eprintln!("Warning: unknown event type '{}', skipping", other);
-            EventType::ProblemCreated
-        }
-    }
+    EventType::parse(s).unwrap_or_else(|| {
+        eprintln!("Warning: unknown event type '{}', skipping", s);
+        EventType::ProblemCreated
+    })
 }
 
 // ============================================================================

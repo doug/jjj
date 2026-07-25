@@ -395,3 +395,68 @@ fn test_events_approve_emits_two_events_in_one_commit() {
         stdout
     );
 }
+
+#[test]
+fn test_events_db_primary_ingests_local_tail_without_duplicates() {
+    if !jj_available() {
+        return;
+    }
+    let temp_dir = setup_test_repo();
+    let dir = temp_dir.path();
+
+    // Events exist before the DB does (file-fallback territory)
+    let output = run_jjj(dir, &["problem", "new", "Pre-DB Problem"]);
+    assert!(output.status.success());
+
+    // Build the cache: rebuild loads every event and must fast-forward the
+    // ingest offsets so nothing is replayed later
+    let output = run_jjj(dir, &["db", "rebuild"]);
+    assert!(
+        output.status.success(),
+        "db rebuild failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    // A local write appends to the shard but not the DB events table; the
+    // DB-primary listing must top up the table from the tail before serving
+    let output = run_jjj(dir, &["problem", "new", "Post-DB Problem"]);
+    assert!(output.status.success());
+
+    let count_created = |stdout: &str| -> usize {
+        let events: serde_json::Value =
+            serde_json::from_str(stdout).expect("events --json should be valid JSON");
+        events
+            .as_array()
+            .expect("events --json should be an array")
+            .iter()
+            .filter(|e| e["type"] == "problem_created")
+            .count()
+    };
+
+    let output = run_jjj(dir, &["events", "--json"]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Post-DB Problem") || count_created(&stdout) == 2,
+        "locally-appended event missing from DB-primary listing: {}",
+        stdout
+    );
+    assert_eq!(
+        count_created(&stdout),
+        2,
+        "expected exactly 2 problem_created"
+    );
+
+    // Listing again must not re-ingest the same tail (offset advanced)
+    let output = run_jjj(dir, &["events", "--json"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(count_created(&stdout), 2, "duplicate events after re-list");
+
+    // A second rebuild reloads every event; the offset fast-forward inside the
+    // rebuild must prevent the next listing from replaying the whole log
+    let output = run_jjj(dir, &["db", "rebuild"]);
+    assert!(output.status.success());
+    let output = run_jjj(dir, &["events", "--json"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(count_created(&stdout), 2, "duplicate events after rebuild");
+}

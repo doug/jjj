@@ -82,6 +82,10 @@ pub fn load_from_markdown(db: &Database, store: &MetadataStore) -> Result<()> {
             rebuild_fts(db)?;
             // Clear dirty flag on successful completion
             set_dirty_internal(conn, false)?;
+            // The rebuild just loaded every event, so fast-forward the
+            // incremental-ingest offsets — otherwise the next ingest would
+            // replay the whole log into the table it's already in (duplicates).
+            let _ = store.reset_event_offsets();
             Ok(())
         }
         Err(e) => {
