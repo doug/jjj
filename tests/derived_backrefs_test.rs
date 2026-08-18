@@ -6,6 +6,7 @@
 //!   1. Creating a child touches ONE file — no parent-rewrite amplification.
 //!   2. The back-ref never appears in the parent's markdown, but IS present in
 //!      `--json` output.
+//!
 //! (Deletion cleanup — removing a child no longer rewrites its parent — is
 //! covered by the storage-layer delete tests; entity deletion has no CLI.)
 

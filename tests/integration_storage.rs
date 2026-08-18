@@ -58,8 +58,10 @@ fn test_storage_requires_jj() {
 #[test]
 fn test_project_config_roundtrip() {
     // Given: A project configuration
-    let mut config = ProjectConfig::default();
-    config.name = Some("Test Project".to_string());
+    let config = ProjectConfig {
+        name: Some("Test Project".to_string()),
+        ..Default::default()
+    };
 
     // When: I serialize to TOML
     let toml_str = toml::to_string(&config).expect("Failed to serialize");
@@ -243,8 +245,10 @@ fn test_entity_file_naming() {
 #[test]
 fn test_config_is_human_readable() {
     // Given: A config
-    let mut config = ProjectConfig::default();
-    config.name = Some("My Project".to_string());
+    let config = ProjectConfig {
+        name: Some("My Project".to_string()),
+        ..Default::default()
+    };
 
     // When: I serialize to TOML
     let toml_str = toml::to_string(&config).expect("Failed");

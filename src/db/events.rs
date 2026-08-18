@@ -234,8 +234,10 @@ mod tests {
         insert_event(conn, &problem_event).expect("Failed to insert problem event");
 
         // Create a solution event that references the problem
-        let mut extra = EventExtra::default();
-        extra.problem = Some("p1".to_string());
+        let extra = EventExtra {
+            problem: Some("p1".to_string()),
+            ..Default::default()
+        };
 
         let solution_event = Event::new(
             EventType::SolutionCreated,
@@ -302,10 +304,12 @@ mod tests {
         let conn = db.conn();
 
         // Create a critique event with extra fields
-        let mut extra = EventExtra::default();
-        extra.target = Some("s1".to_string());
-        extra.severity = Some("high".to_string());
-        extra.title = Some("Test critique".to_string());
+        let extra = EventExtra {
+            target: Some("s1".to_string()),
+            severity: Some("high".to_string()),
+            title: Some("Test critique".to_string()),
+            ..Default::default()
+        };
 
         let event = Event::new(
             EventType::CritiqueRaised,

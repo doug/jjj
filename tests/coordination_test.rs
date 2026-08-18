@@ -22,7 +22,7 @@ fn inject_conflict(meta_problems: &std::path::Path) -> String {
     let original = std::fs::read_to_string(&path).unwrap();
     let (front, _body) = original
         .split_once("---\n")
-        .and_then(|(_, rest)| rest.split_once("\n---\n").map(|(fm, body)| (fm, body)))
+        .and_then(|(_, rest)| rest.split_once("\n---\n"))
         .map(|(fm, body)| (format!("---\n{fm}\n---\n"), body.to_string()))
         .expect("frontmatter split");
     let conflicted = format!(

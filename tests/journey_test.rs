@@ -3,17 +3,33 @@ mod test_helpers;
 use regex::Regex;
 use std::collections::HashMap;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
-#[derive(Debug, Clone)]
-enum BlockType {
+/// Which program a block runs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Runner {
+    /// The jjj binary, with the block's words as argv.
     Jjj,
-    JjjFail,
-    JjjSetup,
+    /// `sh -c`, for setup and for asserting on files.
     Shell,
-    ShellSetup,
-    ShellFail,
+}
+
+/// What the block's exit status is expected to be.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Expect {
+    Success,
+    Failure,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct BlockType {
+    runner: Runner,
+    expect: Expect,
+    /// 0 = `$REPO`, 1 = `$REPO2`. A journey that names repo 2 must declare
+    /// `mode: two-clone` in its frontmatter, or there is no second repo to run
+    /// in and the journey fails loudly rather than silently using repo 1.
+    repo: usize,
 }
 
 #[derive(Debug)]
@@ -45,15 +61,7 @@ fn extract_journey_blocks(content: &str) -> Vec<JourneyBlock> {
         let trimmed = line.trim();
 
         if !in_block {
-            let bt = match trimmed {
-                "```jjj" => Some(BlockType::Jjj),
-                "```jjj:fail" => Some(BlockType::JjjFail),
-                "```jjj:setup" => Some(BlockType::JjjSetup),
-                "```shell" => Some(BlockType::Shell),
-                "```shell:setup" => Some(BlockType::ShellSetup),
-                "```shell:fail" => Some(BlockType::ShellFail),
-                _ => None,
-            };
+            let bt = trimmed.strip_prefix("```").and_then(parse_fence);
 
             if let Some(bt) = bt {
                 in_block = true;
@@ -81,18 +89,50 @@ fn extract_journey_blocks(content: &str) -> Vec<JourneyBlock> {
                 let pattern = rest[space_pos + 1..].to_string();
                 assertions.push(Assertion::Capture(var, pattern));
             }
-        } else if trimmed.starts_with(">~ ") {
-            assertions.push(Assertion::Matches(trimmed[3..].to_string()));
-        } else if trimmed.starts_with(">! ") {
-            assertions.push(Assertion::NotContains(trimmed[3..].to_string()));
-        } else if trimmed.starts_with("> ") {
-            assertions.push(Assertion::Contains(trimmed[2..].to_string()));
+        } else if let Some(rest) = trimmed.strip_prefix(">~ ") {
+            assertions.push(Assertion::Matches(rest.to_string()));
+        } else if let Some(rest) = trimmed.strip_prefix(">! ") {
+            assertions.push(Assertion::NotContains(rest.to_string()));
+        } else if let Some(rest) = trimmed.strip_prefix("> ") {
+            assertions.push(Assertion::Contains(rest.to_string()));
         } else {
             command_lines.push(line.to_string());
         }
     }
 
     blocks
+}
+
+/// Parse a fence info string (everything after the opening backticks) into a
+/// block type, or `None` if this fence is ordinary prose/code.
+///
+/// Grammar: `jjj|shell` then any order of `:2` (run in the second clone),
+/// `:setup` (no assertions expected) and `:fail` (expect a non-zero exit).
+fn parse_fence(info: &str) -> Option<BlockType> {
+    let mut parts = info.trim().split(':');
+    let runner = match parts.next()? {
+        "jjj" => Runner::Jjj,
+        "shell" => Runner::Shell,
+        _ => return None,
+    };
+    let mut bt = BlockType {
+        runner,
+        expect: Expect::Success,
+        repo: 0,
+    };
+    for modifier in parts {
+        match modifier {
+            "fail" => bt.expect = Expect::Failure,
+            "setup" => {}
+            "2" => bt.repo = 1,
+            // An unrecognized modifier is almost certainly a typo in a journey.
+            // Treating the fence as prose would silently skip the commands, so
+            // refuse to claim the block at all and let the missing assertions
+            // fail visibly.
+            _ => return None,
+        }
+    }
+    Some(bt)
 }
 
 fn split_shell_args(cmd: &str) -> Vec<String> {
@@ -183,7 +223,11 @@ fn truncate_output(s: &str, max_len: usize) -> String {
     }
 }
 
-fn setup_journey_repo() -> tempfile::TempDir {
+/// Create one colocated git+jj repo with a fixed identity.
+///
+/// `identity` names the actor so a two-clone journey can tell the two sides
+/// apart in `jjj whoami` and in event authorship.
+fn setup_journey_repo_as(identity: &str, email: &str) -> tempfile::TempDir {
     let dir = tempfile::TempDir::new().expect("create temp dir");
 
     // git init (matching UXR lib.sh colocated setup)
@@ -195,12 +239,12 @@ fn setup_journey_repo() -> tempfile::TempDir {
     assert!(status.success(), "git init failed");
 
     Command::new("git")
-        .args(["config", "user.name", "Test User"])
+        .args(["config", "user.name", identity])
         .current_dir(dir.path())
         .status()
         .unwrap();
     Command::new("git")
-        .args(["config", "user.email", "test@example.com"])
+        .args(["config", "user.email", email])
         .current_dir(dir.path())
         .status()
         .unwrap();
@@ -220,17 +264,99 @@ fn setup_journey_repo() -> tempfile::TempDir {
         .ok();
 
     Command::new("jj")
-        .args(["config", "set", "--repo", "user.name", "Test User"])
+        .args(["config", "set", "--repo", "user.name", identity])
         .current_dir(dir.path())
         .status()
         .ok();
     Command::new("jj")
-        .args(["config", "set", "--repo", "user.email", "test@example.com"])
+        .args(["config", "set", "--repo", "user.email", email])
         .current_dir(dir.path())
         .status()
         .ok();
 
     dir
+}
+
+/// Everything a journey runs against: one repo, or two clones sharing a bare
+/// remote when the journey declares `mode: two-clone`.
+///
+/// The bare remote is what makes a real multi-user journey possible — push and
+/// fetch have somewhere to meet — and it is the piece the single-repo setup
+/// could never provide.
+struct JourneyEnv {
+    repo: tempfile::TempDir,
+    repo2: Option<tempfile::TempDir>,
+    /// Held so the bare remote outlives the clones that point at it.
+    _remote: Option<tempfile::TempDir>,
+}
+
+impl JourneyEnv {
+    /// Working directory for a block, or `None` if it names a repo this
+    /// journey did not declare.
+    fn dir(&self, index: usize) -> Option<&Path> {
+        match index {
+            0 => Some(self.repo.path()),
+            1 => self.repo2.as_ref().map(|d| d.path()),
+            _ => None,
+        }
+    }
+}
+
+/// Whether a journey's frontmatter asks for two clones.
+fn wants_two_clones(content: &str) -> bool {
+    content
+        .lines()
+        .take_while(|l| !l.starts_with("## "))
+        .any(|l| l.trim() == "mode: two-clone")
+}
+
+/// Point a colocated repo at a bare remote and pull its initial commit.
+fn attach_remote(repo: &Path, remote: &Path) {
+    let url = remote.to_string_lossy().into_owned();
+    Command::new("git")
+        .args(["remote", "add", "origin", &url])
+        .current_dir(repo)
+        .status()
+        .ok();
+    // jj discovers git remotes through the colocated .git, but the bookmark
+    // tracking it needs only exists after a fetch.
+    Command::new("jj")
+        .args(["git", "fetch", "--remote", "origin"])
+        .current_dir(repo)
+        .output()
+        .ok();
+}
+
+fn setup_journey_env(two_clone: bool) -> JourneyEnv {
+    // Repo 1 keeps the historic identity: existing journeys assert against
+    // "Test User", and a rename would silently change what `--assignee`
+    // filters match.
+    let repo = setup_journey_repo_as("Test User", "test@example.com");
+    if !two_clone {
+        return JourneyEnv {
+            repo,
+            repo2: None,
+            _remote: None,
+        };
+    }
+
+    let remote = tempfile::TempDir::new().expect("create remote dir");
+    Command::new("git")
+        .args(["init", "-q", "--bare", "."])
+        .current_dir(remote.path())
+        .status()
+        .expect("git init --bare");
+
+    attach_remote(repo.path(), remote.path());
+
+    let repo2 = setup_journey_repo_as("Bob", "bob@example.com");
+    attach_remote(repo2.path(), remote.path());
+
+    JourneyEnv {
+        repo,
+        repo2: Some(repo2),
+        _remote: Some(remote),
+    }
 }
 
 fn run_journey(path: &Path) -> Vec<String> {
@@ -242,10 +368,19 @@ fn run_journey(path: &Path) -> Vec<String> {
         return failures;
     }
 
-    let dir = setup_journey_repo();
+    let env = setup_journey_env(wants_two_clones(&content));
     let jjj = test_helpers::jjj_binary();
     let mut vars: HashMap<String, String> = HashMap::new();
-    vars.insert("REPO".to_string(), dir.path().to_string_lossy().to_string());
+    vars.insert(
+        "REPO".to_string(),
+        env.repo.path().to_string_lossy().to_string(),
+    );
+    if let Some(second) = env.repo2.as_ref() {
+        vars.insert(
+            "REPO2".to_string(),
+            second.path().to_string_lossy().to_string(),
+        );
+    }
     vars.insert("JJJ".to_string(), jjj.to_string_lossy().to_string());
 
     let rel_path = path.file_name().unwrap().to_string_lossy();
@@ -253,21 +388,31 @@ fn run_journey(path: &Path) -> Vec<String> {
     for block in &blocks {
         let command = expand_vars(&block.command, &vars);
 
-        // Check for fake-bin PATH on each iteration (may be created mid-journey)
-        let env_path = get_modified_path(dir.path());
-        let env_path_ref = env_path.as_deref();
-
-        let (success, output) = match &block.lang {
-            BlockType::Jjj | BlockType::JjjFail | BlockType::JjjSetup => {
-                run_jjj_block(&jjj, dir.path(), &command, env_path_ref)
-            }
-            BlockType::Shell | BlockType::ShellSetup | BlockType::ShellFail => {
-                run_shell_block(dir.path(), &command, env_path_ref)
+        let cwd = match env.dir(block.lang.repo) {
+            Some(d) => d,
+            None => {
+                failures.push(format!(
+                    "{}:{} -- block targets repo {} but the journey did not declare \
+                     `mode: two-clone` in its frontmatter",
+                    rel_path,
+                    block.line_number,
+                    block.lang.repo + 1,
+                ));
+                break;
             }
         };
 
+        // Check for fake-bin PATH on each iteration (may be created mid-journey)
+        let env_path = get_modified_path(cwd);
+        let env_path_ref = env_path.as_deref();
+
+        let (success, output) = match block.lang.runner {
+            Runner::Jjj => run_jjj_block(&jjj, cwd, &command, env_path_ref),
+            Runner::Shell => run_shell_block(cwd, &command, env_path_ref),
+        };
+
         // Check exit code expectation
-        let expect_success = !matches!(&block.lang, BlockType::JjjFail | BlockType::ShellFail);
+        let expect_success = block.lang.expect == Expect::Success;
         let exit_ok = success == expect_success;
 
         if !exit_ok {
@@ -371,52 +516,96 @@ fn run_journey(path: &Path) -> Vec<String> {
     failures
 }
 
-#[test]
-fn journey_tests() {
+/// Run one journey file by name, failing the test with every assertion that
+/// did not hold.
+///
+/// Each journey gets its own `#[test]` (see the `journeys!` block below) so a
+/// failure names the journey that broke, the suite runs them in parallel, and
+/// one broken journey no longer hides the other seventeen.
+fn run_journey_file(file_name: &str) {
     if !test_helpers::jj_available() {
-        eprintln!("Skipping journey tests: jj not found");
+        eprintln!("Skipping journey {}: jj not found", file_name);
         return;
     }
 
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("journeys")
+        .join(file_name);
+    assert!(path.exists(), "journey file not found: {}", path.display());
+
+    let failures = run_journey(&path);
+    assert!(
+        failures.is_empty(),
+        "\n{} failure(s) in {}:\n\n{}",
+        failures.len(),
+        file_name,
+        failures.join("\n\n"),
+    );
+}
+
+/// Declare one `#[test]` per journey file.
+///
+/// The literal list is deliberate rather than a directory walk: it makes the
+/// test names visible in `cargo test` output and in CI logs. Drift is caught by
+/// `every_journey_file_has_a_test` below, which fails if the two ever disagree.
+macro_rules! journeys {
+    ($($name:ident => $file:literal),* $(,)?) => {
+        $(
+            #[test]
+            fn $name() {
+                run_journey_file($file);
+            }
+        )*
+
+        /// Every journey file declared above, for the completeness guard.
+        const DECLARED_JOURNEYS: &[&str] = &[$($file),*];
+    };
+}
+
+journeys! {
+    solo_quickstart        => "01-solo-quickstart.md",
+    team_workflow          => "02-team-workflow.md",
+    new_contributor        => "03-new-contributor.md",
+    conflict_resolution    => "04-conflict-resolution.md",
+    error_recovery         => "05-error-recovery.md",
+    end_to_end_showcase    => "06-end-to-end-showcase.md",
+    solution_lifecycle     => "07-solution-lifecycle.md",
+    critique_validate      => "08-critique-validate.md",
+    events_audit           => "09-events-audit.md",
+    status_and_filtering   => "10-status-and-filtering.md",
+    milestone_advanced     => "11-milestone-advanced.md",
+    github_sync            => "12-github-sync.md",
+    problem_reopen         => "13-problem-reopen.md",
+    milestone_status       => "14-milestone-status.md",
+    assignee_workflow      => "15-assignee-workflow.md",
+    problem_graph          => "16-problem-graph.md",
+    solution_diff          => "17-solution-diff.md",
+    automation_rules       => "18-automation-rules.md",
+    ranking                => "19-ranking.md",
+    coordination           => "20-coordination.md",
+    two_clone_sync         => "21-two-clone-sync.md",
+    triage                 => "22-triage.md",
+}
+
+/// Guard against a journey file being added without a test to run it — the
+/// failure mode that a directory walk avoids and a literal list invites.
+#[test]
+fn every_journey_file_has_a_test() {
     let journeys_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("journeys");
-    if !journeys_dir.exists() {
-        eprintln!("Skipping journey tests: journeys/ directory not found");
-        return;
-    }
-
-    let mut entries: Vec<PathBuf> = fs::read_dir(&journeys_dir)
-        .unwrap()
+    let mut on_disk: Vec<String> = fs::read_dir(&journeys_dir)
+        .expect("journeys/ must exist")
         .filter_map(|e| e.ok())
-        .map(|e| e.path())
-        .filter(|p| p.extension().map(|e| e == "md").unwrap_or(false))
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n.ends_with(".md"))
         .collect();
-    entries.sort();
+    on_disk.sort();
 
-    let mut all_failures: Vec<String> = Vec::new();
-    let mut tested = 0;
+    let mut declared: Vec<String> = DECLARED_JOURNEYS.iter().map(|s| s.to_string()).collect();
+    declared.sort();
 
-    for path in &entries {
-        let name = path.file_name().unwrap().to_string_lossy();
-        eprintln!("Running journey: {}", name);
-        let failures = run_journey(path);
-        if failures.is_empty() {
-            eprintln!("  PASS");
-        } else {
-            eprintln!("  FAIL ({} failures)", failures.len());
-            all_failures.extend(failures);
-        }
-        tested += 1;
-    }
-
-    eprintln!("Journey tests: {} files tested", tested);
-
-    if !all_failures.is_empty() {
-        panic!(
-            "\n{} journey test failure(s):\n\n{}",
-            all_failures.len(),
-            all_failures.join("\n\n"),
-        );
-    }
-
-    assert!(tested > 0, "No journey files found in journeys/");
+    assert_eq!(
+        on_disk, declared,
+        "journeys/ and the `journeys!` list in this file have drifted — add the \
+         missing `#[test]` (or delete the stale entry)"
+    );
 }

@@ -75,9 +75,11 @@ fn test_default_reviewers() {
 #[test]
 fn test_config_serialization_toml() {
     // Given: A fully configured project
-    let mut config = ProjectConfig::default();
-    config.name = Some("Test Project".to_string());
-    config.default_reviewers = vec!["alice".to_string(), "bob".to_string()];
+    let mut config = ProjectConfig {
+        name: Some("Test Project".to_string()),
+        default_reviewers: vec!["alice".to_string(), "bob".to_string()],
+        ..Default::default()
+    };
     config
         .settings
         .insert("require_approval".to_string(), "true".to_string());
