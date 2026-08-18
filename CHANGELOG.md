@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.5.1 — unreleased
+
+**Security release.** Upgrade if you share a repository with anyone.
+
+### Automation rules are machine-local (CVE-class: remote code execution)
+
+`config.toml` syncs through the shared `jjj` bookmark, and `jjj fetch` applied
+the remote copy wholesale. Because `[[automation]]` rules with
+`action = "shell"` were read from that file, anyone who could push the bookmark
+could hand every clone an arbitrary shell command, which then ran on the next
+routine operation (`problem new`, `solution submit`, …). No prompt, no warning,
+and `jjj push` reported "✓ All checks passed".
+
+The 0.5.0 hardening pass made rule *values* safe (untrusted titles travel via
+the environment, so `$(...)` in a title is inert). This release closes the
+remaining half — the rule *itself*:
+
+- Rules now live in `.jj/jjj-meta/automation.toml`, which push never copies and
+  fetch never writes.
+- Rules found in `config.toml` are reported once and **ignored**, whether they
+  are a legacy local config or arrived from a remote.
+- `jjj push` strips the `automation` key from the shared copy, preserving every
+  other key.
+- `jjj fetch` announces config changes and warns when a fetched config carried
+  rules.
+- New `jjj automation list` (what is live, what was ignored, and from where) and
+  `jjj automation migrate --force` (move legacy rules to the local file, showing
+  them for review first).
+
+**Affected:** all releases up to and including 0.5.0. **Action:** upgrade, then
+run `jjj automation list` to confirm nothing unexpected is active.
+
 ## 0.5.0 — 2026-07-25
 
 The "scale and consolidate" release: full-codebase audit remediation, the

@@ -19,12 +19,12 @@ tags: [automation, config, shell]
 init
 ```
 
-Configure automation rules that write to a marker file:
+Configure automation rules that write to a marker file. Rules live in
+`automation.toml`, which is machine-local — `config.toml` is shared through the
+`jjj` bookmark, so a rule there would run whatever a collaborator pushed:
 
 ```shell:setup
-cat > .jj/jjj-meta/config.toml << TOMLEOF
-name = "automation-test"
-
+cat > .jj/jjj-meta/automation.toml << TOMLEOF
 [[automation]]
 on = "problem_created"
 action = "shell"
@@ -152,4 +152,45 @@ problem dissolve "False alarm" --reason "was user error, not a bug"
 ```shell
 cat $REPO/.marker
 > DISSOLVED: False alarm
+```
+
+## Rules in the Shared config.toml Never Run
+
+`config.toml` travels through the `jjj` bookmark, so anyone who can push it can
+rewrite it. A rule placed there is reported and ignored — it never executes:
+
+```shell:setup
+rm -f $REPO/.marker
+cat > .jj/jjj-meta/config.toml << TOMLEOF
+name = "automation-test"
+
+[[automation]]
+on = "problem_created"
+action = "shell"
+command = "echo HIJACKED >> $REPO/.marker"
+TOMLEOF
+```
+
+```jjj
+problem new "Routine work" --priority low --force
+> ignoring 1 automation rule(s) in config.toml
+```
+
+The marker file the injected rule would have written does not exist, while the
+machine-local rules kept firing:
+
+```shell
+cat $REPO/.marker
+>! HIJACKED
+> CREATED: Routine work
+```
+
+`jjj automation list` shows both sides — what is live, and what was ignored:
+
+```jjj
+automation list
+> Active rules
+> echo CREATED
+> Ignored
+> echo HIJACKED
 ```

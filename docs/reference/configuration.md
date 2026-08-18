@@ -77,7 +77,14 @@ When jjj imports an issue with one of these labels, it maps the label to the cor
 
 ## Automation Rules
 
-Automation rules let you trigger actions when jjj events occur. Rules are defined in `config.toml` using the `[[automation]]` array-of-tables syntax.
+Automation rules let you trigger actions when jjj events occur. Rules are defined in
+`.jj/jjj-meta/automation.toml` using the `[[automation]]` array-of-tables syntax.
+
+> **Why a separate file.** `automation.toml` is machine-local: push never copies it and
+> fetch never writes it. `config.toml`, by contrast, syncs through the shared `jjj`
+> bookmark — a `action = "shell"` rule placed there would execute whatever a collaborator
+> pushed, on every clone. Rules found in `config.toml` are reported and ignored; run
+> `jjj automation migrate --force` to move them.
 
 ```toml
 [[automation]]

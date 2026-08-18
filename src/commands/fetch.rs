@@ -68,6 +68,25 @@ const ENTITY_KINDS: &[(&str, &str)] = &[
     ("milestones", "milestone"),
 ];
 
+/// Whether a fetched `config.toml` declares automation rules.
+///
+/// Purely for reporting: the rules are already inert by the time this runs
+/// (`load_config` reads automation from the machine-local `automation.toml`),
+/// but a user should know the remote tried.
+fn remote_config_carries_automation(content: &str) -> bool {
+    toml::from_str::<toml::Value>(content)
+        .ok()
+        .and_then(|v| {
+            v.as_table()
+                .and_then(|t| t.get("automation"))
+                .map(|a| match a {
+                    toml::Value::Array(items) => !items.is_empty(),
+                    _ => true,
+                })
+        })
+        .unwrap_or(false)
+}
+
 fn classify(path: &str) -> Target {
     for &(dir, singular) in ENTITY_KINDS {
         if path.starts_with(dir)
@@ -217,8 +236,29 @@ fn apply_file_delta(meta_path: &Path, delta: &FileDelta, outcome: &mut FetchOutc
         }
         Target::Config => {
             // config.toml: last-fetch-wins; never delete on a remote removal.
+            //
+            // This file is remote-controlled, so it must not be able to make
+            // this machine run anything: automation rules are read from the
+            // local-only automation.toml and any `automation` key arriving here
+            // is inert. Surface both the overwrite and any inert rules — a
+            // silent config swap is how F1 (RCE via synced config) stayed
+            // invisible.
             if let Some(remote) = delta.remote.as_deref() {
-                fs::write(meta_path.join("config.toml"), remote)?;
+                let local_path = meta_path.join("config.toml");
+                let changed = fs::read_to_string(&local_path)
+                    .map(|existing| existing != remote)
+                    .unwrap_or(true);
+                fs::write(&local_path, remote)?;
+                if changed {
+                    crate::output::notify("  config.toml updated from remote.");
+                }
+                if remote_config_carries_automation(remote) {
+                    crate::output::warn(
+                        "the fetched config.toml contains automation rules — \
+                         ignored. Automation is machine-local (automation.toml) \
+                         and is never taken from a remote.",
+                    );
+                }
             }
         }
         Target::Events => {

@@ -1,4 +1,4 @@
-use jjj::models::{AutomationAction, EventType, ProjectConfig};
+use jjj::models::{AutomationAction, AutomationConfig, EventType, ProjectConfig};
 
 /// Behavior: Creating default configuration
 #[test]
@@ -179,13 +179,40 @@ fn test_automation_roundtrip_toml() {
 on = "problem_solved"
 action = "github_close"
 "#;
-    let config: ProjectConfig = toml::from_str(toml_str).expect("parse");
-    let serialized = toml::to_string(&config).expect("serialize");
-    let roundtrip: ProjectConfig = toml::from_str(&serialized).expect("re-parse");
+
+    // AutomationConfig is the file automation actually lives in
+    // (.jj/jjj-meta/automation.toml, machine-local) and round-trips fully.
+    let local: AutomationConfig = toml::from_str(toml_str).expect("parse");
+    let serialized = toml::to_string(&local).expect("serialize");
+    let roundtrip: AutomationConfig = toml::from_str(&serialized).expect("re-parse");
     assert_eq!(roundtrip.automation.len(), 1);
     assert_eq!(roundtrip.automation[0].on, EventType::ProblemSolved);
     assert_eq!(
         roundtrip.automation[0].action,
         AutomationAction::GithubClose
+    );
+}
+
+#[test]
+fn test_project_config_never_serializes_automation() {
+    // ProjectConfig still *reads* the key so a legacy config.toml can be
+    // detected and reported — but it must never write it back, or the rules
+    // would leak into the synced file again on the next save_config.
+    let toml_str = r#"
+[[automation]]
+on = "problem_solved"
+action = "github_close"
+"#;
+    let config: ProjectConfig = toml::from_str(toml_str).expect("parse");
+    assert_eq!(
+        config.automation.len(),
+        1,
+        "legacy rules must still be visible for reporting"
+    );
+
+    let serialized = toml::to_string(&config).expect("serialize");
+    assert!(
+        !serialized.contains("automation"),
+        "config.toml is synced; writing automation into it is the F1 RCE path. Got:\n{serialized}"
     );
 }

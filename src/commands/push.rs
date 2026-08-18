@@ -109,6 +109,33 @@ fn copy_rankings_tree(src: &Path, dst: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Remove the `automation` key from a `config.toml` bound for the shared
+/// bookmark, returning `(content, stripped)`.
+///
+/// Rules are executable and machine-local; publishing them would hand every
+/// collaborator a command that runs on their machine. Operates on the parsed
+/// TOML tree so unknown keys written by a newer jjj survive the round trip. An
+/// unparseable config is passed through verbatim — it cannot carry a rule this
+/// version would honor, and silently rewriting a file we do not understand is
+/// worse than copying it.
+pub fn sanitize_shared_config(content: &str) -> (String, bool) {
+    let mut value = match toml::from_str::<toml::Value>(content) {
+        Ok(v) => v,
+        Err(_) => return (content.to_string(), false),
+    };
+    let removed = value
+        .as_table_mut()
+        .map(|t| t.remove("automation").is_some())
+        .unwrap_or(false);
+    if !removed {
+        return (content.to_string(), false);
+    }
+    match toml::to_string_pretty(&value) {
+        Ok(s) => (s, true),
+        Err(_) => (content.to_string(), false),
+    }
+}
+
 /// Create or update a metadata bookmark from the current metadata files,
 /// returning the commit id it now points at.
 ///
@@ -198,11 +225,27 @@ fn sync_meta_to_bookmark(
         }
     }
 
-    // Copy config.toml and events.jsonl
+    // Copy config.toml and events.jsonl.
+    //
+    // The `automation` key is stripped from the pushed copy: rules are
+    // executable and machine-local (`automation.toml`), so publishing them into
+    // the shared bookmark would hand collaborators a command that runs on their
+    // machines. Current jjj never writes the key; a pre-0.5.1 config.toml still
+    // can carry it, and this is where that stops.
     let config_src = meta_path.join("config.toml");
     if config_src.exists() {
-        fs::copy(&config_src, sync_path.join("config.toml"))?;
+        let content = fs::read_to_string(&config_src)?;
+        let (sanitized, stripped) = sanitize_shared_config(&content);
+        if stripped {
+            crate::output::warn(
+                "stripped automation rules from the pushed config.toml \
+                 (automation is machine-local; run `jjj automation migrate`)",
+            );
+        }
+        fs::write(sync_path.join("config.toml"), sanitized)?;
     }
+    // NOTE: automation.toml is deliberately absent from this whitelist — it
+    // never leaves the machine.
     let events_src = meta_path.join("events.jsonl");
     if events_src.exists() {
         fs::copy(&events_src, sync_path.join("events.jsonl"))?;

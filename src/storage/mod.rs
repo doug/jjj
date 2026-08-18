@@ -1,6 +1,6 @@
 use crate::error::{JjjError, Result};
 use crate::jj::JjClient;
-use crate::models::{Event, ProblemStatus, ProjectConfig, SolutionStatus};
+use crate::models::{AutomationConfig, Event, ProblemStatus, ProjectConfig, SolutionStatus};
 use std::cell::RefCell;
 use std::fs;
 use std::path::PathBuf;
@@ -115,6 +115,9 @@ fn flock_exclusive(meta_path: &std::path::Path) -> Result<std::fs::File> {
 
 pub const META_BOOKMARK: &str = "jjj";
 pub(super) const CONFIG_FILE: &str = "config.toml";
+/// Machine-local automation rules. Deliberately **not** part of the synced
+/// metadata set — see [`crate::models::AutomationConfig`].
+pub const AUTOMATION_FILE: &str = "automation.toml";
 pub(super) const PROBLEMS_DIR: &str = "problems";
 pub(super) const SOLUTIONS_DIR: &str = "solutions";
 pub(super) const CRITIQUES_DIR: &str = "critiques";
@@ -161,6 +164,23 @@ pub struct MetadataStore {
     /// nested calls just increment this so a single process can't deadlock
     /// against its own lock.
     write_lock_depth: RefCell<u32>,
+}
+
+/// Report ignored automation rules found in a synced `config.toml`, once.
+///
+/// `load_config` runs on nearly every command, so the notice is latched — a
+/// per-invocation warning would drown the output it is attached to.
+fn warn_legacy_automation(count: usize) {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        crate::output::warn(&format!(
+            "ignoring {} automation rule(s) in config.toml — automation is \
+             machine-local since 0.5.1 because config.toml syncs through the \
+             shared bookmark. Run `jjj automation migrate` to move them to \
+             automation.toml.",
+            count
+        ));
+    });
 }
 
 /// Load the global user config from ~/.config/jjj/config.toml.
@@ -210,9 +230,11 @@ fn merge_config(base: &mut ProjectConfig, project: &ProjectConfig) {
     if project.sync.workspace.is_some() {
         base.sync.workspace = project.sync.workspace.clone();
     }
-    if !project.automation.is_empty() {
-        base.automation = project.automation.clone();
-    }
+    // NOTE: `automation` is deliberately NOT merged from the project
+    // `config.toml`. That file is synced through the shared `jjj` bookmark, so
+    // honoring rules from it would let any collaborator run arbitrary shell
+    // commands on every clone. Rules come from the machine-local
+    // `automation.toml` instead; see `MetadataStore::load_config`.
 }
 
 // =============================================================================
@@ -907,8 +929,16 @@ impl MetadataStore {
     /// Load project configuration, merging with global config.
     ///
     /// Load order (later overrides earlier):
-    /// 1. `~/.config/jjj/config.toml` (global user defaults)
-    /// 2. `.jj/jjj-meta/config.toml` (project-specific)
+    /// 1. `~/.config/jjj/config.toml` (global user defaults; machine-local)
+    /// 2. `.jj/jjj-meta/config.toml` (project-specific; **synced**)
+    /// 3. `.jj/jjj-meta/automation.toml` (automation rules; machine-local)
+    ///
+    /// Automation is loaded from its own file on purpose. `config.toml` travels
+    /// through the shared `jjj` bookmark and fetch applies the remote copy
+    /// wholesale, so a rule read from it would let any collaborator execute
+    /// arbitrary shell commands here. Rules found in a legacy `config.toml` are
+    /// dropped and reported once per process; `jjj automation migrate` moves
+    /// them across.
     pub fn load_config(&self) -> Result<ProjectConfig> {
         self.ensure_meta_checkout()?;
 
@@ -918,10 +948,72 @@ impl MetadataStore {
         if config_path.exists() {
             let content = fs::read_to_string(config_path)?;
             let project: ProjectConfig = toml::from_str(&content)?;
+            if !project.automation.is_empty() {
+                warn_legacy_automation(project.automation.len());
+            }
             merge_config(&mut config, &project);
         }
 
+        if let Some(local) = self.load_automation_config()? {
+            config.automation = local.automation;
+        }
+
         Ok(config)
+    }
+
+    /// Read the machine-local `automation.toml`, if it exists.
+    pub fn load_automation_config(&self) -> Result<Option<AutomationConfig>> {
+        let path = self.meta_path.join(AUTOMATION_FILE);
+        if !path.exists() {
+            return Ok(None);
+        }
+        let content = fs::read_to_string(&path)?;
+        Ok(Some(toml::from_str(&content)?))
+    }
+
+    /// Write the machine-local `automation.toml`.
+    pub fn save_automation_config(&self, automation: &AutomationConfig) -> Result<()> {
+        self.ensure_meta_checkout()?;
+        let path = self.meta_path.join(AUTOMATION_FILE);
+        let content = toml::to_string_pretty(automation)?;
+        atomic_write(&path, content.as_bytes())?;
+        Ok(())
+    }
+
+    /// Rules present in the project `config.toml` that are being ignored.
+    ///
+    /// Used by `jjj automation migrate` / `jjj doctor` to report and relocate
+    /// pre-0.5.1 rules.
+    pub fn legacy_config_automation(&self) -> Result<Vec<crate::models::AutomationRule>> {
+        let config_path = self.meta_path.join(CONFIG_FILE);
+        if !config_path.exists() {
+            return Ok(Vec::new());
+        }
+        let content = fs::read_to_string(config_path)?;
+        let project: ProjectConfig = toml::from_str(&content)?;
+        Ok(project.automation)
+    }
+
+    /// Rewrite the project `config.toml` with the `automation` key removed.
+    ///
+    /// Operates on the parsed TOML tree rather than re-serializing
+    /// `ProjectConfig`, so unknown/future keys written by a newer jjj survive.
+    /// Returns `true` if the file changed.
+    pub fn strip_config_automation(&self) -> Result<bool> {
+        let config_path = self.meta_path.join(CONFIG_FILE);
+        if !config_path.exists() {
+            return Ok(false);
+        }
+        let content = fs::read_to_string(&config_path)?;
+        let mut value: toml::Value = toml::from_str(&content)?;
+        let removed = value
+            .as_table_mut()
+            .map(|t| t.remove("automation").is_some())
+            .unwrap_or(false);
+        if removed {
+            atomic_write(&config_path, toml::to_string_pretty(&value)?.as_bytes())?;
+        }
+        Ok(removed)
     }
 
     /// Save project configuration

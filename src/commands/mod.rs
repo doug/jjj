@@ -1,3 +1,4 @@
+pub mod automation;
 pub mod completion;
 pub mod conflicts;
 pub mod critique;
@@ -106,6 +107,10 @@ fn execute_with_context(ctx: &CommandContext, command: Commands) -> Result<()> {
         Commands::Github { action, dry_run } => sync::execute(ctx, action, dry_run),
 
         // Coordination identity
+        Commands::Automation { command } => match command {
+            crate::cli::AutomationCommands::List { json } => automation::list(ctx, json),
+            crate::cli::AutomationCommands::Migrate { force } => automation::migrate(ctx, force),
+        },
         Commands::Whoami { json } => whoami::execute(ctx, json),
 
         // Conflict discovery + resolution

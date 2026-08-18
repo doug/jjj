@@ -269,6 +269,13 @@ pub enum Commands {
     #[command(display_order = 50)]
     Init,
 
+    /// Inspect automation rules and move pre-0.5.1 rules out of the synced config
+    #[command(display_order = 51)]
+    Automation {
+        #[command(subcommand)]
+        command: AutomationCommands,
+    },
+
     /// Show the resolved coordination identity: actor, pod, and push bookmark
     #[command(display_order = 52)]
     Whoami {
@@ -331,6 +338,24 @@ pub enum Shell {
 // =============================================================================
 // Db Commands
 // =============================================================================
+
+/// Automation rule inspection and migration.
+#[derive(Subcommand)]
+pub enum AutomationCommands {
+    /// Show active rules and any ignored rules still sitting in config.toml
+    List {
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Move rules from the synced config.toml into the machine-local automation.toml
+    Migrate {
+        /// Apply the move (without this, the rules are only listed for review)
+        #[arg(long)]
+        force: bool,
+    },
+}
 
 #[derive(Subcommand)]
 pub enum DbAction {

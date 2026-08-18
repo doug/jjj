@@ -5,7 +5,9 @@ mod milestone;
 mod problem;
 mod solution;
 
-pub use config::{AutomationAction, AutomationRule, GitHubConfig, ProjectConfig, SyncConfig};
+pub use config::{
+    AutomationAction, AutomationConfig, AutomationRule, GitHubConfig, ProjectConfig, SyncConfig,
+};
 pub use critique::{Critique, CritiqueSeverity, CritiqueStatus, Reply};
 pub use event::{Event, EventExtra, EventType};
 pub use milestone::{Milestone, MilestoneStatus};

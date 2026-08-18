@@ -59,6 +59,10 @@ config.toml
 events.jsonl
 ```
 
+Machine-local files under `.jj/jjj-meta/` that are deliberately **not** synced:
+`automation.toml` (executable rules), `.sync_state.json`, `.events_offsets.json`,
+and `jjj.db`.
+
 Entity files use YAML frontmatter + markdown body. Each entity has one free-form body field:
 - **Problem**: body = `description`
 - **Solution**: body = `approach`
@@ -77,7 +81,11 @@ Per-user ordering files in `rankings/{milestone_id}/{user}.json` store a problem
 Global ranking aggregates all users as a **budget-normalized, gap-weighted ordering**: walking each user's list top-to-bottom, item `k` sits at cumulative descent `depth_k` (each gap adds 1/2/4/8/16 for none/S/M/L/XL) and gets harmonic weight `1/(1+depth_k)`; weights are scaled so every user's points sum to the budget `B = max(100, 2*problem_count)`, giving equal influence regardless of list length, with the top of the list dominant. With no gaps this is exactly the harmonic sequence `1, 1/2, …, 1/n`, so an un-annotated list is backward-compatible; a large gap (e.g. an `XL` above the bottom item) is the "must not win" signal. Ties break by `problem_id`. (Legacy quadratic-vote data in older ranking files is ignored on load.) See `docs/design/latent-preference-ranking.md` for the rationale.
 
 ### Automation Rules
-Config-driven automation in `config.toml` fires actions on jjj events:
+Config-driven automation fires actions on jjj events. Rules live in
+`.jj/jjj-meta/automation.toml` — **machine-local, never synced**. `config.toml`
+travels through the shared `jjj` bookmark, so a rule there would let any
+collaborator run arbitrary shell commands on every clone; rules found in
+`config.toml` are reported and ignored (`jjj automation migrate` moves them).
 ```toml
 [[automation]]
 on = "solution_submitted"  # EventType (snake_case)

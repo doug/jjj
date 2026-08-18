@@ -156,6 +156,9 @@ jj bookmark track jjj@origin
 ## Installation
 
 ```bash
+# Prebuilt binary (macOS + Linux, arm64 + x86_64)
+curl -fsSL https://raw.githubusercontent.com/doug/jjj/main/install.sh | sh
+
 # From crates.io
 cargo install jjj
 
@@ -165,6 +168,12 @@ cargo install --path .
 # Generate shell completions
 jjj completion bash > ~/.local/share/bash-completion/completions/jjj
 ```
+
+> **Upgrade if you are on 0.4.1 or earlier.** Those releases predate two fixes
+> that matter for shared repositories: a silent-data-loss path in `jjj fetch`,
+> and automation rules being read from the synced `config.toml` (which let
+> anyone able to push the `jjj` bookmark run shell commands on every clone).
+> See the [changelog](CHANGELOG.md).
 
 ### Semantic search (optional)
 

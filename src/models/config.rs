@@ -191,7 +191,29 @@ pub struct ProjectConfig {
     #[serde(default)]
     pub sync: SyncConfig,
 
-    /// Automation rules — fire actions on jjj events
+    /// Automation rules — fire actions on jjj events.
+    ///
+    /// **Never serialized into `config.toml`.** Automation rules are executable
+    /// (`action = "shell"` runs `sh -c <command>`), and `config.toml` travels
+    /// through the shared `jjj` bookmark, where any collaborator can rewrite it.
+    /// Rules therefore live in a machine-local `automation.toml` that push never
+    /// copies and fetch never writes — see [`AutomationConfig`].
+    ///
+    /// Deserialization still accepts the key so a pre-0.5.1 `config.toml` can be
+    /// detected and reported (`jjj automation migrate`); such rules are dropped,
+    /// not executed.
+    #[serde(default, skip_serializing)]
+    pub automation: Vec<AutomationRule>,
+}
+
+/// The machine-local automation file (`.jj/jjj-meta/automation.toml`).
+///
+/// This file is deliberately outside the synced metadata set: it is not copied
+/// into the `jjj` bookmark on push and is never written by fetch. Rules here are
+/// trusted because only someone with write access to this checkout can add them.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct AutomationConfig {
+    /// Automation rules — fire actions on jjj events.
     #[serde(default)]
     pub automation: Vec<AutomationRule>,
 }
