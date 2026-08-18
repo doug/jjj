@@ -2,7 +2,7 @@ mod app;
 mod detail;
 mod next_actions;
 mod tree;
-mod ui;
+pub mod ui;
 
 pub use app::App;
 pub use detail::{DetailContent, ProblemRankInfo};

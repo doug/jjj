@@ -10,9 +10,13 @@ env:
   # Turn a missing `jj` into a hard failure instead of a silent test skip: the
   # sync/data-loss integration tests are jj-backed and must actually run in CI.
   JJJ_REQUIRE_JJ: "1"
+  # The jj release the code is validated against. Pinned so a jj release that
+  # changes CLI semantics can't silently break the sync tests.
+  JJ_VERSION: "0.43.0"
 
 jobs:
-  check:
+  test:
+    name: test (${{ matrix.os }})
     # jjj supports macOS (primary) and Linux — exercise both.
     strategy:
       fail-fast: false
@@ -23,20 +27,111 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      # The jj-backed integration tests (push/fetch, concurrent writers) need a
-      # real jj binary. Pin the version the code is validated against so a jj
-      # release that changes CLI semantics can't silently break sync tests.
       - name: Install jujutsu (jj)
         uses: taiki-e/install-action@v2
         with:
-          tool: jj@0.43.0
+          tool: jj@${{ env.JJ_VERSION }}
       - name: Configure jj identity
         run: |
           jj config set --user user.name "CI" || true
           jj config set --user user.email "ci@example.com" || true
       - name: Check formatting
         run: cargo fmt --check
+      # --all-targets so test code is linted too: without it the ~11 warnings
+      # that accumulated in tests/ were invisible to a "-D warnings" gate.
       - name: Clippy
-        run: cargo clippy -- -D warnings
+        run: cargo clippy --all-targets --all-features -- -D warnings
       - name: Run tests
         run: cargo test
+
+  msrv:
+    name: MSRV (rust-version in Cargo.toml)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read MSRV from Cargo.toml
+        id: msrv
+        run: |
+          version=$(grep '^rust-version' Cargo.toml | head -1 | cut -d'"' -f2)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Declared MSRV: $version"
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.msrv.outputs.version }}
+      - uses: Swatinem/rust-cache@v2
+      # Building, not testing: the point is that the declared MSRV is true, and
+      # dev-dependencies routinely require newer toolchains than the crate does.
+      - name: Build at the declared MSRV
+        run: cargo build --locked
+
+  features:
+    name: feature matrix
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # `semantic` pulls in candle and is off by default, so nothing else here
+      # compiles it — exactly the condition under which a feature bit-rots.
+      - name: Build with --features semantic
+        run: cargo check --features semantic --all-targets
+
+  audit:
+    name: dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+      # Advisories and licences only. Duplicate-dependency bans are noise for a
+      # binary crate and would fail the build for something nobody will act on.
+      - name: cargo-deny
+        run: cargo deny check advisories licenses
+
+  bench:
+    name: performance tripwire
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: jj@0.43.0
+      - name: Configure jj identity
+        run: |
+          jj config set --user user.name "CI" || true
+          jj config set --user user.email "ci@example.com" || true
+      - name: Build release binary
+        run: cargo build --release
+      # A small corpus with deliberately loose thresholds. Shared runners are too
+      # noisy for real numbers, so this catches algorithmic regressions (the
+      # O(n^2) kind that a 25K run surfaced in July), not drift. The real gate is
+      # the 25K run in RELEASE.md, on a quiet machine.
+      - name: Bench tripwire (2K corpus)
+        working-directory: tools/bench
+        run: python3 bench.py --count 2000 --json ci-2k.json --check-against baseline-2k.json --tolerance 3.0
+
+  vscode:
+    name: VS Code extension
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: vscode/package-lock.json
+      - name: Install dependencies
+        working-directory: vscode
+        run: npm ci
+      - name: Lint
+        working-directory: vscode
+        run: npm run lint
+      - name: Compile
+        working-directory: vscode
+        run: npm run compile
+      - name: Test
+        working-directory: vscode
+        run: npm test

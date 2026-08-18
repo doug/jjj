@@ -1,0 +1,15 @@
+default_reviewers = []
+automation = []
+
+[settings]
+
+[github]
+auto_push = false
+sync_critiques = true
+sync_lgtm = true
+auto_close_on_solve = false
+problem_label = "jjj"
+
+[github.label_priority]
+
+[sync]

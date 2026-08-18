@@ -1,0 +1,180 @@
+#!/usr/bin/env bash
+#
+# Hermetic stand-in for the GitHub CLI.
+#
+# jjj shells out to `gh` for every GitHub operation, so a test that puts this
+# script earlier on PATH exercises the real mapping code — argument building,
+# JSON parsing, state reconciliation — with no network, no credentials, and no
+# shared repository to pollute.
+#
+# Two knobs, both environment variables:
+#
+#   FAKE_GH_LOG    append one line per invocation (the full argv). Tests assert
+#                  on this to check *how* gh was called, which a stdout-only
+#                  stub cannot show — e.g. that `--base` is actually passed.
+#   FAKE_GH_STATE  directory holding mutable state, so a close/reopen in one
+#                  command is visible to the `view` in the next. Without it the
+#                  stub is stateless and always reports OPEN.
+#
+# Unhandled subcommands exit non-zero with a message naming the argv, so a new
+# call site fails loudly here instead of silently returning empty JSON.
+
+set -uo pipefail
+
+if [[ -n "${FAKE_GH_LOG:-}" ]]; then
+  # One record per invocation. Arguments legitimately contain newlines (a PR
+  # body, for one), so escape them — otherwise a single call spans several log
+  # lines and an assertion looking for two fragments "in the same call" fails
+  # for a call that really did contain both.
+  printf '%s\n' "${*//$'\n'/\\n}" >> "$FAKE_GH_LOG"
+fi
+
+# --- state helpers ----------------------------------------------------------
+
+state_file() {
+  [[ -n "${FAKE_GH_STATE:-}" ]] || return 1
+  mkdir -p "$FAKE_GH_STATE"
+  printf '%s/%s' "$FAKE_GH_STATE" "$1"
+}
+
+issue_state() {
+  local f
+  if f=$(state_file "issue-$1.state") && [[ -f "$f" ]]; then
+    cat "$f"
+  else
+    echo "OPEN"
+  fi
+}
+
+set_issue_state() {
+  local f
+  if f=$(state_file "issue-$1.state"); then
+    printf '%s' "$2" > "$f"
+  fi
+}
+
+pr_state() {
+  local f
+  if f=$(state_file "pr-$1.state") && [[ -f "$f" ]]; then
+    cat "$f"
+  else
+    echo "OPEN"
+  fi
+}
+
+set_pr_state() {
+  local f
+  if f=$(state_file "pr-$1.state"); then
+    printf '%s' "$2" > "$f"
+  fi
+}
+
+ALL_ARGS="$*"
+CMD="${1:-} ${2:-}"
+
+# jjj probes the CLI version before using newer flags, so the stub has to answer
+# it or every GitHub command bails before doing anything.
+if [[ "${1:-}" == "--version" ]]; then
+  echo "gh version 2.40.1 (2024-01-01)"
+  echo "https://github.com/cli/cli/releases/tag/v2.40.1"
+  exit 0
+fi
+
+case "$CMD" in
+  "auth status")
+    echo "Logged in to github.com account testuser (keyring)"
+    ;;
+
+  "api user")
+    echo "testuser"
+    ;;
+
+  "repo view")
+    echo "testowner/testrepo"
+    ;;
+
+  # --- issues ---------------------------------------------------------------
+
+  "issue create")
+    # jjj parses the whole stdout as the number (`--json number --jq .number`),
+    # so print only that.
+    echo "42"
+    ;;
+
+  "issue view")
+    NUM="${3:-42}"
+    if [[ "$ALL_ARGS" == *".state"* ]]; then
+      issue_state "$NUM"
+    elif [[ "$NUM" == "43" ]]; then
+      cat <<'JSON'
+{"number":43,"title":"Memory leak in worker thread","body":"Worker process grows to 2 GB then crashes.","state":"OPEN","labels":[{"name":"critical"}],"author":{"login":"bob"}}
+JSON
+    elif [[ "$NUM" == "44" ]]; then
+      # A closed issue: importing this must NOT reopen it upstream.
+      cat <<'JSON'
+{"number":44,"title":"Already fixed upstream","body":"Landed in 1.2.0.","state":"CLOSED","labels":[],"author":{"login":"carol"}}
+JSON
+    else
+      cat <<'JSON'
+{"number":42,"title":"Login is slow when session expires","body":"Users are logged out after 30 minutes of inactivity.","state":"OPEN","labels":[{"name":"high"}],"author":{"login":"octocat"}}
+JSON
+    fi
+    ;;
+
+  "issue list")
+    cat <<'JSON'
+[{"number":42,"title":"Login is slow when session expires","state":"OPEN","labels":[{"name":"high"}]},{"number":43,"title":"Memory leak in worker thread","state":"OPEN","labels":[{"name":"critical"}]}]
+JSON
+    ;;
+
+  "issue close")
+    set_issue_state "${3:-42}" "CLOSED"
+    echo "Closed issue #${3:-42}."
+    ;;
+
+  "issue reopen")
+    set_issue_state "${3:-42}" "OPEN"
+    echo "Reopened issue #${3:-42}."
+    ;;
+
+  # --- pull requests --------------------------------------------------------
+
+  "pr create")
+    echo "101"
+    ;;
+
+  "pr view")
+    NUM="${3:-101}"
+    if [[ "$ALL_ARGS" == *"reviewThreads"* ]]; then
+      cat <<'JSON'
+[{"isResolved":false,"isOutdated":false,"comments":[{"databaseId":99001,"author":{"login":"alice"},"body":"Missing null check on line 42","path":"src/session.rs","line":42,"originalLine":42}]}]
+JSON
+    elif [[ "$ALL_ARGS" == *"reviews"* ]]; then
+      cat <<'JSON'
+[{"id":9001,"author":{"login":"alice"},"state":"CHANGES_REQUESTED","body":"The session timeout logic needs error handling for network failures."}]
+JSON
+    elif [[ "$ALL_ARGS" == *".state"* ]]; then
+      pr_state "$NUM"
+    else
+      echo '{}'
+    fi
+    ;;
+
+  "pr edit")
+    echo "Updated PR #${3:-101}."
+    ;;
+
+  "pr merge")
+    set_pr_state "${3:-101}" "MERGED"
+    echo "Merged PR #${3:-101}."
+    ;;
+
+  "pr list")
+    echo '[]'
+    ;;
+
+  *)
+    echo "fake-gh: unhandled invocation: $ALL_ARGS" >&2
+    exit 1
+    ;;
+esac

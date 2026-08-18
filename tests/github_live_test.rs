@@ -1,7 +1,21 @@
-//! End-to-end integration tests for GitHub sync against a real private repo (doug/jjjtest).
+//! End-to-end GitHub sync against a **real** repository (`doug/jjjtest`).
 //!
-//! These tests are gated behind `gh auth status` and `which jj` checks.
-//! They use unique prefixes per run to avoid conflicts and clean up after themselves.
+//! Opt-in: set `JJJ_LIVE_GITHUB=1` to run these. They mutate a shared remote,
+//! need an authenticated `gh`, and depend on network and GitHub replication
+//! timing, so they are not part of the default suite — a CI runner would skip
+//! them silently and report green having tested nothing, which is exactly how
+//! the GitHub integration went unverified for so long.
+//!
+//! The everyday coverage lives in `github_sync_test.rs`, which drives the same
+//! code paths through a stub `gh` on `PATH` and runs on every commit. Run this
+//! suite before a release to confirm the stub still matches the real CLI:
+//!
+//! ```sh
+//! JJJ_LIVE_GITHUB=1 cargo test --test github_live_test
+//! ```
+//!
+//! They use unique prefixes per run to avoid conflicts and clean up after
+//! themselves.
 
 mod test_helpers;
 
@@ -66,18 +80,28 @@ fn create_gh_issue(dir: &std::path::Path, title: &str, body: &str) -> u64 {
         .unwrap_or_else(|_| panic!("Failed to parse issue number from URL: {}", url))
 }
 
-/// Check prerequisites: jj available, gh available and authenticated.
-/// Returns false if any check fails (test should skip).
+/// Check prerequisites: opt-in flag set, jj available, gh available and
+/// authenticated. Returns false if any check fails (test should skip).
 fn prerequisites_met() -> bool {
+    // Opt-in only. Without this these tests would appear to run everywhere and
+    // actually run nowhere.
+    if std::env::var_os("JJJ_LIVE_GITHUB").is_none() {
+        eprintln!(
+            "Skipping github_live: set JJJ_LIVE_GITHUB=1 to run against the real \
+             GitHub API (see github_sync_test.rs for the hermetic suite)"
+        );
+        return false;
+    }
+
     // jj installed?
     if jjj::jj::find_executable("jj").is_none() {
-        eprintln!("Skipping github_sync_e2e: jj not found");
+        eprintln!("Skipping github_live: jj not found");
         return false;
     }
 
     // gh installed?
     if jjj::jj::find_executable("gh").is_none() {
-        eprintln!("Skipping github_sync_e2e: gh not found");
+        eprintln!("Skipping github_live: gh not found");
         return false;
     }
 
@@ -87,7 +111,7 @@ fn prerequisites_met() -> bool {
         .output()
         .expect("Failed to run gh auth status");
     if !output.status.success() {
-        eprintln!("Skipping github_sync_e2e: gh not authenticated");
+        eprintln!("Skipping github_live: gh not authenticated");
         return false;
     }
 

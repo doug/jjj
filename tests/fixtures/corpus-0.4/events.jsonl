@@ -1,0 +1,5 @@
+{"when":"2026-08-18T23:55:20.941805Z","type":"problem_created","entity":"01a0174d-0ded-7153-a3b4-ea821d9890e4","by":"Alice"}
+{"when":"2026-08-18T23:55:20.978875Z","type":"problem_created","entity":"01a0174d-0e12-7c72-b24d-4ab8124adb7f","by":"Alice"}
+{"when":"2026-08-18T23:55:21.016228Z","type":"solution_created","entity":"01a0174d-0e38-7483-a305-16e515a60b46","by":"Alice","problem":"01a0174d-0ded-7153-a3b4-ea821d9890e4"}
+{"when":"2026-08-18T23:55:21.262070Z","type":"solution_submitted","entity":"01a0174d-0e38-7483-a305-16e515a60b46","by":"Alice","problem":"01a0174d-0ded-7153-a3b4-ea821d9890e4"}
+{"when":"2026-08-18T23:55:21.315850Z","type":"critique_raised","entity":"01a0174d-0f52-72b2-a37d-14996fb58cb7","by":"Alice","target":"01a0174d-0e38-7483-a305-16e515a60b46","severity":"high","title":"Refresh tokens need rotation"}

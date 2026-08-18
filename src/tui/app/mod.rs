@@ -23,7 +23,7 @@ fn char_to_byte_pos(s: &str, char_pos: usize) -> usize {
 }
 
 /// Which pane currently has keyboard focus.
-#[derive(Default, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum FocusedPane {
     #[default]
     Tree,
@@ -299,7 +299,21 @@ impl App {
     /// node and the first milestone by default. Kicks off the initial related-items
     /// load for whatever entity is selected first.
     pub fn new() -> Result<Self> {
-        let jj_client = JjClient::new()?;
+        Self::open(JjClient::new()?)
+    }
+
+    /// Build an [`App`] against a repository at an explicit root.
+    ///
+    /// `new()` discovers the repository from the process's current directory,
+    /// which tests cannot use: `cargo test` runs them in parallel threads of one
+    /// process, so a `chdir` in one test corrupts every other. This entry point
+    /// takes the root instead, which is what the TUI driver in
+    /// `tests/tui_test.rs` uses.
+    pub fn open_at(root: std::path::PathBuf) -> Result<Self> {
+        Self::open(JjClient::with_root(root)?)
+    }
+
+    fn open(jj_client: JjClient) -> Result<Self> {
         let store = MetadataStore::new(jj_client)?;
         let data = ProjectData::load(&store)?;
         let mut ui = UiState::new();
@@ -429,7 +443,33 @@ impl App {
         }
     }
 
-    fn handle_key(&mut self, key: KeyEvent) -> Result<()> {
+    /// Title of the tree row the cursor is on, if any.
+    ///
+    /// The render cache is private, but "what is selected" is the one piece of
+    /// it that callers outside the event loop legitimately need — a test driving
+    /// keys has to know where the cursor landed, and so would any future
+    /// scripting hook.
+    pub fn selected_title(&self) -> Option<&str> {
+        self.cache
+            .tree_items
+            .get(self.ui.tree_index)
+            .map(|item| item.node.title())
+    }
+
+    /// Id of the tree row the cursor is on, if any.
+    pub fn selected_id(&self) -> Option<&str> {
+        self.cache
+            .tree_items
+            .get(self.ui.tree_index)
+            .map(|item| item.node.id())
+    }
+
+    /// Feed one key press to the app.
+    ///
+    /// Public so a test can drive the TUI without a terminal or an event loop:
+    /// [`Self::run`] is a thin wrapper that polls crossterm and calls this. The
+    /// split is what makes the interactive surface testable at all.
+    pub fn handle_key(&mut self, key: KeyEvent) -> Result<()> {
         // Ctrl+C always exits, regardless of mode
         if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
             self.should_quit = true;
