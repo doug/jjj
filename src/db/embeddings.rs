@@ -190,7 +190,7 @@ fn embedding_to_blob(embedding: &[f32]) -> Vec<u8> {
 /// A misaligned blob is corrupted storage — silently truncating would yield a
 /// vector with the wrong dimensions and no error.
 fn blob_to_embedding(blob: &[u8]) -> Option<Vec<f32>> {
-    if blob.len() % 4 != 0 {
+    if !blob.len().is_multiple_of(4) {
         return None;
     }
     Some(
