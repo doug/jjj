@@ -20,7 +20,8 @@ pub fn execute(ctx: &CommandContext, action: SolutionAction) -> Result<()> {
             reviewer,
             force,
             tags,
-        } => new_solution(ctx, title, problem, supersedes, reviewer, force, tags),
+            json,
+        } => new_solution(ctx, title, problem, supersedes, reviewer, force, tags, json),
 
         SolutionAction::List {
             problem,
@@ -87,6 +88,7 @@ pub fn execute(ctx: &CommandContext, action: SolutionAction) -> Result<()> {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn new_solution(
     ctx: &CommandContext,
     title: String,
@@ -95,6 +97,7 @@ fn new_solution(
     reviewer_critiques: Vec<String>,
     force: bool,
     tags: Vec<String>,
+    json: bool,
 ) -> Result<()> {
     let store = &ctx.store;
 
@@ -246,10 +249,14 @@ fn new_solution(
             store.save_problem(&problem)?;
         }
 
-        println!("Created solution {} ({})", solution.id, solution.title);
-        println!("  Addresses: {} - {}", problem.id, problem.title);
-        if let Some(ref sup) = solution.supersedes {
-            println!("  Supersedes: {}", sup);
+        if json {
+            println!("{}", serde_json::to_string_pretty(&solution)?);
+        } else {
+            println!("Created solution {} ({})", solution.id, solution.title);
+            println!("  Addresses: {} - {}", problem.id, problem.title);
+            if let Some(ref sup) = solution.supersedes {
+                println!("  Supersedes: {}", sup);
+            }
         }
         if !reviewer_critiques.is_empty() {
             let names: Vec<_> = reviewer_critiques

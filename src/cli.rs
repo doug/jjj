@@ -418,6 +418,10 @@ pub enum ProblemAction {
         /// Comma-separated tags (e.g., --tags backend,auth,size:L)
         #[arg(long, value_delimiter = ',')]
         tags: Vec<String>,
+
+        /// Print the created entity as JSON (for scripting and agents)
+        #[arg(long)]
+        json: bool,
     },
 
     /// List problems with optional filters
@@ -616,6 +620,10 @@ pub enum SolutionAction {
         /// Comma-separated tags (e.g., --tags backend,refactor)
         #[arg(long, value_delimiter = ',')]
         tags: Vec<String>,
+
+        /// Print the created entity as JSON (for scripting and agents)
+        #[arg(long)]
+        json: bool,
     },
 
     /// List solutions with optional filters
@@ -838,6 +846,10 @@ pub enum CritiqueAction {
         /// Assign a specific reviewer to address this critique
         #[arg(long)]
         reviewer: Option<String>,
+
+        /// Print the created entity as JSON (for scripting and agents)
+        #[arg(long)]
+        json: bool,
     },
 
     /// List critiques with optional filters

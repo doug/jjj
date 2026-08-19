@@ -16,7 +16,17 @@ pub fn execute(ctx: &CommandContext, action: CritiqueAction) -> Result<()> {
             file,
             line,
             reviewer,
-        } => new_critique(ctx, solution_id, title, severity, file, line, reviewer),
+            json,
+        } => new_critique(
+            ctx,
+            solution_id,
+            title,
+            severity,
+            file,
+            line,
+            reviewer,
+            json,
+        ),
         CritiqueAction::List {
             solution,
             status,
@@ -49,6 +59,7 @@ pub fn execute(ctx: &CommandContext, action: CritiqueAction) -> Result<()> {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn new_critique(
     ctx: &CommandContext,
     solution_input: String,
@@ -57,6 +68,7 @@ fn new_critique(
     file: Option<String>,
     line: Option<usize>,
     reviewer: Option<String>,
+    json: bool,
 ) -> Result<()> {
     let solution_id = ctx.resolve_solution(&solution_input)?;
     let store = &ctx.store;
@@ -162,14 +174,18 @@ fn new_critique(
             // creating a critique touches exactly one new file (no parent
             // rewrite, no hot-solution contention).
 
-            println!(
-                "Created critique {} ({}) on solution {}",
-                critique.id, critique.title, solution_id
-            );
-            println!("  Severity: {}", severity);
+            if json {
+                println!("{}", serde_json::to_string_pretty(&critique)?);
+            } else {
+                println!(
+                    "Created critique {} ({}) on solution {}",
+                    critique.id, critique.title, solution_id
+                );
+                println!("  Severity: {}", severity);
 
-            if let Some(ref fp) = file {
-                println!("  Location: {}:{}", fp, line.unwrap_or(0));
+                if let Some(ref fp) = file {
+                    println!("  Location: {}:{}", fp, line.unwrap_or(0));
+                }
             }
 
             *critique_id_cell.borrow_mut() = critique_id.clone();

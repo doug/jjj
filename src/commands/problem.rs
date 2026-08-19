@@ -18,7 +18,8 @@ pub fn execute(ctx: &CommandContext, action: ProblemAction) -> Result<()> {
             milestone,
             force,
             tags,
-        } => new_problem(ctx, title, priority, parent, milestone, force, tags),
+            json,
+        } => new_problem(ctx, title, priority, parent, milestone, force, tags, json),
         ProblemAction::List {
             status,
             tree,
@@ -82,6 +83,7 @@ fn new_problem(
     milestone: Option<String>,
     force: bool,
     tags: Vec<String>,
+    json: bool,
 ) -> Result<()> {
     let store = &ctx.store;
 
@@ -179,9 +181,13 @@ fn new_problem(
 
         store.save_problem(&problem)?;
 
-        println!("Created problem {} ({})", problem.id, problem.title);
-        if let Some(ref parent_id) = resolved_parent {
-            println!("  Parent: {}", parent_id);
+        if json {
+            println!("{}", serde_json::to_string_pretty(&problem)?);
+        } else {
+            println!("Created problem {} ({})", problem.id, problem.title);
+            if let Some(ref parent_id) = resolved_parent {
+                println!("  Parent: {}", parent_id);
+            }
         }
         *created_id.borrow_mut() = problem_id;
         Ok(())

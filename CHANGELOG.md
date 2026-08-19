@@ -44,6 +44,19 @@ run `jjj automation list` to confirm nothing unexpected is active.
 - **MSRV is now 1.88** (was 1.82), required by ratatui 0.30. CI builds at the
   declared MSRV so the number cannot quietly become a fiction again.
 
+### For agents
+
+- **`skills/jjj/SKILL.md`** — a checked-in skill describing how to use and
+  collaborate through jjj: the machine interface, the single-agent loop, and the
+  multi-agent patterns (claim loop, rival conjectures, adversarial review,
+  collision avoidance, distributed prioritization, pods). `tests/skill_test.rs`
+  checks every command it teaches against the real CLI, so it cannot drift into
+  describing a jjj that does not exist — which is what happened to the
+  hand-maintained version it replaces.
+- **`AGENTS.md`** at the repository root, for harnesses that read it.
+- **`--json` on `problem new`, `solution new` and `critique new`**, so an agent
+  can capture the created id directly instead of parsing "Created ...".
+
 ### New commands
 
 - `jjj doctor [--json]` — one read-only pass over the environment and repository:
