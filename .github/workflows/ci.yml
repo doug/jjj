@@ -12,7 +12,12 @@ env:
   JJJ_REQUIRE_JJ: "1"
   # The jj release the code is validated against. Pinned so a jj release that
   # changes CLI semantics can't silently break the sync tests.
-  JJ_VERSION: "0.44.0"
+  #
+  # Must be a version taiki-e/install-action ships a manifest for — it has no
+  # crates.io fallback here, because the `jj` crate name is unrelated to
+  # jujutsu (whose crate is `jj-cli`), so binstall resolves the wrong thing and
+  # fails. Check https://github.com/taiki-e/install-action before bumping.
+  JJ_VERSION: "0.43.0"
 
 jobs:
   test:

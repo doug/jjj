@@ -29,7 +29,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@v2
         with:
-          tool: jj@0.44.0
+          # Keep in step with JJ_VERSION in ci.yml (see the note there).
+          tool: jj@0.43.0
       - name: Configure jj identity
         run: |
           jj config set --user user.name "CI" || true
