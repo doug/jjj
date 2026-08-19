@@ -166,7 +166,7 @@ pub fn execute(ctx: &CommandContext, json: bool) -> Result<()> {
         }
     }
     let mut active_problems: Vec<(&str, usize)> = problem_event_counts.into_iter().collect();
-    active_problems.sort_by(|a, b| b.1.cmp(&a.1));
+    active_problems.sort_by_key(|p| std::cmp::Reverse(p.1));
     active_problems.truncate(5);
 
     // Look up problem titles

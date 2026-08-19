@@ -277,8 +277,8 @@ fn list_problems(
     match sort {
         "priority" => problems.sort_by(|a, b| b.priority.cmp(&a.priority)),
         "status" => problems.sort_by(|a, b| a.status.cmp(&b.status)),
-        "created" => problems.sort_by(|a, b| b.created_at.cmp(&a.created_at)),
-        "title" => problems.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase())),
+        "created" => problems.sort_by_key(|p| std::cmp::Reverse(p.created_at)),
+        "title" => problems.sort_by_key(|a| a.title.to_lowercase()),
         _ => {} // default: no additional sort (UUID7 order)
     }
 

@@ -280,17 +280,16 @@ fn validate_events(ctx: &CommandContext) -> Result<()> {
                     ));
                 }
             }
-            ProblemStatus::Dissolved => {
+            ProblemStatus::Dissolved
                 if !events
                     .iter()
                     .any(|e| e.entity == *id && e.event_type == EventType::ProblemDissolved)
-                {
+                => {
                     errors.push(format!(
                         "Problem '{}' is Dissolved but has no problem_dissolved event",
                         id
                     ));
                 }
-            }
             _ => {}
         }
     }
@@ -308,17 +307,16 @@ fn validate_events(ctx: &CommandContext) -> Result<()> {
                     ));
                 }
             }
-            SolutionStatus::Withdrawn => {
+            SolutionStatus::Withdrawn
                 if !events
                     .iter()
                     .any(|e| e.entity == *id && e.event_type == EventType::SolutionWithdrawn)
-                {
+                => {
                     errors.push(format!(
                         "Solution '{}' is Withdrawn but has no solution_withdrawn event",
                         id
                     ));
                 }
-            }
             _ => {}
         }
     }
@@ -347,17 +345,16 @@ fn validate_events(ctx: &CommandContext) -> Result<()> {
                     ));
                 }
             }
-            CritiqueStatus::Dismissed => {
+            CritiqueStatus::Dismissed
                 if !events
                     .iter()
                     .any(|e| e.entity == *id && e.event_type == EventType::CritiqueDismissed)
-                {
+                => {
                     errors.push(format!(
                         "Critique '{}' is Dismissed but has no critique_dismissed event",
                         id
                     ));
                 }
-            }
             _ => {}
         }
     }

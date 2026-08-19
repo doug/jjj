@@ -335,8 +335,8 @@ fn list_solutions(
     // Sort
     match sort {
         "status" => solutions.sort_by(|a, b| a.status.cmp(&b.status)),
-        "created" => solutions.sort_by(|a, b| b.created_at.cmp(&a.created_at)),
-        "title" => solutions.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase())),
+        "created" => solutions.sort_by_key(|s| std::cmp::Reverse(s.created_at)),
+        "title" => solutions.sort_by_key(|a| a.title.to_lowercase()),
         _ => {} // default: no additional sort (UUID7 order)
     }
 

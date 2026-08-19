@@ -166,7 +166,7 @@ fn expand_vars(text: &str, vars: &HashMap<String, String>) -> String {
     let mut result = text.to_string();
     // Sort by key length (longest first) to avoid partial matches
     let mut sorted: Vec<_> = vars.iter().collect();
-    sorted.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+    sorted.sort_by_key(|(k, _)| std::cmp::Reverse(k.len()));
     for (k, v) in sorted {
         result = result.replace(&format!("${}", k), v);
     }

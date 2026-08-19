@@ -157,12 +157,19 @@ class Bench:
         print(f"  {name:<28} {'':>7} {seconds:8.3f}s")
 
 
-def compare_to_baseline(out, baseline_path, tolerance):
+def compare_to_baseline(out, baseline_path, tolerance, min_duration=0.0):
     """Report benches slower than `tolerance` x their recorded median.
 
     Returns True if everything is within tolerance. A bench missing from the
     baseline is reported and skipped rather than failing: adding a bench should
     not break the build before anyone has recorded a number for it.
+
+    `min_duration` skips benches whose baseline is below that many seconds. A
+    ratio computed from a 0.1s measurement is mostly scheduler noise — on a
+    shared CI runner those swing 3x while nothing has changed — and a check that
+    cries wolf is a check people learn to ignore. The regressions this is meant
+    to catch (an accidental O(n^2)) show up as large multiples of the *slow*
+    benches, which are the stable ones.
     """
     try:
         baseline = json.loads(Path(baseline_path).read_text())
@@ -178,9 +185,10 @@ def compare_to_baseline(out, baseline_path, tolerance):
         return False
 
     base_results = baseline.get("results", {})
-    regressions, missing = [], []
+    regressions, missing, too_short = [], [], []
 
-    print(f"\n— comparing against {baseline_path} (tolerance {tolerance}x) —")
+    print(f"\n— comparing against {baseline_path} (tolerance {tolerance}x, "
+          f"floor {min_duration}s) —")
     for name, result in out["results"].items():
         if name not in base_results:
             missing.append(name)
@@ -190,6 +198,10 @@ def compare_to_baseline(out, baseline_path, tolerance):
         if got is None or not want:
             continue
         ratio = got / want
+        if want < min_duration:
+            too_short.append(name)
+            print(f"  {name:44s} {got:7.3f}s vs {want:7.3f}s  ({ratio:4.2f}x) too short to judge")
+            continue
         flag = "REGRESSION" if ratio > tolerance else "ok"
         print(f"  {name:44s} {got:7.3f}s vs {want:7.3f}s  ({ratio:4.2f}x) {flag}")
         if ratio > tolerance:
@@ -231,6 +243,13 @@ def main():
         default=3.0,
         help="allowed slowdown factor for --check-against (default 3.0). Shared "
              "CI runners are noisy, so this catches algorithmic regressions, not drift",
+    )
+    ap.add_argument(
+        "--min-duration",
+        type=float,
+        default=0.0,
+        help="skip --check-against for benches whose baseline is faster than this "
+             "many seconds; sub-second timings are dominated by scheduler noise",
     )
     args = ap.parse_args()
 
@@ -339,7 +358,9 @@ def main():
             print(f"wrote {args.json}")
 
         if args.check_against:
-            if not compare_to_baseline(out, args.check_against, args.tolerance):
+            if not compare_to_baseline(
+                out, args.check_against, args.tolerance, args.min_duration
+            ):
                 sys.exit(1)
 
     print("done.")

@@ -98,13 +98,22 @@ jobs:
           version: ${{ env.JJ_VERSION }}
       - name: Build release binary
         run: cargo build --release
-      # A small corpus with deliberately loose thresholds. Shared runners are too
-      # noisy for real numbers, so this catches algorithmic regressions (the
-      # O(n^2) kind that a 25K run surfaced in July), not drift. The real gate is
-      # the 25K run in RELEASE.md, on a quiet machine.
-      - name: Bench tripwire (2K corpus)
+      # A small corpus with deliberately loose thresholds. This is a tripwire for
+      # algorithmic regressions (the O(n^2) kind a 25K run surfaced in July), not
+      # a performance measurement: the baseline was recorded on a developer
+      # machine, the runner is shared and virtualized, and sub-second benches
+      # swing several-fold from scheduler noise alone. Hence the wide tolerance
+      # and the floor that skips benches too short to judge. The real gate is the
+      # 25K run in RELEASE.md, on a quiet machine.
+      # 10K rather than 2K: at 2K nearly every bench lands under a second, where
+      # the ratio is scheduler noise. At 10K the sync paths and db_rebuild — the
+      # places the O(n^2) bugs actually lived — are seconds long and stable
+      # enough to judge.
+      - name: Bench tripwire (10K corpus)
         working-directory: tools/bench
-        run: python3 bench.py --count 2000 --json ci-2k.json --check-against baseline-2k.json --tolerance 3.0
+        run: >-
+          python3 bench.py --count 10000 --json ci-10k.json
+          --check-against baseline-10k.json --tolerance 5.0 --min-duration 0.3
 
   docs:
     name: docs site builds

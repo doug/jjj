@@ -478,11 +478,9 @@ fn milestone_status(ctx: &CommandContext, milestone_input: String, json: bool) -
         }
     }
 
-    let pct_complete = if total > 0 {
-        (solved_count + dissolved_count) * 100 / total
-    } else {
-        0
-    };
+    let pct_complete = ((solved_count + dissolved_count) * 100)
+        .checked_div(total)
+        .unwrap_or(0);
 
     // Target date and days remaining
     let target_date_str = milestone

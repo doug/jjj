@@ -23,7 +23,7 @@ Work through this list before pushing the tag.
 
 ## 2. Run the gates CI cannot
 
-- [ ] **Benchmark at scale.** CI runs a 2K tripwire on a noisy shared runner. The
+- [ ] **Benchmark at scale.** CI runs a 10K tripwire on a shared runner, wide-toleranced. The
       real gate is 25K on a quiet machine — no other heavy processes, laptop on
       power:
 
