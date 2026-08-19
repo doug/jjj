@@ -27,14 +27,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - uses: taiki-e/install-action@v2
+      - name: Install jujutsu (jj)
+        uses: ./.github/actions/install-jj
         with:
-          # Keep in step with JJ_VERSION in ci.yml (see the note there).
-          tool: jj@0.43.0
-      - name: Configure jj identity
-        run: |
-          jj config set --user user.name "CI" || true
-          jj config set --user user.email "ci@example.com" || true
+          # Keep in step with JJ_VERSION in ci.yml.
+          version: "0.44.0"
       - name: Formatting, lints, tests
         env:
           JJJ_REQUIRE_JJ: "1"

@@ -12,12 +12,7 @@ env:
   JJJ_REQUIRE_JJ: "1"
   # The jj release the code is validated against. Pinned so a jj release that
   # changes CLI semantics can't silently break the sync tests.
-  #
-  # Must be a version taiki-e/install-action ships a manifest for — it has no
-  # crates.io fallback here, because the `jj` crate name is unrelated to
-  # jujutsu (whose crate is `jj-cli`), so binstall resolves the wrong thing and
-  # fails. Check https://github.com/taiki-e/install-action before bumping.
-  JJ_VERSION: "0.43.0"
+  JJ_VERSION: "0.44.0"
 
 jobs:
   test:
@@ -33,13 +28,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Install jujutsu (jj)
-        uses: taiki-e/install-action@v2
+        uses: ./.github/actions/install-jj
         with:
-          tool: jj@${{ env.JJ_VERSION }}
-      - name: Configure jj identity
-        run: |
-          jj config set --user user.name "CI" || true
-          jj config set --user user.email "ci@example.com" || true
+          version: ${{ env.JJ_VERSION }}
       - name: Check formatting
         run: cargo fmt --check
       # --all-targets so test code is linted too: without it the ~11 warnings
@@ -101,13 +92,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - uses: taiki-e/install-action@v2
+      - name: Install jujutsu (jj)
+        uses: ./.github/actions/install-jj
         with:
-          tool: jj@${{ env.JJ_VERSION }}
-      - name: Configure jj identity
-        run: |
-          jj config set --user user.name "CI" || true
-          jj config set --user user.email "ci@example.com" || true
+          version: ${{ env.JJ_VERSION }}
       - name: Build release binary
         run: cargo build --release
       # A small corpus with deliberately loose thresholds. Shared runners are too

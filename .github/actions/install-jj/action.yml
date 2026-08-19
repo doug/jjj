@@ -1,0 +1,80 @@
+name: Install jujutsu
+description: >-
+  Install a pinned jj release from the official GitHub release assets and
+  configure a CI identity.
+
+# Why not taiki-e/install-action: it has no manifest for jujutsu, so
+# `tool: jj@X` silently falls through to cargo-binstall, where the crates.io
+# package named `jj` is a different project entirely (jujutsu publishes
+# `jj-cli`). Resolution fails, the step exits 76, and — because every jj-backed
+# job dies at that step — the suite never runs. That is exactly what happened
+# here: CI was red on every push from 2026-04-12 onward and the jj-backed
+# integration tests had never executed in CI at all.
+#
+# Downloading the release tarball is deterministic, needs no build, and pins to
+# the exact version the code is validated against.
+
+inputs:
+  version:
+    description: jj version to install, without the leading "v"
+    required: true
+  identity-name:
+    description: jj user.name to configure
+    required: false
+    default: CI
+  identity-email:
+    description: jj user.email to configure
+    required: false
+    default: ci@example.com
+
+runs:
+  using: composite
+  steps:
+    - name: Download and install jj ${{ inputs.version }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        version="${{ inputs.version }}"
+
+        case "$RUNNER_OS/$RUNNER_ARCH" in
+          Linux/X64)   target=x86_64-unknown-linux-musl ;;
+          Linux/ARM64) target=aarch64-unknown-linux-musl ;;
+          macOS/ARM64) target=aarch64-apple-darwin ;;
+          macOS/X64)   target=x86_64-apple-darwin ;;
+          *)
+            echo "::error::no jj release asset for $RUNNER_OS/$RUNNER_ARCH"
+            exit 1
+            ;;
+        esac
+
+        asset="jj-v${version}-${target}.tar.gz"
+        url="https://github.com/jj-vcs/jj/releases/download/v${version}/${asset}"
+        echo "Downloading $url"
+
+        tmp="$(mktemp -d)"
+        curl -fsSL --retry 3 --retry-delay 2 "$url" -o "$tmp/$asset"
+        tar -xzf "$tmp/$asset" -C "$tmp"
+
+        # The archive layout has varied across jj releases (bare binary in some,
+        # a directory in others), so find it rather than assuming a path.
+        binary="$(find "$tmp" -type f -name jj -perm -u+x | head -1)"
+        if [ -z "$binary" ]; then
+          echo "::error::no jj binary inside $asset"
+          find "$tmp" -type f | head -20
+          exit 1
+        fi
+
+        mkdir -p "$HOME/.local/bin"
+        install -m 0755 "$binary" "$HOME/.local/bin/jj"
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        rm -rf "$tmp"
+
+    - name: Verify and configure jj
+      shell: bash
+      run: |
+        set -euo pipefail
+        # Fail loudly here rather than letting JJJ_REQUIRE_JJ surface it as a
+        # confusing test panic later.
+        jj --version
+        jj config set --user user.name "${{ inputs.identity-name }}"
+        jj config set --user user.email "${{ inputs.identity-email }}"
