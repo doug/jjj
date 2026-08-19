@@ -324,7 +324,7 @@ impl App {
             ui.expanded_nodes.insert(m.id.clone());
         }
 
-        let user = store.jj_client.user_identity().unwrap_or_default();
+        let user = store.get_current_user().unwrap_or_default();
 
         // Load personal orderings for the current user, syncing with current problem list
         let mut personal_orderings = HashMap::new();

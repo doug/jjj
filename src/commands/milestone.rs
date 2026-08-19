@@ -436,7 +436,7 @@ fn assign_milestone(
 
     let assignee_name = match assignee {
         Some(name) => name,
-        None => store.jj_client.user_identity()?,
+        None => store.get_current_user()?,
     };
 
     store.with_metadata(

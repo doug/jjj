@@ -500,10 +500,13 @@ fn check_and_prompt_approve_solve(ctx: &CommandContext) -> Result<()> {
     let solutions = store.list_solutions()?;
     let user = store.jj_client.user_name().unwrap_or_default();
 
-    for solution in solutions
-        .iter()
-        .filter(|s| s.is_submitted() && s.assignee.as_deref() == Some(&user))
-    {
+    for solution in solutions.iter().filter(|s| {
+        s.is_submitted()
+            && s.assignee
+                .as_deref()
+                .map(|a| crate::identity::actor_matches(a, &user))
+                .unwrap_or(false)
+    }) {
         // Check if all critiques are resolved
         let critiques = store.list_critiques_for_solution(&solution.id)?;
         let open_critiques: Vec<_> = critiques

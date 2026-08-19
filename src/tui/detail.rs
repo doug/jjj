@@ -421,10 +421,9 @@ fn render_md_body(text: &str) -> Vec<Line<'static>> {
                     list_depth = list_depth.saturating_sub(1);
                     list_indices.pop();
                 }
-                TagEnd::Item
-                    if !current_spans.is_empty() => {
-                        flush_line(&mut lines, &mut current_spans);
-                    }
+                TagEnd::Item if !current_spans.is_empty() => {
+                    flush_line(&mut lines, &mut current_spans);
+                }
                 _ => {}
             },
             Event::Text(text) => {

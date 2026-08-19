@@ -90,7 +90,7 @@ fn new_critique(
             critique.set_severity(severity.clone());
 
             // Set author to current user
-            let author = store.jj_client.user_identity()?;
+            let author = store.get_current_user()?;
             critique.author = Some(author);
 
             // Set reviewer if provided
@@ -458,7 +458,7 @@ fn reply_to_critique(ctx: &CommandContext, critique_input: String, body: String)
 
     store.with_metadata(&format!("Reply to critique {}", critique_id), || {
         let mut critique = store.load_critique(&critique_id)?;
-        let author = store.jj_client.user_identity()?;
+        let author = store.get_current_user()?;
 
         critique.add_reply(author.clone(), body.clone());
         store.save_critique(&critique)?;

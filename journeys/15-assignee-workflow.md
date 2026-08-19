@@ -8,6 +8,8 @@ covers:
   - "Filter with --assignee on problem and solution list"
   - "Reassign overwrites previous assignee"
   - "Assignee shown in both JSON and plain-text output"
+  - "next --mine restricts the queue to work this actor owns"
+  - "JJJ_USER scopes the queue per agent"
 tags: [assignee, workflow, self-assign, filter]
 ---
 
@@ -143,17 +145,38 @@ solution list --assignee bob
 
 `--assignee` filter uses case-insensitive substring matching.
 
-## Step 5: jjj next --mine (shows work for current user)
+## Step 5: jjj next --mine (work this actor owns)
 
-`next --mine` shows all open TODO problems (no active solutions) regardless of assignee.
-Problem 3 (Avatar upload, unassigned) appears as a TODO:
+`next --mine` restricts the queue to items you own — the assignee of a problem
+or solution, or the reviewer of a critique. Assign the remaining unowned problem
+so there is something to own:
 
-```jjj
-next --mine
+```jjj:setup
+problem assign "Avatar upload" --to alice
+```
+
+Alice sees it; nobody else does:
+
+```shell
+JJJ_USER=alice $JJJ next --top 0 --mine
 > Avatar upload
 ```
 
-`next --mine` does not filter problems by assignee -- use `problem list --assignee` for that.
+```shell
+JJJ_USER=bob $JJJ next --top 0 --mine
+> Nothing to do
+```
+
+Without the flag the queue is shared, so everyone sees the same list:
+
+```jjj
+next --top 0
+> Avatar upload
+```
+
+This is what makes a fleet of agents workable: each sets `JJJ_USER` (or
+`JJJ_POD`), claims an item, and `--mine` becomes that agent's own queue rather
+than one list every agent would re-attempt.
 
 ## Step 6: Reassign to a different person
 

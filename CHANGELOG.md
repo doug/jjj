@@ -55,6 +55,30 @@ run `jjj automation list` to confirm nothing unexpected is active.
 - `jjj automation migrate [--force]` — relocate legacy rules, showing them for
   review first.
 
+### Per-agent identity (behaviour change)
+
+jjj resolves an actor from `JJJ_USER` → pod → jj `user.name` so that several
+agents can share one checkout and remain distinct writers. That resolution was
+only wired into event authorship; assignment and attribution read the raw jj
+identity instead. On a machine running a fleet, every agent therefore appeared
+as the same person:
+
+- `jjj next --claim` assigned work to the jj user, so agents overwrote each
+  other's claims and none could tell which items were theirs.
+- `jjj critique new` credited every critique to whoever configured the repo.
+- The TUI's personal ordering was keyed by the machine, not the agent.
+
+All identity-bearing paths now use the resolved actor. Identity comparison moved
+into one place (`identity::actor_matches`), which also accepts the
+`Name <email>` form written before 0.5.1, so existing assignees keep matching
+after an upgrade. The three previous ad-hoc comparisons included a substring
+test that made `bo` match `bob` and an empty identity match everyone.
+
+**`jjj next --mine` now means what it says.** It restricts the queue to work
+this actor owns — the assignee of a problem or solution, or the reviewer of a
+critique. Previously the flag only toggled the review section, and toggled it
+the wrong way: `--mine` *hid* the review requests addressed to you.
+
 ### Testing and release infrastructure
 
 - **The TUI has tests.** 6,654 lines of interactive code had none. `App::open_at`

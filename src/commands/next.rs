@@ -20,7 +20,7 @@ pub fn execute(
     let solutions = store.list_solutions()?;
     let critiques = store.list_critiques()?;
 
-    let user = store.jj_client.user_identity().unwrap_or_default();
+    let user = store.get_current_user().unwrap_or_default();
 
     let items =
         crate::commands::status::build_next_actions(&problems, &solutions, &critiques, &user, mine);

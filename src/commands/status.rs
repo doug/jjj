@@ -22,7 +22,7 @@ pub fn execute(
 ) -> Result<()> {
     let store = &ctx.store;
     let jj_client = ctx.jj();
-    let user = store.jj_client.user_identity().unwrap_or_default();
+    let user = store.get_current_user().unwrap_or_default();
 
     let problems = store.list_problems()?;
     let solutions = store.list_solutions()?;
@@ -284,6 +284,7 @@ pub(crate) fn build_next_actions(
 
             items.push(serde_json::json!({
                 "category": "blocked",
+                "owner": solution.assignee,
                 "entity_type": "solution",
                 "entity_id": solution.id,
                 "title": solution.title,
@@ -314,6 +315,7 @@ pub(crate) fn build_next_actions(
 
             items.push(serde_json::json!({
                 "category": "ready",
+                "owner": solution.assignee,
                 "entity_type": "solution",
                 "entity_id": solution.id,
                 "title": solution.title,
@@ -328,13 +330,13 @@ pub(crate) fn build_next_actions(
     }
 
     // 3. REVIEW: Critiques assigned to user that need response
-    if !mine {
+    {
         for critique in critiques
             .iter()
             .filter(|c| c.status == CritiqueStatus::Open)
         {
             if let Some(reviewer) = &critique.reviewer {
-                if user.contains(reviewer) || reviewer.contains(user) {
+                if crate::identity::actor_matches(reviewer, user) {
                     let solution = solutions.iter().find(|s| s.id == critique.solution_id);
                     let problem =
                         solution.and_then(|s| problems.iter().find(|p| p.id == s.problem_id));
@@ -342,6 +344,7 @@ pub(crate) fn build_next_actions(
 
                     items.push(serde_json::json!({
                         "category": "review",
+                        "owner": critique.reviewer,
                         "entity_type": "critique",
                         "entity_id": critique.id,
                         "title": critique.title,
@@ -361,8 +364,8 @@ pub(crate) fn build_next_actions(
     for solution in solutions.iter().filter(|s| s.is_active()) {
         let is_mine = solution
             .assignee
-            .as_ref()
-            .map(|a| user == *a)
+            .as_deref()
+            .map(|a| crate::identity::actor_matches(a, user))
             .unwrap_or(false);
         if is_mine {
             let pending_reviews: Vec<_> = critiques
@@ -372,7 +375,7 @@ pub(crate) fn build_next_actions(
                     c.reviewer.is_some()
                         && c.reviewer
                             .as_ref()
-                            .map(|r| !user.contains(r))
+                            .map(|r| !crate::identity::actor_matches(r, user))
                             .unwrap_or(false)
                 })
                 .collect();
@@ -388,6 +391,7 @@ pub(crate) fn build_next_actions(
 
                 items.push(serde_json::json!({
                     "category": "waiting",
+                    "owner": solution.assignee,
                     "entity_type": "solution",
                     "entity_id": solution.id,
                     "title": solution.title,
@@ -411,6 +415,7 @@ pub(crate) fn build_next_actions(
         if !has_active_solution {
             items.push(serde_json::json!({
                 "category": "todo",
+                "owner": problem.assignee,
                 "entity_type": "problem",
                 "entity_id": problem.id,
                 "title": problem.title,
@@ -422,6 +427,19 @@ pub(crate) fn build_next_actions(
                 "details": [],
             }));
         }
+    }
+
+    // `--mine` restricts to work this actor owns: the assignee of a problem or
+    // solution, or the reviewer of a critique. Applied once here rather than
+    // per-section, so every category obeys it — previously the flag only
+    // toggled the review section, and toggled it the wrong way.
+    if mine {
+        items.retain(|item| {
+            item["owner"]
+                .as_str()
+                .map(|owner| crate::identity::actor_matches(owner, user))
+                .unwrap_or(false)
+        });
     }
 
     // Sort: category order, then priority descending, then age ascending (older first)

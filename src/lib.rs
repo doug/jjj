@@ -20,6 +20,7 @@ pub mod embeddings;
 pub mod entity_type;
 pub mod error;
 pub mod id;
+pub mod identity;
 pub mod jj;
 pub mod local_config;
 pub mod models;
