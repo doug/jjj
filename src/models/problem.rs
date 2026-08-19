@@ -446,11 +446,11 @@ mod tests {
             "size:L".to_string(),
         ];
 
-        let yaml = serde_yml::to_string(&p).unwrap();
+        let yaml = serde_norway::to_string(&p).unwrap();
         assert!(yaml.contains("tags:"));
         assert!(yaml.contains("backend"));
 
-        let parsed: Problem = serde_yml::from_str(&yaml).unwrap();
+        let parsed: Problem = serde_norway::from_str(&yaml).unwrap();
         assert_eq!(parsed.tags, p.tags);
     }
 
@@ -458,7 +458,7 @@ mod tests {
     fn test_problem_serde_default_tags() {
         // YAML without tags field should deserialize with empty vec
         let yaml = "id: P-1\ntitle: Test\nstatus: open\npriority: medium\ncreated_at: '2025-01-01T00:00:00Z'\nupdated_at: '2025-01-01T00:00:00Z'\n";
-        let p: Problem = serde_yml::from_str(yaml).unwrap();
+        let p: Problem = serde_norway::from_str(yaml).unwrap();
         assert!(p.tags.is_empty());
         assert!(p.solution_ids.is_empty());
         assert!(p.parent_id.is_none());

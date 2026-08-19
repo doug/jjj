@@ -2,6 +2,15 @@
 
 Manage problems, solutions, and critiques directly in VS Code. All metadata is stored in an orphaned jj bookmark and synced via `jj git push` -- no server, no database, fully offline.
 
+## Versioning
+
+The extension versions **independently of the jjj CLI** — its `0.x` number
+tracks the extension's own changes, not the CLI release it runs against. It
+shells out to whatever `jjj` is on your `PATH`.
+
+Tested against **jjj 0.5.1**. Older CLIs may not expose every command the
+extension calls; run `jjj doctor` if something looks missing.
+
 ## Features
 
 ### Project Tree View

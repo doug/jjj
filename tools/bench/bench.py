@@ -157,6 +157,57 @@ class Bench:
         print(f"  {name:<28} {'':>7} {seconds:8.3f}s")
 
 
+def compare_to_baseline(out, baseline_path, tolerance):
+    """Report benches slower than `tolerance` x their recorded median.
+
+    Returns True if everything is within tolerance. A bench missing from the
+    baseline is reported and skipped rather than failing: adding a bench should
+    not break the build before anyone has recorded a number for it.
+    """
+    try:
+        baseline = json.loads(Path(baseline_path).read_text())
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"!! cannot read baseline {baseline_path}: {e}")
+        return False
+
+    if baseline.get("corpus") != out.get("corpus"):
+        print(
+            f"!! baseline corpus {baseline.get('corpus')} != this run "
+            f"{out.get('corpus')} — timings are not comparable"
+        )
+        return False
+
+    base_results = baseline.get("results", {})
+    regressions, missing = [], []
+
+    print(f"\n— comparing against {baseline_path} (tolerance {tolerance}x) —")
+    for name, result in out["results"].items():
+        if name not in base_results:
+            missing.append(name)
+            continue
+        got = result.get("median_s")
+        want = base_results[name].get("median_s")
+        if got is None or not want:
+            continue
+        ratio = got / want
+        flag = "REGRESSION" if ratio > tolerance else "ok"
+        print(f"  {name:44s} {got:7.3f}s vs {want:7.3f}s  ({ratio:4.2f}x) {flag}")
+        if ratio > tolerance:
+            regressions.append((name, got, want, ratio))
+
+    for name in missing:
+        print(f"  {name:44s} (not in baseline — skipped)")
+
+    if regressions:
+        print(f"\n!! {len(regressions)} bench(es) regressed beyond {tolerance}x:")
+        for name, got, want, ratio in regressions:
+            print(f"   {name}: {got:.3f}s vs {want:.3f}s ({ratio:.2f}x)")
+        return False
+
+    print("\nno regressions beyond tolerance.")
+    return True
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--count", type=int, default=2000, help="corpus size (default 2000; release gate 25000)")
@@ -167,6 +218,20 @@ def main():
     ap.add_argument("--skip-sync", action="store_true")
     ap.add_argument("--json", type=Path, default=None)
     ap.add_argument("--jjj", default=os.environ.get("JJJ_BIN", str(REPO_ROOT / "target" / "release" / "jjj")))
+    ap.add_argument(
+        "--check-against",
+        type=Path,
+        default=None,
+        help="compare medians against a recorded baseline JSON and exit non-zero "
+             "if any bench is slower than --tolerance x its baseline",
+    )
+    ap.add_argument(
+        "--tolerance",
+        type=float,
+        default=3.0,
+        help="allowed slowdown factor for --check-against (default 3.0). Shared "
+             "CI runners are noisy, so this catches algorithmic regressions, not drift",
+    )
     args = ap.parse_args()
 
     jjj = args.jjj
@@ -272,6 +337,10 @@ def main():
         if args.json:
             args.json.write_text(json.dumps(out, indent=2) + "\n")
             print(f"wrote {args.json}")
+
+        if args.check_against:
+            if not compare_to_baseline(out, args.check_against, args.tolerance):
+                sys.exit(1)
 
     print("done.")
 

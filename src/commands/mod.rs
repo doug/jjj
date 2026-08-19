@@ -3,6 +3,7 @@ pub mod completion;
 pub mod conflicts;
 pub mod critique;
 pub mod db;
+pub mod doctor;
 pub mod events;
 pub mod fetch;
 pub mod init;
@@ -111,6 +112,7 @@ fn execute_with_context(ctx: &CommandContext, command: Commands) -> Result<()> {
             crate::cli::AutomationCommands::List { json } => automation::list(ctx, json),
             crate::cli::AutomationCommands::Migrate { force } => automation::migrate(ctx, force),
         },
+        Commands::Doctor { json } => doctor::execute(ctx, json),
         Commands::Whoami { json } => whoami::execute(ctx, json),
 
         // Conflict discovery + resolution

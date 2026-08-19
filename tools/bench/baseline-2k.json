@@ -1,0 +1,67 @@
+{
+  "corpus": 2000,
+  "reps": 3,
+  "jjj_rev": "a3c0977",
+  "results": {
+    "cold_list (no DB, FS walk)": {
+      "median_s": 0.0982,
+      "min_s": 0.0944,
+      "runs": 3
+    },
+    "db_rebuild": {
+      "median_s": 0.635,
+      "runs": 1
+    },
+    "warm_list (DB)": {
+      "median_s": 0.031,
+      "min_s": 0.0306,
+      "runs": 3
+    },
+    "status": {
+      "median_s": 0.0685,
+      "min_s": 0.0677,
+      "runs": 3
+    },
+    "next_top5": {
+      "median_s": 0.0493,
+      "min_s": 0.049,
+      "runs": 3
+    },
+    "search_fts": {
+      "median_s": 0.0303,
+      "min_s": 0.0298,
+      "runs": 3
+    },
+    "events_cold_ingest": {
+      "median_s": 0.1666,
+      "runs": 1
+    },
+    "events_warm (DB-primary)": {
+      "median_s": 0.0263,
+      "min_s": 0.0263,
+      "runs": 3
+    },
+    "write_throughput (10x5)": {
+      "median_s": 0.4669,
+      "runs": 1,
+      "ops_per_s": 107.09,
+      "failures": 0
+    },
+    "cold_push (full corpus)": {
+      "median_s": 2.0805,
+      "runs": 1
+    },
+    "cold_fetch (full corpus)": {
+      "median_s": 0.7946,
+      "runs": 1
+    },
+    "delta_push (100 files)": {
+      "median_s": 1.4313,
+      "runs": 1
+    },
+    "warm_delta_fetch (100 files)": {
+      "median_s": 0.6515,
+      "runs": 1
+    }
+  }
+}

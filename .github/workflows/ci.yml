@@ -12,7 +12,7 @@ env:
   JJJ_REQUIRE_JJ: "1"
   # The jj release the code is validated against. Pinned so a jj release that
   # changes CLI semantics can't silently break the sync tests.
-  JJ_VERSION: "0.43.0"
+  JJ_VERSION: "0.44.0"
 
 jobs:
   test:
@@ -98,7 +98,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@v2
         with:
-          tool: jj@0.43.0
+          tool: jj@${{ env.JJ_VERSION }}
       - name: Configure jj identity
         run: |
           jj config set --user user.name "CI" || true

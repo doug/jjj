@@ -269,6 +269,14 @@ pub enum Commands {
     #[command(display_order = 50)]
     Init,
 
+    /// Diagnose the environment and repository: versions, cache, locks, automation
+    #[command(display_order = 53)]
+    Doctor {
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
     /// Inspect automation rules and move pre-0.5.1 rules out of the synced config
     #[command(display_order = 51)]
     Automation {

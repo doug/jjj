@@ -74,7 +74,7 @@ pub enum JjjError {
     JsonParse(#[from] serde_json::Error),
 
     #[error("Failed to parse YAML: {0}")]
-    YamlParse(#[from] serde_yml::Error),
+    YamlParse(#[from] serde_norway::Error),
 
     #[error("Failed to parse TOML: {0}")]
     TomlParse(#[from] toml::de::Error),

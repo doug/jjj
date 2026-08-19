@@ -221,7 +221,7 @@ impl App {
         }
     }
 
-    pub(super) fn run_editor<B: Backend + std::io::Write>(
+    pub(super) fn run_editor<B: Backend<Error = std::io::Error> + std::io::Write>(
         &mut self,
         terminal: &mut Terminal<B>,
         request: EditorRequest,

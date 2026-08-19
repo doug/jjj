@@ -153,3 +153,29 @@ events --event-type conflict_resolved
 > conflict_resolved
 > token bucket matches the upstream limiter
 ```
+
+## Diagnosing a Repository
+
+`jjj doctor` gathers the environment and repository checks that are otherwise
+scattered — versions, cache health, locks, conflicts, and which automation rules
+are live — into one place. It is read-only, and it is the right thing to paste
+into a bug report:
+
+```jjj
+doctor
+> jjj doctor
+> jjj
+> jj
+> identity
+> metadata
+> cache
+> push lock
+> conflicts
+> automation
+```
+
+```jjj
+doctor --json
+> "check": "identity"
+> "level": "ok"
+```

@@ -267,11 +267,12 @@ fn parse_frontmatter<T: serde::de::DeserializeOwned>(content: &str) -> Result<(T
     let yaml_str = &rest[..end_pos].trim();
     let body = rest[end_pos + 4..].trim().to_string();
 
-    let frontmatter: T = serde_yml::from_str(yaml_str).map_err(|e| JjjError::FrontmatterParse {
-        entity_type: String::new(),
-        entity_id: String::new(),
-        message: e.to_string(),
-    })?;
+    let frontmatter: T =
+        serde_norway::from_str(yaml_str).map_err(|e| JjjError::FrontmatterParse {
+            entity_type: String::new(),
+            entity_id: String::new(),
+            message: e.to_string(),
+        })?;
 
     Ok((frontmatter, body))
 }
@@ -301,11 +302,11 @@ fn to_markdown_strip<T: serde::Serialize>(
     body: &str,
     body_field: &str,
 ) -> Result<String> {
-    let mut value = serde_yml::to_value(entity)?;
+    let mut value = serde_norway::to_value(entity)?;
     if let Some(map) = value.as_mapping_mut() {
-        map.remove(serde_yml::Value::String(body_field.to_string()));
+        map.remove(serde_norway::Value::String(body_field.to_string()));
     }
-    let yaml = serde_yml::to_string(&value)?;
+    let yaml = serde_norway::to_string(&value)?;
     Ok(format!("---\n{}---\n\n{}", yaml, body))
 }
 

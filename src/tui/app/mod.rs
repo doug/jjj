@@ -408,7 +408,10 @@ impl App {
     /// present), expires flash messages, polls for completed background loads,
     /// renders a frame, then waits up to 100 ms for a key press. Exits when
     /// `should_quit` is set.
-    pub fn run<B: Backend + std::io::Write>(&mut self, terminal: &mut Terminal<B>) -> Result<()> {
+    pub fn run<B: Backend<Error = std::io::Error> + std::io::Write>(
+        &mut self,
+        terminal: &mut Terminal<B>,
+    ) -> Result<()> {
         while !self.should_quit {
             // Check for editor request
             if let Some(request) = self.editor_request.take() {

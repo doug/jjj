@@ -157,7 +157,7 @@ jj bookmark track jjj@origin
 
 ```bash
 # Prebuilt binary (macOS + Linux, arm64 + x86_64)
-curl -fsSL https://raw.githubusercontent.com/doug/jjj/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/doug/jjj/main/install.sh | bash
 
 # From crates.io
 cargo install jjj

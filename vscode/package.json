@@ -473,10 +473,11 @@
     ]
   },
   "scripts": {
-    "compile": "tsc -p ./",
+    "clean": "rm -rf out out-test",
+    "compile": "npm run clean && tsc -p ./",
     "watch": "tsc -watch -p ./",
     "lint": "eslint src --ext ts",
-    "test": "tsc -p ./tsconfig.test.json && mocha out-test/**/*.test.js",
+    "test": "npm run clean && tsc -p ./tsconfig.test.json && mocha out-test/**/*.test.js",
     "package": "vsce package",
     "install-ext": "vsce package && code --install-extension *.vsix"
   },

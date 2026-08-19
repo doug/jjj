@@ -1,0 +1,36 @@
+# cargo-deny configuration.
+#
+# CI runs `cargo deny check advisories licenses`. Bans and sources are
+# deliberately not checked: duplicate-version bans are noise for a binary crate
+# whose dependency tree nobody vendors, and failing a build on something nobody
+# will act on trains people to ignore the check.
+
+[advisories]
+# Fail on any known vulnerability. jjj bundles SQLite (via rusqlite) and can
+# optionally pull in candle, so "we have no C dependencies" is not true here.
+yanked = "warn"
+# Empty on purpose. Every advisory the tree carried at the time this check was
+# added was fixed rather than ignored: serde_yml (RUSTSEC-2025-0068, unsound and
+# archived) became serde_norway, and the unmaintained `paste` left with the
+# ratatui 0.29 -> 0.30 upgrade. An entry here needs a reason someone can check.
+ignore = []
+
+[licenses]
+# jjj is Apache-2.0. These are the permissive licences compatible with
+# redistributing a binary under it.
+allow = [
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "MIT",
+    "BSD-2-Clause",
+    "Unicode-3.0",
+    "Zlib",
+]
+confidence-threshold = 0.8
+
+[bans]
+multiple-versions = "allow"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

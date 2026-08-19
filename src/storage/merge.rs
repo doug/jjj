@@ -8,7 +8,7 @@
 //!   milestones markdown files.
 //!
 //! The entity merger parses YAML frontmatter into a generic
-//! [`serde_yml::Value`] tree and walks it recursively:
+//! [`serde_norway::Value`] tree and walks it recursively:
 //!
 //! - **Sequences** (`solution_ids`, `tags`, …) → set union, preserving items
 //!   that were in the base and items added on either side. Items removed on
@@ -28,7 +28,7 @@
 //! same canonical byte sequence given the same three inputs.
 
 use crate::error::{JjjError, Result};
-use serde_yml::{Mapping, Value};
+use serde_norway::{Mapping, Value};
 use std::collections::HashSet;
 
 // NOTE: the on-disk `base/` mirror (`snapshot_base`/`write_base_file`/
@@ -70,7 +70,7 @@ pub fn merge_entity_md(base: Option<&str>, local: &str, remote: &str) -> Result<
     let merged = normalize_timestamps(merged, &l_yaml, &r_yaml);
     let merged = sort_mapping_keys(merged);
 
-    let yaml_str = serde_yml::to_string(&merged).map_err(JjjError::YamlParse)?;
+    let yaml_str = serde_norway::to_string(&merged).map_err(JjjError::YamlParse)?;
     let body = merge_body(b_body.as_deref(), &l_body, &r_body);
     Ok(format!("---\n{}---\n\n{}", yaml_str, body))
 }
@@ -259,8 +259,8 @@ fn pick_side(l: &Value, r: &Value) -> Side {
         std::cmp::Ordering::Less => Side::Local,
         std::cmp::Ordering::Equal => {
             // Stable, deterministic tiebreak by full-document serialization.
-            let l_repr = serde_yml::to_string(l).unwrap_or_default();
-            let r_repr = serde_yml::to_string(r).unwrap_or_default();
+            let l_repr = serde_norway::to_string(l).unwrap_or_default();
+            let r_repr = serde_norway::to_string(r).unwrap_or_default();
             if r_repr > l_repr {
                 Side::Remote
             } else {
@@ -289,7 +289,7 @@ fn split_md(content: &str) -> Result<(Value, String)> {
         })?;
     let yaml_str = rest[..end].trim();
     let body = rest[end + 4..].trim_start_matches('\n').to_string();
-    let yaml: Value = serde_yml::from_str(yaml_str).map_err(JjjError::YamlParse)?;
+    let yaml: Value = serde_norway::from_str(yaml_str).map_err(JjjError::YamlParse)?;
     Ok((yaml, body))
 }
 
@@ -346,7 +346,7 @@ fn merge_value(
 fn merge_mapping(base: Option<&Mapping>, local: &Mapping, remote: &Mapping, prefer: Side) -> Value {
     let mut out = Mapping::new();
     let mut keys: Vec<Value> = local.keys().chain(remote.keys()).cloned().collect();
-    keys.sort_by_key(|k| serde_yml::to_string(k).unwrap_or_default());
+    keys.sort_by_key(|k| serde_norway::to_string(k).unwrap_or_default());
     keys.dedup();
 
     for key in keys {
@@ -380,7 +380,7 @@ fn merge_sequence(
     prefer: Side,
     ordered: bool,
 ) -> Value {
-    let key_of = |v: &Value| serde_yml::to_string(v).unwrap_or_default();
+    let key_of = |v: &Value| serde_norway::to_string(v).unwrap_or_default();
     let base_items: Vec<&Value> = base.map(|s| s.iter().collect()).unwrap_or_default();
     let local_contains = |v: &Value| local.iter().any(|x| x == v);
     let remote_contains = |v: &Value| remote.iter().any(|x| x == v);
@@ -458,7 +458,7 @@ fn sort_mapping_keys(v: Value) -> Value {
     match v {
         Value::Mapping(m) => {
             let mut entries: Vec<(Value, Value)> = m.into_iter().collect();
-            entries.sort_by_key(|(k, _)| serde_yml::to_string(k).unwrap_or_default());
+            entries.sort_by_key(|(k, _)| serde_norway::to_string(k).unwrap_or_default());
             let mut sorted = Mapping::new();
             for (k, val) in entries {
                 sorted.insert(k, sort_mapping_keys(val));
@@ -584,7 +584,7 @@ Original body.\n";
         );
         let merged = merge_entity_md(Some(BASE), &local, &remote).unwrap();
         assert!(merged.contains("title: Bob"), "merged was:\n{}", merged);
-        // updated_at must be the max — serde_yml quotes date-like strings.
+        // updated_at must be the max — serde_norway quotes date-like strings.
         assert!(
             merged.contains("2026-05-03T00:00:00Z"),
             "expected 2026-05-03 timestamp in merged output:\n{}",

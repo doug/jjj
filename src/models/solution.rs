@@ -370,11 +370,11 @@ mod tests {
 
         s.tags = vec!["refactor".to_string(), "backend".to_string()];
 
-        let yaml = serde_yml::to_string(&s).unwrap();
+        let yaml = serde_norway::to_string(&s).unwrap();
         assert!(yaml.contains("tags:"));
         assert!(yaml.contains("refactor"));
 
-        let parsed: Solution = serde_yml::from_str(&yaml).unwrap();
+        let parsed: Solution = serde_norway::from_str(&yaml).unwrap();
         assert_eq!(parsed.tags, s.tags);
     }
 
@@ -383,7 +383,7 @@ mod tests {
         // Old files may have used `force_accepted` before the rename to
         // `force_approved`. The serde alias must keep them readable.
         let yaml = "id: s1\ntitle: t\nproblem_id: p\nstatus: proposed\nforce_accepted: true\ncreated_at: '2025-01-01T00:00:00Z'\nupdated_at: '2025-01-01T00:00:00Z'\n";
-        let s: Solution = serde_yml::from_str(yaml).unwrap();
+        let s: Solution = serde_norway::from_str(yaml).unwrap();
         assert!(s.force_approved);
     }
 }

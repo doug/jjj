@@ -123,10 +123,6 @@ impl GhRepo {
         self.jjj_ok(&["solution", "attach", solution]);
     }
 
-    fn path(&self) -> &Path {
-        self.repo.path()
-    }
-
     /// Run jjj with the stub ahead of the real `gh` on PATH.
     fn jjj(&self, args: &[&str]) -> Output {
         let path = format!(
