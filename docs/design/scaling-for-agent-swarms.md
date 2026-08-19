@@ -1,3 +1,8 @@
+---
+title: Scaling for Agent Swarms
+description: The design behind incremental sync, per-pod event shards, and derived back-references
+---
+
 # Scaling jjj for Agent Swarms
 
 **Status:** Proposed — decisions locked (see "Decisions" below)

@@ -113,6 +113,26 @@ jobs:
         working-directory: tools/bench
         run: python3 bench.py --count 2000 --json ci-2k.json --check-against baseline-2k.json --tolerance 3.0
 
+  docs:
+    name: docs site builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: docs-site/package-lock.json
+      - name: Install dependencies
+        working-directory: docs-site
+        run: npm ci
+      # Build-only, no deploy. docs.yml runs on push to main, which meant a PR
+      # could break the site and nobody found out until after the merge — that
+      # is exactly how the build stayed broken from 2026-05-30 onward.
+      - name: Build
+        working-directory: docs-site
+        run: npm run build
+
   vscode:
     name: VS Code extension
     runs-on: ubuntu-latest

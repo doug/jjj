@@ -75,8 +75,8 @@ run `jjj automation list` to confirm nothing unexpected is active.
   machines, and triage — the commands that previously had no end-to-end test.
   Journeys now run one test per file, in parallel.
 - **CI** additionally lints test code, verifies the declared MSRV, builds the
-  `semantic` feature, audits dependencies, runs a benchmark tripwire, and builds
-  and tests the VS Code extension.
+  `semantic` feature, audits dependencies, runs a benchmark tripwire, builds the
+  documentation site, and builds and tests the VS Code extension.
 - **Releases are automated.** A `v*` tag builds macOS and Linux binaries for arm64
   and x86_64 with SHA-256 sums, publishes a GitHub release from the changelog
   section, and publishes to crates.io. `install.sh` fetches and verifies a
@@ -87,6 +87,11 @@ run `jjj automation list` to confirm nothing unexpected is active.
 - The VS Code extension's `npm test` ran stale compiled output, so 13 tests for a
   deleted source file kept passing. The build now cleans first.
 - `install.sh` documented itself as `curl … | sh` while being a bash script.
+- The documentation site had not built since 2026-05-30: the audit findings log
+  was picked up as a content page without the frontmatter Starlight requires,
+  failing the whole build. `audit/` and `plans/` are now excluded as the internal
+  working documents they are, and the docs build runs on pull requests instead of
+  only after merge — which is why nobody noticed for three months.
 
 ## 0.5.0 — 2026-07-25
 

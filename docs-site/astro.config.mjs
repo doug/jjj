@@ -56,6 +56,7 @@ export default defineConfig({
           { label: 'Workflow Commands', slug: 'reference/cli-workflow' },
           { label: 'Search Commands', slug: 'reference/cli-search' },
           { label: 'Database Commands', slug: 'reference/cli-db' },
+          { label: 'Diagnostics & Automation', slug: 'reference/cli-diagnostics' },
           { label: 'Configuration', slug: 'reference/configuration' },
         ],
       },
