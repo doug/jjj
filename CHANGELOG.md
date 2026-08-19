@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.5.1 — unreleased
+## 0.5.1 — 2026-08-19
 
 **Security release.** Upgrade if you share a repository with anyone.
 
