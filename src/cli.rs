@@ -181,6 +181,14 @@ pub enum Commands {
         #[arg(long)]
         search: Option<String>,
 
+        /// Filter to events authored by a specific actor
+        #[arg(long)]
+        user: Option<String>,
+
+        /// Filter to events you authored (shorthand for --user <you>)
+        #[arg(long, conflicts_with = "user")]
+        mine: bool,
+
         /// Filter events after this RFC3339 timestamp (e.g. 2025-01-01T00:00:00Z)
         #[arg(long)]
         since: Option<String>,
@@ -447,6 +455,10 @@ pub enum ProblemAction {
         #[arg(long)]
         assignee: Option<String>,
 
+        /// Show only problems assigned to you (shorthand for --assignee <you>)
+        #[arg(long, conflicts_with = "assignee")]
+        mine: bool,
+
         /// Filter by tag (case-insensitive exact match)
         #[arg(long)]
         tag: Option<String>,
@@ -641,6 +653,10 @@ pub enum SolutionAction {
         #[arg(long)]
         assignee: Option<String>,
 
+        /// Show only solutions assigned to you (shorthand for --assignee <you>)
+        #[arg(long, conflicts_with = "assignee")]
+        mine: bool,
+
         /// Filter by title keyword
         #[arg(long)]
         search: Option<String>,
@@ -788,6 +804,10 @@ pub enum SolutionAction {
     Lgtm {
         /// Solution ID, short prefix, or fuzzy title
         solution_id: String,
+
+        /// Record why you signed off — the evidence behind the approval
+        #[arg(long)]
+        rationale: Option<String>,
     },
 
     /// Leave a reply on a critique of this solution

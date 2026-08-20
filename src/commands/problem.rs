@@ -9,6 +9,23 @@ use crate::local_config::LocalConfig;
 use crate::models::{Event, EventType, Priority, Problem, ProblemStatus};
 use crate::storage::MetadataStore;
 
+/// Resolve `--mine` into an assignee filter.
+///
+/// `--mine` is shorthand for "assigned to whoever I am", which is the form
+/// agents reach for. Keeping the resolution here means the list functions never
+/// need to know about identity.
+pub(crate) fn resolve_mine(
+    ctx: &CommandContext,
+    assignee: Option<String>,
+    mine: bool,
+) -> Option<String> {
+    if mine {
+        ctx.store.get_current_user().ok()
+    } else {
+        assignee
+    }
+}
+
 pub fn execute(ctx: &CommandContext, action: ProblemAction) -> Result<()> {
     match action {
         ProblemAction::New {
@@ -26,6 +43,7 @@ pub fn execute(ctx: &CommandContext, action: ProblemAction) -> Result<()> {
             milestone,
             search,
             assignee,
+            mine,
             tag,
             sort,
             json,
@@ -35,7 +53,7 @@ pub fn execute(ctx: &CommandContext, action: ProblemAction) -> Result<()> {
             tree,
             milestone,
             search.as_deref(),
-            assignee,
+            resolve_mine(ctx, assignee, mine),
             tag,
             &sort,
             json,

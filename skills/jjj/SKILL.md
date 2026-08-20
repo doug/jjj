@@ -87,7 +87,8 @@ Other things worth knowing before scripting:
 | Non-zero exit on failure, message on stderr | Check the status; do not parse stdout for errors |
 | `jjj next --json` emits `null`, one object, or an array | Normalize before iterating |
 | `--force` skips duplicate detection (`problem new`) or the critique gate (`solution approve`) | Never default to it in a loop; it disables the thing that makes review real |
-| Prompts appear on a TTY | Pass `--no-rationale` or `--rationale "..."` in non-interactive runs |
+| Only `solution approve`, `solution withdraw` and `problem dissolve` prompt for a rationale | Pass `--rationale "..."` or `--no-rationale` to *those*; other commands reject the flag |
+| `--mine` works on `next`, `status`, `events`, and `problem`/`solution`/`critique list` | It is shorthand for "assigned to me"; it does not exist elsewhere |
 | Reads are served from a SQLite cache | `jjj db rebuild` after editing metadata files behind jjj's back |
 
 ## The single-agent loop

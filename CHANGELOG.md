@@ -4,6 +4,19 @@
 
 ### Added
 
+- **CLI consistency: `--mine`, `events --user`, `lgtm --rationale`.** A
+  nine-agent trial produced 274 failing invocations, and roughly 150 were agents
+  calling flags that did not exist but plausibly should have — `solution list
+  --mine` 76 times, because `next --mine` and `critique list --mine` both do.
+  Agents probe an API far more systematically than people, and they had inferred
+  the consistent surface jjj lacked. Now:
+  - `--mine` on `problem list`, `solution list` and `events` (it already existed
+    on `next`, `status` and `critique list`)
+  - `events --user <actor>` — "what did agent-03 do?" is the first question
+    anyone asks of a swarm's log, and it had no answer
+  - `solution lgtm --rationale "..."` — a sign-off asserts the work is correct,
+    so it should carry the evidence, as `approve` already does
+
 - **`jjj next` spreads a fleet instead of stampeding it.** Category, priority and
   age are identical for every agent, so a strictly-ordered queue handed all of
   them the same head of the list and they all took it — measured at nine agents,

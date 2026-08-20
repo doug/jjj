@@ -456,3 +456,159 @@ fn an_agents_preference_is_stable_across_turns() {
         );
     }
 }
+
+// =============================================================================
+// CLI consistency — flags agents reasonably expect to exist
+// =============================================================================
+
+/// `--mine` must work everywhere it reads as if it should.
+///
+/// A nine-agent trial produced 274 failing invocations, and roughly 150 were
+/// agents calling flags that do not exist but plausibly ought to: `solution
+/// list --mine` 76 times, because `next --mine` and `critique list --mine` both
+/// exist. Agents probe an API far more systematically than people do, and they
+/// had inferred the consistent surface jjj did not have.
+#[test]
+fn mine_works_on_every_listing() {
+    if !jj_available() {
+        return;
+    }
+    let repo = setup_test_repo();
+    run_jjj_success(repo.path(), &["problem", "new", "Owned", "--force"]);
+    run_jjj_success(
+        repo.path(),
+        &["problem", "assign", "Owned", "--to", "agent-a"],
+    );
+    run_jjj_success(
+        repo.path(),
+        &[
+            "solution",
+            "new",
+            "An approach",
+            "--problem",
+            "Owned",
+            "--force",
+        ],
+    );
+    run_jjj_success(
+        repo.path(),
+        &["solution", "assign", "An approach", "--to", "agent-a"],
+    );
+
+    let problems = as_agent(
+        repo.path(),
+        "agent-a",
+        &["problem", "list", "--mine", "--json"],
+    );
+    assert!(
+        problems.contains("Owned"),
+        "problem list --mine: {problems}"
+    );
+
+    let solutions = as_agent(
+        repo.path(),
+        "agent-a",
+        &["solution", "list", "--mine", "--json"],
+    );
+    assert!(
+        solutions.contains("An approach"),
+        "solution list --mine: {solutions}"
+    );
+
+    // And it must actually filter, not just be accepted and ignored.
+    let others = as_agent(
+        repo.path(),
+        "agent-b",
+        &["problem", "list", "--mine", "--json"],
+    );
+    assert!(
+        !others.contains("Owned"),
+        "--mine returned another actor's work: {others}"
+    );
+}
+
+/// The log must answer "what did that agent do?" — the first question anyone
+/// asks of a swarm, and one `jjj events` could not answer.
+#[test]
+fn events_can_be_filtered_by_actor() {
+    if !jj_available() {
+        return;
+    }
+    let repo = setup_test_repo();
+    as_agent(
+        repo.path(),
+        "agent-a",
+        &["problem", "new", "From A", "--force"],
+    );
+    as_agent(
+        repo.path(),
+        "agent-b",
+        &["problem", "new", "From B", "--force"],
+    );
+
+    let a_only = as_agent(
+        repo.path(),
+        "agent-a",
+        &["events", "--user", "agent-a", "--json"],
+    );
+    assert!(a_only.contains("agent-a"), "expected agent-a's events");
+    assert!(
+        !a_only.contains("agent-b"),
+        "--user leaked another actor's events: {a_only}"
+    );
+
+    let mine = as_agent(repo.path(), "agent-b", &["events", "--mine", "--json"]);
+    assert!(mine.contains("agent-b"));
+    assert!(!mine.contains("agent-a"), "--mine leaked others: {mine}");
+}
+
+/// A sign-off asserts the work is correct, so it must be able to carry the
+/// evidence — reviewers reach for this by analogy with `approve --rationale`.
+#[test]
+fn lgtm_records_a_rationale() {
+    if !jj_available() {
+        return;
+    }
+    let repo = setup_test_repo();
+    run_jjj_success(repo.path(), &["problem", "new", "Needs review", "--force"]);
+    run_jjj_success(
+        repo.path(),
+        &[
+            "solution",
+            "new",
+            "An approach",
+            "--problem",
+            "Needs review",
+            "--force",
+        ],
+    );
+    run_jjj_success(
+        repo.path(),
+        &[
+            "critique",
+            "new",
+            "An approach",
+            "Please review",
+            "--reviewer",
+            "reviewer-1",
+        ],
+    );
+
+    as_agent(
+        repo.path(),
+        "reviewer-1",
+        &[
+            "solution",
+            "lgtm",
+            "An approach",
+            "--rationale",
+            "ran the suite; all cases pass",
+        ],
+    );
+
+    let critiques = run_jjj_success(repo.path(), &["critique", "list", "--json"]);
+    assert!(
+        critiques.contains("all cases pass"),
+        "the sign-off's evidence was discarded: {critiques}"
+    );
+}

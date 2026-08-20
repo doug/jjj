@@ -27,6 +27,7 @@ pub fn execute(ctx: &CommandContext, action: SolutionAction) -> Result<()> {
             problem,
             status,
             assignee,
+            mine,
             search,
             tag,
             sort,
@@ -35,7 +36,7 @@ pub fn execute(ctx: &CommandContext, action: SolutionAction) -> Result<()> {
             ctx,
             problem,
             status,
-            assignee,
+            crate::commands::problem::resolve_mine(ctx, assignee, mine),
             search.as_deref(),
             tag,
             &sort,
@@ -78,7 +79,10 @@ pub fn execute(ctx: &CommandContext, action: SolutionAction) -> Result<()> {
         } => approve_solution(ctx, solution_id, force, rationale, no_rationale),
         SolutionAction::Assign { solution_id, to } => assign_solution(ctx, solution_id, to),
         SolutionAction::Resume { solution_id } => resume_solution(ctx, solution_id),
-        SolutionAction::Lgtm { solution_id } => lgtm_solution(ctx, solution_id),
+        SolutionAction::Lgtm {
+            solution_id,
+            rationale,
+        } => lgtm_solution(ctx, solution_id, rationale),
         SolutionAction::Comment {
             solution_id,
             critique,
@@ -807,7 +811,11 @@ fn resume_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
     Ok(())
 }
 
-fn lgtm_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
+fn lgtm_solution(
+    ctx: &CommandContext,
+    solution_input: String,
+    rationale: Option<String>,
+) -> Result<()> {
     let store = &ctx.store;
     let solution_id = ctx.resolve_solution(&solution_input)?;
 
@@ -821,7 +829,7 @@ fn lgtm_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
         c.status == CritiqueStatus::Open
             && c.reviewer
                 .as_ref()
-                .is_some_and(|r| r.contains(&current_user) || current_user.contains(r.as_str()))
+                .is_some_and(|r| crate::identity::actor_matches(r, &current_user))
     });
 
     let critique = match my_review {
@@ -850,8 +858,27 @@ fn lgtm_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
     };
 
     let critique_id = critique.id.clone();
+
+    // A sign-off is a claim that the work is correct, so record the evidence
+    // behind it when offered. Reviewers reach for this by analogy with
+    // `approve --rationale`, and it was silently rejected.
+    if let Some(ref why) = rationale {
+        let recorded = store.with_metadata(&format!("LGTM rationale on {critique_id}"), || {
+            let mut c = store.load_critique(&critique_id)?;
+            c.add_reply(current_user.clone(), why.clone());
+            store.save_critique(&c)?;
+            Ok(())
+        });
+        if let Err(e) = recorded {
+            crate::output::warn(&format!("could not record the rationale: {e}"));
+        }
+    }
+
     crate::domain::address_critique(store, &critique_id)?;
     println!("Signed off on '{}' as @{}", solution.title, current_user);
+    if rationale.is_some() {
+        println!("  rationale recorded on the review critique");
+    }
 
     // Check if this was the last blocking item
     let remaining = store

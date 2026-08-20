@@ -15,6 +15,7 @@ pub fn execute(
     solution: Option<String>,
     event_type: Option<String>,
     search: Option<String>,
+    user: Option<String>,
     since: Option<String>,
     json: bool,
     limit: usize,
@@ -23,7 +24,7 @@ pub fn execute(
         Some(EventsAction::Rebuild) => rebuild_events(ctx),
         Some(EventsAction::Validate) => validate_events(ctx),
         None => list_events(
-            ctx, from, to, problem, solution, event_type, search, since, json, limit,
+            ctx, from, to, problem, solution, event_type, search, user, since, json, limit,
         ),
     }
 }
@@ -37,6 +38,7 @@ fn list_events(
     solution: Option<String>,
     event_type: Option<String>,
     search: Option<String>,
+    user: Option<String>,
     since: Option<String>,
     json: bool,
     limit: usize,
@@ -106,6 +108,14 @@ fn list_events(
         // Type filter
         if let Some(ref t) = event_type {
             if !e.event_type.to_string().contains(t) {
+                return false;
+            }
+        }
+
+        // Actor filter. "What did agent-03 do?" is the first question anyone
+        // asks of a swarm's log, and it had no answer.
+        if let Some(ref u) = user {
+            if !crate::identity::actor_matches(&e.by, u) {
                 return false;
             }
         }
