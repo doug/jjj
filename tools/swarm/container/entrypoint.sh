@@ -137,6 +137,7 @@ $IDENTITY_RULE"
 # --- loop -------------------------------------------------------------------
 
 iter=0
+stuck=0
 while true; do
     if [ -e "$STOP" ]; then log "stopping: kill switch present"; break; fi
     if [ "$DEADLINE" -gt 0 ] && [ "$(date +%s)" -ge "$DEADLINE" ]; then
@@ -205,39 +206,52 @@ $PROMPT"
     # through git; metadata through jjj. Both must land for another agent to see
     # this work at all.
     if ! git diff --quiet HEAD 2>/dev/null || [ -n "$(git status --porcelain 2>/dev/null)" ]; then
-        # Never publish an unresolved conflict. jjj already refuses this for
-        # metadata (it validates entity bodies before push); the code had no
-        # such guard, and one committed marker is enough to break every agent's
-        # score at once.
         # Never publish an unresolved conflict: one committed marker breaks the
-        # package import and takes every agent's score to zero. If the agent did
-        # not manage to resolve it, keep the work in this container and try again
-        # next turn rather than discarding it.
-        if grep -rlE '^(<{7} |={7}$|>{7} )' --include='*.py' . 2>/dev/null | grep -q .; then
-            log "iter $iter not pushing: markers still present in $(grep -rlE '^(<{7} |={7}$|>{7} )' --include='*.py' . 2>/dev/null | tr '\n' ' ')"
-            continue
-        fi
-        git add -A 2>/dev/null
-        git commit -q -m "$JJJ_USER: iter $iter" 2>/dev/null
-        for attempt in 1 2 3; do
-            git fetch -q origin 2>/dev/null
-            if ! git merge -q --no-edit origin/HEAD 2>/dev/null; then
-                # Do NOT auto-pick a side. `checkout --ours` here silently threw
-                # away another agent's registry entry, so a correct operation
-                # scored zero — the exact lossy auto-resolve decision 10 warns
-                # about. Abort and let an agent reconcile on its next turn,
-                # which is what the prompt instructs.
-                log "iter $iter merge conflict; aborting and deferring to next turn"
+        # package import and takes every agent's score to zero. jjj already
+        # refuses this for metadata by validating entity bodies before push; the
+        # code path had no equivalent.
+        markers="$(grep -rlE '^(<{7} |={7}$|>{7} )' --include='*.py' . 2>/dev/null | tr '\n' ' ')"
+        if [ -n "$markers" ]; then
+            stuck=$((stuck + 1))
+            log "iter $iter not pushing code: markers in $markers (stuck $stuck)"
+
+            # An agent that cannot resolve its tree is dead weight for the rest
+            # of the run, so give it a bounded number of turns and then rejoin
+            # the fleet. Local work is lost, which is worth saying out loud —
+            # but an agent contributing nothing for three hours is worse.
+            if [ "$stuck" -ge 3 ]; then
+                log "iter $iter RESETTING to origin after $stuck stuck turns; local work discarded"
                 git merge --abort 2>/dev/null
-                break
+                git reset -q --hard origin/main 2>/dev/null || git reset -q --hard origin/HEAD 2>/dev/null
+                git clean -qfd 2>/dev/null
+                stuck=0
             fi
-            if git push -q origin HEAD:refs/heads/main 2>/dev/null; then
-                log "iter $iter pushed code (attempt $attempt)"
-                break
-            fi
-            sleep $((attempt * 2))
-        done
+        else
+            stuck=0
+            git add -A 2>/dev/null
+            git commit -q -m "$JJJ_USER: iter $iter" 2>/dev/null
+            for attempt in 1 2 3; do
+                git fetch -q origin 2>/dev/null
+                if ! git merge -q --no-edit origin/HEAD 2>/dev/null; then
+                    # Do not auto-pick a side; the next turn's pull hands the
+                    # conflict to the agent, which resolves it properly.
+                    log "iter $iter merge conflict on push; deferring to next turn"
+                    git merge --abort 2>/dev/null
+                    break
+                fi
+                if git push -q origin HEAD:refs/heads/main 2>/dev/null; then
+                    log "iter $iter pushed code (attempt $attempt)"
+                    break
+                fi
+                sleep $((attempt * 2))
+            done
+        fi
     fi
+
+    # Metadata pushes regardless of the code's state. Claims, critiques and
+    # sign-offs are how the rest of the fleet coordinates, and withholding them
+    # because a Python file has a marker in it makes one agent's local mess
+    # everyone's problem — an earlier `continue` here did exactly that.
     jjj push >/dev/null 2>&1 || log "iter $iter jjj push failed"
 
     after=$(./score.py 2>/dev/null || echo "? ?")

@@ -31,6 +31,11 @@ shape exists to force collisions on four surfaces at once:
 | Claim contention | seed fewer problems than agents |
 | Same-entity edits | agents critique and reply on each other's solutions |
 
+29 operations, 115 conformance cases. Expected values were computed by a
+reference implementation, not written by hand — a wrong expectation is
+indistinguishable from a broken agent — and the full set is verified achievable
+at 115/115 before any trial runs.
+
 **Fitness is `./score.py`: a count of passing conformance cases.** Counted, never
 timed. A swarm saturates the machine it runs on, so any wall-clock metric would
 measure its own contention rather than the code.

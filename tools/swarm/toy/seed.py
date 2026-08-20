@@ -34,8 +34,14 @@ import sys
 from pathlib import Path
 
 # Each op: (name, one-line spec, conformance cases as (input, expected)).
-# Chosen so a competent agent implements one in a single pass — the difficulty
-# of the trial must come from coordination, never from the puzzle.
+#
+# Chosen so a competent agent implements one in a single pass — the difficulty of
+# the trial must come from coordination, never from the puzzle. Specs are stated
+# precisely enough to have one right answer: an ambiguous spec turns a trial into
+# agents arguing about intent, which measures nothing.
+#
+# Expected values were computed by a reference implementation rather than written
+# by hand, because a wrong expectation is indistinguishable from a broken agent.
 OPS = [
     (
         "reverse",
@@ -80,6 +86,216 @@ OPS = [
         "runlength",
         "Run-length encode: 'aaab' -> 'a3b1'. Counts always written, even for 1.",
         [("aaab", "a3b1"), ("", ""), ("abc", "a1b1c1"), ("aa", "a2")],
+    ),
+    (
+        'upper',
+        'Uppercase the input.',
+        [
+            ('abc', 'ABC'),
+            ('', ''),
+            ('Hello, World!', 'HELLO, WORLD!'),
+            ('ünï', 'ÜNÏ'),
+        ],
+    ),
+    (
+        'trim',
+        'Strip leading and trailing whitespace.',
+        [
+            ('  ab  ', 'ab'),
+            ('', ''),
+            ('\tx\n', 'x'),
+            ('  ', ''),
+        ],
+    ),
+    (
+        'wordcount',
+        'Count whitespace-separated words; return the count as a string.',
+        [
+            ('a b c', '3'),
+            ('', '0'),
+            ('  one  ', '1'),
+            ('a\tb\nc', '3'),
+        ],
+    ),
+    (
+        'charfreq',
+        "Most frequent character; ties broken by first appearance. Empty input gives ''.",
+        [
+            ('aabbb', 'b'),
+            ('', ''),
+            ('abc', 'a'),
+            ('xxyy', 'x'),
+        ],
+    ),
+    (
+        'dedupe',
+        'Remove duplicate characters, keeping first occurrences.',
+        [
+            ('aabbcc', 'abc'),
+            ('', ''),
+            ('abcabc', 'abc'),
+            ('', ''),
+        ],
+    ),
+    (
+        'sortchars',
+        'Sort characters ascending by code point.',
+        [
+            ('cba', 'abc'),
+            ('', ''),
+            ('bAa', 'Aab'),
+            ('zz', 'zz'),
+        ],
+    ),
+    (
+        'palindrome',
+        "'yes' if the input reads the same backwards, else 'no'. Case-sensitive, no stripping.",
+        [
+            ('racecar', 'yes'),
+            ('', 'yes'),
+            ('ab', 'no'),
+            ('aba', 'yes'),
+        ],
+    ),
+    (
+        'vowels',
+        'Count a/e/i/o/u, case-insensitive; return as a string.',
+        [
+            ('hello', '2'),
+            ('', '0'),
+            ('AEIOU', '5'),
+            ('xyz', '0'),
+        ],
+    ),
+    (
+        'caesar',
+        "Shift letters by N: input is 'N|text'. N may be negative. Non-letters unchanged.",
+        [
+            ('3|abc', 'def'),
+            ('0|xyz', 'xyz'),
+            ('-1|bcd', 'abc'),
+            ('13|Hello, World!', 'Uryyb, Jbeyq!'),
+        ],
+    ),
+    (
+        'atbash',
+        'Atbash cipher: map a<->z, b<->y. Non-letters unchanged.',
+        [
+            ('abc', 'zyx'),
+            ('', ''),
+            ('Hello', 'Svool'),
+            ('xyz', 'cba'),
+        ],
+    ),
+    (
+        'digitsum',
+        'Sum the decimal digits of a non-negative integer string.',
+        [
+            ('123', '6'),
+            ('0', '0'),
+            ('9999', '36'),
+            ('10', '1'),
+        ],
+    ),
+    (
+        'gcd',
+        'Greatest common divisor of two integers separated by a comma.',
+        [
+            ('12,18', '6'),
+            ('7,1', '1'),
+            ('100,75', '25'),
+            ('0,5', '5'),
+        ],
+    ),
+    (
+        'collatz',
+        'Number of Collatz steps to reach 1 from a positive integer.',
+        [
+            ('1', '0'),
+            ('6', '8'),
+            ('7', '16'),
+            ('27', '111'),
+        ],
+    ),
+    (
+        'luhn',
+        "'valid' if the digit string passes the Luhn checksum, else 'invalid'.",
+        [
+            ('79927398713', 'valid'),
+            ('79927398710', 'invalid'),
+            ('0', 'valid'),
+            ('18', 'valid'),
+        ],
+    ),
+    (
+        'b64encode',
+        'Base64-encode the UTF-8 bytes of the input.',
+        [
+            ('abc', 'YWJj'),
+            ('', ''),
+            ('hello world', 'aGVsbG8gd29ybGQ='),
+            ('=', 'PQ=='),
+        ],
+    ),
+    (
+        'b64decode',
+        'Decode a Base64 string to UTF-8 text.',
+        [
+            ('YWJj', 'abc'),
+            ('', ''),
+            ('aGVsbG8gd29ybGQ=', 'hello world'),
+            ('PQ==', '='),
+        ],
+    ),
+    (
+        'camel_to_snake',
+        "Insert '_' before every uppercase letter except a leading one, then lowercase. 'CamelCase' -> 'camel_case'.",
+        [
+            ('CamelCase', 'camel_case'),
+            ('', ''),
+            ('aB', 'a_b'),
+            ('parseXMLValue', 'parse_x_m_l_value'),
+        ],
+    ),
+    (
+        'titlecase',
+        'Capitalise the first letter of each whitespace-separated word; lowercase the rest.',
+        [
+            ('hello world', 'Hello World'),
+            ('', ''),
+            ('aBC dEF', 'Abc Def'),
+            ('x', 'X'),
+        ],
+    ),
+    (
+        'morse',
+        "Encode letters and spaces to Morse; letters separated by ' ', words by ' / '. Lowercase input.",
+        [
+            ('sos', '... --- ...'),
+            ('', ''),
+            ('ab c', '.- -... / -.-.'),
+            ('e', '.'),
+        ],
+    ),
+    (
+        'hexencode',
+        'Lowercase hex of the UTF-8 bytes.',
+        [
+            ('abc', '616263'),
+            ('', ''),
+            ('A', '41'),
+            ('\n', '0a'),
+        ],
+    ),
+    (
+        'romanadd',
+        "Add two Roman numerals, return a Roman numeral. Input 'X+IV'.",
+        [
+            ('X+IV', 'XIV'),
+            ('I+I', 'II'),
+            ('MC+M', 'MMC'),
+            ('IV+VI', 'X'),
+        ],
     ),
 ]
 
