@@ -453,6 +453,13 @@ def build_workbench(root: Path, ops) -> None:
     # union merge is the correct resolution rather than a guess. Without this
     # the first shakedown silently dropped a working `roman` implementation's
     # registration and it scored zero despite being correct.
+    # Bytecode is regenerated on every run and cannot be merged; committing it
+    # gave every agent a permanent binary conflict on files nobody authored.
+    write(
+        root / ".gitignore",
+        "__pycache__/\n*.pyc\n.jjj-swarm/\n",
+    )
+
     write(
         root / ".gitattributes",
         "opkit/registry.py merge=union\n"

@@ -20,7 +20,10 @@
 #   ./swarm.sh stop
 #   ./swarm.sh analyze
 #
-# Credentials: works with a Claude subscription. Exactly one process refreshes
+# Credentials: works with a Claude subscription. The refresher writes
+# $SWARM_ROOT/credentials.json and each agent copies it in per turn — never
+# bind-mounted, because podman binds a file by inode and the refresher's atomic
+# rename would make the mount dangle. Exactly one process refreshes
 # the token — token-refresher.sh on the host, using the CLI's own refresh path —
 # and containers mount the exported credential READ-ONLY. Several containers
 # refreshing one credential would race to rotate it and can break the host
@@ -198,7 +201,6 @@ cmd_start() {
                 -e "SWARM_MODEL=$model" \
                 -e "SWARM_ROLE=$role" \
                 ${use_key:+$([ "$use_key" = 1 ] && echo "-e ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY")} \
-                $([ "$use_key" = 0 ] && echo "-v $CREDS:/home/swarm/.claude/.credentials.json:ro") \
                 -v "$SWARM_ROOT:/swarm:rw" \
                 "$IMAGE" >/dev/null || die "failed to start $name"
             echo "  started $name ($role)"

@@ -138,6 +138,7 @@ $IDENTITY_RULE"
 
 iter=0
 stuck=0
+failures=0
 while true; do
     if [ -e "$STOP" ]; then log "stopping: kill switch present"; break; fi
     if [ "$DEADLINE" -gt 0 ] && [ "$(date +%s)" -ge "$DEADLINE" ]; then
@@ -148,6 +149,22 @@ while true; do
     fi
 
     iter=$((iter + 1))
+
+    # Refresh the credential from the shared directory.
+    #
+    # It is copied per turn rather than bind-mounted, because podman binds a
+    # *file* by inode: the host-side refresher writes atomically via rename,
+    # which replaces the inode, and the container's mount is then a dangling
+    # reference — the file simply disappears inside the container. That killed a
+    # three-hour run 45 minutes in, with every agent reporting "Not logged in"
+    # while the host credential was perfectly valid. Mounting the *directory*
+    # would also work; copying keeps each container's ~/.claude private, which
+    # matters because the CLI writes other state there.
+    if [ -f /swarm/credentials.json ]; then
+        mkdir -p "$HOME/.claude"
+        cp /swarm/credentials.json "$HOME/.claude/.credentials.json" 2>/dev/null
+        chmod 600 "$HOME/.claude/.credentials.json" 2>/dev/null
+    fi
 
     # Pull before choosing work — design decision 8's sync cadence. A failed
     # merge must be aborted: left alone it writes conflict markers into the tree,
@@ -198,7 +215,15 @@ $PROMPT"
 
     if [ $rc -ne 0 ]; then
         log "iter $iter FAILED rc=$rc after ${elapsed}s: $(echo "$out" | tail -3 | tr '\n' ' ')"
+        failures=$((failures + 1))
+        # Exponential backoff, capped. A turn that fails in a second will fail
+        # again in a second; spinning on it burns the run and buries the real
+        # signal in noise.
+        backoff=$(( failures * failures * 5 )); [ "$backoff" -gt 300 ] && backoff=300
+        log "iter $iter backing off ${backoff}s after $failures consecutive failures"
+        sleep "$backoff"
     else
+        failures=0
         log "iter $iter ok ${elapsed}s: $(echo "$out" | tail -2 | tr '\n' ' ')"
     fi
 
