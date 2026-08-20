@@ -377,3 +377,82 @@ fn an_assignment_without_a_claim_does_not_expire() {
         "an explicit assignment has no lease and must stay with its owner: {others:?}"
     );
 }
+
+/// A fleet of agents looking at the same fresh backlog must not all pick the
+/// same item.
+///
+/// Everything `next` sorts by — category, priority, age — is identical for every
+/// agent, so with a uniformly-seeded backlog they were all handed the same head
+/// of the list and all claimed it: nine agents, twenty-three claim attempts,
+/// three distinct items. The final tiebreak is per-actor so they spread out
+/// without coordinating.
+#[test]
+fn different_agents_prefer_different_work_when_everything_ties() {
+    if !jj_available() {
+        return;
+    }
+    let repo = setup_test_repo();
+    for i in 0..8 {
+        run_jjj_success(
+            repo.path(),
+            &[
+                "problem",
+                "new",
+                &format!("Task {i}"),
+                "--priority",
+                "high",
+                "--force",
+            ],
+        );
+    }
+
+    // What each agent would be handed first, with nothing claimed yet.
+    let mut heads = std::collections::HashSet::new();
+    for agent in [
+        "agent-01", "agent-02", "agent-03", "agent-04", "agent-05", "agent-06",
+    ] {
+        let titles = queue_titles(&as_agent(repo.path(), agent, &["next", "--json"]));
+        if let Some(first) = titles.first() {
+            heads.insert(first.clone());
+        }
+    }
+
+    assert!(
+        heads.len() > 1,
+        "every agent was offered the same item, so a fleet stampedes one problem \
+         and leaves the rest untouched; got {heads:?}"
+    );
+}
+
+/// The spread must be stable: an agent's own view cannot reshuffle between
+/// turns, or it abandons work half-done.
+#[test]
+fn an_agents_preference_is_stable_across_turns() {
+    if !jj_available() {
+        return;
+    }
+    let repo = setup_test_repo();
+    for i in 0..6 {
+        run_jjj_success(
+            repo.path(),
+            &[
+                "problem",
+                "new",
+                &format!("Job {i}"),
+                "--priority",
+                "high",
+                "--force",
+            ],
+        );
+    }
+
+    let first = queue_titles(&as_agent(repo.path(), "agent-01", &["next", "--json"]));
+    for _ in 0..3 {
+        let again = queue_titles(&as_agent(repo.path(), "agent-01", &["next", "--json"]));
+        assert_eq!(
+            first, again,
+            "an agent's preferred item changed between turns; it would keep \
+             switching tasks and finish nothing"
+        );
+    }
+}

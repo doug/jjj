@@ -4,6 +4,17 @@
 
 ### Added
 
+- **`jjj next` spreads a fleet instead of stampeding it.** Category, priority and
+  age are identical for every agent, so a strictly-ordered queue handed all of
+  them the same head of the list and they all took it — measured at nine agents,
+  twenty-three claim attempts, three distinct items out of eight. Within a
+  priority band, work is now ordered by a hash of the actor and the entity id:
+  each actor gets a stable but different order, so they spread out without
+  coordinating, and an agent does not reshuffle between turns. Priority still
+  decides what matters; strict oldest-first *within* a band is deliberately given
+  up, which for one worker is cosmetic and for a fleet is the difference between
+  parallel and serial.
+
 - **Claims are leases (design decision 15).** `jjj next --claim` now records
   `claimed_at`, and `jjj next` no longer offers work another agent is actively
   holding. Two problems this solves, both measured in the swarm trial:

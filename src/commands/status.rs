@@ -229,6 +229,24 @@ pub fn execute(
     Ok(())
 }
 
+/// A stable per-actor ordering key for otherwise-equivalent work.
+///
+/// Two actors looking at the same tied items get different orders; one actor
+/// always gets the same order. Any hash would do — this is FNV-1a, inlined to
+/// avoid a dependency for eight lines.
+fn preference_key(actor: &str, entity_id: &str) -> u64 {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in actor
+        .bytes()
+        .chain(b"\0".iter().copied())
+        .chain(entity_id.bytes())
+    {
+        hash ^= byte as u64;
+        hash = hash.wrapping_mul(0x100_0000_01b3);
+    }
+    hash
+}
+
 pub(crate) fn build_next_actions(
     problems: &[crate::models::Problem],
     solutions: &[crate::models::Solution],
@@ -502,7 +520,28 @@ pub(crate) fn build_next_actions_with_ttl(
         if a_pri != b_pri {
             return b_pri.cmp(&a_pri);
         }
-        // Tiebreak: older items first (smaller created_at string sorts earlier for RFC3339)
+        // Within a priority band, order per actor. This is what stops a fleet
+        // stampeding: category, priority and age are identical for every agent,
+        // so a strictly-ordered queue hands all of them the same head and they
+        // all take it — measured at nine agents, twenty-three claims, three
+        // distinct items.
+        //
+        // Hashing the actor with the entity id gives each actor a stable but
+        // different order over equally-urgent work, so they spread out without
+        // coordinating. Deterministic, so an agent does not reshuffle between
+        // turns and abandon work half-done.
+        //
+        // The trade is explicit: priority still decides what matters, but strict
+        // oldest-first within a band is given up. A single agent therefore no
+        // longer works in FIFO order, which for one worker is a cosmetic change
+        // and for a fleet is the difference between parallel and serial.
+        let a_pref = preference_key(user, a["entity_id"].as_str().unwrap_or(""));
+        let b_pref = preference_key(user, b["entity_id"].as_str().unwrap_or(""));
+        if a_pref != b_pref {
+            return a_pref.cmp(&b_pref);
+        }
+
+        // Older first, as a final stable tiebreak.
         let a_ts = a["created_at"].as_str().unwrap_or("");
         let b_ts = b["created_at"].as_str().unwrap_or("");
         a_ts.cmp(b_ts)

@@ -775,3 +775,74 @@ b-theirs
         assert_eq!(theirs, "a-theirs\nmiddle\nb-theirs\n");
     }
 }
+
+#[cfg(test)]
+mod convergence_tests {
+    use super::*;
+
+    fn doc(assignee: &str, updated: &str) -> String {
+        format!(
+            "---\nid: p1\ntitle: Contended\nstatus: open\nassignee: {assignee}\n\
+             created_at: '2026-08-20T11:00:00Z'\nupdated_at: '{updated}'\n---\n"
+        )
+    }
+
+    fn assignee_of(md: &str) -> String {
+        md.lines()
+            .find(|l| l.starts_with("assignee:"))
+            .unwrap_or("assignee: <none>")
+            .trim()
+            .to_string()
+    }
+
+    /// Three pods claim the same item, then each merges the others' versions.
+    /// Whatever order a pod happens to merge in, every pod must end up agreeing
+    /// on who holds it — otherwise the clones permanently disagree and the whole
+    /// coordination story is unsound.
+    ///
+    /// This is not hypothetical: with three pods racing one problem, the clones
+    /// ended up seeing agent-c, agent-a and agent-a respectively.
+    #[test]
+    fn concurrent_scalar_edits_converge_regardless_of_merge_order() {
+        let base = doc("<none>", "2026-08-20T11:00:00Z");
+        let a = doc("agent-a", "2026-08-20T11:56:02.314999Z");
+        let b = doc("agent-b", "2026-08-20T11:56:02.350000Z");
+        let c = doc("agent-c", "2026-08-20T11:56:02.379188Z");
+
+        // Pod A merges B then C; pod B merges C then A; pod C merges A then B.
+        let a_view = {
+            let m = merge_entity_md(Some(&base), &a, &b).expect("merge");
+            merge_entity_md(Some(&base), &m, &c).expect("merge")
+        };
+        let b_view = {
+            let m = merge_entity_md(Some(&base), &b, &c).expect("merge");
+            merge_entity_md(Some(&base), &m, &a).expect("merge")
+        };
+        let c_view = {
+            let m = merge_entity_md(Some(&base), &c, &a).expect("merge");
+            merge_entity_md(Some(&base), &m, &b).expect("merge")
+        };
+
+        assert_eq!(
+            assignee_of(&a_view),
+            assignee_of(&b_view),
+            "pods A and B disagree after seeing the same three versions:\n\
+             A: {}\nB: {}",
+            assignee_of(&a_view),
+            assignee_of(&b_view)
+        );
+        assert_eq!(
+            assignee_of(&b_view),
+            assignee_of(&c_view),
+            "pods B and C disagree after seeing the same three versions"
+        );
+
+        // And the winner should be the genuinely newest write, not an artefact
+        // of who merged in which order.
+        assert_eq!(
+            assignee_of(&a_view),
+            "assignee: agent-c",
+            "last-writer-wins should pick the newest edit"
+        );
+    }
+}
