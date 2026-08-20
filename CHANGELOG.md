@@ -58,6 +58,18 @@
 
 ### Fixed
 
+- **A not-yet-fetched reference no longer breaks the cache.** The SQLite cache
+  enforced foreign keys, but it is a *derived* view of an eventually-consistent
+  distributed store: a fetch legitimately delivers a critique before the solution
+  it references, or a solution whose problem is still on another pod's unmerged
+  bookmark. That is convergence, not corruption — and enforcing it made
+  convergence fatal. One such reference failed the whole `db rebuild` with
+  `FOREIGN KEY constraint failed`, which also fails `push`, so a clone could
+  neither heal its cache nor publish its work — and rebuild was the very thing
+  that would have healed it. A one-hour swarm hit this 140 times. Genuinely
+  dangling references are still refused, in the right place and as a report
+  rather than a brick: `jjj db validate`, which `push` runs before publishing.
+
 - **An empty entity reference no longer resolves to an arbitrary entity.**
   Resolution falls back to a case-insensitive substring match on the title, and
   every title contains the empty string — so `""` matched *every* entity, and in

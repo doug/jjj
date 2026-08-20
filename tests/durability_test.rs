@@ -243,3 +243,93 @@ fn a_corrupt_entity_file_is_skipped_with_a_warning_not_a_crash() {
         "one malformed file suppressed every other entity: {combined}"
     );
 }
+
+// =============================================================================
+// The derived cache must tolerate references that have not arrived yet
+// =============================================================================
+
+/// A reference to a not-yet-fetched entity must not break the cache.
+///
+/// The SQLite cache is a *derived* view of an eventually-consistent distributed
+/// store, so a fetch legitimately delivers a critique before the solution it
+/// references, or a solution whose problem is still on another pod's unmerged
+/// bookmark. That is convergence, not corruption.
+///
+/// Enforcing it as a hard foreign key made convergence fatal: one such reference
+/// failed the entire `db rebuild` with "FOREIGN KEY constraint failed", which
+/// also fails `push` — so an agent could neither heal its cache nor publish its
+/// work, and rebuild was the very thing that would have healed it. A one-hour
+/// swarm hit this 140 times.
+#[test]
+fn a_reference_to_a_missing_entity_does_not_break_the_cache() {
+    if !jj_available() {
+        return;
+    }
+    let repo = setup_test_repo();
+    run_jjj_success(repo.path(), &["problem", "new", "Present", "--force"]);
+
+    // A critique whose solution has not arrived — exactly what an out-of-order
+    // fetch produces.
+    fs::write(
+        repo.path()
+            .join(".jj/jjj-meta/critiques")
+            .join("01900000-0000-7000-8000-0000000000ff.md"),
+        "---\nid: '01900000-0000-7000-8000-0000000000ff'\n\
+         title: An objection from another pod\n\
+         solution_id: '01900000-0000-7000-8000-000000000042'\n\
+         status: open\nseverity: high\n\
+         created_at: '2026-08-20T00:00:00Z'\nupdated_at: '2026-08-20T00:00:00Z'\n---\n",
+    )
+    .expect("write critique");
+
+    let rebuilt = run_jjj(repo.path(), &["db", "rebuild"]);
+    assert!(
+        rebuilt.status.success(),
+        "a not-yet-arrived reference broke the cache rebuild:\n{}",
+        String::from_utf8_lossy(&rebuilt.stderr)
+    );
+
+    // Everything must still be readable — including the entity that arrived
+    // first. Losing sight of it would be worse than the dangling reference.
+    let problems = run_jjj_success(repo.path(), &["problem", "list"]);
+    assert!(problems.contains("Present"), "{problems}");
+    let critiques = run_jjj_success(repo.path(), &["critique", "list"]);
+    assert!(critiques.contains("another pod"), "{critiques}");
+}
+
+/// Tolerating it in the cache must not mean tolerating it on the wire: a
+/// genuinely dangling reference is still refused at push, which is where it can
+/// be reported rather than silently propagated to every clone.
+#[test]
+fn a_dangling_reference_is_still_refused_at_push() {
+    if !jj_available() {
+        return;
+    }
+    let repo = setup_test_repo();
+    run_jjj_success(repo.path(), &["problem", "new", "Present", "--force"]);
+    fs::write(
+        repo.path()
+            .join(".jj/jjj-meta/critiques")
+            .join("01900000-0000-7000-8000-0000000000fe.md"),
+        "---\nid: '01900000-0000-7000-8000-0000000000fe'\n\
+         title: Dangling\nsolution_id: '01900000-0000-7000-8000-000000000099'\n\
+         status: open\nseverity: high\n\
+         created_at: '2026-08-20T00:00:00Z'\nupdated_at: '2026-08-20T00:00:00Z'\n---\n",
+    )
+    .expect("write critique");
+
+    let out = run_jjj(repo.path(), &["push"]);
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        !out.status.success(),
+        "a dangling reference was published to every clone: {combined}"
+    );
+    assert!(
+        combined.contains("non-existent solution"),
+        "the refusal should name the missing reference: {combined}"
+    );
+}

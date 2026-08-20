@@ -31,7 +31,28 @@ impl Database {
         // briefly rather than failing immediately with SQLITE_BUSY. The cache
         // is a derived index, so WAL's relaxed durability is acceptable.
         // execute_batch ignores the row that `PRAGMA journal_mode` returns.
-        conn.execute_batch("PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL;")?;
+        //
+        // Foreign keys are deliberately NOT enforced. The FK clauses in
+        // schema.sql document intent, but this cache is a *derived* view of an
+        // eventually-consistent distributed store: a fetch legitimately delivers
+        // a critique before the solution it references, or a solution whose
+        // problem is still on another pod's unmerged bookmark. That is normal
+        // convergence, not corruption.
+        //
+        // Enforcing it made convergence fatal. A single not-yet-arrived
+        // reference failed the whole `db rebuild` with "FOREIGN KEY constraint
+        // failed", which also fails `push` — so an agent could neither heal its
+        // cache nor publish its work, and rebuild is the very thing that would
+        // have healed it. A one-hour swarm hit this 140 times.
+        //
+        // Genuine dangling references are still caught, in the right place and
+        // as a report rather than a brick: `jjj db validate`, which push runs
+        // before publishing.
+        conn.execute_batch(
+            "PRAGMA busy_timeout = 5000; \
+             PRAGMA journal_mode = WAL; \
+             PRAGMA foreign_keys = OFF;",
+        )?;
         let mut db = Self { conn };
         db.ensure_schema()?;
         Ok(db)
@@ -40,6 +61,9 @@ impl Database {
     /// Create an in-memory database for testing.
     pub fn open_in_memory() -> SqliteResult<Self> {
         let conn = Connection::open_in_memory()?;
+        // Match the on-disk cache, or tests pass against different semantics
+        // than production uses.
+        conn.execute_batch("PRAGMA foreign_keys = OFF;")?;
         let mut db = Self { conn };
         db.ensure_schema()?;
         Ok(db)
