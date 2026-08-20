@@ -99,6 +99,30 @@ shared files now use a union merge driver, and the harness no longer picks a sid
 (node plus the CLI); at 1 GiB they are OOM-killed mid-turn, which looks
 identical to a crash. Size the podman machine accordingly.
 
+### Findings about swarm design itself
+
+Three came from the rig rather than from jjj, and each cost a run to learn.
+
+**A shared priority list does not distribute.** With every agent told "review if
+anything is reviewable, otherwise take new work", six agents produced **193
+reviewing calls against 13 producing ones** and implemented two operations in 36
+turns. Reviewing is always available and cheaper than building, so the fleet
+starved itself. Fixed by specialising pods into builders and critics — which is
+what decision 4's "soft domain specialization per pod" is for.
+
+**Do not resolve semantic merge conflicts in bash.** Three shell policies were
+tried and all three lost work: `checkout --ours` discarded another agent's
+registry entry (a correct implementation scored zero), `merge --abort` dropped
+the incoming side, and `checkout -- .` threw away the agent's own. Every agent is
+a Claude session that resolves a Python conflict in seconds, so the conflict is
+now left in the tree and handed to the agent as its task. **Fitness went 4/31 to
+12/31 on that change alone.**
+
+**Never publish an unresolved conflict.** One committed `<<<<<<< HEAD` broke the
+package import and took the whole fleet's score to zero. jjj already refuses this
+for metadata (it validates entity bodies before push); the code path had no such
+guard and now does.
+
 ## Known gaps this rig should expose
 
 Four decisions in `docs/design/scaling-for-agent-swarms.md` are locked but

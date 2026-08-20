@@ -13,7 +13,7 @@
 # experiment; a bookmark per agent would have quietly designed it away.
 #
 #   ./swarm.sh build                                  build the agent image
-#   ./swarm.sh init  [--pods N] [--agents N] [--problems N]
+#   ./swarm.sh init  [--pods N] [--agents N] [--problems N] [--critics N]
 #   ./swarm.sh start [--hours H] [--max-iters N] [--model M]
 #   ./swarm.sh status
 #   ./swarm.sh logs [agent]
@@ -59,12 +59,13 @@ cmd_build() {
 # --- init -------------------------------------------------------------------
 
 cmd_init() {
-    local pods=2 agents=3 problems=8
+    local pods=2 agents=3 problems=8 critics=1
     while [ $# -gt 0 ]; do
         case "$1" in
             --pods) pods="$2"; shift 2 ;;
             --agents) agents="$2"; shift 2 ;;
             --problems) problems="$2"; shift 2 ;;
+            --critics) critics="$2"; shift 2 ;;
             *) die "unknown option $1" ;;
         esac
     done
@@ -108,6 +109,7 @@ cmd_init() {
 pods=$pods
 agents=$agents
 problems=$problems
+critics=$critics
 EOF
 
     echo
@@ -171,7 +173,12 @@ cmd_start() {
     [ "$max_iters" != "0" ] && echo "  cap: $max_iters iterations per agent"
 
     for p in $(seq 1 "$pods"); do
-        local pod="pod-$p"
+        local pod="pod-$p" role="builder"
+        # The last `critics` pods review; the rest build. A single shared
+        # priority list does not distribute — six identically-prompted agents
+        # produced 193 reviewing calls against 13 producing ones, because
+        # reviewing is always available and cheaper than building.
+        if [ "$p" -gt "$((pods - ${critics:-0}))" ]; then role="critic"; fi
         for a in $(seq 1 "$agents"); do
             local agent name
             agent="agent-$(printf '%02d' "$a")"
@@ -189,11 +196,12 @@ cmd_start() {
                 -e "SWARM_DEADLINE=$deadline" \
                 -e "SWARM_MAX_ITERS=$max_iters" \
                 -e "SWARM_MODEL=$model" \
+                -e "SWARM_ROLE=$role" \
                 ${use_key:+$([ "$use_key" = 1 ] && echo "-e ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY")} \
                 $([ "$use_key" = 0 ] && echo "-v $CREDS:/home/swarm/.claude/.credentials.json:ro") \
                 -v "$SWARM_ROOT:/swarm:rw" \
                 "$IMAGE" >/dev/null || die "failed to start $name"
-            echo "  started $name"
+            echo "  started $name ($role)"
         done
     done
 
