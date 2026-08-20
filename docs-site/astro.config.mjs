@@ -68,6 +68,7 @@ export default defineConfig({
           { label: 'Change ID Tracking', slug: 'architecture/change-tracking' },
           { label: 'Event Lifecycle', slug: 'architecture/event-lifecycle' },
           { label: 'Consistency Model', slug: 'architecture/consistency' },
+          { label: 'Exclusive Claims', slug: 'design/exclusive-claims' },
         ],
       },
       {
