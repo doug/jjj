@@ -41,6 +41,18 @@ pub struct Solution {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub assignee: Option<String>,
 
+    /// When the current assignee claimed this, if the assignment came from a
+    /// claim rather than a deliberate hand-off.
+    ///
+    /// A claim is a *lease*, not a lock (design decision 15). An agent that dies
+    /// mid-task would otherwise hold its work forever, and in a long swarm run
+    /// that is not hypothetical — it is the expected failure mode. After the
+    /// staleness window the item becomes claimable again by anyone.
+    ///
+    /// Absent means "assigned, not claimed": a human hand-off never expires.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub claimed_at: Option<DateTime<Utc>>,
+
     /// Force-approved without full sign-off
     #[serde(default, alias = "force_accepted")]
     pub force_approved: bool,
@@ -127,6 +139,7 @@ impl Solution {
             critique_ids: Vec::new(),
             change_ids: Vec::new(),
             assignee: None,
+            claimed_at: None,
             force_approved: false,
             created_at: now,
             updated_at: now,

@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Added
+
+- **Claims are leases (design decision 15).** `jjj next --claim` now records
+  `claimed_at`, and `jjj next` no longer offers work another agent is actively
+  holding. Two problems this solves, both measured in the swarm trial:
+  - Every agent was shown the same top item, so a fleet starting together all
+    claimed one problem — four of four, on the first run.
+  - A claim was permanent, so an agent that died mid-task held its work forever.
+    Over a long run that is the expected failure, not a rare one.
+
+  A lapsed lease returns the item to the pool and the reclaim is reported. Your
+  own claim refreshes each time you re-claim, so an agent that keeps working
+  keeps its work. An explicit `jjj problem assign` has **no** lease and never
+  expires — handing work to a person is a decision, not a claim. Default one
+  hour; set `claim_ttl_minutes` under `[settings]`.
+
 ### Fixed
 
 - **Per-pod push bookmarks are `jjj-{pod}`, not `jjj/{pod}`** (breaking, for

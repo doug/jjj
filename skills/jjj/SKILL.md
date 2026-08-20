@@ -135,10 +135,23 @@ while true; do
 done
 ```
 
-**`--claim` is not a lock.** It reads the top item, then assigns it. Two agents
-that read before either writes will both claim the same item, and the last write
-wins. The claim-then-verify above is what makes it safe. Two alternatives that
-avoid the race entirely:
+**A claim is a lease, not a lock.** Two things follow.
+
+*It does not exclude.* `--claim` reads the top item then assigns it, so two
+agents reading before either writes both claim it and the last write wins. The
+claim-then-verify above is what makes that safe.
+
+*It expires.* The claim records when it was taken, and once the lease lapses the
+item returns to the pool — otherwise an agent that dies mid-task would hold its
+work forever, which over a long run is the expected failure, not a rare one. Your
+own claim refreshes whenever you re-claim, so keep working and it stays yours.
+An explicit `jjj problem assign` has **no** lease and never expires: handing work
+to someone is a decision, not a claim. The default lease is an hour
+(`claim_ttl_minutes` under `[settings]`).
+
+Work another agent is actively holding is not offered to you at all, so the queue
+you see is already filtered to what you may take. Two further ways to avoid
+contending:
 
 - **Partition up front.** Give each agent a disjoint slice — `jjj problem list
   --tag backend`, or one milestone per agent — so they never contend.

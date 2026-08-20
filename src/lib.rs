@@ -10,6 +10,7 @@
 //! SQLite is used as a local cache for search and embeddings only.
 
 pub mod automation;
+pub mod claim;
 pub mod cli;
 pub mod commands;
 pub mod context;

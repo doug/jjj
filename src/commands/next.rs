@@ -7,6 +7,28 @@ use crate::error::Result;
 /// `mine` restricts to work authored by the current user.
 /// `claim` assigns the top item to the current user before displaying it.
 /// The action list is the same one `jjj status` uses.
+/// Report when a claim is taken from another actor.
+///
+/// Only a lapsed lease can be taken, so this is never a silent theft — but it
+/// still means someone's in-flight work was handed elsewhere, and that should be
+/// visible rather than inferred from an assignee changing.
+fn note_reclaim(
+    _store: &crate::storage::MetadataStore,
+    entity_id: &str,
+    previous: Option<&str>,
+    actor: &str,
+) {
+    if let Some(previous) = previous {
+        if !crate::identity::actor_matches(previous, actor) {
+            crate::output::warn(&format!(
+                "reclaimed {} from {} — their claim had lapsed",
+                crate::display::short_id(entity_id),
+                previous
+            ));
+        }
+    }
+}
+
 pub fn execute(
     ctx: &CommandContext,
     top: Option<usize>,
@@ -21,9 +43,11 @@ pub fn execute(
     let critiques = store.list_critiques()?;
 
     let user = store.get_current_user().unwrap_or_default();
+    let ttl = crate::claim::claim_ttl(&store.load_config().unwrap_or_default().settings);
 
-    let items =
-        crate::commands::status::build_next_actions(&problems, &solutions, &critiques, &user, mine);
+    let items = crate::commands::status::build_next_actions_with_ttl(
+        &problems, &solutions, &critiques, &user, mine, ttl,
+    );
 
     if items.is_empty() {
         if json {
@@ -48,10 +72,14 @@ pub fn execute(
                     &format!("Claim problem {} for {}", entity_id, user),
                     || {
                         let mut problem = store.load_problem(entity_id)?;
-                        if problem.assignee.as_deref() != Some(&user) {
-                            problem.assignee = Some(user.clone());
-                            store.save_problem(&problem)?;
-                        }
+                        let previous = problem.assignee.clone();
+                        // Always restamp, even when re-claiming our own item:
+                        // the lease refreshes at the agent's sync boundaries
+                        // rather than through a separate heartbeat.
+                        problem.assignee = Some(user.clone());
+                        problem.claimed_at = Some(chrono::Utc::now());
+                        store.save_problem(&problem)?;
+                        note_reclaim(store, entity_id, previous.as_deref(), &user);
                         Ok(())
                     },
                 )?;
@@ -61,10 +89,11 @@ pub fn execute(
                     &format!("Claim solution {} for {}", entity_id, user),
                     || {
                         let mut solution = store.load_solution(entity_id)?;
-                        if solution.assignee.as_deref() != Some(&user) {
-                            solution.assignee = Some(user.clone());
-                            store.save_solution(&solution)?;
-                        }
+                        let previous = solution.assignee.clone();
+                        solution.assignee = Some(user.clone());
+                        solution.claimed_at = Some(chrono::Utc::now());
+                        store.save_solution(&solution)?;
+                        note_reclaim(store, entity_id, previous.as_deref(), &user);
                         Ok(())
                     },
                 )?;

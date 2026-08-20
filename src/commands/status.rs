@@ -236,6 +236,26 @@ pub(crate) fn build_next_actions(
     user: &str,
     mine: bool,
 ) -> Vec<serde_json::Value> {
+    build_next_actions_with_ttl(
+        problems,
+        solutions,
+        critiques,
+        user,
+        mine,
+        crate::claim::Duration::minutes(crate::claim::DEFAULT_CLAIM_TTL_MINUTES),
+    )
+}
+
+/// As [`build_next_actions`], with the claim lease length passed in so the
+/// expiry boundary is testable without waiting an hour.
+pub(crate) fn build_next_actions_with_ttl(
+    problems: &[crate::models::Problem],
+    solutions: &[crate::models::Solution],
+    critiques: &[Critique],
+    user: &str,
+    mine: bool,
+    claim_ttl: crate::claim::Duration,
+) -> Vec<serde_json::Value> {
     let mut items: Vec<serde_json::Value> = Vec::new();
 
     // 1. BLOCKED: Solutions with open critiques
@@ -285,6 +305,7 @@ pub(crate) fn build_next_actions(
             items.push(serde_json::json!({
                 "category": "blocked",
                 "owner": solution.assignee,
+                "claimed_at": solution.claimed_at.map(|t| t.to_rfc3339()),
                 "entity_type": "solution",
                 "entity_id": solution.id,
                 "title": solution.title,
@@ -316,6 +337,7 @@ pub(crate) fn build_next_actions(
             items.push(serde_json::json!({
                 "category": "ready",
                 "owner": solution.assignee,
+                "claimed_at": solution.claimed_at.map(|t| t.to_rfc3339()),
                 "entity_type": "solution",
                 "entity_id": solution.id,
                 "title": solution.title,
@@ -416,6 +438,7 @@ pub(crate) fn build_next_actions(
             items.push(serde_json::json!({
                 "category": "todo",
                 "owner": problem.assignee,
+                "claimed_at": problem.claimed_at.map(|t| t.to_rfc3339()),
                 "entity_type": "problem",
                 "entity_id": problem.id,
                 "title": problem.title,
@@ -428,6 +451,20 @@ pub(crate) fn build_next_actions(
             }));
         }
     }
+
+    // Work another agent is actively holding is not offered. Without this every
+    // agent is shown the same top item and they all claim it — measured in the
+    // first swarm trial, where four of four agents claimed one problem. A lapsed
+    // claim returns to the pool so a dead agent cannot strand work (decision 15).
+    let now = chrono::Utc::now();
+    items.retain(|item| {
+        let owner = item["owner"].as_str();
+        let claimed_at = item["claimed_at"]
+            .as_str()
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+            .map(|t| t.with_timezone(&chrono::Utc));
+        crate::claim::classify(owner, claimed_at, user, claim_ttl, now).available()
+    });
 
     // `--mine` restricts to work this actor owns: the assignee of a problem or
     // solution, or the reviewer of a critique. Applied once here rather than

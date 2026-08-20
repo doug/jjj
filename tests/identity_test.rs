@@ -249,3 +249,131 @@ fn a_legacy_assignee_still_matches_its_owner() {
         "a bare actor name must match an assignee stored as `Name <email>`"
     );
 }
+
+// =============================================================================
+// Claims are leases, not locks (design decision 15)
+// =============================================================================
+
+/// Work another agent is actively holding must not be offered to anyone else.
+///
+/// Before this, `jjj next` showed every open item regardless of who held it, so
+/// a fleet starting together was handed the same top item and all of them
+/// claimed it — measured in the first swarm trial, where four of four agents
+/// claimed one problem.
+#[test]
+fn live_claims_are_not_offered_to_other_agents() {
+    if !jj_available() {
+        return;
+    }
+    let repo = setup_test_repo();
+    run_jjj_success(repo.path(), &["problem", "new", "Only job", "--force"]);
+
+    as_agent(repo.path(), "agent-a", &["next", "--claim"]);
+
+    let others = queue_titles(&as_agent(
+        repo.path(),
+        "agent-b",
+        &["next", "--top", "0", "--json"],
+    ));
+    assert!(
+        others.is_empty(),
+        "agent-b was offered work agent-a is actively holding: {others:?}"
+    );
+
+    // The holder still sees it — losing sight of your own claim would be worse.
+    let mine = queue_titles(&as_agent(
+        repo.path(),
+        "agent-a",
+        &["next", "--top", "0", "--json"],
+    ));
+    assert_eq!(
+        mine,
+        vec!["Only job"],
+        "an agent must still see its own claim"
+    );
+}
+
+/// A lapsed claim returns to the pool, so a dead agent cannot strand work.
+#[test]
+fn a_stale_claim_is_reclaimable() {
+    if !jj_available() {
+        return;
+    }
+    let repo = setup_test_repo();
+    run_jjj_success(repo.path(), &["problem", "new", "Abandoned", "--force"]);
+
+    as_agent(repo.path(), "agent-a", &["next", "--claim"]);
+
+    // Age the claim past the lease by rewriting it on disk, which is what an
+    // agent dying an hour ago looks like.
+    let problems = repo.path().join(".jj/jjj-meta/problems");
+    let file = std::fs::read_dir(&problems)
+        .expect("problems dir")
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .find(|p| p.extension().map(|x| x == "md").unwrap_or(false))
+        .expect("a problem file");
+    let text = std::fs::read_to_string(&file).unwrap();
+    assert!(
+        text.contains("claimed_at"),
+        "a claim must record when it was taken, or it can never expire:\n{text}"
+    );
+    let long_ago = (chrono::Utc::now() - chrono::Duration::hours(3)).to_rfc3339();
+    let aged: String = text
+        .lines()
+        .map(|l| {
+            if l.starts_with("claimed_at:") {
+                format!("claimed_at: '{long_ago}'")
+            } else {
+                l.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    std::fs::write(&file, aged).unwrap();
+    for suffix in ["", "-wal", "-shm"] {
+        let _ = std::fs::remove_file(repo.path().join(format!(".jj/jjj.db{suffix}")));
+    }
+
+    let others = queue_titles(&as_agent(
+        repo.path(),
+        "agent-b",
+        &["next", "--top", "0", "--json"],
+    ));
+    assert_eq!(
+        others,
+        vec!["Abandoned"],
+        "a lapsed claim must return to the pool, or a dead agent holds work forever"
+    );
+
+    // And it can actually be taken.
+    as_agent(repo.path(), "agent-b", &["next", "--claim"]);
+    let json = run_jjj_success(repo.path(), &["problem", "list", "--json"]);
+    let listed: serde_json::Value = serde_json::from_str(&json).unwrap();
+    assert_eq!(listed[0]["assignee"].as_str(), Some("agent-b"));
+}
+
+/// A deliberate hand-off is not a claim and must never expire out from under
+/// the person it was given to.
+#[test]
+fn an_assignment_without_a_claim_does_not_expire() {
+    if !jj_available() {
+        return;
+    }
+    let repo = setup_test_repo();
+    run_jjj_success(repo.path(), &["problem", "new", "Handed over", "--force"]);
+    run_jjj_success(
+        repo.path(),
+        &["problem", "assign", "Handed over", "--to", "alice"],
+    );
+
+    let others = queue_titles(&as_agent(
+        repo.path(),
+        "agent-b",
+        &["next", "--top", "0", "--json"],
+    ));
+    assert!(
+        others.is_empty(),
+        "an explicit assignment has no lease and must stay with its owner: {others:?}"
+    );
+}

@@ -10,6 +10,8 @@ covers:
   - "Assignee shown in both JSON and plain-text output"
   - "next --mine restricts the queue to work this actor owns"
   - "JJJ_USER scopes the queue per agent"
+  - "Work owned by another actor is not offered"
+  - "Claims are leases; explicit assignments never expire"
 tags: [assignee, workflow, self-assign, filter]
 ---
 
@@ -167,16 +169,26 @@ JJJ_USER=bob $JJJ next --top 0 --mine
 > Nothing to do
 ```
 
-Without the flag the queue is shared, so everyone sees the same list:
+Work that belongs to someone is not offered to anyone else, with or without the
+flag. Every problem here is now owned, so a third actor is told there is nothing
+to pick up rather than being pointed at someone else's job:
 
-```jjj
-next --top 0
-> Avatar upload
+```shell
+JJJ_USER=carol $JJJ next --top 0
+> Nothing to do
 ```
 
-This is what makes a fleet of agents workable: each sets `JJJ_USER` (or
-`JJJ_POD`), claims an item, and `--mine` becomes that agent's own queue rather
-than one list every agent would re-attempt.
+This is what makes a fleet of agents workable. If the queue were shared, every
+agent starting at once would be handed the same top item and all of them would
+take it — which is exactly what happened the first time a swarm ran against jjj:
+four of four agents claimed one problem.
+
+A claim is a **lease**, not a lock. `jjj next --claim` records when it was taken,
+and once the lease lapses the item returns to the pool, so an agent that dies
+mid-task cannot strand its work forever. An explicit `problem assign` has no
+lease and never expires — handing work to a person is a decision, not a claim.
+The lease is an hour by default; set `claim_ttl_minutes` under `[settings]` in
+`config.toml` to change it.
 
 ## Step 6: Reassign to a different person
 
