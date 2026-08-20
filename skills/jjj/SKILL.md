@@ -220,6 +220,11 @@ Critique lifecycle:
 | `jjj critique validate <id>` | The objection is correct — the solution should be withdrawn |
 | `jjj critique dismiss <id>` | The objection is wrong or no longer relevant |
 | `jjj critique reply <id> "..."` | Argue about it first |
+| `jjj solution lgtm <id> --rationale "..."` | You reviewed it and it holds up |
+
+You do **not** need to be assigned a review to sign off — take submitted work
+off the queue and `lgtm` it, and the review is recorded for you. You cannot sign
+off your own solution: that is the one thing the gate exists to prevent.
 
 Use `--severity critical|high|medium|low` so a triage agent can sort. Anchor a
 critique to code with `--file` and `--line`. Route it to a specific reviewer with

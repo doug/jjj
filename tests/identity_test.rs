@@ -612,3 +612,164 @@ fn lgtm_records_a_rationale() {
         "the sign-off's evidence was discarded: {critiques}"
     );
 }
+
+// =============================================================================
+// Pull-based review: signing off on work nobody assigned you
+// =============================================================================
+
+/// A reviewer must be able to sign off on work they picked up themselves.
+///
+/// `lgtm` originally required a review critique *already assigned* to the caller,
+/// which only fits a push model — an author names a reviewer, the reviewer signs
+/// off. Review in a fleet is pull-based: critics take whatever is submitted, so
+/// nobody assigns them and the command was unusable. 49 of 92 calls failed in one
+/// trial, and the error advised filing a critique against work believed correct,
+/// which would fill the objection record with fake objections.
+#[test]
+fn a_reviewer_can_sign_off_on_self_selected_work() {
+    if !jj_available() {
+        return;
+    }
+    let repo = setup_test_repo();
+    as_agent(
+        repo.path(),
+        "builder-1",
+        &["problem", "new", "Add collatz", "--force"],
+    );
+    as_agent(
+        repo.path(),
+        "builder-1",
+        &[
+            "solution",
+            "new",
+            "Iterative collatz",
+            "--problem",
+            "Add collatz",
+            "--force",
+        ],
+    );
+    as_agent(
+        repo.path(),
+        "builder-1",
+        &["solution", "submit", "Iterative collatz"],
+    );
+
+    // Nobody assigned critic-1 anything; it simply took work off the queue.
+    let out = as_agent(
+        repo.path(),
+        "critic-1",
+        &[
+            "solution",
+            "lgtm",
+            "Iterative collatz",
+            "--rationale",
+            "ran the suite; all cases pass",
+        ],
+    );
+    assert!(out.contains("Signed off"), "sign-off failed: {out}");
+
+    // The review must be on the record, with its evidence.
+    let critiques = run_jjj_success(repo.path(), &["critique", "list", "--json"]);
+    assert!(
+        critiques.contains("critic-1"),
+        "no record of who reviewed: {critiques}"
+    );
+    assert!(
+        critiques.contains("all cases pass"),
+        "the evidence behind the sign-off was lost: {critiques}"
+    );
+
+    // And the solution is now approvable.
+    let approved = as_agent(
+        repo.path(),
+        "builder-1",
+        &["solution", "approve", "Iterative collatz", "--no-rationale"],
+    );
+    assert!(approved.contains("approved"), "{approved}");
+}
+
+/// An agent must never sign off its own conjecture.
+///
+/// Making self-selected review easy must not make self-approval easy. The
+/// critique gate is the one thing stopping a fleet approving its own homework,
+/// and it is worth more than the convenience.
+#[test]
+fn an_author_cannot_sign_off_their_own_solution() {
+    if !jj_available() {
+        return;
+    }
+    let repo = setup_test_repo();
+    as_agent(
+        repo.path(),
+        "builder-1",
+        &["problem", "new", "Add gcd", "--force"],
+    );
+    as_agent(
+        repo.path(),
+        "builder-1",
+        &[
+            "solution",
+            "new",
+            "Euclid",
+            "--problem",
+            "Add gcd",
+            "--force",
+        ],
+    );
+    as_agent(repo.path(), "builder-1", &["solution", "submit", "Euclid"]);
+
+    let out = run_jjj_env(
+        repo.path(),
+        &[("JJJ_USER", "builder-1")],
+        &["solution", "lgtm", "Euclid"],
+    );
+    assert!(
+        !out.status.success(),
+        "an agent signed off its own work — the review gate is bypassable"
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("you wrote"),
+        "the refusal should say why: {stderr}"
+    );
+}
+
+/// Only submitted work can be signed off; a proposal is not up for review yet.
+#[test]
+fn unsubmitted_work_cannot_be_signed_off() {
+    if !jj_available() {
+        return;
+    }
+    let repo = setup_test_repo();
+    as_agent(
+        repo.path(),
+        "builder-1",
+        &["problem", "new", "Add luhn", "--force"],
+    );
+    as_agent(
+        repo.path(),
+        "builder-1",
+        &[
+            "solution",
+            "new",
+            "Checksum",
+            "--problem",
+            "Add luhn",
+            "--force",
+        ],
+    );
+
+    let out = run_jjj_env(
+        repo.path(),
+        &[("JJJ_USER", "critic-1")],
+        &["solution", "lgtm", "Checksum"],
+    );
+    assert!(
+        !out.status.success(),
+        "signed off work that was never submitted"
+    );
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("submitted"),
+        "the refusal should name the problem"
+    );
+}

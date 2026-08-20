@@ -811,6 +811,25 @@ fn resume_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
     Ok(())
 }
 
+/// Who created a solution, according to the event log.
+///
+/// `Solution` has no author field — only an assignee, which may never be set —
+/// so the `solution_created` event is the authoritative record of who conjectured
+/// it. Returns `None` if the log cannot say, in which case the caller must not
+/// guess.
+fn solution_author(
+    store: &crate::storage::MetadataStore,
+    solution_id: &str,
+) -> Result<Option<String>> {
+    let events = store.list_events_cached()?;
+    Ok(events
+        .iter()
+        .find(|e| {
+            e.event_type == crate::models::EventType::SolutionCreated && e.entity == solution_id
+        })
+        .map(|e| e.by.clone()))
+}
+
 fn lgtm_solution(
     ctx: &CommandContext,
     solution_input: String,
@@ -832,28 +851,73 @@ fn lgtm_solution(
                 .is_some_and(|r| crate::identity::actor_matches(r, &current_user))
     });
 
+    // A review that nobody requested is still a review.
+    //
+    // `lgtm` originally required an open review critique already assigned to
+    // you, which only fits a *push* model: an author names a reviewer, the
+    // reviewer signs off. Review in a fleet is pull-based — critics take
+    // whatever is submitted — so nobody ever assigns them and the command was
+    // structurally unusable: 49 of 92 calls failed in one trial. The advice it
+    // printed was worse, telling a reviewer to file a critique against work they
+    // believe is *correct*, which fills the objection record with fake
+    // objections.
+    //
+    // So when there is no review assigned to you, record one and sign it off in
+    // the same step. The critique entity is exactly the right artefact: this
+    // data model already represents "please review" as a critique with a
+    // reviewer, so a completed review is an addressed one.
     let critique = match my_review {
-        Some(c) => c,
+        Some(c) => c.clone(),
         None => {
-            // Check if there are any open review critiques at all (assigned to others)
-            let any_review = critiques
-                .iter()
-                .any(|c| c.status == CritiqueStatus::Open && c.reviewer.is_some());
-            if any_review {
+            if solution.status != SolutionStatus::Submitted {
                 return Err(crate::error::JjjError::Validation(format!(
-                    "No open review critique assigned to you on '{}'.\n\
-                     (There are review critiques assigned to others — are you the right reviewer?)\n\n\
-                     To add yourself: jjj critique new \"{}\" \"Review\" --reviewer @{}",
-                    solution.title, solution_input, current_user
-                )));
-            } else {
-                return Err(crate::error::JjjError::Validation(format!(
-                    "No review critique assigned to you on '{}'.\n\n\
-                     To request review from yourself: jjj critique new \"{}\" \"Review\" --reviewer @{}\n\
-                     Or use solution new --reviewer @{} when creating solutions.",
-                    solution.title, solution_input, current_user, current_user
+                    "'{}' is {} — only a submitted solution can be signed off.\n\
+                     Submit it first: jjj solution submit \"{}\"",
+                    solution.title, solution.status, solution_input
                 )));
             }
+
+            // Never let an agent sign off its own conjecture. The critique gate
+            // is what stops a fleet approving its own homework, and making
+            // self-selected review easy must not make self-approval easy too.
+            let author = solution_author(store, &solution_id)?;
+            if let Some(ref author) = author {
+                if crate::identity::actor_matches(author, &current_user) {
+                    return Err(crate::error::JjjError::Validation(format!(
+                        "you wrote '{}' — someone else has to sign it off.\n\
+                         Sign-off by the author is the one thing the review gate exists to prevent.",
+                        solution.title
+                    )));
+                }
+            }
+
+            let created = store.with_metadata(&format!("Review sign-off on {solution_id}"), || {
+                let id = store.next_critique_id()?;
+                let mut c = crate::models::Critique::new(
+                    id,
+                    format!("Reviewed by {current_user}"),
+                    solution_id.clone(),
+                );
+                c.author = Some(current_user.clone());
+                c.reviewer = Some(current_user.clone());
+                c.severity = crate::models::CritiqueSeverity::Low;
+                store.save_critique(&c)?;
+                Ok(())
+            });
+            created?;
+
+            store
+                .list_critiques_for_solution(&solution_id)?
+                .into_iter()
+                .find(|c| {
+                    c.status == CritiqueStatus::Open
+                        && c.reviewer
+                            .as_deref()
+                            .is_some_and(|r| crate::identity::actor_matches(r, &current_user))
+                })
+                .ok_or_else(|| {
+                    crate::error::JjjError::Validation("could not record the review".to_string())
+                })?
         }
     };
 

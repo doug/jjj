@@ -4,6 +4,20 @@
 
 ### Added
 
+- **`jjj solution lgtm` works for pull-based review.** It previously required a
+  review critique *already assigned* to you, which only fits a push model — an
+  author names a reviewer, the reviewer signs off. Teams and fleets that pull
+  from a queue instead were stuck: 49 of 92 sign-offs failed in one trial, and
+  the error advised filing a critique against work the reviewer believed
+  **correct**, filling the objection record with fake objections. Signing off on
+  self-selected work now records the review in one step, with `--rationale`
+  carrying the evidence.
+
+  Two guards come with it: only *submitted* work can be signed off, and **an
+  author can never sign off their own solution** — making self-selected review
+  easy must not make self-approval easy, since that gate is what stops a fleet
+  approving its own homework.
+
 - **CLI consistency: `--mine`, `events --user`, `lgtm --rationale`.** A
   nine-agent trial produced 274 failing invocations, and roughly 150 were agents
   calling flags that did not exist but plausibly should have — `solution list
