@@ -1249,3 +1249,100 @@ fn two_pods_push_the_same_remote_without_contending() {
         );
     }
 }
+
+// =============================================================================
+// Entity-level conflicts: two writers editing one body
+// =============================================================================
+
+/// Two clones editing the *same entity body* must produce a surfaced conflict,
+/// not a silent winner.
+///
+/// Seven swarm runs never once triggered `jjj conflicts`, because agents collide
+/// in *git* (shared code files) while each editing its *own* entity. The
+/// metadata conflict path — decision 10, the whole reason `conflicts` and
+/// `resolve` exist — was therefore completely unexercised. Hoping a fleet
+/// stumbles into it does not work; it has to be constructed.
+#[test]
+fn divergent_body_edits_surface_as_a_conflict() {
+    if !jj_available() {
+        return;
+    }
+
+    let remote = create_bare_remote();
+    let alice = setup_repo_with_remote(remote.path());
+    run_jjj_success(alice.path(), &["init"]);
+    run_jjj_success(alice.path(), &["problem", "new", "Rate limiter", "--force"]);
+    run_jjj_success(alice.path(), &["push"]);
+
+    let bob = setup_repo_with_remote(remote.path());
+    run_jjj_success(bob.path(), &["init"]);
+    run_jjj_success(bob.path(), &["fetch"]);
+
+    // Both edit the same problem's body, from the same starting point.
+    let rewrite_body = |repo: &std::path::Path, text: &str| {
+        let dir = repo.join(".jj/jjj-meta/problems");
+        let file = std::fs::read_dir(&dir)
+            .expect("problems dir")
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .find(|p| p.extension().map(|x| x == "md").unwrap_or(false))
+            .expect("a problem file");
+        let content = std::fs::read_to_string(&file).unwrap();
+        let (head, _) = content.split_once("\n---\n").expect("frontmatter");
+        std::fs::write(&file, format!("{head}\n---\n{text}\n")).unwrap();
+        for suffix in ["", "-wal", "-shm"] {
+            let _ = std::fs::remove_file(repo.join(format!(".jj/jjj.db{suffix}")));
+        }
+    };
+
+    rewrite_body(alice.path(), "Token bucket: refill per second.");
+    run_jjj_success(alice.path(), &["push"]);
+
+    rewrite_body(bob.path(), "Leaky bucket: smooth drain.");
+    let fetched = run_jjj(bob.path(), &["fetch"]);
+    assert!(
+        fetched.status.success(),
+        "fetch failed: {}",
+        String::from_utf8_lossy(&fetched.stderr)
+    );
+
+    // Bob must be told, not silently overwritten. A body is prose that only a
+    // person (or an agent) can reconcile — picking a side would discard work.
+    let conflicts = run_jjj_success(bob.path(), &["conflicts", "--json"]);
+    assert!(
+        conflicts.contains("Rate limiter"),
+        "divergent body edits did not surface as a conflict: {conflicts}"
+    );
+
+    // And it must be resolvable, deterministically, to a chosen side.
+    let id = {
+        let v: serde_json::Value = serde_json::from_str(&conflicts).unwrap();
+        v[0]["id"].as_str().expect("conflict id").to_string()
+    };
+    run_jjj_success(
+        bob.path(),
+        &[
+            "resolve",
+            &id,
+            "--ours",
+            "--rationale",
+            "leaky bucket matches upstream",
+        ],
+    );
+
+    let after = run_jjj_success(bob.path(), &["conflicts"]);
+    assert!(
+        after.contains("No unresolved"),
+        "the conflict survived resolution: {after}"
+    );
+
+    let shown = run_jjj_success(bob.path(), &["problem", "show", &id]);
+    assert!(
+        shown.contains("Leaky bucket"),
+        "the chosen side was lost: {shown}"
+    );
+    assert!(
+        !shown.contains("<<<<<<<"),
+        "conflict markers were left in the body: {shown}"
+    );
+}

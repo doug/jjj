@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+#
+# Stop the fleet once it has converged.
+#
+# A swarm has no idea when it is finished. In a one-hour trial the score reached
+# its ceiling at minute 35 and the agents then made 4,100 further jjj calls and
+# raised 36 more critiques for no gain — over half the run spent working on
+# finished work. Nothing in jjj can detect that; it is the harness's job.
+#
+# "Converged" means all three of:
+#   * the score has not moved for `--patience` samples,
+#   * no problem is still open,
+#   * no solution is still awaiting review.
+#
+# The second and third matter: a stalled score alone might mean the fleet is
+# stuck on something hard, which is worth letting run. Only when there is also
+# nothing left to do is it genuinely done.
+#
+# Usage: watchdog.sh <swarm-root> [--interval SECONDS] [--patience N]
+
+set -uo pipefail
+
+ROOT="${1:?swarm root required}"; shift || true
+INTERVAL=120
+PATIENCE=5
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --interval) INTERVAL="$2"; shift 2 ;;
+        --patience) PATIENCE="$2"; shift 2 ;;
+        *) echo "watchdog: unknown option $1" >&2; exit 1 ;;
+    esac
+done
+
+JJJ="${JJJ_BIN:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/target/release/jjj}"
+log() { printf '[%s] watchdog: %s\n' "$(date +%H:%M:%S)" "$*"; }
+
+log "watching $ROOT (every ${INTERVAL}s, patience $PATIENCE)"
+
+last_score=""
+stable=0
+
+while [ -n "$(podman ps -q --filter 'name=swarm-' 2>/dev/null)" ]; do
+    sleep "$INTERVAL"
+
+    work="$(mktemp -d)"
+    if ! git clone -q "$ROOT/remote.git" "$work/repo" 2>/dev/null; then
+        rm -rf "$work"; continue
+    fi
+
+    score="$(cd "$work/repo" && ./score.py 2>/dev/null | awk '{print $1}')"
+
+    # Ask the metadata what is left, not just the score: a flat score with work
+    # outstanding means stuck, which deserves more time, not a shutdown.
+    open_problems=0
+    awaiting_review=0
+    if (cd "$work/repo" && jj git init --colocate >/dev/null 2>&1 \
+        && jj config set --repo user.name watchdog >/dev/null 2>&1 \
+        && jj config set --repo user.email watchdog@invalid >/dev/null 2>&1 \
+        && "$JJJ" fetch >/dev/null 2>&1); then
+        open_problems=$(cd "$work/repo" && "$JJJ" problem list --status open --json 2>/dev/null \
+            | grep -c '"id"' || echo 0)
+        awaiting_review=$(cd "$work/repo" && "$JJJ" solution list --status submitted --json 2>/dev/null \
+            | grep -c '"id"' || echo 0)
+    fi
+    rm -rf "$work"
+
+    if [ "$score" = "$last_score" ]; then
+        stable=$((stable + 1))
+    else
+        stable=0
+        last_score="$score"
+    fi
+
+    log "score=$score stable=$stable/$PATIENCE open=$open_problems awaiting_review=$awaiting_review"
+
+    if [ "$stable" -ge "$PATIENCE" ] && [ "${open_problems:-1}" -eq 0 ] \
+       && [ "${awaiting_review:-1}" -eq 0 ]; then
+        log "converged: score steady at $score with nothing open and nothing awaiting review"
+        log "stopping the fleet"
+        touch "$ROOT/STOP"
+        exit 0
+    fi
+done
+
+log "no containers left; exiting"

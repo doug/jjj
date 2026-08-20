@@ -307,6 +307,9 @@ fn list_solutions(
     }
 
     // Filter by status
+    // `--status all` means "do not filter"; see the note in problem.rs.
+    let status_filter = status_filter.filter(|s| !s.eq_ignore_ascii_case("all"));
+
     if let Some(status_str) = status_filter {
         let status: SolutionStatus = status_str
             .parse()

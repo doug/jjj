@@ -197,8 +197,18 @@ impl std::str::FromStr for ProblemStatus {
             "in_progress" | "inprogress" => Ok(ProblemStatus::InProgress),
             "solved" => Ok(ProblemStatus::Solved),
             "dissolved" => Ok(ProblemStatus::Dissolved),
+            // "closed" is what people reach for out of habit from issue
+            // trackers, but jjj distinguishes a problem that was *answered*
+            // from one that turned out to rest on a false premise. Saying so is
+            // more useful than listing the valid values again.
+            "closed" | "done" | "complete" | "completed" => Err(format!(
+                "'{s}' is not a jjj status: a problem is either `solved` (an \
+                 answer survived criticism) or `dissolved` (it was not really a \
+                 problem). Pick whichever you mean."
+            )),
             _ => Err(format!(
-                "Unknown problem status: '{}'. Valid values: open, in_progress, solved, dissolved",
+                "Unknown problem status: '{}'. Valid values: open, in_progress, solved, dissolved, \
+                 or `all` to list every status",
                 s
             )),
         }

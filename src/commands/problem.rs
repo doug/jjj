@@ -252,6 +252,12 @@ fn list_problems(
     let mut problems = store.list_problems()?;
 
     // Filter by status
+    // `--status all` means "do not filter". Listing already defaults to every
+    // status, but asking for all of them explicitly is the obvious thing to
+    // write, and rejecting it is pure friction — it failed 37 times in a single
+    // one-hour trial.
+    let status_filter = status_filter.filter(|s| !s.eq_ignore_ascii_case("all"));
+
     if let Some(status_str) = status_filter {
         let status: ProblemStatus = status_str
             .parse()

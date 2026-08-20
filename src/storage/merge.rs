@@ -68,6 +68,7 @@ pub fn merge_entity_md(base: Option<&str>, local: &str, remote: &str) -> Result<
     let prefer = pick_side(&l_yaml, &r_yaml);
     let merged = merge_value(b_yaml.as_ref(), &l_yaml, &r_yaml, prefer, None);
     let merged = normalize_timestamps(merged, &l_yaml, &r_yaml);
+    let merged = normalize_claim(merged, &l_yaml, &r_yaml);
     let merged = sort_mapping_keys(merged);
 
     let yaml_str = serde_norway::to_string(&merged).map_err(JjjError::YamlParse)?;
@@ -450,6 +451,46 @@ fn normalize_timestamps(mut merged: Value, local: &Value, remote: &Value) -> Val
                 Value::String(latest.to_string()),
             );
         }
+    }
+    merged
+}
+
+/// Resolve a contested claim to the *earliest* claimant, identically on every
+/// clone.
+///
+/// Claims are advisory, so two agents genuinely do claim the same item — 42 of
+/// 72 contested entities in one trial. Leaving that to the generic
+/// last-writer-wins rule made the holder depend on merge order and on how much
+/// each clone had fetched, so pods disagreed about who held what until several
+/// push/fetch rounds had settled, and agents kept re-claiming work in the
+/// meantime.
+///
+/// Earliest-wins fixes both halves. It is **order-independent**: min() over the
+/// same pair gives the same answer whichever side is called "local", so every
+/// clone converges in one merge instead of N rounds. And it is **stable**: once
+/// an item is claimed, no later claim can displace it, so the field stops
+/// changing — where latest-wins would let every fresh claim churn it.
+///
+/// The claimant's name breaks an exact timestamp tie, so the result is total.
+fn normalize_claim(mut merged: Value, local: &Value, remote: &Value) -> Value {
+    let claim_of = |v: &Value| -> Option<(String, String)> {
+        let at = v.get("claimed_at")?.as_str()?.to_string();
+        let who = v.get("assignee")?.as_str()?.to_string();
+        Some((at, who))
+    };
+
+    let (l, r) = (claim_of(local), claim_of(remote));
+    let winner = match (l, r) {
+        (Some(a), Some(b)) => Some(if a <= b { a } else { b }),
+        // Only one side claimed it: nothing to resolve, and the generic merge
+        // already adopts that side.
+        (only, None) => only,
+        (None, only) => only,
+    };
+
+    if let (Value::Mapping(ref mut m), Some((at, who))) = (&mut merged, winner) {
+        m.insert(Value::String("assignee".to_string()), Value::String(who));
+        m.insert(Value::String("claimed_at".to_string()), Value::String(at));
     }
     merged
 }
@@ -844,5 +885,103 @@ mod convergence_tests {
             "assignee: agent-c",
             "last-writer-wins should pick the newest edit"
         );
+    }
+}
+
+#[cfg(test)]
+mod claim_merge_tests {
+    use super::*;
+
+    fn doc(assignee: &str, claimed_at: &str, updated: &str) -> String {
+        format!(
+            "---\nid: p1\ntitle: Contended\nstatus: open\n\
+             assignee: {assignee}\nclaimed_at: '{claimed_at}'\n\
+             created_at: '2026-08-20T11:00:00Z'\nupdated_at: '{updated}'\n---\n"
+        )
+    }
+
+    fn field(md: &str, key: &str) -> String {
+        md.lines()
+            .find(|l| l.starts_with(&format!("{key}:")))
+            .map(|l| {
+                l.split_once(':')
+                    .unwrap()
+                    .1
+                    .trim()
+                    .trim_matches('\'')
+                    .to_string()
+            })
+            .unwrap_or_default()
+    }
+
+    /// The first claimant holds it, whichever side merges first.
+    #[test]
+    fn the_earliest_claim_wins_in_either_order() {
+        let base = "---\nid: p1\ntitle: Contended\nstatus: open\n\
+                    created_at: '2026-08-20T11:00:00Z'\nupdated_at: '2026-08-20T11:00:00Z'\n---\n";
+        let early = doc("agent-a", "2026-08-20T12:00:00Z", "2026-08-20T12:00:00Z");
+        // agent-b claimed later but wrote later too, so plain LWW would hand it
+        // to agent-b — the opposite of first-come-first-served.
+        let late = doc("agent-b", "2026-08-20T12:00:05Z", "2026-08-20T12:00:09Z");
+
+        let one = merge_entity_md(Some(base), &early, &late).expect("merge");
+        let other = merge_entity_md(Some(base), &late, &early).expect("merge");
+
+        assert_eq!(field(&one, "assignee"), "agent-a");
+        assert_eq!(
+            field(&one, "assignee"),
+            field(&other, "assignee"),
+            "the holder must not depend on which side merged first"
+        );
+        assert_eq!(field(&one, "claimed_at"), field(&other, "claimed_at"));
+    }
+
+    /// Three pods contesting one item must agree after a single merge each,
+    /// rather than after several push/fetch rounds.
+    #[test]
+    fn three_way_contention_converges_in_one_round() {
+        let base = "---\nid: p1\ntitle: Contended\nstatus: open\n\
+                    created_at: '2026-08-20T11:00:00Z'\nupdated_at: '2026-08-20T11:00:00Z'\n---\n";
+        let a = doc("agent-a", "2026-08-20T12:00:01Z", "2026-08-20T12:00:01Z");
+        let b = doc("agent-b", "2026-08-20T12:00:02Z", "2026-08-20T12:00:02Z");
+        let c = doc("agent-c", "2026-08-20T12:00:03Z", "2026-08-20T12:00:03Z");
+
+        let a_view = merge_entity_md(
+            Some(base),
+            &merge_entity_md(Some(base), &a, &b).unwrap(),
+            &c,
+        )
+        .unwrap();
+        let b_view = merge_entity_md(
+            Some(base),
+            &merge_entity_md(Some(base), &b, &c).unwrap(),
+            &a,
+        )
+        .unwrap();
+        let c_view = merge_entity_md(
+            Some(base),
+            &merge_entity_md(Some(base), &c, &a).unwrap(),
+            &b,
+        )
+        .unwrap();
+
+        assert_eq!(
+            field(&a_view, "assignee"),
+            "agent-a",
+            "first claimant holds it"
+        );
+        assert_eq!(field(&b_view, "assignee"), "agent-a");
+        assert_eq!(field(&c_view, "assignee"), "agent-a");
+    }
+
+    /// An uncontested claim is simply adopted.
+    #[test]
+    fn an_uncontested_claim_is_adopted() {
+        let base = "---\nid: p1\ntitle: Free\nstatus: open\n\
+                    created_at: '2026-08-20T11:00:00Z'\nupdated_at: '2026-08-20T11:00:00Z'\n---\n";
+        let claimed = doc("agent-a", "2026-08-20T12:00:00Z", "2026-08-20T12:00:00Z");
+
+        let merged = merge_entity_md(Some(base), base, &claimed).expect("merge");
+        assert_eq!(field(&merged, "assignee"), "agent-a");
     }
 }

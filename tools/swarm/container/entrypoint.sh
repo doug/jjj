@@ -150,6 +150,7 @@ $IDENTITY_RULE"
 iter=0
 stuck=0
 failures=0
+idle=0
 while true; do
     if [ -e "$STOP" ]; then log "stopping: kill switch present"; break; fi
     if [ "$DEADLINE" -gt 0 ] && [ "$(date +%s)" -ge "$DEADLINE" ]; then
@@ -200,6 +201,20 @@ while true; do
     jjj fetch >/dev/null 2>&1
 
     before=$(./score.py 2>/dev/null || echo "? ?")
+
+    # If there is no work and nothing to review, wait rather than paying for a
+    # model call to be told there is nothing to do. A finished backlog otherwise
+    # costs exactly as much as a busy one: after the score maxed out at minute
+    # 35 of a one-hour run, nine agents made 4,100 further jjj calls for no gain.
+    if [ "$(jjj next --json 2>/dev/null)" = "null" ] \
+       && [ -z "$(jjj solution list --status submitted --json 2>/dev/null | tr -d '[] \n')" ]; then
+        idle=$((idle + 1))
+        log "iter $iter nothing to do (idle $idle); waiting"
+        sleep $(( idle < 6 ? idle * 30 : 180 ))
+        continue
+    fi
+    idle=0
+
     log "iter $iter begin (score $before)"
 
     turn_prompt="$PROMPT"

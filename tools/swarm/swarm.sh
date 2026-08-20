@@ -14,7 +14,7 @@
 #
 #   ./swarm.sh build                                  build the agent image
 #   ./swarm.sh init  [--pods N] [--agents N] [--problems N] [--critics N]
-#   ./swarm.sh start [--hours H] [--max-iters N] [--model M]
+#   ./swarm.sh start [--hours H] [--max-iters N] [--model M] [--stop-when-done]
 #   ./swarm.sh status
 #   ./swarm.sh logs [agent]
 #   ./swarm.sh stop
@@ -124,12 +124,13 @@ EOF
 # --- start ------------------------------------------------------------------
 
 cmd_start() {
-    local hours=0 max_iters=0 model="sonnet"
+    local hours=0 max_iters=0 model="sonnet" stop_when_done=0
     while [ $# -gt 0 ]; do
         case "$1" in
             --hours) hours="$2"; shift 2 ;;
             --max-iters) max_iters="$2"; shift 2 ;;
             --model) model="$2"; shift 2 ;;
+            --stop-when-done) stop_when_done=1; shift ;;
             *) die "unknown option $1" ;;
         esac
     done
@@ -207,6 +208,12 @@ cmd_start() {
         done
     done
 
+    if [ "$stop_when_done" = 1 ]; then
+        nohup "$SWARM_DIR/watchdog.sh" "$SWARM_ROOT" >"$SWARM_ROOT/logs/watchdog.log" 2>&1 &
+        echo "$!" > "$SWARM_ROOT/watchdog.pid"
+        echo "  watchdog running: will stop the fleet once the work converges"
+    fi
+
     echo "  watch: $0 status    stop: $0 stop"
 }
 
@@ -268,6 +275,10 @@ cmd_logs() {
 
 cmd_stop() {
     touch "$STOP_FILE"
+    if [ -f "$SWARM_ROOT/watchdog.pid" ]; then
+        kill "$(cat "$SWARM_ROOT/watchdog.pid")" 2>/dev/null
+        rm -f "$SWARM_ROOT/watchdog.pid"
+    fi
     if [ -f "$SWARM_ROOT/refresher.pid" ]; then
         kill "$(cat "$SWARM_ROOT/refresher.pid")" 2>/dev/null && echo "  stopped token refresher"
         rm -f "$SWARM_ROOT/refresher.pid"
