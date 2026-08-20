@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Linux release binaries are now statically linked (musl).** The 0.5.1
+  `*-unknown-linux-gnu` artefacts were built on `ubuntu-latest` and link against
+  that runner's glibc 2.39, so they refuse to start on Debian 12, Ubuntu 22.04,
+  RHEL 9 or Amazon Linux with `version 'GLIBC_2.39' not found`. Linux targets are
+  now `*-unknown-linux-musl` built via `cross`, and the release verifies the
+  result is not dynamically linked. `install.sh` fetches the musl assets.
+  Found while building the swarm-trial container image against Debian bookworm.
+
 ## 0.5.1 — 2026-08-19
 
 **Security release.** Upgrade if you share a repository with anyone.

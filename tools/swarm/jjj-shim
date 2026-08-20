@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+#
+# Logging wrapper around the real jjj.
+#
+# A swarm trial that only produces "it seemed to work" is worthless. Every jjj
+# invocation is recorded as one JSON line so the run can be measured afterwards:
+# claim collisions, conflict rate, push contention, whether the critique gate
+# ever got bypassed, and whether agents actually followed the skill.
+#
+# Placed earlier on PATH than the real binary, so agents call it without knowing.
+#
+#   SWARM_LOG      JSONL file to append to (required, else this is a pass-through)
+#   SWARM_JJJ_BIN  the real jjj binary (required)
+#   JJJ_USER       recorded as the actor, so every line is attributable
+#
+# The log is append-only with one write() per line. Concurrent appends of short
+# lines under O_APPEND do not interleave on macOS/Linux, which is why each record
+# is emitted as a single line by a single printf.
+
+set -uo pipefail
+
+real="${SWARM_JJJ_BIN:-}"
+if [ -z "$real" ] || [ ! -x "$real" ]; then
+    echo "jjj-shim: SWARM_JJJ_BIN is not set to an executable jjj" >&2
+    exit 127
+fi
+
+if [ -z "${SWARM_LOG:-}" ]; then
+    exec "$real" "$@"
+fi
+
+start_ns=$(python3 -c 'import time; print(time.time_ns())')
+
+# Capture output so it can be inspected, while still passing it through. Agents
+# read stdout, so it must survive verbatim.
+out_file=$(mktemp); err_file=$(mktemp)
+trap 'rm -f "$out_file" "$err_file"' EXIT
+
+"$real" "$@" > >(tee "$out_file") 2> >(tee "$err_file" >&2)
+status=$?
+
+end_ns=$(python3 -c 'import time; print(time.time_ns())')
+
+# Build the record in python: it has to JSON-escape arbitrary argv and output,
+# and getting that wrong in shell silently corrupts the log the whole analysis
+# depends on.
+SWARM_STATUS="$status" \
+SWARM_START="$start_ns" \
+SWARM_END="$end_ns" \
+SWARM_OUT="$out_file" \
+SWARM_ERR="$err_file" \
+python3 - "$@" <<'PY'
+import json, os, sys, pathlib
+
+def head(path, limit=4000):
+    try:
+        return pathlib.Path(path).read_text(errors="replace")[:limit]
+    except Exception:
+        return ""
+
+start = int(os.environ["SWARM_START"])
+end = int(os.environ["SWARM_END"])
+
+record = {
+    "ts": start / 1e9,
+    "actor": os.environ.get("JJJ_USER", ""),
+    "pod": os.environ.get("JJJ_POD", ""),
+    "agent": os.environ.get("SWARM_AGENT", ""),
+    "argv": sys.argv[1:],
+    "cmd": " ".join(sys.argv[1:3]),
+    "exit": int(os.environ["SWARM_STATUS"]),
+    "ms": round((end - start) / 1e6, 2),
+    "stdout": head(os.environ["SWARM_OUT"]),
+    "stderr": head(os.environ["SWARM_ERR"]),
+}
+
+line = json.dumps(record, ensure_ascii=False) + "\n"
+# One write, O_APPEND: concurrent agents must not interleave partial records.
+fd = os.open(os.environ["SWARM_LOG"], os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
+try:
+    os.write(fd, line.encode())
+finally:
+    os.close(fd)
+PY
+
+exit "$status"

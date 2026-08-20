@@ -64,10 +64,17 @@ jobs:
             os: macos-latest
           - target: x86_64-apple-darwin
             os: macos-latest
-          - target: x86_64-unknown-linux-gnu
+          # musl, not gnu. A gnu build on ubuntu-latest links against that
+          # runner's glibc (2.39 on 24.04), so the binary refuses to start on
+          # Debian 12, Ubuntu 22.04, RHEL 9 or Amazon Linux — which is how the
+          # 0.5.1 Linux artefacts shipped. musl links statically and runs
+          # anywhere; it is what jj itself publishes, for the same reason.
+          - target: x86_64-unknown-linux-musl
             os: ubuntu-latest
-          - target: aarch64-unknown-linux-gnu
+            musl: true
+          - target: aarch64-unknown-linux-musl
             os: ubuntu-latest
+            musl: true
             cross: true
     runs-on: ${{ matrix.os }}
     steps:
@@ -79,15 +86,33 @@ jobs:
         with:
           key: ${{ matrix.target }}
 
-      - name: Install cross-linker
-        if: matrix.cross
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu
-          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
+      # `cross` runs the build in a container carrying the right musl toolchain.
+      # rusqlite bundles SQLite, so a C compiler for the target is required and
+      # hand-assembling one on the runner is far more fragile than this.
+      - name: Install cross
+        if: matrix.musl
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cross
 
       - name: Build
-        run: cargo build --release --locked --target ${{ matrix.target }}
+        run: |
+          if [ "${{ matrix.musl }}" = "true" ]; then
+            cross build --release --locked --target ${{ matrix.target }}
+          else
+            cargo build --release --locked --target ${{ matrix.target }}
+          fi
+
+      # A statically linked binary that silently picked up a dynamic dependency
+      # is the failure this whole change exists to prevent, so prove it.
+      - name: Verify the Linux build is static
+        if: matrix.musl
+        run: |
+          file "target/${{ matrix.target }}/release/jjj"
+          if file "target/${{ matrix.target }}/release/jjj" | grep -q "dynamically linked"; then
+            echo "::error::${{ matrix.target }} produced a dynamically linked binary"
+            exit 1
+          fi
 
       # Tarball plus a checksum, so `install.sh` can verify what it downloaded.
       # A release without checksums cannot be verified after the fact.

@@ -1,0 +1,96 @@
+# One swarm agent.
+#
+# Each agent runs in its own container with its own working copy, so there is no
+# shared filesystem anywhere in the trial. Every piece of coordination — what
+# work exists, who holds it, what was objected to, and the code itself — has to
+# travel through jjj and the shared git remote. That is the whole point: if jjj
+# is not a sufficient substrate, the swarm cannot function, and we find out
+# rather than accidentally leaning on a shared directory.
+#
+# jjj is installed from the published GitHub release rather than built here,
+# which keeps the image small and dogfoods the release artefacts at the same
+# time.
+
+# ubuntu 24.04 rather than debian bookworm: the published jjj 0.5.1 linux-gnu
+# binaries were built on ubuntu-latest and need GLIBC_2.39, which bookworm (2.36)
+# does not have. The real fix is musl release builds — see .github/workflows/
+# release.yml. Until a musl release exists, the base must match the build host.
+FROM docker.io/library/ubuntu:24.04
+
+ARG JJ_VERSION=0.44.0
+ARG JJJ_VERSION=0.5.1
+ARG TARGETARCH
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates curl git openssh-client xz-utils \
+        python3 python3-venv \
+        procps less \
+    && rm -rf /var/lib/apt/lists/*
+
+# Node, for the Claude Code CLI.
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN npm install -g @anthropic-ai/claude-code && npm cache clean --force
+
+# jujutsu, from the official release tarball. Same approach as
+# .github/actions/install-jj, and for the same reason: install-action has no
+# manifest for jj and the crates.io name `jj` is a different project.
+RUN set -eux; \
+    case "${TARGETARCH:-arm64}" in \
+        arm64) jj_target=aarch64-unknown-linux-musl ;; \
+        amd64) jj_target=x86_64-unknown-linux-musl ;; \
+        *) echo "unsupported arch ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    mkdir -p /build; curl -fsSL -o /build/jj.tar.gz \
+        "https://github.com/jj-vcs/jj/releases/download/v${JJ_VERSION}/jj-v${JJ_VERSION}-${jj_target}.tar.gz"; \
+    tar -xzf /build/jj.tar.gz -C /build; \
+    install -m 0755 "$(find /build -type f -name jj -perm -u+x | head -1)" /usr/local/bin/jj; \
+    rm -rf /build; \
+    jj --version
+
+# jjj, from its published release.
+RUN set -eux; \
+    case "${TARGETARCH:-arm64}" in \
+        arm64) jjj_target=aarch64-unknown-linux-gnu ;; \
+        amd64) jjj_target=x86_64-unknown-linux-gnu ;; \
+        *) echo "unsupported arch ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    mkdir -p /build; curl -fsSL -o /build/jjj.tar.gz \
+        "https://github.com/doug/jjj/releases/download/v${JJJ_VERSION}/jjj-${JJJ_VERSION}-${jjj_target}.tar.gz"; \
+    tar -xzf /build/jjj.tar.gz -C /build; \
+    install -m 0755 "$(find /build -type f -name jjj -perm -u+x | head -1)" /usr/local/bin/jjj.real; \
+    rm -rf /build; \
+    /usr/local/bin/jjj.real --version
+
+# The instrumentation shim shadows the real binary on PATH, so every invocation
+# an agent makes is recorded without the agent knowing or being able to skip it.
+COPY jjj-shim /usr/local/bin/jjj
+RUN chmod 0755 /usr/local/bin/jjj
+
+COPY entrypoint.sh /usr/local/bin/agent-entrypoint
+RUN chmod 0755 /usr/local/bin/agent-entrypoint
+
+# Claude Code refuses --dangerously-skip-permissions when running as root, and
+# unattended agents cannot answer a prompt, so the agent must be unprivileged.
+# uid 1000 matches the default rootless podman mapping, which keeps the mounted
+# credentials file readable without loosening its permissions.
+# ubuntu:24.04 ships an existing uid 1000 (`ubuntu`); reuse it rather than
+# fighting for the number, since 1000 is what rootless podman maps to.
+# Restore /tmp: the CLI creates /tmp/claude-$UID and needs the standard sticky
+# world-writable mode.
+RUN chmod 1777 /tmp
+
+RUN userdel --remove ubuntu 2>/dev/null || true; \
+    useradd --create-home --uid 1000 --shell /bin/bash swarm \
+    && mkdir -p /work /home/swarm/.claude \
+    && chown -R swarm:swarm /work /home/swarm
+
+ENV SWARM_JJJ_BIN=/usr/local/bin/jjj.real \
+    HOME=/home/swarm \
+    GIT_TERMINAL_PROMPT=0
+
+USER swarm
+WORKDIR /work
+ENTRYPOINT ["/usr/local/bin/agent-entrypoint"]
