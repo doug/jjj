@@ -58,6 +58,24 @@
 
 ### Fixed
 
+- **An empty entity reference no longer resolves to an arbitrary entity.**
+  Resolution falls back to a case-insensitive substring match on the title, and
+  every title contains the empty string — so `""` matched *every* entity, and in
+  a repository holding exactly one it matched that one **successfully and
+  silently**. Since the usual source of an empty argument is an unset shell
+  variable, `jjj solution approve "$SID"` would approve something arbitrary, and
+  `problem dissolve ""` would dissolve something. Empty references are now
+  rejected with a message naming the likely cause. (The deferred audit item 4.2,
+  in its pathological form.) Found when a swarm agent called `solution attach`
+  with no argument twenty times in an hour.
+
+- **`solution new` now says what to do about a duplicate.** Its only advice was
+  "use --force to create anyway", which is precisely wrong in the common case:
+  when two people race onto the same work, forcing creates the duplicate that was
+  just detected. It now distinguishes the two situations, since they call for
+  opposite actions — take different work, or give a genuinely rival approach a
+  title that says how it differs.
+
 - **Per-pod push bookmarks are `jjj-{pod}`, not `jjj/{pod}`** (breaking, for
   anyone whose pod pushes were working — which is nobody, see below). A git ref
   is a path: `refs/heads/jjj` is a file, so `refs/heads/jjj/{pod}` requires the

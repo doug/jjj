@@ -74,7 +74,7 @@ Read skills/jjj/SKILL.md if present.
 Do ONE unit of work this turn, then stop. In priority order:
 
 1. If one of YOUR solutions has an open critique, address it: fix the code, then
-   `jjj critique address <id>`.
+   `jjj critique address <id>`. `jjj solution list --mine --json` shows yours.
 2. Otherwise TAKE NEW WORK. `jjj next --claim --json` gives you an unimplemented
    operation. Implement it in opkit/ops/<name>.py, register it in
    opkit/registry.py, verify with ./score.py, then create and submit a solution.
@@ -86,6 +86,8 @@ genuinely nothing left to build.
 
 Rules:
 - Never `--force` past a critique.
+- Only `solution approve`, `solution withdraw` and `problem dissolve` take
+  `--rationale` / `--no-rationale`. Other commands reject those flags.
 - Use ids from `--json`, never fuzzy titles.
 - Other agents edit opkit/registry.py concurrently; keep edits small and additive.
 - ./score.py -v lists failures. The score counts passing cases; nothing is timed.
@@ -109,17 +111,26 @@ Do ONE unit of work this turn, then stop. In priority order:
    and exercise the code — do not review by reading alone. If it is wrong or
    incomplete, raise a critique citing the concrete failing input as evidence
    (`jjj critique new <solution-id> "..." --severity high`). If it is correct,
-   `jjj solution lgtm <id>`. Evidence, never opinion.
+   `jjj solution lgtm <id> --rationale "ran ./score.py; all N cases pass"`.
+   Evidence, never opinion — a sign-off should say what you actually ran. You do
+   not need to be assigned a review to sign off; take submitted work off the
+   queue. You cannot sign off your own solution.
 2. If every submitted solution has your review, and an approved solution's
    problem is still open, solve the problem.
 3. Only if there is nothing to review at all, take new work with
    `jjj next --claim --json` and implement it.
+
+Useful: `jjj solution list --status submitted --json` is your queue;
+`jjj solution list --mine` is what you own; `jjj events --user <agent>` shows
+what another agent has been doing.
 
 A critique that cannot name a failing input is not a critique. Prefer one
 well-evidenced objection over three vague ones.
 
 Rules:
 - Never `--force` past a critique.
+- Only `solution approve`, `solution withdraw` and `problem dissolve` take
+  `--rationale` / `--no-rationale`. Other commands reject those flags.
 - Use ids from `--json`, never fuzzy titles.
 - ./score.py -v lists failures. The score counts passing cases; nothing is timed.
 

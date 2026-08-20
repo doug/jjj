@@ -4,6 +4,15 @@
 //! 1. Exact UUID match
 //! 2. Prefix match (hex string of ≥6 hex digits starting with input)
 //! 3. Fuzzy title match (case-insensitive substring; not SQLite FTS)
+//!
+//! An empty or whitespace-only reference resolves to **nothing**, never to a
+//! match. The fuzzy step is a substring test, and every title contains the empty
+//! string — so `""` matched every entity, and in a repository holding exactly one
+//! it matched that one *successfully and silently*. Since the usual source of an
+//! empty argument is an unset shell variable (`jjj solution approve "$SID"`),
+//! that turned a scripting slip into approving, dissolving or attaching to an
+//! arbitrary entity. Found when a swarm agent called `solution attach` with no
+//! argument twenty times in an hour.
 
 use crate::id::{is_hex_prefix, is_uuid};
 
@@ -29,6 +38,13 @@ pub struct ResolveMatch {
 ///
 /// Takes a list of (id, title) pairs representing available entities.
 pub fn resolve(input: &str, entities: &[(String, String)]) -> ResolveResult {
+    // 0. An empty reference identifies nothing. See the module docs: the fuzzy
+    //    step would otherwise match every entity, and silently succeed whenever
+    //    exactly one existed.
+    if input.trim().is_empty() {
+        return ResolveResult::None;
+    }
+
     // 1. Exact UUID match
     if is_uuid(input) {
         if entities.iter().any(|(id, _)| id == input) {
@@ -232,5 +248,54 @@ mod tests {
         assert_eq!(parse_entity_reference("日本語"), None);
         assert_eq!(parse_entity_reference("🦀/x"), None);
         assert_eq!(parse_entity_reference("café"), None);
+    }
+}
+
+#[cfg(test)]
+mod empty_reference_tests {
+    use super::*;
+
+    fn entities() -> Vec<(String, String)> {
+        vec![(
+            "01900000-0000-7000-8000-000000000001".to_string(),
+            "The only solution".to_string(),
+        )]
+    }
+
+    /// An empty reference must never resolve, however few entities exist.
+    ///
+    /// The fuzzy step is a substring test and every title contains "", so a
+    /// repository holding one entity resolved `""` to it — silently and
+    /// successfully. An unset shell variable would then approve, dissolve or
+    /// attach to an arbitrary entity.
+    #[test]
+    fn an_empty_reference_matches_nothing() {
+        assert_eq!(resolve("", &entities()), ResolveResult::None);
+        assert_eq!(resolve("   ", &entities()), ResolveResult::None);
+        assert_eq!(resolve("\t\n", &entities()), ResolveResult::None);
+    }
+
+    #[test]
+    fn an_empty_reference_matches_nothing_even_with_many_entities() {
+        let many: Vec<_> = (1..=5)
+            .map(|i| {
+                (
+                    format!("0190000{i}-0000-7000-8000-00000000000{i}"),
+                    format!("Solution {i}"),
+                )
+            })
+            .collect();
+        assert_eq!(resolve("", &many), ResolveResult::None);
+    }
+
+    #[test]
+    fn a_real_reference_still_resolves() {
+        // The guard must not break ordinary use.
+        let e = entities();
+        assert_eq!(
+            resolve("only solution", &e),
+            ResolveResult::Single(e[0].0.clone())
+        );
+        assert_eq!(resolve(&e[0].0, &e), ResolveResult::Single(e[0].0.clone()));
     }
 }

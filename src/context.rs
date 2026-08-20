@@ -25,6 +25,15 @@ impl CommandContext {
     /// Resolve a problem ID from user input.
     pub fn resolve_problem(&self, input: &str) -> Result<String> {
         use crate::picker::pick_one;
+
+        // "You gave me nothing" is a different failure from "I looked and found
+        // nothing", and saying so points at the real cause — almost always an
+        // unset variable in a script.
+        if input.trim().is_empty() {
+            return Err(crate::error::JjjError::Validation(
+                "no problem specified (the reference was empty — an unset variable?)".to_string(),
+            ));
+        }
         use crate::resolve::{resolve, ResolveResult};
 
         let problems = self.store.list_problems()?;
@@ -43,6 +52,15 @@ impl CommandContext {
     /// Resolve a solution ID from user input.
     pub fn resolve_solution(&self, input: &str) -> Result<String> {
         use crate::picker::pick_one;
+
+        // "You gave me nothing" is a different failure from "I looked and found
+        // nothing", and saying so points at the real cause — almost always an
+        // unset variable in a script.
+        if input.trim().is_empty() {
+            return Err(crate::error::JjjError::Validation(
+                "no solution specified (the reference was empty — an unset variable?)".to_string(),
+            ));
+        }
         use crate::resolve::{resolve, ResolveResult};
 
         let solutions = self.store.list_solutions()?;
@@ -61,6 +79,15 @@ impl CommandContext {
     /// Resolve a critique ID from user input.
     pub fn resolve_critique(&self, input: &str) -> Result<String> {
         use crate::picker::pick_one;
+
+        // "You gave me nothing" is a different failure from "I looked and found
+        // nothing", and saying so points at the real cause — almost always an
+        // unset variable in a script.
+        if input.trim().is_empty() {
+            return Err(crate::error::JjjError::Validation(
+                "no critique specified (the reference was empty — an unset variable?)".to_string(),
+            ));
+        }
         use crate::resolve::{resolve, ResolveResult};
 
         let critiques = self.store.list_critiques()?;
@@ -79,6 +106,15 @@ impl CommandContext {
     /// Resolve a milestone ID from user input.
     pub fn resolve_milestone(&self, input: &str) -> Result<String> {
         use crate::picker::pick_one;
+
+        // "You gave me nothing" is a different failure from "I looked and found
+        // nothing", and saying so points at the real cause — almost always an
+        // unset variable in a script.
+        if input.trim().is_empty() {
+            return Err(crate::error::JjjError::Validation(
+                "no milestone specified (the reference was empty — an unset variable?)".to_string(),
+            ));
+        }
         use crate::resolve::{resolve, ResolveResult};
 
         let milestones = self.store.list_milestones()?;

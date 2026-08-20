@@ -288,7 +288,7 @@ pub(crate) fn check_similar_entities(
         return Ok(());
     }
 
-    eprintln!("Warning: similar {}s already exist:", entity_type);
+    eprintln!("A similar {} already exists:", entity_type);
     for r in &results {
         eprintln!(
             "  {}/{} — \"{}\"",
@@ -297,8 +297,20 @@ pub(crate) fn check_similar_entities(
             r.title
         );
     }
-    eprintln!("\nUse --force to create anyway.");
-    Err(crate::error::JjjError::Validation(
-        "Similar entities exist. Use --force to override.".to_string(),
-    ))
+
+    // `--force` used to be the whole of the advice, which is the wrong move in
+    // the common case: when two people (or two agents) race onto the same work,
+    // forcing creates exactly the duplicate that was just detected. Name the
+    // two situations instead, because they call for opposite actions.
+    eprintln!();
+    eprintln!("If that is the same work, someone already has it — pick something else.");
+    eprintln!("If you are proposing a genuinely different approach, give it a title that says");
+    eprintln!(
+        "how it differs, then --force. Rival {}s are welcome; duplicates are not.",
+        entity_type
+    );
+
+    Err(crate::error::JjjError::Validation(format!(
+        "a similar {entity_type} already exists"
+    )))
 }

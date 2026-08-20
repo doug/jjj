@@ -87,6 +87,7 @@ Other things worth knowing before scripting:
 | Non-zero exit on failure, message on stderr | Check the status; do not parse stdout for errors |
 | `jjj next --json` emits `null`, one object, or an array | Normalize before iterating |
 | `--force` skips duplicate detection (`problem new`) or the critique gate (`solution approve`) | Never default to it in a loop; it disables the thing that makes review real |
+| An empty reference is rejected, not fuzzy-matched | `jjj solution approve "$SID"` with `SID` unset fails loudly instead of approving something arbitrary |
 | Only `solution approve`, `solution withdraw` and `problem dissolve` prompt for a rationale | Pass `--rationale "..."` or `--no-rationale` to *those*; other commands reject the flag |
 | `--mine` works on `next`, `status`, `events`, and `problem`/`solution`/`critique list` | It is shorthand for "assigned to me"; it does not exist elsewhere |
 | Reads are served from a SQLite cache | `jjj db rebuild` after editing metadata files behind jjj's back |
@@ -194,6 +195,12 @@ first-class and permanently attached to the problem.
 
 Keep the conjectures genuinely different. Three agents proposing three variants
 of the same idea is not a tournament — it is one idea with extra steps.
+
+jjj enforces this: `solution new` refuses a title too close to an existing one.
+If you hit that, someone already has the work — take something else. Reach for
+`--force` only when you really are proposing a different approach, and title it
+so the difference is visible ("Regex-based wordcount with unicode handling", not
+"wordcount again").
 
 ### Pattern C — adversarial review (enforced, not requested)
 
