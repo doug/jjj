@@ -48,6 +48,38 @@ sub-second target — the first run of this harness caught two O(n²)/O(n)
 read regressions (fixed in eeacd0f, e752095); the sync latencies are the
 remaining open finding.
 
+## Sync scaling (`sync_scaling.py`) — the open finding
+
+Decision 3 makes sub-second `jjj sync` a **hard** requirement, and it is violated
+at 25K. Profiling shows the cause is not where it was assumed to be:
+
+    delta_push @25K:  11,898ms total — 1,367ms in jj (12 calls), 10,531ms in jjj
+
+88% of the time is **jjj's own work**. The subprocess count is already near
+minimal — 12 calls for a push, 7 for a fetch — so this is not a batching problem.
+Holding the delta at 100 files and growing the corpus shows what it is:
+
+| corpus | jjj's own time (push) | jj's time |
+|---|---|---|
+| 2,000 | 1,182ms | 932ms |
+| 8,000 | 3,244ms | 972ms |
+| 25,000 | **10,401ms** | 1,395ms |
+
+Linear in *corpus*, flat in *delta*: **O(total) work for an O(delta) operation**.
+That is Break #1, which Pillar 1 was meant to eliminate — the jj-side delta work
+is correct, jjj's own paths are not. M0 validated jj's primitives; nobody
+profiled jjj.
+
+```bash
+python3 sync_scaling.py                              # 2K vs 25K
+python3 sync_scaling.py --small 1000 --large 4000    # a faster loop
+```
+
+**The score is a ratio, deliberately:** `jjj_ms(large) / jjj_ms(small)`, ~8.8x
+today, approaching 1.0 as the work becomes delta-proportional. Absolute timings
+are meaningless on a machine saturated by a swarm; a ratio of two measurements
+taken under the same load survives it.
+
 ## M0 probes (historical validation gate)
 
 M0's job was to **get numbers on the design's riskiest assumptions before

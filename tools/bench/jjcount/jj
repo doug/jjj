@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Timing+counting shim for the real `jj`. Records "<ms>\t<argv>" per call, so a
+# profile can attribute jjj's wall time between jj itself and jjj's own work.
+set -uo pipefail
+start=$(python3 -c 'import time;print(time.time_ns())')
+"${JJ_REAL:-/opt/homebrew/bin/jj}" "$@"
+rc=$?
+if [ -n "${JJ_COUNT_LOG:-}" ]; then
+    end=$(python3 -c 'import time;print(time.time_ns())')
+    printf '%s\t%s\n' "$(( (end-start)/1000000 ))" "$*" >> "$JJ_COUNT_LOG"
+fi
+exit $rc
