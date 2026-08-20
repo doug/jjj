@@ -405,7 +405,9 @@ fn sync_pr(
 
     // Generate branch name
     let sid = short_id(&sol_id);
-    let branch = format!("jjj/s-{}", sid);
+    // `jjj-s-`, not `jjj/s-`: refs/heads/jjj is a file, so a nested
+    // refs/heads/jjj/s-<id> is a git D/F conflict and the push is rejected.
+    let branch = format!("jjj-s-{}", sid);
 
     if let Some(pr_number) = solution.github_pr {
         // PR already exists — update by pushing branch

@@ -52,16 +52,20 @@ JJJ_USER=carol JJJ_POD=pod7 $JJJ whoami
 
 The pod gets **its own** push bookmark. That is the whole trick behind pushing
 from many processes at once: each one is the single writer of its own ref, so
-there is nothing to race over:
+there is nothing to race over.
+
+Note the `-` separator. A git ref is a path, so `refs/heads/jjj` being a file
+means `refs/heads/jjj/pod7` cannot also exist — and every repository has the
+bare `jjj` bookmark. A sibling ref sidesteps that entirely:
 
 ```shell
 JJJ_USER=carol JJJ_POD=pod7 $JJJ whoami
-> push bookmark: jjj/pod7
+> push bookmark: jjj-pod7
 ```
 
 ```shell
 JJJ_USER=dave JJJ_POD=pod8 $JJJ whoami
-> push bookmark: jjj/pod8
+> push bookmark: jjj-pod8
 ```
 
 ## A Clean Repository Has No Conflicts

@@ -6,7 +6,7 @@ mod test_helpers;
 
 use std::process::Command;
 use tempfile::TempDir;
-use test_helpers::run_jjj;
+use test_helpers::{jj_available, run_jjj, run_jjj_env, run_jjj_success};
 
 /// Helper to run jj command
 #[allow(dead_code)]
@@ -1138,4 +1138,114 @@ fn test_event_shards_sync_without_conflict() {
             .exists(),
         "incremental-ingest offset index should exist after a fetch"
     );
+}
+
+// =============================================================================
+// Per-pod bookmarks must coexist with the bare bookmark on a real remote
+// =============================================================================
+
+/// A pod push must succeed against a remote that already carries the bare `jjj`
+/// bookmark.
+///
+/// This is the shape every real repository has: `jjj init && jjj push` with no
+/// pod creates `refs/heads/jjj`, and pods arrive later. Before this test, the
+/// per-pod ref was `jjj/{pod}` — i.e. `refs/heads/jjj/{pod}` — which git refuses
+/// to create because `refs/heads/jjj` already exists as a *file* and the same
+/// path cannot also be a *directory*:
+///
+/// ```text
+/// remote: error: cannot lock ref 'refs/heads/jjj/pod-2':
+///         'refs/heads/jjj' exists; cannot create 'refs/heads/jjj/pod-2'
+/// ```
+///
+/// So Break #5's remedy — per-pod single-writer refs, the whole answer to the
+/// ~quadratic ref contention measured in M0 — silently did not work anywhere it
+/// mattered. Nothing caught it because no test pushed from a pod to a real
+/// remote; it was found by the swarm trial in `tools/swarm/` on its first run.
+#[test]
+fn pod_and_bare_bookmarks_coexist_on_a_remote() {
+    if !jj_available() {
+        return;
+    }
+
+    let remote = create_bare_remote();
+    let repo = setup_repo_with_remote(remote.path());
+    run_jjj_success(repo.path(), &["init"]);
+    run_jjj_success(repo.path(), &["problem", "new", "Shared work", "--force"]);
+
+    // 1. A plain push, with no pod: creates the bare `jjj` bookmark.
+    let bare = run_jjj(repo.path(), &["push"]);
+    assert!(
+        bare.status.success(),
+        "bare push failed: {}",
+        String::from_utf8_lossy(&bare.stderr)
+    );
+
+    // 2. Now push as a pod against that same remote.
+    let pod = run_jjj_env(repo.path(), &[("JJJ_POD", "theory")], &["push"]);
+    assert!(
+        pod.status.success(),
+        "a pod could not push to a remote holding the bare bookmark — the \
+         per-pod ref is nested under it and git rejects the D/F conflict:\n{}",
+        String::from_utf8_lossy(&pod.stderr)
+    );
+
+    // 3. Both refs must exist side by side, which is only possible when the pod
+    //    ref is a sibling (`jjj-theory`) rather than a child (`jjj/theory`).
+    let refs = Command::new("git")
+        .current_dir(remote.path())
+        .args(["for-each-ref", "--format=%(refname)"])
+        .output()
+        .expect("list remote refs");
+    let refs = String::from_utf8_lossy(&refs.stdout);
+
+    assert!(
+        refs.contains("refs/heads/jjj\n") || refs.trim().ends_with("refs/heads/jjj"),
+        "the bare bookmark should still be on the remote:\n{refs}"
+    );
+    assert!(
+        refs.contains("refs/heads/jjj-theory"),
+        "the pod bookmark should be a sibling of the bare one:\n{refs}"
+    );
+    assert!(
+        !refs.contains("refs/heads/jjj/"),
+        "no ref may nest under refs/heads/jjj — that is the D/F conflict:\n{refs}"
+    );
+}
+
+/// Two pods pushing the same remote must not contend, which is the entire point
+/// of a single-writer ref per pod.
+#[test]
+fn two_pods_push_the_same_remote_without_contending() {
+    if !jj_available() {
+        return;
+    }
+
+    let remote = create_bare_remote();
+    let repo = setup_repo_with_remote(remote.path());
+    run_jjj_success(repo.path(), &["init"]);
+    run_jjj_success(repo.path(), &["problem", "new", "Work", "--force"]);
+
+    for pod in ["alpha", "beta"] {
+        let out = run_jjj_env(repo.path(), &[("JJJ_POD", pod)], &["push"]);
+        assert!(
+            out.status.success(),
+            "pod {pod} failed to push: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    let refs = Command::new("git")
+        .current_dir(remote.path())
+        .args(["for-each-ref", "--format=%(refname)"])
+        .output()
+        .expect("list remote refs");
+    let refs = String::from_utf8_lossy(&refs.stdout);
+
+    for pod in ["alpha", "beta"] {
+        assert!(
+            refs.contains(&format!("refs/heads/jjj-{pod}")),
+            "pod {pod} has no ref on the remote:\n{refs}"
+        );
+    }
 }

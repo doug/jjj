@@ -146,12 +146,25 @@ impl SyncState {
         self.last_synced_rev.is_none()
     }
 
-    /// The bookmark this clone pushes its own writes to: `jjj/{pod}` when a pod
+    /// The bookmark this clone pushes its own writes to: `jjj-{pod}` when a pod
     /// id is set, else the bare `jjj` bookmark. Single-writer by construction,
     /// so concurrent pods never contend on the same ref (Break #5).
+    ///
+    /// **The separator is `-`, not `/`, and that is load-bearing.** A git ref is
+    /// a path: `refs/heads/jjj` is a *file*, so `refs/heads/jjj/theory` would
+    /// require that same path to also be a *directory*. Git rejects it —
+    /// `cannot lock ref 'refs/heads/jjj/theory': 'refs/heads/jjj' exists` — and
+    /// since a plain `jjj push` (no pod) creates the bare bookmark, every real
+    /// repository has it. With `/`, per-pod push therefore failed everywhere it
+    /// mattered and Break #5's fix was inoperative. Discovered by the swarm
+    /// trial in `tools/swarm/`; see `pod_and_bare_bookmarks_coexist_on_a_remote`
+    /// in `tests/push_fetch_test.rs`.
+    ///
+    /// Both names still match the `jjj*` glob used to track bookmarks and to
+    /// discover heads, so fetch is unaffected.
     pub fn push_bookmark(&self) -> String {
         match &self.pod {
-            Some(pod) if !pod.is_empty() => format!("{}/{}", BOOKMARK_PREFIX, sanitize_pod(pod)),
+            Some(pod) if !pod.is_empty() => format!("{}-{}", BOOKMARK_PREFIX, sanitize_pod(pod)),
             _ => BOOKMARK_PREFIX.to_string(),
         }
     }
@@ -159,8 +172,8 @@ impl SyncState {
 
 /// Sanitize a pod id into a single bookmark path segment. Namespaced ids like
 /// `team/alice` collapse to one segment (`team-alice`) so the push ref is
-/// always exactly `jjj/<segment>` — never accidentally nested deeper or
-/// containing characters a git ref name rejects.
+/// always exactly `jjj-<segment>` — never nested, and never containing
+/// characters a git ref name rejects.
 fn sanitize_pod(pod: &str) -> String {
     pod.chars()
         .map(|c| match c {
@@ -245,7 +258,7 @@ mod tests {
             pod: Some("theory".to_string()),
             ..Default::default()
         };
-        assert_eq!(s.push_bookmark(), "jjj/theory");
+        assert_eq!(s.push_bookmark(), "jjj-theory");
     }
 
     #[test]
@@ -254,11 +267,11 @@ mod tests {
             pod: Some("team/alice".to_string()),
             ..Default::default()
         };
-        // The '/' would otherwise nest the ref a level deeper than `jjj/<seg>`.
-        assert_eq!(s.push_bookmark(), "jjj/team-alice");
+        // A '/' in the pod id would otherwise nest the ref deeper still.
+        assert_eq!(s.push_bookmark(), "jjj-team-alice");
 
         s.pod = Some("pod theory!".to_string());
-        assert_eq!(s.push_bookmark(), "jjj/pod-theory-");
+        assert_eq!(s.push_bookmark(), "jjj-pod-theory-");
     }
 
     #[test]

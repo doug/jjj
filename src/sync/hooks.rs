@@ -65,7 +65,9 @@ pub fn do_create_or_update_pr(
     }
 
     let sid = short_id(&solution.id);
-    let branch = format!("jjj/s-{}", sid);
+    // `jjj-s-`, not `jjj/s-`: refs/heads/jjj is a file, so a nested
+    // refs/heads/jjj/s-<id> is a git D/F conflict and the push is rejected.
+    let branch = format!("jjj-s-{}", sid);
 
     // Auto-created PRs target the default branch.
     let pr_number = provider.create_pr(solution, &problem, &branch, "main")?;

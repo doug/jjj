@@ -169,7 +169,7 @@ fn a_pod_gets_its_own_identity_and_push_bookmark() {
 
     assert_eq!(who["actor"].as_str(), Some("pod-7"));
     assert_eq!(who["pod"].as_str(), Some("pod-7"));
-    assert_eq!(who["push_bookmark"].as_str(), Some("jjj/pod-7"));
+    assert_eq!(who["push_bookmark"].as_str(), Some("jjj-pod-7"));
 }
 
 #[test]

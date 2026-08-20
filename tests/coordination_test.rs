@@ -74,7 +74,7 @@ fn test_whoami_pod_env_steers_actor_and_bookmark() {
     );
     assert_eq!(v["pod"], "team/theory");
     assert_eq!(
-        v["push_bookmark"], "jjj/team-theory",
+        v["push_bookmark"], "jjj-team-theory",
         "namespaced pod sanitizes to one ref segment"
     );
 }
@@ -97,7 +97,7 @@ fn test_whoami_user_env_overrides_actor() {
     assert_eq!(v["actor"], "alice", "JJJ_USER wins for actor");
     assert_eq!(v["pod"], "bob");
     assert_eq!(
-        v["push_bookmark"], "jjj/bob",
+        v["push_bookmark"], "jjj-bob",
         "pod still drives the bookmark"
     );
 }

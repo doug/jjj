@@ -4,6 +4,20 @@
 
 ### Fixed
 
+- **Per-pod push bookmarks are `jjj-{pod}`, not `jjj/{pod}`** (breaking, for
+  anyone whose pod pushes were working — which is nobody, see below). A git ref
+  is a path: `refs/heads/jjj` is a file, so `refs/heads/jjj/{pod}` requires the
+  same path to also be a directory and git rejects it with
+  `cannot lock ref ... 'refs/heads/jjj' exists`. Since a plain `jjj push` with no
+  pod creates the bare bookmark, **every real repository had it**, so per-pod
+  push failed everywhere it mattered and Break #5's fix — the entire remedy for
+  the ~quadratic ref contention measured in M0 — was inoperative. The GitHub PR
+  branch (`jjj/s-{id}` -> `jjj-s-{id}`) had the identical defect. Both names
+  still match the `jjj*` glob used for tracking and head discovery, so fetch is
+  unchanged. No test caught this because none pushed from a pod to a real
+  remote; found by the swarm trial in `tools/swarm/` on its first run, and now
+  covered by `pod_and_bare_bookmarks_coexist_on_a_remote`.
+
 - **Linux release binaries are now statically linked (musl).** The 0.5.1
   `*-unknown-linux-gnu` artefacts were built on `ubuntu-latest` and link against
   that runner's glibc 2.39, so they refuse to start on Debian 12, Ubuntu 22.04,

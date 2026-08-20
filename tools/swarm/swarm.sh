@@ -20,10 +20,11 @@
 #   ./swarm.sh stop
 #   ./swarm.sh analyze
 #
-# Credentials: set ANTHROPIC_API_KEY. The OAuth credentials file is deliberately
-# NOT used — it holds a short-lived access token that must be refreshed by
-# writing back to the file, so N containers sharing it would race to rotate one
-# token and can break the host login.
+# Credentials: works with a Claude subscription. Exactly one process refreshes
+# the token — token-refresher.sh on the host, using the CLI's own refresh path —
+# and containers mount the exported credential READ-ONLY. Several containers
+# refreshing one credential would race to rotate it and can break the host
+# login, so they never write. Set ANTHROPIC_API_KEY instead to use an API key.
 
 set -uo pipefail
 
@@ -36,6 +37,7 @@ IMAGE="${SWARM_IMAGE:-jjj-swarm-agent:0.5.1}"
 REMOTE="$SWARM_ROOT/remote.git"
 SEED="$SWARM_ROOT/seed"
 STOP_FILE="$SWARM_ROOT/STOP"
+CREDS="$SWARM_ROOT/credentials.json"
 LOG="$SWARM_ROOT/jjj-invocations.jsonl"
 
 die() { echo "swarm: $*" >&2; exit 1; }
@@ -126,13 +128,33 @@ cmd_start() {
     # shellcheck disable=SC1091
     . "$SWARM_ROOT/config"
 
-    [ -n "${ANTHROPIC_API_KEY:-}" ] || die "ANTHROPIC_API_KEY is not set.
-  A swarm needs a programmatic credential: the OAuth token in
-  ~/.claude/.credentials.json is short-lived and must be refreshed by writing
-  back to the file, so sharing it across containers races to rotate one token
-  and can break your host login."
-
     rm -f "$STOP_FILE"
+
+    # Credential: an API key if there is one, otherwise the subscription token
+    # kept fresh by exactly one host-side refresher.
+    local use_key=0
+    if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
+        use_key=1
+        info "using ANTHROPIC_API_KEY"
+    else
+        security find-generic-password -s "Claude Code-credentials" -w >/dev/null 2>&1 \
+            || die "no ANTHROPIC_API_KEY and no Claude Code Keychain entry.
+  Log in on the host with \`claude\` first, or export ANTHROPIC_API_KEY."
+
+        pkill -f "token-refresher.sh $CREDS" 2>/dev/null
+        nohup "$SWARM_DIR/token-refresher.sh" "$CREDS" \
+            >"$SWARM_ROOT/logs/refresher.log" 2>&1 &
+        echo $! > "$SWARM_ROOT/refresher.pid"
+
+        # The refresher must produce a credential before any agent starts, or
+        # every container fails its first turn on a missing file.
+        for _ in $(seq 1 20); do
+            [ -s "$CREDS" ] && break
+            sleep 1
+        done
+        [ -s "$CREDS" ] || die "refresher produced no credential; see $SWARM_ROOT/logs/refresher.log"
+        info "subscription token exported; refresher pid $(cat "$SWARM_ROOT/refresher.pid")"
+    fi
 
     local deadline=0
     if [ "$hours" != "0" ]; then
@@ -162,7 +184,8 @@ cmd_start() {
                 -e "SWARM_DEADLINE=$deadline" \
                 -e "SWARM_MAX_ITERS=$max_iters" \
                 -e "SWARM_MODEL=$model" \
-                -e "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY" \
+                ${use_key:+$([ "$use_key" = 1 ] && echo "-e ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY")} \
+                $([ "$use_key" = 0 ] && echo "-v $CREDS:/home/swarm/.claude/.credentials.json:ro") \
                 -v "$SWARM_ROOT:/swarm:rw" \
                 "$IMAGE" >/dev/null || die "failed to start $name"
             echo "  started $name"
@@ -218,6 +241,10 @@ cmd_logs() {
 
 cmd_stop() {
     touch "$STOP_FILE"
+    if [ -f "$SWARM_ROOT/refresher.pid" ]; then
+        kill "$(cat "$SWARM_ROOT/refresher.pid")" 2>/dev/null && echo "  stopped token refresher"
+        rm -f "$SWARM_ROOT/refresher.pid"
+    fi
     echo "Kill switch set; agents exit after their current turn."
     echo "Force-stopping containers..."
     for c in $(podman ps -a --filter "name=swarm-" --format "{{.Names}}"); do
