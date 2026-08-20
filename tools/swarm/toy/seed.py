@@ -233,6 +233,16 @@ def build_workbench(root: Path, ops) -> None:
     write(root / "tests" / "cases.py", "".join(lines))
 
 
+    # Registering an operation and adding cases are both append-only, so a
+    # union merge is the correct resolution rather than a guess. Without this
+    # the first shakedown silently dropped a working `roman` implementation's
+    # registration and it scored zero despite being correct.
+    write(
+        root / ".gitattributes",
+        "opkit/registry.py merge=union\n"
+        "tests/cases.py     merge=union\n",
+    )
+
     write(
         root / "README.md",
         """# opkit — swarm trial workbench

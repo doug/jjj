@@ -46,9 +46,14 @@ info() { echo "  $*"; }
 # --- build ------------------------------------------------------------------
 
 cmd_build() {
+    # Build context is the repo root: the image compiles jjj from this working
+    # tree so a trial tests the code in front of us, not the last release. The
+    # first shakedown ran against 0.5.1 and every pod push failed on a bug that
+    # was already fixed locally.
     cp "$SWARM_DIR/jjj-shim" "$SWARM_DIR/container/jjj-shim"
-    podman build -t "$IMAGE" "$SWARM_DIR/container" || die "image build failed"
-    echo "Built $IMAGE"
+    podman build -t "$IMAGE" -f "$SWARM_DIR/container/Containerfile" "$REPO_ROOT" \
+        || die "image build failed"
+    echo "Built $IMAGE from $(git -C "$REPO_ROOT" rev-parse --short HEAD)"
 }
 
 # --- init -------------------------------------------------------------------
@@ -174,7 +179,7 @@ cmd_start() {
             podman rm -f "$name" >/dev/null 2>&1
 
             podman run -d --name "$name" \
-                --memory 1g --cpus 1.5 \
+                --memory "${SWARM_AGENT_MEMORY:-3g}" --cpus "${SWARM_AGENT_CPUS:-2}" \
                 -e "JJJ_USER=$pod/$agent" \
                 -e "JJJ_POD=$pod" \
                 -e "SWARM_AGENT=$agent" \
@@ -197,6 +202,17 @@ cmd_start() {
 
 # --- status / logs / stop / analyze -----------------------------------------
 
+# Exit 137 is SIGKILL, which for these containers means the OOM reaper. It is
+# indistinguishable from a crash in `podman ps` output, so call it out.
+report_ooms() {
+    local ooms
+    ooms=$(podman ps -a --filter "name=swarm-" --format "{{.Names}} {{.Status}}" 2>/dev/null \
+        | grep -c "Exited (137)" || true)
+    if [ "${ooms:-0}" -gt 0 ]; then
+        echo "  !! $ooms container(s) were OOM-killed — raise SWARM_AGENT_MEMORY"
+    fi
+}
+
 cmd_status() {
     [ -f "$SWARM_ROOT/config" ] || die "not initialised"
     # shellcheck disable=SC1091
@@ -206,6 +222,7 @@ cmd_status() {
     podman ps -a --filter "name=swarm-" \
         --format "  {{.Names}}  {{.Status}}" 2>/dev/null | sort
     [ -e "$STOP_FILE" ] && echo "  (kill switch SET)"
+    report_ooms
 
     if [ -d "$SEED" ]; then
         echo "seed score: $(cd "$SEED" && ./score.py 2>/dev/null)"

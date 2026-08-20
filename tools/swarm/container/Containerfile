@@ -7,9 +7,23 @@
 # is not a sufficient substrate, the swarm cannot function, and we find out
 # rather than accidentally leaning on a shared directory.
 #
-# jjj is installed from the published GitHub release rather than built here,
-# which keeps the image small and dogfoods the release artefacts at the same
-# time.
+# jjj is compiled from the working tree, so a trial always exercises the code
+# under development rather than the last release.
+
+# --- builder: compile jjj from this working tree ------------------------------
+#
+# The rig must test the code in front of us, not the last published release.
+# The first shakedown ran against release 0.5.1 and every pod push failed on a
+# bug already fixed locally — the results were about a stale binary. Building
+# here keeps the trial honest.
+
+FROM docker.io/library/rust:1-bookworm AS builder
+WORKDIR /src
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+RUN cargo build --release --locked && strip target/release/jjj
+
+# --- agent image -------------------------------------------------------------
 
 # ubuntu 24.04 rather than debian bookworm: the published jjj 0.5.1 linux-gnu
 # binaries were built on ubuntu-latest and need GLIBC_2.39, which bookworm (2.36)
@@ -50,26 +64,16 @@ RUN set -eux; \
     rm -rf /build; \
     jj --version
 
-# jjj, from its published release.
-RUN set -eux; \
-    case "${TARGETARCH:-arm64}" in \
-        arm64) jjj_target=aarch64-unknown-linux-gnu ;; \
-        amd64) jjj_target=x86_64-unknown-linux-gnu ;; \
-        *) echo "unsupported arch ${TARGETARCH}" >&2; exit 1 ;; \
-    esac; \
-    mkdir -p /build; curl -fsSL -o /build/jjj.tar.gz \
-        "https://github.com/doug/jjj/releases/download/v${JJJ_VERSION}/jjj-${JJJ_VERSION}-${jjj_target}.tar.gz"; \
-    tar -xzf /build/jjj.tar.gz -C /build; \
-    install -m 0755 "$(find /build -type f -name jjj -perm -u+x | head -1)" /usr/local/bin/jjj.real; \
-    rm -rf /build; \
-    /usr/local/bin/jjj.real --version
+# jjj, built from the working tree by the builder stage above.
+COPY --from=builder /src/target/release/jjj /usr/local/bin/jjj.real
+RUN /usr/local/bin/jjj.real --version
 
 # The instrumentation shim shadows the real binary on PATH, so every invocation
 # an agent makes is recorded without the agent knowing or being able to skip it.
-COPY jjj-shim /usr/local/bin/jjj
+COPY tools/swarm/container/jjj-shim /usr/local/bin/jjj
 RUN chmod 0755 /usr/local/bin/jjj
 
-COPY entrypoint.sh /usr/local/bin/agent-entrypoint
+COPY tools/swarm/container/entrypoint.sh /usr/local/bin/agent-entrypoint
 RUN chmod 0755 /usr/local/bin/agent-entrypoint
 
 # Claude Code refuses --dangerously-skip-permissions when running as root, and

@@ -74,6 +74,31 @@ design's locked decisions assert but never verified:
 - Did agents follow the skill — identity set, ids not titles?
 - Did the fitness actually climb, or were agents merely busy?
 
+## Findings so far
+
+The rig earned its keep on its first run.
+
+**Per-pod push was broken in the shipped release.** Every `jjj push` from a pod
+failed with `cannot lock ref 'refs/heads/jjj/pod-2': 'refs/heads/jjj' exists`.
+A git ref is a path, so the bare `jjj` bookmark being a *file* means no ref can
+nest beneath it — and every real repository has that bookmark. Break #5's
+remedy for ref contention had therefore never worked. Fixed to sibling refs
+(`jjj-{pod}`); see `pod_and_bare_bookmarks_coexist_on_a_remote`.
+
+**The published Linux binaries did not run on most distros.** Building the agent
+image against Debian bookworm surfaced `GLIBC_2.39 not found`: the release built
+`*-linux-gnu` on ubuntu-latest. Linux targets are now static musl.
+
+**A naive auto-resolve loses work silently.** The harness resolved code merge
+conflicts with `git checkout --ours`, which discarded another agent's registry
+entry — a fully correct `roman` implementation scored zero because its
+registration vanished. That is decision 10's hazard in miniature. The append-only
+shared files now use a union merge driver, and the harness no longer picks a side.
+
+**Scale is bounded by container memory, not tokens.** Agents need ~3 GiB
+(node plus the CLI); at 1 GiB they are OOM-killed mid-turn, which looks
+identical to a crash. Size the podman machine accordingly.
+
 ## Known gaps this rig should expose
 
 Four decisions in `docs/design/scaling-for-agent-swarms.md` are locked but
