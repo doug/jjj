@@ -1,6 +1,6 @@
 mod test_helpers;
 
-use test_helpers::{jj_available, run_jjj, run_jjj_success, setup_test_repo};
+use test_helpers::{jj_available, run_jjj, run_jjj_env, run_jjj_success, setup_test_repo};
 
 #[test]
 fn test_solution_new_creates_solution() {
@@ -680,5 +680,90 @@ fn test_solution_edit_set_tags() {
         !stdout.contains("Tags:"),
         "Expected no tags after clear: {}",
         stdout
+    );
+}
+
+/// Signing off must be able to finish the job.
+///
+/// `lgtm` records a review and then only *prints* "Ready to approve: jjj
+/// solution approve ...". A swarm trial ended with eight reviewed solutions and
+/// nothing merged, on two lgtm calls and zero approve calls: the reviewers
+/// considered the review done, and under a merge gate nothing lands until a
+/// solution is Approved. `--approve` closes that gap explicitly, and still
+/// refuses while anything is blocking.
+#[test]
+fn lgtm_can_approve_when_nothing_is_blocking() {
+    if !jj_available() {
+        return;
+    }
+    let dir = setup_test_repo();
+    run_jjj_success(&dir, &["problem", "new", "Problem"]);
+    run_jjj_success(
+        &dir,
+        &["solution", "new", "Solution", "--problem", "Problem"],
+    );
+    run_jjj_success(&dir, &["solution", "submit", "Solution"]);
+
+    // A reviewer who is not the author.
+    let out = run_jjj_env(
+        &dir,
+        &[("JJJ_USER", "reviewer")],
+        &[
+            "solution",
+            "lgtm",
+            "Solution",
+            "--approve",
+            "--rationale",
+            "ran the benchmark: 2.8x -> 2.1x",
+        ],
+    );
+    assert!(
+        out.status.success(),
+        "lgtm --approve failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    let shown = run_jjj_success(&dir, &["solution", "show", "Solution"]);
+    assert!(
+        shown.to_lowercase().contains("approved"),
+        "lgtm --approve left the solution unapproved: {shown}"
+    );
+}
+
+/// An open critique must still block, flag or no flag.
+#[test]
+fn lgtm_approve_refuses_while_a_critique_is_open() {
+    if !jj_available() {
+        return;
+    }
+    let dir = setup_test_repo();
+    run_jjj_success(&dir, &["problem", "new", "Problem"]);
+    run_jjj_success(
+        &dir,
+        &["solution", "new", "Solution", "--problem", "Problem"],
+    );
+    run_jjj_success(&dir, &["solution", "submit", "Solution"]);
+    run_jjj_success(
+        &dir,
+        &[
+            "critique",
+            "new",
+            "Solution",
+            "This is wrong",
+            "--severity",
+            "high",
+        ],
+    );
+
+    run_jjj_env(
+        &dir,
+        &[("JJJ_USER", "reviewer")],
+        &["solution", "lgtm", "Solution", "--approve"],
+    );
+
+    let shown = run_jjj_success(&dir, &["solution", "show", "Solution"]);
+    assert!(
+        !shown.to_lowercase().contains("approved"),
+        "an open critique must block approval: {shown}"
     );
 }

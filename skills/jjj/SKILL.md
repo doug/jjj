@@ -407,7 +407,7 @@ jjj solution submit ID              # open for critique
 jjj solution approve ID [--rationale "..." | --no-rationale] [--force]
 jjj solution withdraw ID [--rationale "..."]
 jjj solution list [--json]          jjj solution show ID [--json]
-jjj solution diff ID [--json]       jjj solution lgtm ID
+jjj solution diff ID [--json]       jjj solution lgtm ID [--approve]
 
 # Critiques
 jjj critique new SOLUTION_ID "Title" [--body TEXT | --body -]

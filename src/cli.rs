@@ -816,6 +816,12 @@ pub enum SolutionAction {
         /// Record why you signed off — the evidence behind the approval
         #[arg(long)]
         rationale: Option<String>,
+
+        /// Approve too, if nothing is left blocking. Signing off does not
+        /// approve on its own — a reviewer who stops at lgtm leaves the work
+        /// stranded, which is easy to miss in an automated loop.
+        #[arg(long)]
+        approve: bool,
     },
 
     /// Leave a reply on a critique of this solution

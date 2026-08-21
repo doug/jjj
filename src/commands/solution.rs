@@ -93,7 +93,8 @@ pub fn execute(ctx: &CommandContext, action: SolutionAction) -> Result<()> {
         SolutionAction::Lgtm {
             solution_id,
             rationale,
-        } => lgtm_solution(ctx, solution_id, rationale),
+            approve,
+        } => lgtm_solution(ctx, solution_id, rationale, approve),
         SolutionAction::Comment {
             solution_id,
             critique,
@@ -903,6 +904,7 @@ fn lgtm_solution(
     ctx: &CommandContext,
     solution_input: String,
     rationale: Option<String>,
+    approve: bool,
 ) -> Result<()> {
     let store = &ctx.store;
     let solution_id = ctx.resolve_solution(&solution_input)?;
@@ -1021,8 +1023,18 @@ fn lgtm_solution(
         .count();
 
     if remaining == 0 {
-        println!("All critiques resolved. Ready to approve:");
-        println!("  jjj solution approve \"{}\"", solution.title);
+        if approve {
+            crate::domain::approve_solution(store, &solution_id, false, rationale.as_deref())?;
+            println!("Approved '{}'.", solution.title);
+        } else {
+            println!("All critiques resolved. Ready to approve:");
+            println!("  jjj solution approve \"{}\"", solution.title);
+        }
+    } else if approve {
+        println!(
+            "{} critique(s) still open — not approving. Address them first.",
+            remaining
+        );
     } else {
         println!("{} critique(s) still open.", remaining);
     }
