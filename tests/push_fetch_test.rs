@@ -1461,7 +1461,7 @@ fn two_submitted_solutions_publish_to_distinct_branches() {
         .stdout,
     )
     .lines()
-    .filter(|l| l.starts_with("jjj-s-"))
+    .filter(|l| l.starts_with("review-s-"))
     .map(str::to_string)
     .collect::<Vec<_>>();
 
@@ -1534,5 +1534,78 @@ fn a_fetch_advanced_base_still_pushes_local_edits() {
     assert!(
         listed.contains("Shared"),
         "the original problem went missing: {listed}"
+    );
+}
+
+/// A review branch must not live in the metadata namespace.
+///
+/// `JjClient::meta_head_commits` finds metadata bookmarks by globbing `jjj*`,
+/// and merges every head it finds into the commit that push publishes. A review
+/// branch named `jjj-s-<id>` matches that glob, so the solution's *code* commit
+/// gets merged into the *metadata* commit: the sync commit picks up the whole
+/// source tree, conflicts many ways against the other pods' heads, and jj
+/// refuses to push a conflicted commit. In one trial 78 of 92 metadata pushes
+/// failed exactly this way.
+#[test]
+fn a_review_branch_is_not_mistaken_for_a_metadata_bookmark() {
+    if !jj_available() {
+        return;
+    }
+    let remote = create_bare_remote();
+    let author = setup_repo_with_remote(remote.path());
+    run_jjj_success(author.path(), &["init"]);
+    run_jjj_success(
+        author.path(),
+        &["problem", "new", "Needs fixing", "--force"],
+    );
+
+    std::fs::write(author.path().join("fix.txt"), "the fix\n").expect("write fix");
+    run_jj(author.path(), &["file", "track", "fix.txt"]);
+    run_jj(author.path(), &["describe", "-m", "the actual fix"]);
+    run_jjj_success(
+        author.path(),
+        &[
+            "solution",
+            "new",
+            "The fix",
+            "--problem",
+            "Needs fixing",
+            "--force",
+        ],
+    );
+    run_jjj_success(author.path(), &["solution", "attach", "The fix"]);
+    run_jjj_success(author.path(), &["solution", "submit", "The fix"]);
+
+    let branches = String::from_utf8_lossy(
+        &run_jj(
+            author.path(),
+            &["bookmark", "list", "-T", r#"name ++ "\n""#],
+        )
+        .stdout,
+    )
+    .lines()
+    .map(str::to_string)
+    .collect::<Vec<_>>();
+
+    let review: Vec<&String> = branches.iter().filter(|b| b.contains("-s-")).collect();
+    assert!(
+        !review.is_empty(),
+        "no review branch was published: {branches:?}"
+    );
+    for b in &review {
+        assert!(
+            !b.starts_with("jjj"),
+            "review branch {b} sits in the jjj* metadata namespace, so \
+             meta_head_commits will merge a code commit into the metadata commit"
+        );
+    }
+
+    // And metadata push must still work with a review branch present.
+    let out = run_jjj(author.path(), &["push"]);
+    assert!(
+        out.status.success(),
+        "push failed with a review branch present: {}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
     );
 }

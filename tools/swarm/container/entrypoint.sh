@@ -162,7 +162,7 @@ the body — `jjj critique new <sid> "Short title" --body -` reads stdin, so a
 long argument survives intact. A title is a label, not the argument.
 
 A submitted solution has its diff published as a branch, so review the real
-code: `git fetch origin jjj-s-<solution-id> && git diff main...FETCH_HEAD`.
+code: `git fetch origin review-s-<solution-id> && git diff main...FETCH_HEAD`.
 
 Your sign-off is what lets code reach the shared branch — nothing merges
 without it. That cuts both ways: waving through a change that lowers the score,
@@ -263,14 +263,14 @@ while true; do
     # code landed whether or not anyone had reviewed it: the critics were real,
     # their reasoning was good, and nothing they concluded could stop a merge.
     # That measures six agents editing a shared branch, not an economy of
-    # critique. `jjj solution submit` now publishes a jjj-s-<id> branch, so a
+    # critique. `jjj solution submit` now publishes a review-s-<id> branch, so a
     # reviewer can read the actual diff — and approval can mean something.
     if [ "${SWARM_MERGE_GATE:-0}" = "1" ]; then
         for sid in $(jjj solution list --status approved --json 2>/dev/null \
                      | python3 -c 'import json,sys
 try: print(" ".join(s["id"] for s in json.load(sys.stdin)))
 except Exception: pass' 2>/dev/null); do
-            b="jjj-s-$sid"
+            b="review-s-$sid"
             git fetch -q origin "$b" 2>/dev/null || continue
             # Already in? Nothing to do.
             git merge-base --is-ancestor FETCH_HEAD origin/main 2>/dev/null && continue

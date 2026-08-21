@@ -682,12 +682,7 @@ fn publish_attached_changes(ctx: &CommandContext, solution_id: &str) {
         return;
     };
 
-    // The **full** id, not `short_id`. Entity ids are UUID7 and therefore
-    // time-ordered, so every solution created in the same session shares a long
-    // leading prefix — a swarm's solutions were 01a0225…, 01a02249…, 01a0224a…,
-    // all of which `short_id` truncates to the same "01a022". Every agent would
-    // publish its review branch over every other agent's.
-    let branch = format!("jjj-s-{}", solution_id);
+    let branch = crate::storage::sync_state::review_branch(solution_id);
     let jj = ctx.jj();
 
     // `bookmark set` rather than `create`: resubmitting after addressing a

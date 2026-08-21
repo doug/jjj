@@ -51,6 +51,23 @@ use std::path::{Path, PathBuf};
 /// bookmark for single-writer / backward-compatible operation.
 pub const BOOKMARK_PREFIX: &str = "jjj";
 
+/// Branch carrying a solution's code for review.
+///
+/// Deliberately **outside** the `jjj*` namespace. Metadata bookmarks are found
+/// by globbing `jjj*` (see `JjClient::meta_head_commits`), so a review branch
+/// called `jjj-s-<id>` is indistinguishable from a pod's metadata bookmark. It
+/// then gets merged into the metadata sync commit, which drags the whole source
+/// tree in, conflicts many ways, and jj refuses to push the result: in one
+/// trial 78 of 92 metadata pushes failed that way, with the fleet still limping
+/// along on the few that got through.
+///
+/// The full id, not a short prefix: entity ids are UUID7 and time-ordered, so
+/// solutions from one session share a long leading prefix and a truncated name
+/// would collide across agents.
+pub fn review_branch(solution_id: &str) -> String {
+    format!("review-s-{}", solution_id)
+}
+
 /// File name of the local-only sync-state pointer, stored under the meta dir.
 /// The leading dot keeps it out of every entity glob and the push copy.
 pub const SYNC_STATE_FILE: &str = ".sync_state.json";

@@ -404,10 +404,7 @@ fn sync_pr(
     let problem = ctx.store.load_problem(&solution.problem_id)?;
 
     // Generate branch name
-    let sid = short_id(&sol_id);
-    // `jjj-s-`, not `jjj/s-`: refs/heads/jjj is a file, so a nested
-    // refs/heads/jjj/s-<id> is a git D/F conflict and the push is rejected.
-    let branch = format!("jjj-s-{}", sid);
+    let branch = crate::storage::sync_state::review_branch(&sol_id);
 
     if let Some(pr_number) = solution.github_pr {
         // PR already exists — update by pushing branch

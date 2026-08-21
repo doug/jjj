@@ -7,7 +7,6 @@
 //! Network failures print warnings but never block local operations.
 
 use crate::context::CommandContext;
-use crate::display::short_id;
 use crate::models::{Problem, Solution};
 use crate::storage::MetadataStore;
 use crate::sync::github::GitHubProvider;
@@ -64,10 +63,7 @@ pub fn do_create_or_update_pr(
         return Ok(());
     }
 
-    let sid = short_id(&solution.id);
-    // `jjj-s-`, not `jjj/s-`: refs/heads/jjj is a file, so a nested
-    // refs/heads/jjj/s-<id> is a git D/F conflict and the push is rejected.
-    let branch = format!("jjj-s-{}", sid);
+    let branch = crate::storage::sync_state::review_branch(&solution.id);
 
     // Auto-created PRs target the default branch.
     let pr_number = provider.create_pr(solution, &problem, &branch, "main")?;
