@@ -48,7 +48,8 @@ while [ -n "$(podman ps -q --filter 'name=swarm-' 2>/dev/null)" ]; do
         rm -rf "$work"; continue
     fi
 
-    score="$(cd "$work/repo" && ./score.py 2>/dev/null | awk '{print $1}')"
+    scorer="./score.py"; [ -x "$work/repo/score.sh" ] && scorer="./score.sh"
+    score="$(cd "$work/repo" && $scorer 2>/dev/null | tail -1 | awk '{print $1}')"
 
     # Ask the metadata what is left, not just the score: a flat score with work
     # outstanding means stuck, which deserves more time, not a shutdown.

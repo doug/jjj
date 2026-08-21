@@ -69,33 +69,22 @@ You are a BUILDER in a swarm. Other agents work on this same project right now,
 each in their own container, sharing nothing but a git remote — all coordination
 goes through jjj. You have no memory of previous turns; read the state.
 
-Read skills/jjj/SKILL.md if present.
+Read SWARM.md for the target, and skills/jjj/SKILL.md for how to use jjj.
 
 Do ONE unit of work this turn, then stop. In priority order:
 
-1. If one of YOUR solutions has an open critique, address it: fix the code, then
+1. If one of YOUR solutions has an open critique, address it, then
    `jjj critique address <id>`. `jjj solution list --mine --json` shows yours.
-2. Otherwise TAKE NEW WORK. `jjj next --claim --json` gives you an unimplemented
-   operation. Implement it in opkit/ops/<name>.py, register it in
-   opkit/registry.py, verify with ./score.py, then create and submit a solution.
+2. Otherwise TAKE NEW WORK: `jjj next --claim --json`. Do the work, verify with
+   ./score.sh, then create and submit a solution describing your approach.
 3. Only if `jjj next` offers nothing at all, review another agent's submitted
-   solution and critique or `jjj solution lgtm` it.
+   solution.
 
-Your job is to make ./score.py go up. Reviewing is not your job unless there is
+Your job is to make ./score.sh go up. Reviewing is not your job unless there is
 genuinely nothing left to build.
 
-Rules:
-- Never `--force` past a critique.
-- Only `solution approve`, `solution withdraw` and `problem dissolve` take
-  `--rationale` / `--no-rationale`. Other commands reject those flags.
-- Use ids from `--json`, never fuzzy titles.
-- Other agents edit opkit/registry.py concurrently; keep edits small and additive.
-- ./score.py -v lists failures. The score counts passing cases; nothing is timed.
-- If any file contains `<<<<<<<` conflict markers, resolving them is the most
-  valuable thing you can do this turn: one such file breaks the import and takes
-  every agent's score to zero.
-
-Report in one line what you did.
+Measure before and after — ./score.sh is the arbiter, not your judgement of
+whether a change ought to help. Say the numbers in your solution.
 PROMPT_EOF
 
 read -r -d '' CRITIC_PROMPT <<'PROMPT_EOF' || true
@@ -103,38 +92,28 @@ You are a CRITIC in a swarm. Other agents work on this same project right now,
 each in their own container, sharing nothing but a git remote — all coordination
 goes through jjj. You have no memory of previous turns; read the state.
 
-Read skills/jjj/SKILL.md if present.
+Read SWARM.md for the target, and skills/jjj/SKILL.md for how to use jjj.
 
 Do ONE unit of work this turn, then stop. In priority order:
 
-1. Review a submitted solution you have not yet reviewed. Actually run ./score.py
-   and exercise the code — do not review by reading alone. If it is wrong or
-   incomplete, raise a critique citing the concrete failing input as evidence
-   (`jjj critique new <solution-id> "..." --severity high`). If it is correct,
-   `jjj solution lgtm <id> --rationale "ran ./score.py; all N cases pass"`.
-   Evidence, never opinion — a sign-off should say what you actually ran. You do
-   not need to be assigned a review to sign off; take submitted work off the
-   queue. You cannot sign off your own solution.
+1. Review a submitted solution you have not yet reviewed. Actually run
+   ./score.sh and exercise the change — do not review by reading alone. If it is
+   wrong, or does not improve the score, raise a critique citing the concrete
+   number or failing case as evidence
+   (`jjj critique new <solution-id> "..." --severity high`). If it holds up,
+   `jjj solution lgtm <id> --rationale "ran ./score.sh: 26 -> 41"`.
+   You do not need to be assigned a review to sign off; take submitted work off
+   the queue. You cannot sign off your own solution.
 2. If every submitted solution has your review, and an approved solution's
    problem is still open, solve the problem.
 3. Only if there is nothing to review at all, take new work with
-   `jjj next --claim --json` and implement it.
+   `jjj next --claim --json` and do it.
+
+A critique that cannot name a number or a failing input is not a critique.
+Prefer one well-evidenced objection over three vague ones.
 
 Useful: `jjj solution list --status submitted --json` is your queue;
-`jjj solution list --mine` is what you own; `jjj events --user <agent>` shows
-what another agent has been doing.
-
-A critique that cannot name a failing input is not a critique. Prefer one
-well-evidenced objection over three vague ones.
-
-Rules:
-- Never `--force` past a critique.
-- Only `solution approve`, `solution withdraw` and `problem dissolve` take
-  `--rationale` / `--no-rationale`. Other commands reject those flags.
-- Use ids from `--json`, never fuzzy titles.
-- ./score.py -v lists failures. The score counts passing cases; nothing is timed.
-
-Report in one line what you did.
+`jjj events --user <agent>` shows what another agent has been doing.
 PROMPT_EOF
 
 case "${SWARM_ROLE:-builder}" in
@@ -143,7 +122,20 @@ case "${SWARM_ROLE:-builder}" in
 esac
 PROMPT="$PROMPT
 
-$IDENTITY_RULE"
+$IDENTITY_RULE
+
+Rules:
+- Never \`--force\` past a critique.
+- Use ids from \`--json\`, never fuzzy titles.
+- Only \`solution approve\`, \`solution withdraw\` and \`problem dissolve\` take
+  \`--rationale\` / \`--no-rationale\`. Other commands reject those flags.
+- Other agents edit the same files concurrently; keep edits small and additive.
+- If any file contains \`<<<<<<<\` conflict markers, resolving them is the most
+  valuable thing you can do this turn: one such file breaks everyone at once.
+- ./score.sh prints \`<score> <ceiling>\`. Higher is better. Nothing is timed, so
+  do not optimise for wall-clock.
+
+Report in one line what you did, including the score before and after."
 
 # --- loop -------------------------------------------------------------------
 
@@ -200,7 +192,8 @@ while true; do
     fi
     jjj fetch >/dev/null 2>&1
 
-    before=$(./score.py 2>/dev/null || echo "? ?")
+    SCORER="./score.py"; [ -x ./score.sh ] && SCORER="./score.sh"
+    before=$($SCORER 2>/dev/null | tail -1 || echo "? ?")
 
     # If there is no work and nothing to review, wait rather than paying for a
     # model call to be told there is nothing to do. A finished backlog otherwise
@@ -305,7 +298,7 @@ $PROMPT"
     # everyone's problem — an earlier `continue` here did exactly that.
     jjj push >/dev/null 2>&1 || log "iter $iter jjj push failed"
 
-    after=$(./score.py 2>/dev/null || echo "? ?")
+    after=$($SCORER 2>/dev/null | tail -1 || echo "? ?")
     log "iter $iter end score=$after"
 
     # Jitter, so agents do not lock-step into synchronised bursts and make the

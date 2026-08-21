@@ -10,26 +10,10 @@
 # jjj is compiled from the working tree, so a trial always exercises the code
 # under development rather than the last release.
 
-# --- builder: compile jjj from this working tree ------------------------------
-#
-# The rig must test the code in front of us, not the last published release.
-# The first shakedown ran against release 0.5.1 and every pod push failed on a
-# bug already fixed locally — the results were about a stale binary. Building
-# here keeps the trial honest.
-
-FROM docker.io/library/rust:1-bookworm AS builder
-WORKDIR /src
-COPY Cargo.toml Cargo.lock ./
-COPY src ./src
-RUN cargo build --release --locked && strip target/release/jjj
-
-# --- agent image -------------------------------------------------------------
-
-# ubuntu 24.04 rather than debian bookworm: the published jjj 0.5.1 linux-gnu
-# binaries were built on ubuntu-latest and need GLIBC_2.39, which bookworm (2.36)
-# does not have. The real fix is musl release builds — see .github/workflows/
-# release.yml. Until a musl release exists, the base must match the build host.
-FROM docker.io/library/ubuntu:24.04
+# Single stage on the Rust image. Agents working the jjj self-improvement target
+# need cargo themselves — they build and test the tree they are modifying — and
+# a separate builder stage would leave them without it.
+FROM docker.io/library/rust:1-bookworm
 
 ARG JJ_VERSION=0.44.0
 ARG JJJ_VERSION=0.5.1
@@ -64,9 +48,18 @@ RUN set -eux; \
     rm -rf /build; \
     jj --version
 
-# jjj, built from the working tree by the builder stage above.
-COPY --from=builder /src/target/release/jjj /usr/local/bin/jjj.real
-RUN /usr/local/bin/jjj.real --version
+# The KNOWN-GOOD jjj used for *coordination*, compiled from this working tree.
+#
+# Two binaries exist and the distinction is load-bearing: agents modifying jjj
+# would otherwise break the very tool they use to report that they broke it.
+# This one never changes during a run; the agent's own build lives under the
+# workbench and is exercised only by ./score.sh.
+WORKDIR /src
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+RUN cargo build --release --locked \
+    && install -m 0755 target/release/jjj /usr/local/bin/jjj.real \
+    && /usr/local/bin/jjj.real --version
 
 # The instrumentation shim shadows the real binary on PATH, so every invocation
 # an agent makes is recorded without the agent knowing or being able to skip it.
@@ -93,7 +86,13 @@ RUN userdel --remove ubuntu 2>/dev/null || true; \
 
 ENV SWARM_JJJ_BIN=/usr/local/bin/jjj.real \
     HOME=/home/swarm \
+    CARGO_HOME=/home/swarm/.cargo \
     GIT_TERMINAL_PROMPT=0
+
+# Seed the agent's cargo home from the image build, so the first `cargo build`
+# inside a container does not re-fetch the whole crate index — which would
+# otherwise dominate every agent's first turn.
+RUN cp -a /usr/local/cargo /home/swarm/.cargo && chown -R swarm:swarm /home/swarm/.cargo
 
 USER swarm
 WORKDIR /work

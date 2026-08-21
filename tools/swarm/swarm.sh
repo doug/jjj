@@ -13,7 +13,7 @@
 # experiment; a bookmark per agent would have quietly designed it away.
 #
 #   ./swarm.sh build                                  build the agent image
-#   ./swarm.sh init  [--pods N] [--agents N] [--problems N] [--critics N]
+#   ./swarm.sh init  [--target toy|jjj] [--pods N] [--agents N] [--problems N] [--critics N]
 #   ./swarm.sh start [--hours H] [--max-iters N] [--model M] [--stop-when-done]
 #   ./swarm.sh status
 #   ./swarm.sh logs [agent]
@@ -62,13 +62,14 @@ cmd_build() {
 # --- init -------------------------------------------------------------------
 
 cmd_init() {
-    local pods=2 agents=3 problems=8 critics=1
+    local pods=2 agents=3 problems=8 critics=1 target="toy"
     while [ $# -gt 0 ]; do
         case "$1" in
             --pods) pods="$2"; shift 2 ;;
             --agents) agents="$2"; shift 2 ;;
             --problems) problems="$2"; shift 2 ;;
             --critics) critics="$2"; shift 2 ;;
+            --target) target="$2"; shift 2 ;;
             *) die "unknown option $1" ;;
         esac
     done
@@ -88,9 +89,27 @@ cmd_init() {
         info "      than agents produces more claim contention, which is the point"
     fi
 
-    info "seeding workbench ($problems operations)"
-    python3 "$SWARM_DIR/toy/seed.py" "$SEED" --problems "$problems" --jjj "$JJJ_BIN" --force \
-        >"$SWARM_ROOT/logs/seed.log" 2>&1 || { cat "$SWARM_ROOT/logs/seed.log"; die "seeding failed"; }
+    case "$target" in
+        toy)
+            info "seeding the toy workbench ($problems operations)"
+            python3 "$SWARM_DIR/toy/seed.py" "$SEED" --problems "$problems" \
+                --jjj "$JJJ_BIN" --force \
+                >"$SWARM_ROOT/logs/seed.log" 2>&1 \
+                || { cat "$SWARM_ROOT/logs/seed.log"; die "seeding failed"; }
+            ;;
+        jjj)
+            # A clone of the repository, never the repository: a nine-agent
+            # fleet editing the tree we ship from is more blast radius than an
+            # experiment deserves. The clone has no origin, so nothing an agent
+            # does can reach it, and whatever survives is merge-gated by hand.
+            info "cloning jjj as the workbench (self-improvement target)"
+            "$SWARM_DIR/targets/jjj/seed.sh" "$SEED" "$REPO_ROOT" "$JJJ_BIN" \
+                >"$SWARM_ROOT/logs/seed.log" 2>&1 \
+                || { cat "$SWARM_ROOT/logs/seed.log"; die "seeding failed"; }
+            grep -E '^(baseline|problems)' "$SWARM_ROOT/logs/seed.log" | sed 's/^/  /'
+            ;;
+        *) die "unknown target '$target' (expected toy or jjj)" ;;
+    esac
 
     # The skill is half of what is under test, so it ships inside the repo the
     # agents clone rather than being mounted in.
@@ -109,6 +128,7 @@ cmd_init() {
     ( cd "$REMOTE" && git symbolic-ref HEAD refs/heads/main )
 
     cat > "$SWARM_ROOT/config" <<EOF
+target=$target
 pods=$pods
 agents=$agents
 problems=$problems
@@ -117,7 +137,8 @@ EOF
 
     echo
     echo "Ready: $pods pods x $agents agents = $total containers"
-    echo "  ceiling: $(cd "$SEED" && ./score.py | awk '{print $2}') conformance cases"
+    local scorer="./score.py"; [ -x "$SEED/score.sh" ] && scorer="./score.sh"
+    echo "  baseline: $(cd "$SEED" && $scorer 2>/dev/null | tail -1)"
     echo "  start with: $0 start --hours 1"
 }
 
@@ -242,7 +263,8 @@ cmd_status() {
     report_ooms
 
     if [ -d "$SEED" ]; then
-        echo "seed score: $(cd "$SEED" && ./score.py 2>/dev/null)"
+        local scorer="./score.py"; [ -x "$SEED/score.sh" ] && scorer="./score.sh"
+        echo "seed score: $(cd "$SEED" && $scorer 2>/dev/null | tail -1)"
     fi
 
     if [ -s "$LOG" ]; then
