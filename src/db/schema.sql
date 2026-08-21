@@ -119,6 +119,16 @@ CREATE INDEX IF NOT EXISTS idx_problems_github_issue ON problems(github_issue);
 CREATE INDEX IF NOT EXISTS idx_solutions_github_pr ON solutions(github_pr);
 CREATE INDEX IF NOT EXISTS idx_critiques_github_review_id ON critiques(github_review_id);
 
+-- Per-file content fingerprints, used by the incremental push-validation
+-- reload to skip re-parsing markdown that has not changed since the cache
+-- last saw it (see db::sync::load_from_markdown_incremental).
+CREATE TABLE IF NOT EXISTS content_cache (
+    entity_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    content_hash TEXT NOT NULL,
+    PRIMARY KEY (entity_type, entity_id)
+);
+
 -- Embeddings table for semantic search
 CREATE TABLE IF NOT EXISTS embeddings (
     entity_type TEXT NOT NULL,

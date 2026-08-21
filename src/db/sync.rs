@@ -3,6 +3,8 @@
 //! This module handles loading metadata from the shadow branch (markdown files)
 //! into SQLite for fast queries, and dumping SQLite data back to markdown.
 
+use std::collections::HashMap;
+
 use rusqlite::{params, Connection};
 
 use crate::db::entities::{
@@ -12,7 +14,7 @@ use crate::db::entities::{
 use crate::db::events::{clear_events, insert_event};
 use crate::db::Database;
 use crate::error::Result;
-use crate::storage::MetadataStore;
+use crate::storage::{MetadataStore, Persist};
 
 /// Load all metadata from markdown files into SQLite.
 ///
@@ -86,6 +88,119 @@ pub fn load_from_markdown(db: &Database, store: &MetadataStore) -> Result<()> {
             // incremental-ingest offsets — otherwise the next ingest would
             // replay the whole log into the table it's already in (duplicates).
             let _ = store.reset_event_offsets();
+            Ok(())
+        }
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK");
+            Err(e)
+        }
+    }
+}
+
+/// Read the `entity_id -> content_hash` map recorded for one entity type.
+fn load_content_hashes(conn: &Connection, entity_type: &str) -> Result<HashMap<String, u64>> {
+    let mut stmt =
+        conn.prepare("SELECT entity_id, content_hash FROM content_cache WHERE entity_type = ?1")?;
+    let rows = stmt.query_map(params![entity_type], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+    })?;
+    let mut map = HashMap::new();
+    for row in rows {
+        let (id, hash_str) = row?;
+        if let Ok(hash) = hash_str.parse::<u64>() {
+            map.insert(id, hash);
+        }
+    }
+    Ok(map)
+}
+
+fn save_content_hash(
+    conn: &Connection,
+    entity_type: &str,
+    entity_id: &str,
+    hash: u64,
+) -> Result<()> {
+    conn.execute(
+        "INSERT OR REPLACE INTO content_cache (entity_type, entity_id, content_hash) VALUES (?1, ?2, ?3)",
+        params![entity_type, entity_id, hash.to_string()],
+    )?;
+    Ok(())
+}
+
+fn remove_content_hash(conn: &Connection, entity_type: &str, entity_id: &str) -> Result<()> {
+    conn.execute(
+        "DELETE FROM content_cache WHERE entity_type = ?1 AND entity_id = ?2",
+        params![entity_type, entity_id],
+    )?;
+    Ok(())
+}
+
+/// Reconcile SQLite from markdown, but skip the parse + upsert for any file
+/// whose content hash matches what `content_cache` recorded at the last
+/// reload (see [`crate::storage::MetadataStore::list_fs_changed`]).
+///
+/// This exists for `push`'s pre-publish validation. `load_from_markdown` is
+/// unconditional and O(corpus) — it clears and re-parses every entity file on
+/// every push, regardless of how many changed, which is the exact push-side
+/// counterpart of the O(corpus) fetch bug already fixed (see
+/// `docs/design/sync-scaling-investigation.md`). Skipping the reload outright
+/// when the DB looked "clean" was tried and rejected: the dirty flag means "a
+/// sync was interrupted", not "the markdown hasn't changed" — markdown
+/// written by anything other than jjj itself (a `git merge`, a hand edit)
+/// would leave a stale cache un-validated. Hashing every file's *current*
+/// content and comparing it to what was last loaded gets the same
+/// correctness guarantee — every changed file is always re-validated — while
+/// only paying parse + SQL cost for the delta.
+///
+/// New files always miss the hash cache (nothing recorded for an id that was
+/// never seen), so a freshly added dangling reference or conflict-marked body
+/// is loaded and validated exactly as it would be by a full reload.
+pub fn load_from_markdown_incremental(db: &Database, store: &MetadataStore) -> Result<()> {
+    let conn = db.conn();
+
+    set_dirty_internal(conn, true)?;
+    conn.execute_batch("BEGIN")?;
+
+    let result = (|| -> Result<()> {
+        use crate::models::{Critique, Milestone, Problem, Solution};
+
+        macro_rules! reconcile {
+            ($ty:ty, $entity_type:expr, $sync_fn:path) => {{
+                let known = load_content_hashes(conn, $entity_type)?;
+                let (changed, removed, current) = store.list_fs_changed::<$ty>(&known)?;
+                for entity in &changed {
+                    $sync_fn(db, entity)?;
+                    if let Some(hash) = current.get(entity.id()) {
+                        save_content_hash(conn, $entity_type, entity.id(), *hash)?;
+                    }
+                }
+                for id in &removed {
+                    remove_entity_from_cache(db, $entity_type, id)?;
+                    remove_content_hash(conn, $entity_type, id)?;
+                }
+            }};
+        }
+
+        // Same dependency order as the full reload: milestones and problems
+        // before the solutions/critiques that reference them.
+        reconcile!(Milestone, "milestone", sync_milestone_to_cache);
+        reconcile!(Problem, "problem", sync_problem_to_cache);
+        reconcile!(Solution, "solution", sync_solution_to_cache);
+        reconcile!(Critique, "critique", sync_critique_to_cache);
+
+        // Ingest only newly-appended events (Pillar 3's offset-tracked path),
+        // not a full clear + replay of the whole log.
+        store.ingest_events_incremental(db)?;
+
+        prune_orphan_embeddings(conn)?;
+
+        Ok(())
+    })();
+
+    match result {
+        Ok(()) => {
+            conn.execute_batch("COMMIT")?;
+            set_dirty_internal(conn, false)?;
             Ok(())
         }
         Err(e) => {

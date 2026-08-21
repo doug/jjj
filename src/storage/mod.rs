@@ -237,6 +237,22 @@ fn merge_config(base: &mut ProjectConfig, project: &ProjectConfig) {
     // `automation.toml` instead; see `MetadataStore::load_config`.
 }
 
+/// FNV-1a over raw file bytes — a cheap, stable-across-runs change fingerprint
+/// for [`MetadataStore::list_fs_changed`]. Not cryptographic: it only needs to
+/// detect "this file's content differs from what the cache last saw", and a
+/// hand-rolled algorithm avoids depending on `DefaultHasher`, whose output is
+/// explicitly not guaranteed stable across Rust versions.
+fn fnv1a(bytes: &[u8]) -> u64 {
+    const OFFSET_BASIS: u64 = 0xcbf29ce484222325;
+    const PRIME: u64 = 0x100000001b3;
+    let mut hash = OFFSET_BASIS;
+    for &b in bytes {
+        hash ^= b as u64;
+        hash = hash.wrapping_mul(PRIME);
+    }
+    hash
+}
+
 // =============================================================================
 // Markdown Frontmatter Parsing
 // =============================================================================
@@ -519,6 +535,14 @@ impl Persist for crate::models::Milestone {
     }
 }
 
+/// Content hashes for the entity files of one type, keyed by entity id.
+pub(crate) type ContentHashes = std::collections::HashMap<String, u64>;
+
+/// What a hash-compared directory walk found: entities whose content changed or
+/// are new, ids that vanished from disk, and the full current hash map for the
+/// caller to persist as the next baseline.
+pub(crate) type FsChanges<T> = (Vec<T>, Vec<String>, ContentHashes);
+
 impl MetadataStore {
     /// Create a new metadata store
     pub fn new(jj_client: JjClient) -> Result<Self> {
@@ -716,6 +740,83 @@ impl MetadataStore {
         }
 
         Ok(entities)
+    }
+
+    /// Like [`Self::list_fs`], but skips YAML parsing for any file whose
+    /// content hash matches `known_hashes` — used by the incremental push
+    /// validation reload so an unchanged corpus costs a `read_dir` + hash per
+    /// file instead of a full parse + DB upsert per file.
+    ///
+    /// Returns the entities that need re-upserting into the cache, ids present
+    /// in `known_hashes` but no longer on disk (deleted by another tool), and
+    /// the current id→hash map for the caller to persist as the new baseline.
+    pub(crate) fn list_fs_changed<T: Persist>(
+        &self,
+        known_hashes: &ContentHashes,
+    ) -> Result<FsChanges<T>> {
+        self.ensure_meta_checkout()?;
+
+        let dir = self.meta_path.join(T::DIR);
+        let mut current_hashes = std::collections::HashMap::new();
+        if !dir.exists() {
+            let removed = known_hashes.keys().cloned().collect();
+            return Ok((Vec::new(), removed, current_hashes));
+        }
+
+        let mut changed = Vec::new();
+        let mut failures = Vec::new();
+        for entry in fs::read_dir(&dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) != Some("md") {
+                continue;
+            }
+            let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+                continue;
+            };
+            let content = match fs::read_to_string(&path) {
+                Ok(c) => c,
+                Err(e) => {
+                    failures.push(format!("{}: {}", stem, e));
+                    continue;
+                }
+            };
+            let hash = fnv1a(content.as_bytes());
+            current_hashes.insert(stem.to_string(), hash);
+            if known_hashes.get(stem) == Some(&hash) {
+                continue; // unchanged since the cache last saw it — skip the parse
+            }
+            match parse_frontmatter::<T>(&content) {
+                Ok((mut entity, body)) => {
+                    entity.set_body(body);
+                    changed.push(entity);
+                }
+                Err(e) => failures.push(format!(
+                    "{}: {}",
+                    stem,
+                    add_frontmatter_context(e, T::ENTITY_TYPE, stem)
+                )),
+            }
+        }
+
+        if !failures.is_empty() {
+            crate::output::warn(&format!(
+                "Failed to load {} {}(s):",
+                failures.len(),
+                T::ENTITY_TYPE
+            ));
+            for failure in &failures {
+                crate::output::warn(&format!("  {}", failure));
+            }
+        }
+
+        let removed = known_hashes
+            .keys()
+            .filter(|id| !current_hashes.contains_key(id.as_str()))
+            .cloned()
+            .collect();
+
+        Ok((changed, removed, current_hashes))
     }
 
     /// Delete an entity's markdown file and remove it from the cache.

@@ -131,6 +131,22 @@ pub fn all_migrations() -> Vec<Migration> {
                 Ok(())
             },
         },
+        Migration {
+            version: 11,
+            description: "Add content_cache table for incremental push validation",
+            requires_rebuild: false,
+            up: |conn| {
+                conn.execute_batch(
+                    "CREATE TABLE IF NOT EXISTS content_cache (
+                        entity_type TEXT NOT NULL,
+                        entity_id TEXT NOT NULL,
+                        content_hash TEXT NOT NULL,
+                        PRIMARY KEY (entity_type, entity_id)
+                    );",
+                )?;
+                Ok(())
+            },
+        },
     ]
 }
 

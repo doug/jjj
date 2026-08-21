@@ -420,7 +420,7 @@ pub fn execute(
         // and push the wipe. Loading instead makes validation check the real
         // current content, and push copies the untouched markdown files.
         println!("Validating metadata...");
-        db::load_from_markdown(&db, store)?;
+        db::load_from_markdown_incremental(&db, store)?;
         let errors = db::validate(&db)?;
         if !errors.is_empty() {
             println!("Validation errors:");
