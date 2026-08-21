@@ -144,6 +144,14 @@ Do ONE unit of work this turn, then stop. In priority order:
    `jjj solution lgtm <id> --rationale "ran ./score.sh: 26 -> 41"`.
    You do not need to be assigned a review to sign off; take submitted work off
    the queue. You cannot sign off your own solution.
+
+   SIGNING OFF IS NOT APPROVING. `lgtm` records your review and then tells you
+   whether anything still blocks. If it reports that all critiques are resolved,
+   you must finish the job:
+       jjj solution approve <id> --rationale "why this is safe to land"
+   Nothing merges until a solution is Approved, so an lgtm you do not follow
+   through leaves the work stranded on its branch — which is where a whole
+   trial's output ended up: eight reviewed solutions, none of them landed.
 2. If every submitted solution has your review, and an approved solution's
    problem is still open, solve the problem.
 3. Only if there is nothing to review at all, take new work with
