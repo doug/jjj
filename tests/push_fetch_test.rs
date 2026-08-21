@@ -1420,6 +1420,59 @@ fn submitting_a_solution_publishes_its_change_for_reviewers() {
     );
 }
 
+/// Two solutions must not publish over each other.
+///
+/// Entity ids are UUID7 and therefore time-ordered, so solutions created in the
+/// same session share a long leading prefix: a swarm produced 01a0225…,
+/// 01a02249… and 01a0224a…, which a 6-character `short_id` flattens to one
+/// name. Naming review branches that way means the second agent to submit
+/// silently replaces the first agent's diff, and reviewers read the wrong code.
+#[test]
+fn two_submitted_solutions_publish_to_distinct_branches() {
+    if !jj_available() {
+        return;
+    }
+    let remote = create_bare_remote();
+    let author = setup_repo_with_remote(remote.path());
+    run_jjj_success(author.path(), &["init"]);
+    run_jjj_success(
+        author.path(),
+        &["problem", "new", "Needs fixing", "--force"],
+    );
+
+    for (n, file) in [("First", "one.txt"), ("Second", "two.txt")] {
+        std::fs::write(author.path().join(file), "x\n").expect("write");
+        run_jj(author.path(), &["file", "track", file]);
+        run_jj(author.path(), &["describe", "-m", n]);
+        run_jjj_success(
+            author.path(),
+            &["solution", "new", n, "--problem", "Needs fixing", "--force"],
+        );
+        run_jjj_success(author.path(), &["solution", "attach", n]);
+        run_jjj_success(author.path(), &["solution", "submit", n]);
+        run_jj(author.path(), &["new"]);
+    }
+
+    let branches = String::from_utf8_lossy(
+        &run_jj(
+            author.path(),
+            &["bookmark", "list", "-T", r#"name ++ "\n""#],
+        )
+        .stdout,
+    )
+    .lines()
+    .filter(|l| l.starts_with("jjj-s-"))
+    .map(str::to_string)
+    .collect::<Vec<_>>();
+
+    assert_eq!(
+        branches.len(),
+        2,
+        "two submitted solutions collapsed onto {} review branch(es): {branches:?}",
+        branches.len()
+    );
+}
+
 /// Advancing `last_synced_rev` on fetch must not cost a pod its unpushed work.
 ///
 /// Fetch used to leave the pointer at `None` forever for any pod that only ever

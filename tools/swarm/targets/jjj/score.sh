@@ -46,11 +46,31 @@ fail() { echo "0 100"; [ -n "${1:-}" ] && echo "$1" >&2; exit 0; }
 # 1. It must build.
 cargo build --release --quiet 2>/tmp/build.err || fail "build failed: $(tail -3 /tmp/build.err)"
 
-# 2. It must still be correct. Fast tests only — the full suite runs at the
-#    merge gate, but a broken build must never score above zero here.
+# 2. It must still be correct.
+#
+# Lib tests alone are not enough, and this is the most important line in the
+# file. The fastest way to make sync look delta-proportional is to stop
+# validating on the way out — skip the markdown reload, trust the SQLite cache,
+# watch the number fall. A trial produced exactly that change, twice, and both
+# times `cargo test --lib` passed: the tests that catch it are integration
+# tests. An agent optimising against a gate that cannot see the damage is being
+# told its regression is a success, and will keep going.
 if ! cargo test --release --quiet --lib >/tmp/test.err 2>&1; then
     fail "lib tests failed: $(grep -E '^test .* FAILED|panicked' /tmp/test.err | head -3)"
 fi
+
+# The specific guarantees this target is tempted to trade away: a dangling
+# reference must not reach other clones, and conflict-marked markdown must not
+# be pushable. Both are cheap and both are load-bearing.
+for t in \
+    "durability_test a_dangling_reference_is_still_refused_at_push" \
+    "push_fetch_test test_body_conflict_blocks_push" \
+    "push_fetch_test a_fetch_advanced_base_still_pushes_local_edits"; do
+    set -- $t
+    if ! cargo test --release --quiet --test "$1" "$2" >/tmp/test.err 2>&1; then
+        fail "$2 failed — sync correctness regressed: $(grep -E 'panicked|assertion' /tmp/test.err | head -2)"
+    fi
+done
 
 # 3. Measure.
 out=$(python3 tools/bench/sync_scaling.py \

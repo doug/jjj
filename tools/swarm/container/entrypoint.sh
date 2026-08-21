@@ -314,6 +314,22 @@ $PROMPT"
                 git clean -qfd 2>/dev/null
                 stuck=0
             fi
+        elif ! cargo build --release --quiet 2>/tmp/pushbuild.err; then
+            # Do not publish a tree that does not compile. The marker guard
+            # above catches conflict markers, but a half-finished refactor
+            # compiles to nothing just as effectively — and everything here is
+            # pushed straight to a branch every other agent builds on. One
+            # fleet ended a two-hour run on a shared branch that would not
+            # build, with every agent's score at zero, because nothing checked.
+            stuck=$((stuck + 1))
+            log "iter $iter not pushing code: build fails (stuck $stuck): $(tail -1 /tmp/pushbuild.err)"
+            if [ "$stuck" -ge 3 ]; then
+                log "iter $iter RESETTING to origin after $stuck stuck turns; local work discarded"
+                git merge --abort 2>/dev/null
+                git reset -q --hard origin/main 2>/dev/null || git reset -q --hard origin/HEAD 2>/dev/null
+                git clean -qfd 2>/dev/null
+                stuck=0
+            fi
         else
             stuck=0
             git add -A 2>/dev/null
