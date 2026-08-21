@@ -43,8 +43,16 @@ DELTA="${SYNC_DELTA:-50}"
 
 fail() { echo "0 100"; [ -n "${1:-}" ] && echo "$1" >&2; exit 0; }
 
-# 1. It must build.
+# 1. It must build, and be mergeable without cleanup.
 cargo build --release --quiet 2>/tmp/build.err || fail "build failed: $(tail -3 /tmp/build.err)"
+
+# fmt and clippy are part of the real merge gate, so leaving them out here just
+# defers the work: a swarm's approved solution passed its own scorer and the
+# whole 704-test suite, then needed hand formatting and a type_complexity fix
+# before it could land. Cheap to check, and it keeps "approved" meaning "ready".
+cargo fmt --check >/tmp/fmt.err 2>&1 || fail "cargo fmt --check: run \`cargo fmt --all\`"
+cargo clippy --all-targets --all-features --quiet -- -D warnings >/tmp/clippy.err 2>&1 \
+    || fail "clippy: $(grep -E '^error' /tmp/clippy.err | head -2 | tr '\n' ' ')"
 
 # 2. It must still be correct.
 #
