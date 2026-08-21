@@ -17,6 +17,7 @@ jjj critique new <solution_id> <title> [OPTIONS]
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
+| `--body` | string | | The argument: why this solution is wrong. Use `-` to read stdin, so long text survives shell quoting |
 | `--severity` | string | `medium` | Severity: low, medium, high, critical |
 | `--file` | string | | File path for code-level critique |
 | `--line` | integer | | Line number for code-level critique |

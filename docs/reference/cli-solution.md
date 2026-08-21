@@ -17,6 +17,7 @@ jjj solution new <title> [OPTIONS]
 
 | Flag | Type | Required | Description |
 |------|------|----------|-------------|
+| `--body` | string | | The approach: how the conjecture works. Use `-` to read stdin, so long text survives shell quoting |
 | `--problem` | string | no | Problem this solution addresses (prompts interactively if not provided) |
 | `--supersedes` | string | no | Solution this supersedes (title or UUID prefix) |
 | `--reviewer` | string (repeatable) | no | Assign reviewers at creation (e.g., `@alice`) |
@@ -130,12 +131,22 @@ jjj solution detach "Add connection" abc123
 
 Submit a solution for review — opens it for critique.
 
+Submitting also **publishes the attached change** as a `review-s-<solution_id>`
+branch, so a reviewer in another clone can read the diff. Attaching records a
+change id; it does not share the code, and a reviewer who cannot see the diff
+can only guess. Publishing is best-effort: a solution with no attached change,
+or a repo with no remote, still submits.
+
 ```
 jjj solution submit <solution_id>
 ```
 
 ```bash
 jjj solution submit "Add connection"
+
+# In another clone, to review the actual code:
+git fetch origin review-s-<solution_id>
+git diff main...FETCH_HEAD
 ```
 
 ## `jjj solution approve`
@@ -227,12 +238,25 @@ jjj solution diff "Add connection"
 
 Sign off on a solution as a reviewer. This addresses your open review critique for the solution, recording your approval.
 
+**Signing off is not approving.** By default `lgtm` records the review and then
+reports whether anything still blocks — leaving the solution in `submitted`
+until someone runs `solution approve`. That is right when several reviewers sign
+off in turn, and a trap in an automated loop: a fleet once produced eight
+reviewed solutions and merged none of them. Pass `--approve` to finish the job
+in one step; it still refuses while any critique is open.
+
 ```
-jjj solution lgtm <solution_id>
+jjj solution lgtm <solution_id> [OPTIONS]
 ```
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `--rationale` | string | Record why you signed off — the evidence behind the approval |
+| `--approve` | bool | Approve too, if nothing is left blocking |
 
 ```bash
 jjj solution lgtm "Add connection"
+jjj solution lgtm "Add connection" --approve --rationale "ran the benchmark: 2.8x -> 2.1x"
 ```
 
 ## `jjj solution comment`

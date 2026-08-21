@@ -27,6 +27,7 @@ jjj problem new <title> [OPTIONS]
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
+| `--body` | string | | The description: what the problem is and why it matters. Use `-` to read stdin, so long text survives shell quoting |
 | `--priority` | string | `medium` | Priority: critical, high, medium, low |
 | `--parent` | string | | Parent problem (title, prefix, or UUID) |
 | `--milestone` | string | | Milestone to target (title, prefix, or UUID) |
