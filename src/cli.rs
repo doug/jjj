@@ -407,6 +407,10 @@ pub enum ProblemAction {
         /// Problem title (the question to answer)
         title: String,
 
+        /// Description: what the problem is and why it matters. Use `-` to read stdin.
+        #[arg(long, alias = "description")]
+        body: Option<String>,
+
         /// Priority: critical, high, medium (default), low
         #[arg(long, default_value = "medium")]
         priority: String,
@@ -612,6 +616,10 @@ pub enum SolutionAction {
     New {
         /// Solution title describing the approach
         title: String,
+
+        /// The approach: how the conjecture works. Use `-` to read stdin.
+        #[arg(long, alias = "approach")]
+        body: Option<String>,
 
         /// Problem this solution addresses (prompts if omitted)
         #[arg(long)]
@@ -851,6 +859,10 @@ pub enum CritiqueAction {
         /// Brief description of the critique
         title: String,
 
+        /// The argument itself: why this solution is wrong. Use `-` to read stdin.
+        #[arg(long, alias = "argument")]
+        body: Option<String>,
+
         /// Severity: low, medium, high, critical
         #[arg(long, default_value = "medium")]
         severity: String,
@@ -977,6 +989,10 @@ pub enum MilestoneAction {
     New {
         /// Milestone title
         title: String,
+
+        /// Description: what this milestone covers. Use `-` to read stdin.
+        #[arg(long, alias = "description")]
+        body: Option<String>,
 
         /// Target completion date (YYYY-MM-DD)
         #[arg(long)]

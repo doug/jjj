@@ -65,6 +65,31 @@ pub fn run_jjj_env(dir: impl AsRef<Path>, envs: &[(&str, &str)], args: &[&str]) 
     cmd.output().expect("Failed to run jjj command")
 }
 
+/// Run jjj with `input` piped to its stdin.
+///
+/// Needed to exercise `--body -`, the path an agent uses to supply a long
+/// argument without shell quoting mangling it.
+pub fn run_jjj_stdin(dir: impl AsRef<Path>, input: &str, args: &[&str]) -> Output {
+    use std::io::Write;
+    use std::process::Stdio;
+
+    let mut child = Command::new(jjj_binary())
+        .args(args)
+        .current_dir(dir.as_ref())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn jjj command");
+    child
+        .stdin
+        .as_mut()
+        .expect("stdin")
+        .write_all(input.as_bytes())
+        .expect("write stdin");
+    child.wait_with_output().expect("Failed to run jjj command")
+}
+
 pub fn run_jjj_success(dir: impl AsRef<Path>, args: &[&str]) -> String {
     let output = run_jjj(dir.as_ref(), args);
     assert!(

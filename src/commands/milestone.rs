@@ -7,7 +7,9 @@ use chrono::NaiveDate;
 
 pub fn execute(ctx: &CommandContext, action: MilestoneAction) -> Result<()> {
     match action {
-        MilestoneAction::New { title, date } => create_milestone(ctx, title, date),
+        MilestoneAction::New { title, body, date } => {
+            create_milestone(ctx, title, super::read_body(body)?, date)
+        }
         MilestoneAction::Edit {
             milestone_id,
             title,
@@ -30,7 +32,12 @@ pub fn execute(ctx: &CommandContext, action: MilestoneAction) -> Result<()> {
     }
 }
 
-fn create_milestone(ctx: &CommandContext, title: String, date: Option<String>) -> Result<()> {
+fn create_milestone(
+    ctx: &CommandContext,
+    title: String,
+    description: String,
+    date: Option<String>,
+) -> Result<()> {
     let store = &ctx.store;
 
     store.with_metadata(&format!("Create milestone: {}", title), || {
@@ -58,6 +65,7 @@ fn create_milestone(ctx: &CommandContext, title: String, date: Option<String>) -
         };
 
         let mut milestone = Milestone::new(milestone_id.clone(), title.clone());
+        milestone.description = description.clone();
         milestone.set_target_date(target_date);
 
         store.save_milestone(&milestone)?;

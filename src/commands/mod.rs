@@ -24,6 +24,33 @@ pub mod ui;
 pub mod whoami;
 
 use crate::cli::{Cli, Commands};
+
+/// Resolve a `--body` argument into entity body text.
+///
+/// Every entity has one free-form body — a problem's description, a solution's
+/// approach, a critique's argument — and until this existed the only way to
+/// write one was an interactive `$EDITOR`. A headless agent has no editor, so
+/// agents in a swarm trial did the only thing left to them and crammed
+/// multi-paragraph reasoning into the *title*, producing critique titles
+/// hundreds of characters long. In a tool whose entire model is conjecture and
+/// refutation, the argument is the payload; it must be writable from a script.
+///
+/// `-` reads stdin, so a long argument can be piped in without shell quoting
+/// mangling it.
+pub fn read_body(body: Option<String>) -> Result<String> {
+    match body {
+        None => Ok(String::new()),
+        Some(arg) if arg == "-" => {
+            use std::io::Read;
+            let mut buf = String::new();
+            std::io::stdin()
+                .read_to_string(&mut buf)
+                .map_err(crate::error::JjjError::Io)?;
+            Ok(buf.trim_end().to_string())
+        }
+        Some(arg) => Ok(arg),
+    }
+}
 use crate::context::CommandContext;
 use crate::db::{search as db_search, Database};
 use crate::display::short_id;

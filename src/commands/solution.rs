@@ -15,13 +15,24 @@ pub fn execute(ctx: &CommandContext, action: SolutionAction) -> Result<()> {
     match action {
         SolutionAction::New {
             title,
+            body,
             problem,
             supersedes,
             reviewer,
             force,
             tags,
             json,
-        } => new_solution(ctx, title, problem, supersedes, reviewer, force, tags, json),
+        } => new_solution(
+            ctx,
+            title,
+            super::read_body(body)?,
+            problem,
+            supersedes,
+            reviewer,
+            force,
+            tags,
+            json,
+        ),
 
         SolutionAction::List {
             problem,
@@ -96,6 +107,7 @@ pub fn execute(ctx: &CommandContext, action: SolutionAction) -> Result<()> {
 fn new_solution(
     ctx: &CommandContext,
     title: String,
+    approach: String,
     problem_input: Option<String>,
     supersedes_input: Option<String>,
     reviewer_critiques: Vec<String>,
@@ -180,6 +192,7 @@ fn new_solution(
     store.with_metadata(&format!("Start solution: {}", title), || {
         let solution_id = store.next_solution_id()?;
         let mut solution = Solution::new(solution_id.clone(), title.clone(), problem_id.clone());
+        solution.approach = approach.clone();
 
         // Set supersedes
         solution.supersedes = supersedes.clone();
@@ -638,6 +651,7 @@ fn submit_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
     println!("Solution {} submitted for review", solution_id);
     Ok(())
 }
+
 
 fn approve_solution(
     ctx: &CommandContext,

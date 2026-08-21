@@ -12,6 +12,7 @@ pub fn execute(ctx: &CommandContext, action: CritiqueAction) -> Result<()> {
         CritiqueAction::New {
             solution_id,
             title,
+            body,
             severity,
             file,
             line,
@@ -21,6 +22,7 @@ pub fn execute(ctx: &CommandContext, action: CritiqueAction) -> Result<()> {
             ctx,
             solution_id,
             title,
+            super::read_body(body)?,
             severity,
             file,
             line,
@@ -64,6 +66,7 @@ fn new_critique(
     ctx: &CommandContext,
     solution_input: String,
     title: String,
+    argument: String,
     severity_str: String,
     file: Option<String>,
     line: Option<usize>,
@@ -100,6 +103,7 @@ fn new_critique(
             let mut critique =
                 Critique::new(critique_id.clone(), title.clone(), solution_id.clone());
             critique.set_severity(severity.clone());
+            critique.argument = argument.clone();
 
             // Set author to current user
             let author = store.get_current_user()?;

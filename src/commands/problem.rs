@@ -30,13 +30,24 @@ pub fn execute(ctx: &CommandContext, action: ProblemAction) -> Result<()> {
     match action {
         ProblemAction::New {
             title,
+            body,
             priority,
             parent,
             milestone,
             force,
             tags,
             json,
-        } => new_problem(ctx, title, priority, parent, milestone, force, tags, json),
+        } => new_problem(
+            ctx,
+            title,
+            super::read_body(body)?,
+            priority,
+            parent,
+            milestone,
+            force,
+            tags,
+            json,
+        ),
         ProblemAction::List {
             status,
             tree,
@@ -96,6 +107,7 @@ pub fn execute(ctx: &CommandContext, action: ProblemAction) -> Result<()> {
 fn new_problem(
     ctx: &CommandContext,
     title: String,
+    description: String,
     priority: String,
     parent: Option<String>,
     milestone: Option<String>,
@@ -163,6 +175,7 @@ fn new_problem(
     store.with_metadata(&format!("Create problem: {}", title), || {
         let problem_id = store.next_problem_id()?;
         let mut problem = Problem::new(problem_id.clone(), title.clone());
+        problem.description = description.clone();
 
         // Set priority
         problem.priority = priority
