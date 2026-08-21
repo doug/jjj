@@ -268,7 +268,7 @@ fn list_critiques(
         let jj_client = ctx.jj();
         let db_path = jj_client.repo_root().join(".jj").join("jjj.db");
         let db = Database::open(&db_path)?;
-        crate::db::load_from_markdown(&db, &ctx.store)?;
+        crate::db::load_from_markdown_incremental(&db, &ctx.store)?;
         let results = search::search(db.conn(), query, Some("critique"))?;
         let matching_ids: std::collections::HashSet<_> =
             results.iter().map(|r| r.entity_id.as_str()).collect();

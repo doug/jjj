@@ -16,17 +16,31 @@ Measured with `tools/bench/sync_scaling.py` (CPU time, 500 vs 5,000 entities,
 | | before | now | |
 |---|---|---|---|
 | fetch | 2.0x | **1.0x** | O(delta) — done |
-| push | 2.8x | **2.1x** | still O(corpus), constant reduced |
+| push | 2.8x | **1.5x** | both O(corpus) steps fixed |
 
 **Fetch is fixed.** It used to leave `last_synced_rev` at `None` for any pod
 that only ever fetched, so every fetch paid a full cold-start reconcile.
 
-**Push is improved but not fixed.** Validation's markdown reload is now
-incremental — a `content_cache` of per-file content hashes means only changed
-files are parsed and re-validated — which cut the constant by about a quarter.
-It is still O(corpus) in shape, because hashing has to *read* every file to
-decide it is unchanged. Getting to O(delta) needs a change feed (jj can name
-the paths that differ between two revisions) rather than a faster full scan.
+**Push had two O(corpus) steps, and both are now fixed.**
+
+1. *Validation's markdown reload.* A `content_cache` of per-file content hashes
+   means only changed files are parsed and re-validated. Nothing is skipped on
+   trust: a changed file always misses the cache and is checked in full.
+2. *The copy into the sync workspace.* It used to delete and rewrite every
+   `.md` file on every push. Now a file is written only when its bytes actually
+   differ — compared live, not via an `mtime`/size proxy that a
+   timestamp-preserving copy can defeat. Leaving an unchanged file's mtime alone
+   is what lets jj's own working-copy snapshot skip rehashing it, which is where
+   most of the cost was.
+
+**Is there a third bottleneck?** No. Checked directly, by applying the
+copy-step fix and re-measuring on the same machine in the same turn: push went
+from 2.18x to 1.10x — within run-to-run noise of 1.0x, not a residual multiple
+of it. The `jj` subprocess calls stay flat in corpus size (12 calls), because
+`sync_meta_to_bookmark` never asks jj to diff or hash the corpus; jj's
+auto-snapshot only has to notice the handful of files jjj actually touched.
+That is precisely why removing the unconditional rewrite closes the gap rather
+than moving the cost into jj.
 
 The push analysis below is accurate about *where*
 the cost is, but the obvious shortcut — skipping `load_from_markdown` when the

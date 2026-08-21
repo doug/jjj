@@ -198,30 +198,49 @@ fn sync_meta_to_bookmark(
     }
     sync_client.execute(&new_args)?;
 
-    // Copy all metadata files into the sync workspace
+    // Copy all metadata files into the sync workspace. A file is only
+    // (over)written when its content actually differs from what's already
+    // sitting in the workspace, compared as live bytes on both sides — not a
+    // cached proxy like mtime/size, which a same-length edit that preserves
+    // the timestamp (rsync -t, cp -p, a restore) could satisfy without the
+    // content actually matching. Leaving an unchanged file's mtime alone is
+    // also what lets jj's own working-copy snapshot skip rehashing it on the
+    // next `jj new`/`describe`, which is where most of the O(corpus) cost of
+    // this step came from (see docs/design/sync-scaling-investigation.md).
     for dir in &["problems", "solutions", "critiques", "milestones"] {
         let src_dir = meta_path.join(dir);
         let dst_dir = sync_path.join(dir);
         fs::create_dir_all(&dst_dir)?;
 
-        // Clean destination first to handle deletions, but only touch files
-        // we own (`.md`). Editor backups, swap files, and anything else the
-        // user might have left in the sync workspace is preserved.
+        // Files we own that currently exist in the workspace; anything still
+        // left in here after the loop below has no matching source file
+        // anymore, i.e. is a real deletion.
+        let mut stale = std::collections::HashSet::new();
         if dst_dir.exists() {
             for entry in (fs::read_dir(&dst_dir)?).flatten() {
-                let path = entry.path();
-                if is_jjj_owned_file(&path) {
-                    let _ = fs::remove_file(&path);
+                if is_jjj_owned_file(&entry.path()) {
+                    stale.insert(entry.file_name());
                 }
             }
         }
 
-        // Copy source files
         if src_dir.exists() {
             for entry in (fs::read_dir(&src_dir)?).flatten() {
-                let dst = dst_dir.join(entry.file_name());
-                fs::copy(entry.path(), dst)?;
+                let file_name = entry.file_name();
+                stale.remove(&file_name);
+                let dst_path = dst_dir.join(&file_name);
+                let src_bytes = fs::read(entry.path())?;
+                let unchanged = fs::read(&dst_path)
+                    .map(|dst_bytes| dst_bytes == src_bytes)
+                    .unwrap_or(false);
+                if !unchanged {
+                    fs::write(&dst_path, &src_bytes)?;
+                }
             }
+        }
+
+        for file_name in stale {
+            let _ = fs::remove_file(dst_dir.join(file_name));
         }
     }
 
