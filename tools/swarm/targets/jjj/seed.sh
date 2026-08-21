@@ -50,7 +50,10 @@ main=$(new_problem \
 # Sub-problems are directions, not instructions: each is a place to look, so
 # agents that pick different ones explore genuinely different approaches.
 new_problem "Reduce jjj's own time in the push path" high "perf,sync,push" >/dev/null
-new_problem "Reduce jjj's own time in the fetch path" high "perf,sync,fetch" >/dev/null
+# The fetch path is already delta-proportional (1.0x); seeding it as open work
+# would send agents to re-solve a solved problem.
+new_problem "Make push validation incremental rather than a full-corpus reload" \
+    high "perf,sync,push,validation" >/dev/null
 new_problem "Find which jjj operations scale with corpus size rather than delta size" \
     high "perf,sync,investigation" >/dev/null
 
@@ -59,59 +62,64 @@ cat > "$ROOT/SWARM.md" <<'BRIEF'
 
 `jjj sync` must complete in under a second for a small delta. Design decision 3
 calls this a **hard** requirement, because sync sits in the synchronous critical
-path of every agent's loop. It is currently violated, and the reason is not where
-it was assumed to be.
+path of every agent's loop.
+
+Half of it is now fixed. **Push is what remains.**
 
 ## What is measured
 
-Profiling a delta sync (100 changed files) at a 25,000-entity corpus:
+`./score.sh` prints `<score> 100`, where the score is `100 / ratio` and the
+ratio is CPU time on a 5,000-entity corpus divided by CPU time on a 500-entity
+one, for a 50-file delta. 1.0x means the cost no longer depends on how much
+history exists. The worse of push and fetch sets the score.
 
-    delta_push:  11,898ms total — 1,367ms in jj (12 calls), 10,531ms in jjj
-    delta_fetch:  5,826ms total — 2,014ms in jj  (7 calls),  3,812ms in jjj
+    push   ~2.2x    <- the remaining problem
+    fetch   1.0x    <- solved; leave it alone
+    score  ~47/100
 
-**88% of a push is jjj's own work**, not jj and not subprocess overhead. The call
-count is already near minimal, so this is not a batching problem.
+CPU time rather than wall-clock, because this runs on a machine the swarm
+itself saturates and contention does not tax both corpora equally. Compare your
+before and after within a turn; do not compare against a number from another run.
 
-Holding the delta constant at 100 files and growing the corpus:
+## What is already known
 
-| corpus | jjj's own time (push) | jj's time |
-|---|---|---|
-| 2,000 | 1,182ms | 932ms |
-| 8,000 | 3,244ms | 972ms |
-| 25,000 | 10,401ms | 1,395ms |
+Fetch used to be O(corpus) for the same reason it looked mysterious: a pod that
+only ever fetched never advanced its merge base, so every fetch paid a full
+cold-start reconcile. That is fixed. `docs/design/sync-scaling-investigation.md`
+records the investigation, and its analysis of the **push** path is accurate
+about where the cost is.
 
-Linear in the **corpus**, flat in the **delta**. The work being done is
-proportional to how much history exists rather than to how much changed.
+**One approach has already been tried and rejected — do not repeat it.** Push
+spends its time in a full markdown→SQLite reload used to validate before
+publishing. Skipping that reload when the SQLite cache is "clean" makes the
+number fall and is **wrong**: the dirty flag means "a sync was interrupted", not
+"the markdown has not changed". A clean-but-stale cache then passes validation,
+and a dangling reference or a conflict-marked body reaches every clone.
+`./score.sh` will now score that change zero and name the failing test.
 
-## The score
+The honest version is to make validation itself delta-proportional — reload and
+validate only what changed since the cache was written — rather than to skip it.
+That is harder, and it is the actual problem.
 
-`./score.sh` prints `<score> 100`, where the score is `100 / ratio` and the ratio
-is jjj's own time on a 5,000-entity corpus divided by its time on a 500-entity
-one, for a 50-file delta.
+## How work lands
 
-    baseline today: 26/100   (ratio ~3.8x)
-    ratio 2.0x:     50/100
-    ratio 1.0x:    100/100   cost no longer depends on corpus size
+Nothing reaches the shared branch except through review:
 
-A ratio rather than milliseconds, because this is measured on a machine
-saturated by the swarm itself: both sides suffer the same contention, so the
-ratio survives where an absolute timing would not.
+    jjj solution new "..." --body "what and why"  --problem <id>
+    jjj solution attach <id>      # link your jj change
+    jjj solution submit <id>      # publishes the diff for a reviewer
+    -> a critic reviews the real diff and approves, or critiques it
+    -> approved work is merged to main automatically
 
-**Correctness gates the score.** A tree that fails to build, or fails the library
-tests, scores zero however fast it is. Making sync fast by breaking it is not
-progress, and the full suite runs at the merge gate regardless.
-
-## What is not provided
-
-The responsible code path. That is the problem.
+Your own pushes go to your own branch. An unreviewed change helps nobody.
 
 ## Rules
 
 - Measure before you optimise, and again after. `./score.sh` is the arbiter.
-- A critique must cite a number, not an opinion.
-- `cargo test` must pass. Speed bought with correctness scores zero.
-- Several approaches are plausible here. If another agent is already pursuing
-  one, take a different one — rival approaches are the point, duplicates are not.
+- A critique must cite a number or a failing input, not an opinion.
+- Speed bought with correctness scores zero, and the scorer checks for it.
+- Several approaches are plausible. If another agent is already pursuing one,
+  take a different one — rival approaches are the point, duplicates are not.
 BRIEF
 
 git add -A

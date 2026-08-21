@@ -35,6 +35,10 @@ WORK=/work/repo
 
 log() { printf '[%s] %s\n' "$(date -u +%H:%M:%S)" "$*"; }
 
+# A per-agent branch name: JJJ_USER is "pod-1/agent-02", and a slash would make
+# refs/heads/swarm-pod-1/agent-02 a directory where a sibling ref is a file.
+SWARM_BRANCH="${JJJ_USER//\//-}"
+
 log "agent $JJJ_USER starting (pod=$JJJ_POD role=${SWARM_ROLE:-builder} model=$MODEL)"
 
 # --- clone and identify -----------------------------------------------------
@@ -110,7 +114,17 @@ Your job is to make ./score.sh go up. Reviewing is not your job unless there is
 genuinely nothing left to build.
 
 Measure before and after — ./score.sh is the arbiter, not your judgement of
-whether a change ought to help. Say the numbers in your solution.
+whether a change ought to help. Say the numbers in your solution, and put your
+reasoning in the body: `jjj solution new "Title" --body "..."` (or `--body -`
+to read stdin for anything long). A title is a label, not an argument.
+
+YOUR CODE ONLY REACHES THE OTHERS IF IT IS APPROVED. Working, submitting and
+being reviewed is the whole loop:
+  jjj solution new "..." --body "what you changed and why" --problem <id>
+  jjj solution attach <id>     # link your jj change
+  jjj solution submit <id>     # publishes the diff so a critic can read it
+Attaching without submitting leaves your work invisible. If a critic raises a
+critique, fix it and `jjj critique address <id>` — do not argue past it.
 PROMPT_EOF
 
 read -r -d '' CRITIC_PROMPT <<'PROMPT_EOF' || true
@@ -136,7 +150,18 @@ Do ONE unit of work this turn, then stop. In priority order:
    `jjj next --claim --json` and do it.
 
 A critique that cannot name a number or a failing input is not a critique.
-Prefer one well-evidenced objection over three vague ones.
+Prefer one well-evidenced objection over three vague ones. Put the evidence in
+the body — `jjj critique new <sid> "Short title" --body -` reads stdin, so a
+long argument survives intact. A title is a label, not the argument.
+
+A submitted solution has its diff published as a branch, so review the real
+code: `git fetch origin jjj-s-<solution-id> && git diff main...FETCH_HEAD`.
+
+Your sign-off is what lets code reach the shared branch — nothing merges
+without it. That cuts both ways: waving through a change that lowers the score,
+or that makes a number look good by removing a correctness check, costs
+everyone. ./score.sh already refuses to score a tree that fails the sync
+correctness tests; if it prints 0, the change is broken, not fast.
 
 Useful: `jjj solution list --status submitted --json` is your queue;
 `jjj events --user <agent>` shows what another agent has been doing.
@@ -217,6 +242,36 @@ while true; do
         log "iter $iter pull conflicted in: $CONFLICTED (handing to the agent)"
     fi
     jjj fetch >/dev/null 2>&1
+
+    # Integrate approved work — the ONLY path by which code reaches the shared
+    # branch when SWARM_MERGE_GATE is on.
+    #
+    # A previous trial let every agent commit straight to main each turn, so
+    # code landed whether or not anyone had reviewed it: the critics were real,
+    # their reasoning was good, and nothing they concluded could stop a merge.
+    # That measures six agents editing a shared branch, not an economy of
+    # critique. `jjj solution submit` now publishes a jjj-s-<id> branch, so a
+    # reviewer can read the actual diff — and approval can mean something.
+    if [ "${SWARM_MERGE_GATE:-0}" = "1" ]; then
+        for sid in $(jjj solution list --status approved --json 2>/dev/null \
+                     | python3 -c 'import json,sys
+try: print(" ".join(s["id"] for s in json.load(sys.stdin)))
+except Exception: pass' 2>/dev/null); do
+            b="jjj-s-$sid"
+            git fetch -q origin "$b" 2>/dev/null || continue
+            # Already in? Nothing to do.
+            git merge-base --is-ancestor FETCH_HEAD origin/main 2>/dev/null && continue
+            if git merge -q --no-edit FETCH_HEAD 2>/dev/null \
+               && cargo build --release --quiet 2>/dev/null; then
+                if git push -q origin HEAD:refs/heads/main 2>/dev/null; then
+                    log "iter $iter integrated approved solution $sid"
+                fi
+            else
+                git merge --abort 2>/dev/null
+                log "iter $iter approved solution $sid does not merge/build cleanly; left for an agent"
+            fi
+        done
+    fi
 
     SCORER="./score.py"; [ -x ./score.sh ] && SCORER="./score.sh"
     # Keep the scorer's stderr: it carries both the measured ratio and the
@@ -334,6 +389,14 @@ $PROMPT"
             stuck=0
             git add -A 2>/dev/null
             git commit -q -m "$JJJ_USER: iter $iter" 2>/dev/null
+            if [ "${SWARM_MERGE_GATE:-0}" = "1" ]; then
+                # Work stays on this agent's own branch. It reaches main only
+                # by being submitted, reviewed and approved — see the
+                # integration step above.
+                git push -q -f origin "HEAD:refs/heads/swarm-$SWARM_BRANCH" 2>/dev/null \
+                    && log "iter $iter pushed to swarm-$SWARM_BRANCH (awaiting review)"
+                continue
+            fi
             for attempt in 1 2 3; do
                 git fetch -q origin 2>/dev/null
                 if ! git merge -q --no-edit origin/HEAD 2>/dev/null; then
@@ -360,6 +423,10 @@ $PROMPT"
 
     after=$($SCORER 2>/dev/null | tail -1 || echo "? ?")
     log "iter $iter end score=$after"
+    # Publish the latest score for the host-side sampler. Best of whatever the
+    # agents last measured — any one of them is representative, since they all
+    # score the same shared tree.
+    printf '%s\n' "${after%% *}" > /swarm/last_score 2>/dev/null || true
 
     # Jitter, so agents do not lock-step into synchronised bursts and make the
     # contention an artefact of the harness.

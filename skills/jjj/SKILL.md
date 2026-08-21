@@ -84,6 +84,7 @@ Other things worth knowing before scripting:
 | Behaviour | Consequence |
 |---|---|
 | `problem new`, `solution new`, `critique new` accept `--json` | Capture the new id directly instead of parsing "Created ..." |
+| Every creator accepts `--body TEXT` or `--body -` (stdin) | Write the argument in the body, not the title — see below |
 | Non-zero exit on failure, message on stderr | Check the status; do not parse stdout for errors |
 | `jjj next --json` emits `null`, one object, or an array | Normalize before iterating |
 | `--force` skips duplicate detection (`problem new`) or the critique gate (`solution approve`) | Never default to it in a loop; it disables the thing that makes review real |
@@ -91,6 +92,32 @@ Other things worth knowing before scripting:
 | Only `solution approve`, `solution withdraw` and `problem dissolve` prompt for a rationale | Pass `--rationale "..."` or `--no-rationale` to *those*; other commands reject the flag |
 | `--mine` works on `next`, `status`, `events`, and `problem`/`solution`/`critique list` | It is shorthand for "assigned to me"; it does not exist elsewhere |
 | Reads are served from a SQLite cache | `jjj db rebuild` after editing metadata files behind jjj's back |
+
+## Write the argument in the body, not the title
+
+Every entity has one free-form body: a problem's `description`, a solution's
+`approach`, a critique's `argument`. That body is the payload — in a system
+built on conjecture and refutation, the reasoning *is* the content, and a title
+is only a label for it.
+
+```sh
+jjj solution new "Cache the parsed frontmatter" --problem "$pid" \
+  --body "Parsing dominates list at 25K. Cache keyed by (path, mtime)..."
+
+# `-` reads stdin, so a long argument survives without shell quoting mangling it
+jjj critique new "$sid" "Validates the cache, not the content" --severity critical --body - <<'EOF'
+The dirty flag means "a sync was interrupted", not "the markdown is unchanged".
+Markdown written by any other tool leaves the cache clean but stale, so this
+validates a stale cache: write a critique whose solution_id does not exist,
+then push. On main it is refused; with this change push reports "All checks
+passed" and publishes the dangling reference to every clone.
+EOF
+```
+
+Agents that do not know about `--body` put paragraphs in the title instead —
+observed in practice, producing critique titles hundreds of characters long
+while the structured field stayed empty. Titles are for scanning a list; bodies
+are for the argument that another agent has to be able to evaluate.
 
 ## The single-agent loop
 
@@ -364,7 +391,8 @@ jjj whoami [--json]                 jjj doctor [--json]
 jjj insights [--json]               jjj overlaps [--json]         jjj tags [--json]
 
 # Problems
-jjj problem new "Title" [--priority critical|high|medium|low] [--tags a,b]
+jjj problem new "Title" [--body TEXT | --body -]
+                        [--priority critical|high|medium|low] [--tags a,b]
                         [--parent ID] [--milestone REF] [--force]
 jjj problem list [--status S] [--assignee WHO] [--tag T] [--milestone M] [--json]
 jjj problem show ID [--json]        jjj problem assign ID [--to WHO]
@@ -373,7 +401,7 @@ jjj problem reopen ID               jjj problem duplicate ID --of OTHER
 jjj problem tree [--json]           jjj problem graph [--json]
 
 # Solutions
-jjj solution new "Title" --problem ID [--force]
+jjj solution new "Title" --problem ID [--body TEXT | --body -] [--force]
 jjj solution attach ID              # links the CURRENT jj change
 jjj solution submit ID              # open for critique
 jjj solution approve ID [--rationale "..." | --no-rationale] [--force]
@@ -382,14 +410,15 @@ jjj solution list [--json]          jjj solution show ID [--json]
 jjj solution diff ID [--json]       jjj solution lgtm ID
 
 # Critiques
-jjj critique new SOLUTION_ID "Title" [--severity critical|high|medium|low]
+jjj critique new SOLUTION_ID "Title" [--body TEXT | --body -]
+                                     [--severity critical|high|medium|low]
                                      [--file F --line N] [--reviewer WHO]
 jjj critique address ID             jjj critique validate ID
 jjj critique dismiss ID             jjj critique reply ID "..."
 jjj critique list [--json]          jjj critique show ID [--json]
 
 # Milestones and ranking
-jjj milestone new "Title" [--date YYYY-MM-DD]
+jjj milestone new "Title" [--body TEXT] [--date YYYY-MM-DD]
 jjj milestone add-problem M P       jjj milestone status M [--json]
 jjj rank show [MILESTONE] [--by-user] [--json]
 

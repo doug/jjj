@@ -222,12 +222,18 @@ cmd_start() {
                 -e "SWARM_MAX_ITERS=$max_iters" \
                 -e "SWARM_MODEL=$model" \
                 -e "SWARM_ROLE=$role" \
+                -e "SWARM_MERGE_GATE=${SWARM_MERGE_GATE:-0}" \
                 ${use_key:+$([ "$use_key" = 1 ] && echo "-e ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY")} \
                 -v "$SWARM_ROOT:/swarm:rw" \
                 "$IMAGE" >/dev/null || die "failed to start $name"
             echo "  started $name ($role)"
         done
     done
+
+    nohup "$SWARM_DIR/sampler.sh" "$SWARM_ROOT" "${SWARM_SAMPLE_INTERVAL:-300}" \
+        >"$SWARM_ROOT/logs/sampler.log" 2>&1 &
+    echo "$!" > "$SWARM_ROOT/sampler.pid"
+    echo "  sampling every $(( ${SWARM_SAMPLE_INTERVAL:-300} / 60 ))m to $SWARM_ROOT/trajectory.tsv"
 
     if [ "$stop_when_done" = 1 ]; then
         nohup "$SWARM_DIR/watchdog.sh" "$SWARM_ROOT" >"$SWARM_ROOT/logs/watchdog.log" 2>&1 &
