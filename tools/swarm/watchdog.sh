@@ -45,7 +45,7 @@ while [ -n "$(podman ps -q --filter 'name=swarm-' 2>/dev/null)" ]; do
 
     work="$(mktemp -d)"
     if ! git clone -q "$ROOT/remote.git" "$work/repo" 2>/dev/null; then
-        rm -rf "$work"; continue
+        chmod -R u+w "$work" 2>/dev/null; rm -rf "$work"; continue
     fi
 
     scorer="./score.py"; [ -x "$work/repo/score.sh" ] && scorer="./score.sh"
@@ -59,11 +59,17 @@ while [ -n "$(podman ps -q --filter 'name=swarm-' 2>/dev/null)" ]; do
         && jj config set --repo user.name watchdog >/dev/null 2>&1 \
         && jj config set --repo user.email watchdog@invalid >/dev/null 2>&1 \
         && "$JJJ" fetch >/dev/null 2>&1); then
+        # `grep -c` prints its count AND exits non-zero when the count is zero,
+        # so `|| echo 0` appends a *second* line: the variable becomes "0\n0"
+        # and every later `[ "$x" -eq 0 ]` dies with "integer expected". The
+        # watchdog then never converged — a toy run finished its work at minute
+        # 15 and the fleet burned the remaining 45 minutes of its deadline.
         open_problems=$(cd "$work/repo" && "$JJJ" problem list --status open --json 2>/dev/null \
-            | grep -c '"id"' || echo 0)
+            | grep -c '"id"' | head -1)
         awaiting_review=$(cd "$work/repo" && "$JJJ" solution list --status submitted --json 2>/dev/null \
-            | grep -c '"id"' || echo 0)
+            | grep -c '"id"' | head -1)
     fi
+    chmod -R u+w "$work" 2>/dev/null
     rm -rf "$work"
 
     if [ "$score" = "$last_score" ]; then
