@@ -11,14 +11,24 @@ concrete code paths responsible, found by reading `src/commands/push.rs` and
 `src/commands/fetch.rs` against `tools/bench/sync_scaling.py`.
 
 Measured with `tools/bench/sync_scaling.py` (CPU time, 500 vs 5,000 entities,
-50-file delta) — **the fetch half of this is now fixed**:
+50-file delta):
 
-| | before | after |
-|---|---|---|
-| push | 2.2x | 2.2x — still O(corpus) |
-| fetch | 2.0x | **1.0x — O(delta)** |
+| | before | now | |
+|---|---|---|---|
+| fetch | 2.0x | **1.0x** | O(delta) — done |
+| push | 2.8x | **2.1x** | still O(corpus), constant reduced |
 
-Only the fetch fix landed. The push analysis below is accurate about *where*
+**Fetch is fixed.** It used to leave `last_synced_rev` at `None` for any pod
+that only ever fetched, so every fetch paid a full cold-start reconcile.
+
+**Push is improved but not fixed.** Validation's markdown reload is now
+incremental — a `content_cache` of per-file content hashes means only changed
+files are parsed and re-validated — which cut the constant by about a quarter.
+It is still O(corpus) in shape, because hashing has to *read* every file to
+decide it is unchanged. Getting to O(delta) needs a change feed (jj can name
+the paths that differ between two revisions) rather than a faster full scan.
+
+The push analysis below is accurate about *where*
 the cost is, but the obvious shortcut — skipping `load_from_markdown` when the
 SQLite cache is clean — is **wrong and was rejected**: the dirty flag means "a
 sync was interrupted", not "the markdown has not changed since the cache was
