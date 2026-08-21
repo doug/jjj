@@ -34,6 +34,14 @@ set -uo pipefail
 SWARM_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SWARM_DIR/../.." && pwd)"
 SWARM_ROOT="${SWARM_ROOT:-$HOME/.jjj-swarm}"
+
+# Container names are namespaced by the workbench they belong to, so two runs
+# can coexist: a long research trial and a short regression run of the toy
+# target, say. Without this, `swarm-pod-1-agent-01` collides and the second run
+# either fails to start or — worse — `stop`/`clean` from one reaps the other's
+# containers mid-flight. Default keeps the historical names.
+SWARM_NS="${SWARM_NS:-$(basename "$SWARM_ROOT" | sed 's/^\.//; s/^jjj-swarm$/swarm/; s/^jjj-//')}"
+CPREFIX="${SWARM_NS}-"
 JJJ_BIN="${JJJ_BIN:-$REPO_ROOT/target/release/jjj}"
 IMAGE="${SWARM_IMAGE:-jjj-swarm-agent:0.5.1}"
 
@@ -207,7 +215,7 @@ cmd_start() {
         for a in $(seq 1 "$agents"); do
             local agent name
             agent="agent-$(printf '%02d' "$a")"
-            name="swarm-$pod-$agent"
+            name="$CPREFIX$pod-$agent"
             podman rm -f "$name" >/dev/null 2>&1
 
             podman run -d --name "$name" \
@@ -251,7 +259,7 @@ cmd_start() {
 # indistinguishable from a crash in `podman ps` output, so call it out.
 report_ooms() {
     local ooms
-    ooms=$(podman ps -a --filter "name=swarm-" --format "{{.Names}} {{.Status}}" 2>/dev/null \
+    ooms=$(podman ps -a --filter "name=^${CPREFIX}pod-" --format "{{.Names}} {{.Status}}" 2>/dev/null \
         | grep -c "Exited (137)" || true)
     if [ "${ooms:-0}" -gt 0 ]; then
         echo "  !! $ooms container(s) were OOM-killed — raise SWARM_AGENT_MEMORY"
@@ -264,7 +272,7 @@ cmd_status() {
     . "$SWARM_ROOT/config"
 
     echo "containers:"
-    podman ps -a --filter "name=swarm-" \
+    podman ps -a --filter "name=^${CPREFIX}pod-" \
         --format "  {{.Names}}  {{.Status}}" 2>/dev/null | sort
     [ -e "$STOP_FILE" ] && echo "  (kill switch SET)"
     report_ooms
@@ -295,7 +303,7 @@ cmd_logs() {
     if [ $# -gt 0 ]; then
         podman logs -f "swarm-$1" 2>&1
     else
-        for c in $(podman ps -a --filter "name=swarm-" --format "{{.Names}}" | sort); do
+        for c in $(podman ps -a --filter "name=^${CPREFIX}pod-" --format "{{.Names}}" | sort); do
             echo "=== $c ==="
             podman logs --tail 8 "$c" 2>&1
         done
@@ -314,14 +322,14 @@ cmd_stop() {
     fi
     echo "Kill switch set; agents exit after their current turn."
     echo "Force-stopping containers..."
-    for c in $(podman ps -a --filter "name=swarm-" --format "{{.Names}}"); do
+    for c in $(podman ps -a --filter "name=^${CPREFIX}pod-" --format "{{.Names}}"); do
         podman stop -t 10 "$c" >/dev/null 2>&1 && echo "  stopped $c"
     done
 }
 
 cmd_clean() {
     cmd_stop
-    for c in $(podman ps -a --filter "name=swarm-" --format "{{.Names}}"); do
+    for c in $(podman ps -a --filter "name=^${CPREFIX}pod-" --format "{{.Names}}"); do
         podman rm -f "$c" >/dev/null 2>&1
     done
     echo "Removed containers. Data kept in $SWARM_ROOT"

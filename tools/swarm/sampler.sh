@@ -18,6 +18,8 @@ set -uo pipefail
 ROOT="${1:?swarm root required}"
 INTERVAL="${2:-300}"
 OUT="$ROOT/trajectory.tsv"
+# Match swarm.sh's namespacing so a sampler watches only its own workbench.
+NS="${SWARM_NS:-$(basename "$ROOT" | sed 's/^\.//; s/^jjj-swarm$/swarm/; s/^jjj-//')}"
 IMAGE="${SWARM_IMAGE:-jjj-swarm-agent:0.5.1}"
 
 # `agent_score` is the last score any agent measured in ITS OWN tree, which is
@@ -46,7 +48,7 @@ while true; do
     # `set -o pipefail` the pipeline then reports failure *because* it matched.
     # That intermittently killed the sampler seconds into a run.
     running="$(podman ps --format '{{.Names}}' 2>/dev/null)"
-    if printf '%s\n' "$running" | grep -q '^swarm-pod'; then
+    if printf '%s\n' "$running" | grep -q "^${NS}-pod"; then
         misses=0
     else
         misses=$((misses + 1))
