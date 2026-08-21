@@ -20,10 +20,16 @@ That is **O(total corpus) for an O(delta) operation** — Break #1, which Pillar
 was supposed to eliminate. The jj-side delta work is correct; jjj's own paths are
 not.
 
-**The score is a ratio, deliberately.** `jjj_ms(large) / jjj_ms(small)` is ~8.8x
-today and approaches 1.0 as the work becomes delta-proportional. Absolute
-timings are useless when the measurement may run on a machine saturated by a
-swarm; a ratio of two measurements taken under the same load survives it.
+**The score is a ratio of CPU time, deliberately.** `cpu(large) / cpu(small)`
+approaches 1.0 as the work becomes delta-proportional; it reads ~3.2x today.
+
+Both halves of that matter. Absolute timings are useless when the measurement
+runs on a machine a swarm has saturated — but so is wall-clock *within* a ratio,
+because contention does not tax both corpora equally, and the first version of
+this benchmark scored an unmodified tree anywhere from 0 to 28 across six
+concurrent agents. CPU time is near-invariant under contention: a stolen
+timeslice stops our clock too. See `timed()` for the details and the residual
+caveat about comparing across load conditions.
 
     python3 sync_scaling.py                 # 2K vs 25K, the release gate
     python3 sync_scaling.py --small 1000 --large 8000    # a faster loop
@@ -84,20 +90,52 @@ def touch(repo, k):
         f.write_text(f.read_text() + "\nAmended.\n")
 
 
-def timed(cmd, cwd, env, log):
-    """Run a jjj command, returning (total_ms, jj_ms, jj_calls)."""
-    log.write_text("")
-    env = dict(env, JJ_COUNT_LOG=str(log))
-    t0 = time.time_ns()
-    subprocess.run(cmd, cwd=str(cwd), env=env, capture_output=True, text=True)
-    total = (time.time_ns() - t0) // 1_000_000
-    jj_ms, calls = 0, 0
-    for line in log.read_text().splitlines():
-        parts = line.split("\t", 1)
-        if parts and parts[0].isdigit():
-            jj_ms += int(parts[0])
-            calls += 1
-    return total, jj_ms, calls
+REPS = int(os.environ.get("SYNC_REPS", "2"))
+
+
+def timed(cmd, cwd, env, log, reps=REPS):
+    """Run a jjj command, returning (cpu_ms, jj_ms, jj_calls).
+
+    **CPU time, not wall-clock.** This benchmark doubles as the fitness function
+    for a swarm of agents that saturate the machine they are measured on, and
+    wall-clock does not survive that: on an idle host the ratio reads 3.6x, but
+    with six agents building concurrently the same unmodified tree scored
+    anywhere from 0 to 28. Contention does not tax both corpora equally — the
+    large one holds more memory and does more I/O, so it loses disproportionately
+    and the ratio inflates. An arbiter noisier than the effect it measures makes
+    reviewers accept and reject on coin flips.
+
+    A process's own user+sys time is close to invariant under contention: a
+    stolen timeslice stops the clock for us too. `wait4` folds in the usage of
+    descendants the child reaped, so the jj subprocesses jjj spawns are counted.
+
+    Taking the **minimum** over repetitions on top of that: noise only ever adds
+    work, so the floor is the best available estimate of the uncontended cost.
+    """
+    best_cpu, jj_ms, calls = None, 0, 0
+    for _ in range(max(1, reps)):
+        log.write_text("")
+        run_env = dict(env, JJ_COUNT_LOG=str(log))
+        with tempfile.TemporaryFile() as sink:
+            proc = subprocess.Popen(cmd, cwd=str(cwd), env=run_env,
+                                    stdout=sink, stderr=subprocess.STDOUT)
+            _, _, ru = os.wait4(proc.pid, 0)
+            proc.returncode = 0
+        cpu = int(round((ru.ru_utime + ru.ru_stime) * 1000))
+        faults, maxrss = ru.ru_minflt, ru.ru_maxrss
+
+        this_jj, this_calls = 0, 0
+        for line in log.read_text().splitlines():
+            parts = line.split("\t", 1)
+            if parts and parts[0].isdigit():
+                this_jj += int(parts[0])
+                this_calls += 1
+
+        if best_cpu is None or cpu < best_cpu:
+            best_cpu, jj_ms, calls = cpu, this_jj, this_calls
+            best_faults, best_rss = faults, maxrss
+
+    return best_cpu, jj_ms, calls, best_faults, best_rss
 
 
 def measure(count, delta, jjj, env, log):
@@ -146,18 +184,24 @@ def main():
     for size in (args.small, args.large):
         r = measure(size, args.delta, args.jjj, env, log)
         out["sizes"][str(size)] = {
-            op: {"total_ms": t, "jj_ms": j, "jj_calls": c, "jjj_ms": t - j}
-            for op, (t, j, c) in r.items()
+            op: {"cpu_ms": t, "jj_wall_ms": j, "jj_calls": c,
+                 "minflt": fl, "maxrss_kb": rs}
+            for op, (t, j, c, fl, rs) in r.items()
         }
         print(f"corpus {size:>6}, delta {args.delta}")
-        for op, (t, j, c) in r.items():
-            print(f"  {op:<6} total {t:>6}ms | jj {j:>5}ms ({c} calls) | jjj {t-j:>6}ms")
+        for op, (t, j, c, fl, rs) in r.items():
+            print(f"  {op:<6} cpu {t:>6}ms | faults {fl:>8} | rss {rs:>9} | jj {j:>5}ms ({c})")
 
-    print("\nscaling ratio (jjj's own time, large/small) — the score:")
+    # Scored on total CPU rather than "jjj's own time". The jj figure comes from
+    # a wall-clock shim, so subtracting it from a CPU total would mix two units
+    # and can go negative under contention. Total CPU needs no such surgery, and
+    # the target maps onto it unchanged: jj's cost is flat in corpus size, so a
+    # sync that became delta-proportional drives the whole ratio to 1.0.
+    print("\nscaling ratio (CPU, large/small) — the score:")
     ok = True
     for op in ("push", "fetch"):
-        s = out["sizes"][str(args.small)][op]["jjj_ms"]
-        l = out["sizes"][str(args.large)][op]["jjj_ms"]
+        s = out["sizes"][str(args.small)][op]["cpu_ms"]
+        l = out["sizes"][str(args.large)][op]["cpu_ms"]
         ratio = l / max(s, 1)
         out.setdefault("ratio", {})[op] = round(ratio, 2)
         # Delta-proportional work would barely move; anything near the corpus

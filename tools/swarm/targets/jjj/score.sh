@@ -8,13 +8,26 @@
 # one, for a delta-sized sync.
 #
 #   score = 100 / ratio, so it never saturates and stays intuitive:
-#     ratio 3.6x (today) -> score  28     cost still grows with the corpus
+#     ratio 3.2x (today) -> score  31     cost still grows with the corpus
 #     ratio 2.0x         -> score  50
 #     ratio 1.0x (target)-> score 100     cost no longer depends on the corpus
 #
-# A ratio, not milliseconds, because this may be measured on a machine saturated
-# by the swarm itself — both sides of the ratio suffer the same contention, so it
-# survives; an absolute timing would not.
+# A ratio, not milliseconds, because this is measured on a machine the swarm
+# itself saturates.
+#
+# **The ratio alone was not enough.** The first version timed wall-clock on the
+# assumption that contention taxes both corpora equally. It does not: the large
+# corpus holds more memory and does more I/O, so it loses disproportionately.
+# Measured on an unmodified tree, six concurrent agents scored it 0, 6, 7, 8, 9
+# and 28 — noise far larger than the improvement it exists to detect, which
+# would have had reviewers accepting and rejecting on coin flips. The benchmark
+# now measures **CPU time** (see tools/bench/sync_scaling.py), which a stolen
+# timeslice does not inflate, and takes the minimum of repetitions.
+#
+# Repeatability within a load condition is ~3%. There is still a systematic
+# offset *between* conditions — the same tree reads 3.2x idle and 2.15x with
+# every core busy — so compare before against after within a turn, and do not
+# compare a score to one from another run under different load.
 #
 # Correctness gates the score. A build that fails, or a suite that fails, scores
 # zero however fast it is: making sync fast by breaking it is not progress.

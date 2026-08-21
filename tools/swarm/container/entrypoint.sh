@@ -49,9 +49,35 @@ jj config set --repo user.name "$JJJ_USER" >/dev/null 2>&1
 jj config set --repo user.email "${JJJ_USER//\//-}@swarm.invalid" >/dev/null 2>&1
 
 # Pull the metadata bookmark so the agent can see the seeded problems.
-jjj fetch >/dev/null 2>&1 || log "warning: initial jjj fetch failed"
+#
+# Fatal rather than a warning. An agent that cannot fetch sees an empty
+# repository, finds nothing to do, and idles politely until the deadline — a
+# whole fleet once burned twenty minutes that way over a too-old git in the
+# image, and the only symptom was a warning nobody was watching. Dying here puts
+# the cause in `swarm.sh status` instead.
+fetch_err=""
+for attempt in 1 2 3; do
+    if fetch_err="$(jjj fetch 2>&1)"; then
+        fetch_err=""
+        break
+    fi
+    log "initial jjj fetch failed (attempt $attempt/3)"
+    sleep 5
+done
 
-log "clone ready; $(jjj problem list 2>/dev/null | tail -n +3 | wc -l | tr -d ' ') problems visible"
+if [ -n "$fetch_err" ]; then
+    log "FATAL: cannot fetch jjj metadata; this agent would idle with nothing to do"
+    printf '%s\n' "$fetch_err" | tail -5 | while IFS= read -r line; do log "  $line"; done
+    exit 1
+fi
+
+visible="$(jjj problem list 2>/dev/null | tail -n +3 | wc -l | tr -d ' ')"
+if [ "${visible:-0}" -eq 0 ]; then
+    log "FATAL: fetch succeeded but no problems are visible — nothing to work on"
+    exit 1
+fi
+
+log "clone ready; $visible problems visible"
 
 # The identity line is emphatic because agents got it wrong: two of six in an
 # earlier trial *set* JJJ_USER rather than reading it, and their work landed
@@ -193,7 +219,13 @@ while true; do
     jjj fetch >/dev/null 2>&1
 
     SCORER="./score.py"; [ -x ./score.sh ] && SCORER="./score.sh"
-    before=$($SCORER 2>/dev/null | tail -1 || echo "? ?")
+    # Keep the scorer's stderr: it carries both the measured ratio and the
+    # reason a gate failed. Discarding it once turned a fleet-wide score of zero
+    # into a mystery that took a container autopsy to explain.
+    before=$($SCORER 2>/tmp/score.err | tail -1 || echo "? ?")
+    if [ "${before%% *}" = "0" ]; then
+        log "iter $iter scorer gate FAILED: $(tail -2 /tmp/score.err | tr '\n' ' ')"
+    fi
 
     # If there is no work and nothing to review, wait rather than paying for a
     # model call to be told there is nothing to do. A finished backlog otherwise
@@ -254,7 +286,19 @@ $PROMPT"
         # package import and takes every agent's score to zero. jjj already
         # refuses this for metadata by validating entity bodies before push; the
         # code path had no equivalent.
-        markers="$(grep -rlE '^(<{7} |={7}$|>{7} )' --include='*.py' . 2>/dev/null | tr '\n' ' ')"
+        # Scan whatever git is actually about to commit, rather than a fixed
+        # file glob. This once read `--include='*.py'`, carried over from the
+        # Python toy target, so on the Rust target it matched nothing and the
+        # guard silently passed everything: a fleet ran two hours and ended with
+        # nested `<<<<<<< HEAD` markers committed into src/commands/fetch.rs, a
+        # shared branch that would not compile, and every score at zero. A guard
+        # that only protects one language is worse than none, because it reads
+        # as protection.
+        markers="$(git diff --name-only HEAD 2>/dev/null; git ls-files -o --exclude-standard 2>/dev/null)"
+        markers="$(printf '%s\n' "$markers" | sort -u | while IFS= read -r f; do
+            [ -n "$f" ] && [ -f "$f" ] || continue
+            grep -qE '^(<{7} |={7}$|>{7} )' -- "$f" 2>/dev/null && printf '%s ' "$f"
+        done)"
         if [ -n "$markers" ]; then
             stuck=$((stuck + 1))
             log "iter $iter not pushing code: markers in $markers (stuck $stuck)"

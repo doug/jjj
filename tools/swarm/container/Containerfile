@@ -10,10 +10,13 @@
 # jjj is compiled from the working tree, so a trial always exercises the code
 # under development rather than the last release.
 
-# Single stage on the Rust image. Agents working the jjj self-improvement target
-# need cargo themselves — they build and test the tree they are modifying — and
-# a separate builder stage would leave them without it.
-FROM docker.io/library/rust:1-bookworm
+# ubuntu 24.04 rather than the Rust image, which is bookworm-based and ships git
+# 2.39. jj requires git >= 2.41 for `git fetch --porcelain`, so on bookworm every
+# `jjj fetch` fails and agents see an empty repository — a run died on arrival
+# that way, six agents idling because none could see a seeded problem.
+# bookworm-backports does not carry a newer git either, so the base has to change
+# and Rust comes from rustup.
+FROM docker.io/library/ubuntu:24.04
 
 ARG JJ_VERSION=0.44.0
 ARG JJJ_VERSION=0.5.1
@@ -21,9 +24,17 @@ ARG TARGETARCH
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl git openssh-client xz-utils \
+        build-essential pkg-config \
         python3 python3-venv \
         procps less \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && git --version
+
+# Rust, for agents that build and test the tree they are modifying.
+ENV RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH
+RUN curl -fsSL https://sh.rustup.rs | sh -s -- -y --no-modify-path --profile minimal \
+    && cargo --version
 
 # Node, for the Claude Code CLI.
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
