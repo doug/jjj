@@ -1346,3 +1346,76 @@ fn divergent_body_edits_surface_as_a_conflict() {
         "conflict markers were left in the body: {shown}"
     );
 }
+
+/// Submitting a solution must publish the code, not just the metadata.
+///
+/// `solution attach` records a change *id*; before submit published it, the
+/// commit stayed in the author's clone while the metadata synced everywhere.
+/// A reviewer who fetched then saw a solution pointing at a revision that did
+/// not exist for them. In a swarm trial this was the dominant failure: every
+/// critique against a submitted solution amounted to "the attached change is
+/// unreachable, so the diff cannot be reviewed", and nothing could be judged on
+/// its merits.
+#[test]
+fn submitting_a_solution_publishes_its_change_for_reviewers() {
+    if !jj_available() {
+        return;
+    }
+    let remote = create_bare_remote();
+    let author = setup_repo_with_remote(remote.path());
+    run_jjj_success(author.path(), &["init"]);
+
+    // A real change, attached to a solution.
+    std::fs::write(author.path().join("fix.txt"), "the fix\n").expect("write fix");
+    run_jj(author.path(), &["file", "track", "fix.txt"]);
+    run_jj(author.path(), &["describe", "-m", "the actual fix"]);
+    let change_id = String::from_utf8_lossy(
+        &run_jj(
+            author.path(),
+            &["log", "-r", "@", "--no-graph", "-T", "change_id"],
+        )
+        .stdout,
+    )
+    .trim()
+    .to_string();
+    assert!(!change_id.is_empty(), "could not read the change id");
+
+    run_jjj_success(
+        author.path(),
+        &["problem", "new", "Needs fixing", "--force"],
+    );
+    run_jjj_success(
+        author.path(),
+        &[
+            "solution",
+            "new",
+            "The fix",
+            "--problem",
+            "Needs fixing",
+            "--force",
+        ],
+    );
+    run_jjj_success(author.path(), &["solution", "attach", "The fix"]);
+    let submitted = run_jjj_success(author.path(), &["solution", "submit", "The fix"]);
+    assert!(
+        submitted.contains("published"),
+        "submit should publish the attached change: {submitted}"
+    );
+    run_jjj_success(author.path(), &["push"]);
+
+    // A reviewer, in a different clone, must be able to read that diff.
+    let reviewer = setup_repo_with_remote(remote.path());
+    run_jjj_success(reviewer.path(), &["fetch"]);
+
+    let shown = run_jj(reviewer.path(), &["show", &change_id, "--stat"]);
+    assert!(
+        shown.status.success(),
+        "the reviewer cannot reach the attached change {change_id}: {}",
+        String::from_utf8_lossy(&shown.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&shown.stdout).contains("fix.txt"),
+        "the reviewer fetched the change but not its contents: {}",
+        String::from_utf8_lossy(&shown.stdout)
+    );
+}

@@ -649,9 +649,56 @@ fn submit_solution(ctx: &CommandContext, solution_input: String) -> Result<()> {
     let solution_id = ctx.resolve_solution(&solution_input)?;
     crate::domain::submit_solution(&ctx.store, &solution_id)?;
     println!("Solution {} submitted for review", solution_id);
+    publish_attached_changes(ctx, &solution_id);
     Ok(())
 }
 
+/// Push a bookmark carrying the solution's attached changes, so a reviewer can
+/// actually read the diff.
+///
+/// `solution attach` records a change *id*; it does not publish the commit. The
+/// metadata therefore syncs while the code stays in the author's clone, and a
+/// reviewer who fetches sees a solution pointing at a revision that does not
+/// exist for them. In a swarm trial that was the single largest waste: every
+/// critique raised against a submitted solution said some version of "the
+/// attached change is unreachable, so the diff cannot be reviewed", and no
+/// solution could be judged on its merits at all.
+///
+/// Submit is the right moment — it is exactly the transition that says "this is
+/// ready to be critiqued", and critique without the diff is guesswork.
+///
+/// Best-effort by design: a solution with no attached change has nothing to
+/// publish, and a repo with no remote (or an offline one) must still be able to
+/// submit. A failure here is reported, never fatal.
+fn publish_attached_changes(ctx: &CommandContext, solution_id: &str) {
+    let solution = match ctx.store.load_solution(solution_id) {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+
+    let Some(change_id) = solution.change_ids.last() else {
+        println!("  (no change attached — reviewers will have no diff to read)");
+        return;
+    };
+
+    let branch = format!("jjj-s-{}", short_id(solution_id));
+    let jj = ctx.jj();
+
+    // `bookmark set` rather than `create`: resubmitting after addressing a
+    // critique must move the branch, not fail because it already exists.
+    if let Err(e) = jj.execute(&["bookmark", "set", &branch, "-r", change_id]) {
+        println!("  (could not mark {} for review: {})", change_id, e);
+        return;
+    }
+
+    match jj.execute(&["git", "push", "-b", &branch, "--allow-empty-description"]) {
+        Ok(_) => println!("  (published {} as {} for review)", change_id, branch),
+        Err(e) => println!(
+            "  (could not publish {}: {} — reviewers will not see the diff)",
+            branch, e
+        ),
+    }
+}
 
 fn approve_solution(
     ctx: &CommandContext,
