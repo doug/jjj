@@ -223,6 +223,7 @@ cmd_start() {
                 -e "SWARM_MODEL=$model" \
                 -e "SWARM_ROLE=$role" \
                 -e "SWARM_MERGE_GATE=${SWARM_MERGE_GATE:-0}" \
+                -e "SWARM_TURN_TIMEOUT=${SWARM_TURN_TIMEOUT:-1500}" \
                 ${use_key:+$([ "$use_key" = 1 ] && echo "-e ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY")} \
                 -v "$SWARM_ROOT:/swarm:rw" \
                 "$IMAGE" >/dev/null || die "failed to start $name"

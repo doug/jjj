@@ -185,6 +185,12 @@ Rules:
   valuable thing you can do this turn: one such file breaks everyone at once.
 - ./score.sh prints \`<score> <ceiling>\`. Higher is better. Nothing is timed, so
   do not optimise for wall-clock.
+- **./score.sh costs about two minutes.** Run it once to get your baseline and
+  once to check your change — not in a loop. Your turn is time-boxed, and a turn
+  that runs out mid-edit publishes nothing.
+- **Finish the loop before you run out of time.** A change that is not submitted
+  helps nobody: it stays on your branch and no reviewer can approve it. If time
+  is short, submit what you have with an honest body rather than polishing.
 
 Report in one line what you did, including the score before and after."
 
@@ -312,7 +318,14 @@ $PROMPT"
     fi
 
     started=$(date +%s)
-    out=$(timeout 600 claude -p "$turn_prompt" \
+    # 600s was too short once the fitness function had a real correctness gate.
+    # `./score.sh` costs ~110s under six-way contention — a release build, the
+    # library tests, three integration tests and the benchmark — and an agent
+    # naturally runs it before and after its change. Every turn of one trial
+    # died at rc=124 with the work half-done: agents kept editing and never
+    # reached `jjj solution submit`, so the fleet produced six divergent local
+    # trees and not one reviewable solution.
+    out=$(timeout "${SWARM_TURN_TIMEOUT:-1500}" claude -p "$turn_prompt" \
             --model "$MODEL" \
             --add-dir "$WORK" \
             --dangerously-skip-permissions 2>&1)
