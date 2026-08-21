@@ -19,17 +19,26 @@
 //! Advancing `last_synced_rev` to the wrong commit silently loses local edits:
 //! if it points at a state that already folds in unpushed local work, that work
 //! looks like part of the shared base on the next fetch and a divergent remote
-//! reverts it with no conflict. The rule, enforced by construction here:
+//! reverts it with no conflict. The rule, enforced by construction here: only
+//! advance to a commit that is *itself* reachable on the remote — never to a
+//! merged-but-unpushed local working state.
 //!
 //! 1. A `jjj sync` runs **fetch → merge → push**, in that order.
 //! 2. The three-way merge base for that fetch is the **pre-sync**
 //!    `last_synced_rev` (read it *before* mutating anything).
-//! 3. Only **after a successful push** call [`SyncState::advance`] with the
+//! 3. After a successful push, call [`SyncState::advance`] with the
 //!    **just-pushed** commit (which already contains merged remote + local).
+//! 4. After a successful fetch that resolved to exactly one remote head, call
+//!    [`SyncState::advance`] with that head directly — it already existed on
+//!    the remote before this fetch touched anything, so recording it carries
+//!    none of the risk in point 3 (never with a commit built from this
+//!    clone's own working files); it just avoids a permanent cold start for a
+//!    pod that only ever fetches. See `src/commands/fetch.rs` step 6b.
 //!
-//! Never advance to a merged-but-unpushed working state. [`SyncState::advance`]
-//! is the *only* way to move the pointer, so every caller goes through the same
-//! documented gate.
+//! Never advance to a merged-but-unpushed working state — a commit whose
+//! content includes local edits that have not themselves been pushed.
+//! [`SyncState::advance`] is the *only* way to move the pointer, so every
+//! caller goes through the same documented gate.
 
 use crate::error::Result;
 use serde::{Deserialize, Serialize};
@@ -131,11 +140,14 @@ impl SyncState {
         Ok(())
     }
 
-    /// Advance the merge-base pointer to a **just-pushed** commit.
+    /// Advance the merge-base pointer to a commit known to already exist on
+    /// the remote — a **just-pushed** commit, or (on fetch) a remote head that
+    /// required no local content to identify.
     ///
     /// This is the ONLY way to move `last_synced_rev`. Per the state-machine
-    /// invariant (see module docs), call it *only after* a push succeeds, with
-    /// the commit that push produced — never a merged-but-unpushed state.
+    /// invariant (see module docs), call it only with a commit that is already
+    /// on the remote — never a merged-but-unpushed state built from this
+    /// clone's own working files.
     pub fn advance(&mut self, pushed_rev: impl Into<String>) {
         self.last_synced_rev = Some(pushed_rev.into());
     }
@@ -187,6 +199,33 @@ fn sanitize_pod(pod: &str) -> String {
 mod tests {
     use super::*;
 
+    /// `SyncState::load` deliberately overrides `pod` from `JJJ_POD` (see its
+    /// doc comment), so any test that round-trips `pod` through `load` must
+    /// not inherit the ambient value a swarm agent runs with — otherwise the
+    /// test's outcome depends on who happens to run it. Restores whatever was
+    /// there before, even on panic, so it can't leak into other tests.
+    struct EnvVarGuard {
+        key: &'static str,
+        previous: Option<String>,
+    }
+
+    impl EnvVarGuard {
+        fn unset(key: &'static str) -> Self {
+            let previous = std::env::var(key).ok();
+            std::env::remove_var(key);
+            Self { key, previous }
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            match &self.previous {
+                Some(v) => std::env::set_var(self.key, v),
+                None => std::env::remove_var(self.key),
+            }
+        }
+    }
+
     #[test]
     fn default_is_cold_start() {
         let s = SyncState::default();
@@ -204,6 +243,13 @@ mod tests {
 
     #[test]
     fn save_then_load_roundtrips() {
+        // `load` applies a per-process `JJJ_POD` override (see the module
+        // docs), so a swarm/CI environment that already exports `JJJ_POD`
+        // would silently overwrite `pod` and fail the equality check below.
+        // Unset it for the duration of this test so the roundtrip is
+        // verified against the file content, not the ambient environment.
+        let _guard = EnvVarGuard::unset("JJJ_POD");
+
         let tmp = tempfile::tempdir().unwrap();
         let mut s = SyncState {
             pod: Some("theory".to_string()),
@@ -213,6 +259,7 @@ mod tests {
         s.save(tmp.path()).unwrap();
 
         let loaded = SyncState::load(tmp.path());
+
         assert_eq!(loaded, s);
         assert_eq!(loaded.last_synced_rev.as_deref(), Some("abc123"));
         assert!(!loaded.is_cold_start());

@@ -1419,3 +1419,67 @@ fn submitting_a_solution_publishes_its_change_for_reviewers() {
         String::from_utf8_lossy(&shown.stdout)
     );
 }
+
+/// Advancing `last_synced_rev` on fetch must not cost a pod its unpushed work.
+///
+/// Fetch used to leave the pointer at `None` forever for any pod that only ever
+/// fetched, so every fetch paid a full cold-start reconcile. Advancing it fixes
+/// that, but the pointer is a *merge base*: set it to something that already
+/// contains this clone's local edits and the next push computes its delta
+/// against them and silently omits them.
+///
+/// Advancing to a **remote head** is safe precisely because that commit cannot
+/// contain unpushed local edits. This pins that reasoning down as behaviour: a
+/// pod fetches (advancing the pointer), then edits, and the edit must still
+/// reach everyone.
+#[test]
+fn a_fetch_advanced_base_still_pushes_local_edits() {
+    if !jj_available() {
+        return;
+    }
+    let remote = create_bare_remote();
+    let alice = setup_repo_with_remote(remote.path());
+    let bob = setup_repo_with_remote(remote.path());
+    set_pod(alice.path(), "alice");
+    set_pod(bob.path(), "bob");
+    run_jjj_success(alice.path(), &["init"]);
+    run_jjj_success(bob.path(), &["init"]);
+
+    run_jjj_env(
+        alice.path(),
+        &[("JJJ_POD", "alice")],
+        &["problem", "new", "Shared", "--force"],
+    );
+    run_jjj_env(alice.path(), &[("JJJ_POD", "alice")], &["push"]);
+
+    // Bob only ever fetches — the case that used to stay cold forever, and the
+    // one where the pointer now advances.
+    run_jjj_env(bob.path(), &[("JJJ_POD", "bob")], &["fetch"]);
+
+    // Now Bob does local work on top of that advanced base and publishes it.
+    run_jjj_env(
+        bob.path(),
+        &[("JJJ_POD", "bob")],
+        &["problem", "new", "Bob's own problem", "--force"],
+    );
+    let pushed = run_jjj_env(bob.path(), &[("JJJ_POD", "bob")], &["push"]);
+    assert!(
+        pushed.status.success(),
+        "bob's push failed: {}",
+        String::from_utf8_lossy(&pushed.stderr)
+    );
+
+    // Alice must see it. If the advanced base had swallowed Bob's edit, the
+    // delta would have been empty and this problem would exist only on Bob's
+    // disk.
+    run_jjj_env(alice.path(), &[("JJJ_POD", "alice")], &["fetch"]);
+    let listed = run_jjj_success(alice.path(), &["problem", "list"]);
+    assert!(
+        listed.contains("Bob's own problem"),
+        "a fetch-advanced merge base swallowed the pod's own later edit: {listed}"
+    );
+    assert!(
+        listed.contains("Shared"),
+        "the original problem went missing: {listed}"
+    );
+}

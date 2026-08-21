@@ -19,8 +19,16 @@
 //!    the hot path.
 //!
 //! The merge base is a **revision**, not a directory tree: there is no
-//! `base/` mirror in this path. `last_synced_rev` advances only on a
-//! successful push (see [`SyncState::advance`]); fetch never moves it.
+//! `base/` mirror in this path. `last_synced_rev` advances on a successful
+//! push, and also on a successful fetch when the fetch-union resolves to
+//! exactly one remote head (see [`SyncState::advance`]) — that head is
+//! already a pre-existing remote commit, so pointing at it folds in no
+//! unpushed local edits. Without this, a fetch-only pod (one that never
+//! pushes its own bookmark) would have `last_synced_rev` stuck at `None`
+//! forever and pay the cold-start cost on every fetch, regardless of delta
+//! size. With more than one concurrent head there is no single commit
+//! representing all of them merged short of a push, so the pointer is left
+//! untouched in that case.
 //!
 //! Cold start (no `last_synced_rev`, or it is unreachable) falls back to
 //! `base = root()`, so every file shows as added and is adopted, followed by a
@@ -350,7 +358,7 @@ pub fn execute(ctx: &CommandContext, remote: &str) -> Result<()> {
 
     // 3. Decide delta vs cold start. Cold start = no recorded merge base, or a
     //    base that is no longer reachable (GC'd/rewritten).
-    let state = SyncState::load(&meta_path);
+    let mut state = SyncState::load(&meta_path);
     let cold_start = match state.last_synced_rev.as_deref() {
         None => true,
         Some(rev) => jj_client.resolve_commit(rev)?.is_none(),
@@ -422,6 +430,33 @@ pub fn execute(ctx: &CommandContext, remote: &str) -> Result<()> {
                 eprintln!("  Warning: event ingest failed: {}", e);
             }
         }
+    }
+
+    // 6b. Advance the merge-base pointer when it is safe and unambiguous to
+    // do so.
+    //
+    // `last_synced_rev` used to advance only on push, so a pod that only ever
+    // fetches (a review-only agent, or any pod between pushes) stayed at
+    // `None` forever and paid the full cold-start cost — a full corpus
+    // re-derive plus a DB rebuild — on *every* fetch, not just the first
+    // (see docs/design/sync-scaling-investigation.md).
+    //
+    // With exactly one remote head, advancing to it is safe under the
+    // invariant `SyncState::advance` documents: `head` is a real,
+    // already-shared commit (resolved from the remote's `jjj*` bookmarks in
+    // step 2), so it folds in no unpushed local edits — unlike the local
+    // working set, which may. Nothing was merged *into* this commit; we are
+    // only recording that we have now fully reconciled up to it.
+    //
+    // Restricted to a single head: with several concurrent per-pod heads
+    // there is no one commit that represents all of them merged (only a push
+    // creates that, per `sync_meta_to_bookmark`'s join-every-head commit), so
+    // picking one would silently stop tracking the others — leave the
+    // pointer alone and keep paying the cold-start cost until this pod
+    // pushes (which joins every head) or the remote converges to one head.
+    if let [only_head] = heads.as_slice() {
+        state.advance(only_head.clone());
+        state.save(&meta_path)?;
     }
 
     // 7. Summary + conflict reporting.
