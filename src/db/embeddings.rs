@@ -193,11 +193,11 @@ fn blob_to_embedding(blob: &[u8]) -> Option<Vec<f32>> {
     if !blob.len().is_multiple_of(4) {
         return None;
     }
-    Some(
-        blob.chunks_exact(4)
-            .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
-            .collect(),
-    )
+    // `as_chunks` rather than `chunks_exact`: it yields `&[u8; 4]` directly, so
+    // `from_le_bytes` takes it without rebuilding an array element by element,
+    // and the length is checked above so the remainder is always empty.
+    let (chunks, _rest) = blob.as_chunks::<4>();
+    Some(chunks.iter().copied().map(f32::from_le_bytes).collect())
 }
 
 #[cfg(test)]
