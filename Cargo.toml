@@ -3,6 +3,18 @@ name = "jjj"
 version = "0.5.2"
 edition = "2021"
 rust-version = "1.88"
+
+# Test and benchmark rigs are not part of what a user of this crate installs:
+# `tools/swarm` alone is podman scripts, a container definition and a reference
+# SQL engine used to exercise multi-agent workflows. Keeping them in the
+# repository and out of the package is the point of the split.
+exclude = [
+    "tools/**",
+    "docs-site/**",
+    "vscode/**",
+    "skills/**",
+    "tests/fixtures/**",
+]
 authors = ["jjj contributors"]
 description = "Distributed project management and code review for Jujutsu"
 license = "Apache-2.0"
