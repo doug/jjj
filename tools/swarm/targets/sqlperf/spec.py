@@ -69,9 +69,16 @@ WORKLOAD_TEMPLATES = [
     ("join_filtered",   "SELECT COUNT(*) FROM users INNER JOIN orders ON users.id = orders.user_id WHERE users.city = '{city2}' AND orders.status = '{status2}'", 1.50, "join"),
     ("join_three",      "SELECT COUNT(*) FROM users INNER JOIN orders ON users.id = orders.user_id INNER JOIN items ON orders.id = items.order_id WHERE users.id < {some}", 2.50, "join"),
 
-    ("topn_price",      "SELECT id, price FROM items ORDER BY price DESC LIMIT {lim}", 1.20, "topn"),
-    ("topn_amount",     "SELECT id, amount FROM orders ORDER BY amount DESC LIMIT {lim2}", 0.80, "topn"),
-    ("topn_group",      "SELECT sku, COUNT(*) FROM items GROUP BY sku ORDER BY COUNT(*) DESC LIMIT {lim3}", 1.80, "topn"),
+    # Every ORDER BY ... LIMIT carries a unique tiebreak, because without one
+    # the answer is not unique and the comparison is unwinnable. `ORDER BY
+    # amount DESC LIMIT 20` over 500,000 rows with 99,206 distinct amounts has
+    # six rows tied at the twentieth value: SQLite returns three of them, an
+    # engine returns three others, and both are correct SQL. That was scored as
+    # WRONG for hours and drew five critiques from agents hunting a bug that
+    # was not there.
+    ("topn_price",      "SELECT id, price FROM items ORDER BY price DESC, id LIMIT {lim}", 1.20, "topn"),
+    ("topn_amount",     "SELECT id, amount FROM orders ORDER BY amount DESC, id LIMIT {lim2}", 0.80, "topn"),
+    ("topn_group",      "SELECT sku, COUNT(*) FROM items GROUP BY sku ORDER BY COUNT(*) DESC, sku LIMIT {lim3}", 1.80, "topn"),
 
     ("sub_in",          "SELECT COUNT(*) FROM orders WHERE user_id IN (SELECT id FROM users WHERE city = '{city3}')", 1.20, "sub"),
     ("sub_notin",       "SELECT COUNT(*) FROM orders WHERE user_id IN (SELECT id FROM users WHERE age > {oldish})", 1.20, "sub"),

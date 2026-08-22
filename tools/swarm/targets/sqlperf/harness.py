@@ -153,13 +153,13 @@ def cmd_score(args):
     runner = pathlib.Path(__file__).with_name("runner.py")
     # The whole run is bounded too: budgets sum to well under a minute, and a
     # load that never finishes must not hang an agent's turn.
-    cap = sum(b for _, _, b, _ in workload) + 180
+    cap = sum(b for _, _, b, _ in workload) * (60 if args.correctness_only else 1) + 180
     wl = pathlib.Path(args.data) / ".workload.json"
     wl.write_text(json.dumps(workload))
     try:
         proc = subprocess.run(
             [sys.executable, str(runner), str(pathlib.Path(args.data).resolve()),
-             str(wl.resolve())],
+             str(wl.resolve()), "60" if args.correctness_only else "1.5"],
             capture_output=True, text=True, cwd=args.engine, timeout=cap)
     except subprocess.TimeoutExpired:
         print("engine exceeded the overall time cap (load or a query hung)", file=sys.stderr)
@@ -182,7 +182,11 @@ def cmd_score(args):
         r = got.get(name) or {}
         ok = r.get("digest") == expected[name]
         ms = r.get("ms")
-        in_budget = ms is not None and ms <= budget * 1000
+        in_budget = ms is not None and (args.correctness_only or ms <= budget * 1000)
+        if args.correctness_only and ok:
+            per[cls][0] += 1
+            lines.append(f"    {name:<16} ok")
+            continue
         if ok and in_budget:
             # Meeting the budget is worth half. The other half arrives
             # logarithmically as you get further under it, and only a query
@@ -228,6 +232,10 @@ def main():
     s.add_argument("--data", required=True)
     s.add_argument("--engine", required=True)
     s.add_argument("-v", "--verbose", action="store_true")
+    s.add_argument("--correctness-only", action="store_true",
+                   help="ignore budgets; score agreement with the oracle alone. "
+                        "Used by verify.sh as a pre-merge gate, where semantics "
+                        "matter and timings on tiny data mean nothing.")
     args = ap.parse_args()
     args.fn(args)
 

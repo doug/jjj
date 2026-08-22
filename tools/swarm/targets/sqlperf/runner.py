@@ -56,6 +56,11 @@ from spec import SCHEMA, coerce, ddl, digest  # noqa: E402
 def main():
     data = pathlib.Path(sys.argv[1])
     workload = [tuple(x) for x in json.loads(pathlib.Path(sys.argv[2]).read_text())]
+    # Under a correctness-only run the budgets are not being judged, so they
+    # must not cut a query short either: a nested-loop join is slow but not
+    # wrong, and reporting it as a disagreement with the oracle would make the
+    # pre-merge gate reject working code.
+    grace = float(sys.argv[3]) if len(sys.argv) > 3 else 1.5
     try:
         from sqlengine import Database
     except Exception as e:
@@ -99,7 +104,7 @@ def main():
 
     out = {}
     for name, sql, budget, _cls in workload:
-        signal.setitimer(signal.ITIMER_PROF, budget * 1.5 + 0.05)
+        signal.setitimer(signal.ITIMER_PROF, budget * grace + 0.05)
         try:
             t0 = time.process_time()
             rows = db.execute(sql)
