@@ -1,66 +1,66 @@
 {
   "corpus": 25000,
   "reps": 3,
-  "jjj_rev": "e752095",
+  "jjj_rev": "14f40a9",
   "results": {
     "cold_list (no DB, FS walk)": {
-      "median_s": 1.056,
-      "min_s": 1.0125,
+      "median_s": 1.0214,
+      "min_s": 1.0061,
       "runs": 3
     },
     "db_rebuild": {
-      "median_s": 8.0802,
+      "median_s": 7.3716,
       "runs": 1
     },
     "warm_list (DB)": {
-      "median_s": 0.0956,
-      "min_s": 0.0951,
+      "median_s": 0.0957,
+      "min_s": 0.0944,
       "runs": 3
     },
     "status": {
-      "median_s": 0.1356,
-      "min_s": 0.1352,
+      "median_s": 0.2196,
+      "min_s": 0.2171,
       "runs": 3
     },
     "next_top5": {
-      "median_s": 0.1089,
-      "min_s": 0.1078,
+      "median_s": 0.1945,
+      "min_s": 0.1926,
       "runs": 3
     },
     "search_fts": {
-      "median_s": 0.0777,
-      "min_s": 0.0775,
+      "median_s": 0.0753,
+      "min_s": 0.0746,
       "runs": 3
     },
     "events_cold_ingest": {
-      "median_s": 1.7658,
+      "median_s": 1.7686,
       "runs": 1
     },
     "events_warm (DB-primary)": {
-      "median_s": 0.0538,
-      "min_s": 0.0532,
+      "median_s": 0.0533,
+      "min_s": 0.0523,
       "runs": 3
     },
     "write_throughput (10x5)": {
-      "median_s": 2.0653,
+      "median_s": 2.1136,
       "runs": 1,
-      "ops_per_s": 24.21,
+      "ops_per_s": 23.66,
       "failures": 0
     },
     "cold_push (full corpus)": {
-      "median_s": 18.2878,
+      "median_s": 13.5687,
       "runs": 1
     },
     "cold_fetch (full corpus)": {
-      "median_s": 8.382,
+      "median_s": 8.0705,
       "runs": 1
     },
     "delta_push (100 files)": {
-      "median_s": 12.5473,
+      "median_s": 3.6416,
       "runs": 1
     },
     "warm_delta_fetch (100 files)": {
-      "median_s": 6.8687,
+      "median_s": 0.8774,
       "runs": 1
     }
   }
