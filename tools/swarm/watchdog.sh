@@ -21,8 +21,15 @@
 set -uo pipefail
 
 ROOT="${1:?swarm root required}"; shift || true
-INTERVAL=120
-PATIENCE=5
+INTERVAL="${SWARM_WATCHDOG_INTERVAL:-120}"
+# How many consecutive unchanged polls count as "finished".
+#
+# Five polls is ten minutes, which suits a run measured in hours and is far too
+# eager for one measured in days: a long target plateaus for an hour at a time
+# while agents work through a hard tier, and stopping there would end a
+# 24-hour trial before lunch. Raise it with SWARM_WATCHDOG_PATIENCE for long
+# runs — at the default interval, 90 is three hours of no movement.
+PATIENCE="${SWARM_WATCHDOG_PATIENCE:-5}"
 
 while [ $# -gt 0 ]; do
     case "$1" in

@@ -13,7 +13,7 @@
 # experiment; a bookmark per agent would have quietly designed it away.
 #
 #   ./swarm.sh build                                  build the agent image
-#   ./swarm.sh init  [--target toy|jjj] [--pods N] [--agents N] [--problems N] [--critics N]
+#   ./swarm.sh init  [--target toy|sql|jjj] [--pods N] [--agents N] [--problems N] [--critics N]
 #   ./swarm.sh start [--hours H] [--max-iters N] [--model M] [--stop-when-done]
 #   ./swarm.sh status
 #   ./swarm.sh logs [agent]
@@ -116,7 +116,18 @@ cmd_init() {
                 || { cat "$SWARM_ROOT/logs/seed.log"; die "seeding failed"; }
             grep -E '^(baseline|problems)' "$SWARM_ROOT/logs/seed.log" | sed 's/^/  /'
             ;;
-        *) die "unknown target '$target' (expected toy or jjj)" ;;
+        sql)
+            # A fresh workbench holding a nearly-empty engine and an oracle it
+            # cannot reach. Sized for a long run: the score has no ceiling to
+            # bump into, because truth comes from SQLite over a corpus that is
+            # regenerated every time rather than from a fixed checklist.
+            info "seeding the SQL-engine workbench (differential test vs SQLite)"
+            "$SWARM_DIR/targets/sql/seed.sh" "$SEED" "$REPO_ROOT" "$JJJ_BIN" \
+                >"$SWARM_ROOT/logs/seed.log" 2>&1 \
+                || { cat "$SWARM_ROOT/logs/seed.log"; die "seeding failed"; }
+            grep -E '^(baseline|problems)' "$SWARM_ROOT/logs/seed.log" | sed 's/^/  /'
+            ;;
+        *) die "unknown target '$target' (expected toy, sql or jjj)" ;;
     esac
 
     # The skill is half of what is under test, so it ships inside the repo the
@@ -245,6 +256,7 @@ cmd_start() {
     echo "  sampling every $(( ${SWARM_SAMPLE_INTERVAL:-300} / 60 ))m to $SWARM_ROOT/trajectory.tsv"
 
     if [ "$stop_when_done" = 1 ]; then
+        SWARM_WATCHDOG_PATIENCE="${SWARM_WATCHDOG_PATIENCE:-5}" \
         nohup "$SWARM_DIR/watchdog.sh" "$SWARM_ROOT" >"$SWARM_ROOT/logs/watchdog.log" 2>&1 &
         echo "$!" > "$SWARM_ROOT/watchdog.pid"
         echo "  watchdog running: will stop the fleet once the work converges"
