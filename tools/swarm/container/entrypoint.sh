@@ -204,11 +204,75 @@ Useful: `jjj solution list --status submitted --json` is your queue;
 `jjj events --user <agent>` shows what another agent has been doing.
 PROMPT_EOF
 
+# Different priors, for the hypothesis that a swarm's advantage is not parallel
+# effort but parallel *perspective* — that several agents attacking a problem
+# from genuinely different directions is what stops the group getting stuck
+# where one agent would.
+#
+# Untested until now: every builder in every trial so far had an identical
+# prompt, so the runs measured six copies of one search, not six searches.
+# Empty by default, so a homogeneous run remains the control.
+strategy_brief() {
+    case "$1" in
+        measure) cat <<'EOF'
+
+YOUR APPROACH: measure before you change anything.
+
+Profile first and let the numbers choose the target. Do not optimise what you
+believe is slow — find what the measurement says is slow, and say what you
+measured in your solution body. If a change does not move the number, say that
+too and withdraw it; a refuted conjecture reported honestly is worth more to the
+others than a plausible one left standing.
+EOF
+;;
+        structure) cat <<'EOF'
+
+YOUR APPROACH: attack the representation, not the code around it.
+
+Ask what the data *is* before asking what the loop does — layout, indexes, what
+gets materialised and when, what is copied that could be borrowed. The largest
+wins here usually come from storing something differently rather than from
+doing the same work faster.
+EOF
+;;
+        algorithm) cat <<'EOF'
+
+YOUR APPROACH: attack the asymptotics, not the constants.
+
+Look for the operation whose cost grows with the wrong thing — a scan where a
+lookup would do, a sort where a bounded heap would do, a nested loop where a
+hash would do, work repeated per row that could be done once. Shaving a constant
+off an O(n^2) path is worth less than making it O(n).
+EOF
+;;
+        correctness) cat <<'EOF'
+
+YOUR APPROACH: hunt for wrong answers.
+
+A fast engine that is wrong scores nothing, and a subtle wrong answer is worth
+more to find than a slow one — NULLs, empty inputs, ties, type coercion,
+boundaries. Look for cases the others' optimisations would break, and critique
+them with a reproduction rather than a suspicion.
+EOF
+;;
+        simplify) cat <<'EOF'
+
+YOUR APPROACH: make it smaller.
+
+The fastest code is the code that does not run. Look for work that is redundant,
+paths that can be specialised, layers that can be collapsed, and things being
+computed that nobody reads. Prefer deleting to adding, and be suspicious of any
+change that makes the code longer for a small gain.
+EOF
+;;
+    esac
+}
+
 case "${SWARM_ROLE:-builder}" in
     critic) PROMPT="$CRITIC_PROMPT" ;;
     *)      PROMPT="$BUILDER_PROMPT" ;;
 esac
-PROMPT="$PROMPT
+PROMPT="$PROMPT$(strategy_brief "${SWARM_STRATEGY:-}")
 
 $IDENTITY_RULE
 

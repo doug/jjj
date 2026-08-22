@@ -15,6 +15,11 @@
 #   ./swarm.sh build                                  build the agent image
 #   ./swarm.sh init  [--target toy|sql|sqlperf|jjj] [--pods N] [--agents N] [--problems N] [--critics N]
 #   ./swarm.sh start [--hours H] [--max-iters N] [--model M] [--stop-when-done]
+#       SWARM_STRATEGIES=1 gives each builder a different approach (measure,
+#       structure, algorithm, correctness, simplify) instead of one shared
+#       prompt — the variable behind "diverse perspectives beat parallel
+#       effort", which is untested. Off by default, so the control is the
+#       homogeneous run.
 #   ./swarm.sh status
 #   ./swarm.sh logs [agent]
 #   ./swarm.sh stop
@@ -40,6 +45,11 @@ SWARM_ROOT="${SWARM_ROOT:-$HOME/.jjj-swarm}"
 # target, say. Without this, `swarm-pod-1-agent-01` collides and the second run
 # either fails to start or — worse — `stop`/`clean` from one reaps the other's
 # containers mid-flight. Default keeps the historical names.
+# The strategy roster, in assignment order. Names must match `strategy_brief`
+# in the container entrypoint.
+STRATEGY_NAMES=(measure structure algorithm correctness simplify)
+STRATEGIES="${SWARM_STRATEGIES:-0}"
+
 SWARM_NS="${SWARM_NS:-$(basename "$SWARM_ROOT" | sed 's/^\.//; s/^jjj-swarm$/swarm/; s/^jjj-//')}"
 CPREFIX="${SWARM_NS}-"
 JJJ_BIN="${JJJ_BIN:-$REPO_ROOT/target/release/jjj}"
@@ -241,8 +251,16 @@ cmd_start() {
         # reviewing is always available and cheaper than building.
         if [ "$p" -gt "$((pods - ${critics:-0}))" ]; then role="critic"; fi
         for a in $(seq 1 "$agents"); do
-            local agent name
+            local agent name strategy=""
             agent="agent-$(printf '%02d' "$a")"
+            # One strategy per builder, round-robin and deterministic, so a run
+            # is reproducible and two runs differ only in this. Critics keep
+            # their own brief; the question is whether *builders* searching from
+            # different priors get stuck less often than six copies of one.
+            if [ "$STRATEGIES" = 1 ] && [ "$role" = "builder" ]; then
+                local idx=$(( ( (p - 1) * agents + a - 1 ) % ${#STRATEGY_NAMES[@]} ))
+                strategy="${STRATEGY_NAMES[$idx]}"
+            fi
             name="$CPREFIX$pod-$agent"
             podman rm -f "$name" >/dev/null 2>&1
 
@@ -258,12 +276,13 @@ cmd_start() {
                 -e "SWARM_MAX_ITERS=$max_iters" \
                 -e "SWARM_MODEL=$model" \
                 -e "SWARM_ROLE=$role" \
+                -e "SWARM_STRATEGY=$strategy" \
                 -e "SWARM_MERGE_GATE=${SWARM_MERGE_GATE:-0}" \
                 -e "SWARM_TURN_TIMEOUT=${SWARM_TURN_TIMEOUT:-1500}" \
                 ${use_key:+$([ "$use_key" = 1 ] && echo "-e ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY")} \
                 -v "$SWARM_ROOT:/swarm:rw" \
                 "$IMAGE" >/dev/null || die "failed to start $name"
-            echo "  started $name ($role)"
+            echo "  started $name ($role${strategy:+, $strategy})"
         done
     done
 
