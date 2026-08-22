@@ -81,20 +81,29 @@ def main():
     # fiftieth of full scale, so the honest report — "too slow" — would arrive
     # hours late, and scoring has to be cheap enough to run twice a turn.
     #
+    # **CPU time, not wall-clock**, for both the measurement and the deadline.
+    # Six agents share this machine and score concurrently, so wall-clock says
+    # as much about who else is running as about the engine: the same engine on
+    # the same data measured 9/100 idle and 4-7/100 with the fleet up. A
+    # process's own CPU time barely moves under contention — a stolen timeslice
+    # stops our clock too — which is what makes a 24-hour trajectory mean
+    # something. ITIMER_PROF counts the same clock the measurement does, so the
+    # deadline and the number agree.
+    #
     # A little headroom over the budget, so a query that is merely marginal is
     # reported as SLOW with a real number rather than as a timeout.
     def _expired(signum, frame):
         raise TimeoutError("budget exceeded")
 
-    signal.signal(signal.SIGALRM, _expired)
+    signal.signal(signal.SIGPROF, _expired)
 
     out = {}
     for name, sql, budget, _cls in workload:
-        signal.setitimer(signal.ITIMER_REAL, budget * 1.5 + 0.05)
+        signal.setitimer(signal.ITIMER_PROF, budget * 1.5 + 0.05)
         try:
-            t0 = time.perf_counter()
+            t0 = time.process_time()
             rows = db.execute(sql)
-            ms = (time.perf_counter() - t0) * 1000
+            ms = (time.process_time() - t0) * 1000
             out[name] = {"ms": ms,
                          "digest": digest(rows or [], " order by " in sql.lower())}
         except TimeoutError:
@@ -102,7 +111,7 @@ def main():
         except Exception as e:
             out[name] = {"error": type(e).__name__}
         finally:
-            signal.setitimer(signal.ITIMER_REAL, 0)
+            signal.setitimer(signal.ITIMER_PROF, 0)
     print(json.dumps(out))
 
 
