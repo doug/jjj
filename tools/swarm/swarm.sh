@@ -295,6 +295,106 @@ report_ooms() {
     fi
 }
 
+
+# Assert the things a run has to be doing, rather than describing what it looks
+# like.
+#
+# Descriptive status is how a fleet spent 6.8 hours of a 24-hour run failing 90%
+# of its turns while every container stayed up, the sampler kept writing rows,
+# and "0 failures" was true of the field being read. Each check below is an
+# invariant that was silently violated once, and each names the cause rather
+# than the symptom.
+cmd_health() {
+    local running warn=0
+    running="$(podman ps --filter "name=^${CPREFIX}pod-" --format '{{.Names}}' 2>/dev/null)"
+    [ -z "$running" ] && return 0
+
+    echo "health:"
+
+    # 1. Are turns succeeding? An expired host login fails every turn in about a
+    #    second, which quadratic backoff never escapes.
+    # A recent window, not the whole run. Cumulative counts stay red forever
+    # after any outage, and a permanently red light is one nobody reads.
+    local ok fail total window="${SWARM_HEALTH_WINDOW:-10}"
+    ok=0; fail=0
+    for c in $running; do
+        local recent
+        recent="$(podman logs "$c" 2>&1 | grep -E "iter [0-9]+ (ok|FAILED)" | tail -"$window")"
+        ok=$((ok + $(printf '%s\n' "$recent" | grep -c " ok" || true)))
+        fail=$((fail + $(printf '%s\n' "$recent" | grep -c " FAILED" || true)))
+    done
+    total=$((ok + fail))
+    if [ "$total" -eq 0 ]; then
+        echo "  turns:      none finished yet"
+    elif [ $((ok * 2)) -lt "$total" ]; then
+        echo "  turns:      !! $ok ok / $fail failed in the last $window per agent"
+        local why
+        why="$(for c in $running; do podman logs "$c" 2>&1; done \
+               | grep -E "iter [0-9]+ FAILED" | tail -20 \
+               | grep -oE "OAuth session expired|rc=124|rc=137" | sort | uniq -c | head -2 | tr '\n' ' ')"
+        [ -n "$why" ] && echo "              $why(137 is the OOM killer, 124 a turn timeout)"
+        warn=1
+    else
+        echo "  turns:      $ok ok / $fail failed (last $window per agent)"
+    fi
+
+    # 2. Is shared work actually landing? The merge path broke twice today and
+    #    both times the fleet looked entirely healthy.
+    if [ -d "$REMOTE" ]; then
+        local last age
+        last="$(git --git-dir="$REMOTE" log -1 --format=%ct main 2>/dev/null || echo 0)"
+        age=$(( ( $(date +%s) - ${last:-0} ) / 60 ))
+        if [ "${last:-0}" -eq 0 ]; then
+            echo "  main:       !! no commits — nothing has ever merged"; warn=1
+        elif [ "$age" -gt 45 ]; then
+            echo "  main:       !! last advanced ${age}m ago — approved work may not be merging"; warn=1
+        else
+            echo "  main:       advanced ${age}m ago"
+        fi
+    fi
+
+    # 3. Do the agents agree? They score the same shared tree, so a wide spread
+    #    means they are NOT sharing — which is how a run of six private trees
+    #    passed for a healthy fleet, scores climbing apart from 18 to 55.
+    local scores lo hi
+    scores="$(for c in $running; do
+                  podman logs "$c" 2>&1 | grep -oE "iter [0-9]+ begin \(score [0-9]+" \
+                      | tail -1 | grep -oE "[0-9]+$"
+              done | sort -n)"
+    lo="$(echo "$scores" | head -1)"; hi="$(echo "$scores" | tail -1)"
+    if [ -n "$lo" ] && [ -n "$hi" ] && [ "$hi" -gt 0 ]; then
+        if [ $(( hi - lo )) -gt 25 ]; then
+            echo "  agreement:  !! scores span $lo-$hi — agents are not sharing work"; warn=1
+        else
+            echo "  agreement:  scores $lo-$hi"
+        fi
+    fi
+
+    # 4. Is the credential still good? Its expiry is knowable in advance, and
+    #    only an interactive login on the host renews a dead session.
+    if [ -f "$SWARM_ROOT/AUTH_DEAD" ]; then
+        echo "  auth:       !! the host OAuth session has expired — run \`claude\` and log in"; warn=1
+    elif [ -f "$SWARM_ROOT/credentials.json" ]; then
+        local left
+        left="$(python3 -c "
+import json,sys,time
+try:
+    d=json.load(open('$SWARM_ROOT/credentials.json'))['claudeAiOauth']
+    print(int((d['expiresAt']/1000 - time.time())/60))
+except Exception: print(-1)" 2>/dev/null)"
+        if [ "${left:--1}" -lt 0 ]; then
+            echo "  auth:       !! credential unreadable or expired"; warn=1
+        elif [ "$left" -lt 60 ]; then
+            echo "  auth:       !! expires in ${left}m"; warn=1
+        else
+            echo "  auth:       valid ${left}m"
+        fi
+    fi
+
+    [ "$warn" = 1 ] && echo "  -> something is wrong; the run is probably not producing work"
+    return 0
+}
+
 cmd_status() {
     [ -f "$SWARM_ROOT/config" ] || die "not initialised"
     # shellcheck disable=SC1091
@@ -310,6 +410,8 @@ cmd_status() {
         local scorer="./score.py"; [ -x "$SEED/score.sh" ] && scorer="./score.sh"
         echo "seed score: $(cd "$SEED" && $scorer 2>/dev/null | tail -1)"
     fi
+
+    cmd_health
 
     if [ -s "$LOG" ]; then
         echo "jjj calls: $(wc -l < "$LOG" | tr -d ' ')"

@@ -313,11 +313,37 @@ except Exception: pass' 2>/dev/null); do
                 #
                 # So it becomes an agent's work item, the same way a conflicted
                 # pull already does.
-                UNMERGED="$UNMERGED $sid"
                 git merge --abort 2>/dev/null
-                log "iter $iter approved solution $sid does not merge cleanly; handing to the agent"
+                # Bounded, per agent. Handing a stuck solution to whoever is
+                # next is right; handing the *same* one to all six agents every
+                # turn forever is a livelock — one unmergeable solution was
+                # retried 120 times, and each attempt left conflict markers that
+                # took the retrying agent's own score to zero.
+                tries=$(( $(cat "/tmp/unmerged-$sid" 2>/dev/null || echo 0) + 1 ))
+                echo "$tries" > "/tmp/unmerged-$sid"
+                if [ "$tries" -le 2 ]; then
+                    UNMERGED="$UNMERGED $sid"
+                    log "iter $iter approved solution $sid does not merge cleanly; handing to the agent (try $tries)"
+                else
+                    log "iter $iter approved solution $sid still will not merge after $tries tries; leaving it"
+                fi
             fi
         done
+    fi
+
+    # A tree carrying conflict markers scores zero no matter how good the
+    # engine is, and the agent then spends its turn reading a meaningless
+    # number. If the previous turn left markers behind, say so plainly and let
+    # the guard below count it toward a reset.
+    LEFTOVER="$(git diff --name-only --diff-filter=U 2>/dev/null | tr '\n' ' ')"
+    if [ -z "$LEFTOVER" ]; then
+        LEFTOVER="$(git diff --name-only HEAD 2>/dev/null | while IFS= read -r f; do
+            [ -f "$f" ] && grep -qE '^(<{7} |={7}$|>{7} )' -- "$f" 2>/dev/null && printf '%s ' "$f"
+        done)"
+    fi
+    if [ -n "$LEFTOVER" ]; then
+        log "iter $iter tree still carries conflict markers in: $LEFTOVER"
+        CONFLICTED="$LEFTOVER"
     fi
 
     SCORER="./score.py"; [ -x ./score.sh ] && SCORER="./score.sh"
