@@ -82,6 +82,15 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+
+      # `rust-toolchain.toml` pins a version, and it overrides whatever the
+      # action installed — so the target added above lands on a toolchain that
+      # is then not the one used, and the build fails with "can't find crate for
+      # `core`". Add it to the pinned toolchain, which is the one cargo will
+      # actually run.
+      - name: Add the target to the pinned toolchain
+        if: ${{ !matrix.cross }}
+        run: rustup target add ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
