@@ -273,6 +273,7 @@ while true; do
     # the agent auto-resolves and re-pushes).
     git fetch -q origin 2>/dev/null
     CONFLICTED=""
+    UNMERGED=""
     if ! git merge --no-edit origin/HEAD >/dev/null 2>&1; then
         CONFLICTED="$(git diff --name-only --diff-filter=U 2>/dev/null | tr '\n' ' ')"
         log "iter $iter pull conflicted in: $CONFLICTED (handing to the agent)"
@@ -303,8 +304,18 @@ except Exception: pass' 2>/dev/null); do
                     log "iter $iter integrated approved solution $sid"
                 fi
             else
+                # Six agents editing one module means approved work routinely
+                # conflicts with whatever landed while it was in review.
+                # Resolving that is a semantic job, not a shell one — but
+                # logging it and walking away means approved work never lands
+                # at all, which is how a run ends with a pile of approvals and
+                # an untouched main.
+                #
+                # So it becomes an agent's work item, the same way a conflicted
+                # pull already does.
+                UNMERGED="$UNMERGED $sid"
                 git merge --abort 2>/dev/null
-                log "iter $iter approved solution $sid does not merge/build cleanly; left for an agent"
+                log "iter $iter approved solution $sid does not merge cleanly; handing to the agent"
             fi
         done
     fi
@@ -334,6 +345,24 @@ except Exception: pass' 2>/dev/null); do
     log "iter $iter begin (score $before)"
 
     turn_prompt="$PROMPT"
+    if [ -n "$UNMERGED" ]; then
+        turn_prompt="$turn_prompt
+
+APPROVED WORK IS STUCK. These solutions passed review but no longer merge into
+main, because main moved while they were being reviewed:$UNMERGED
+
+Landing one of them is the most valuable thing you can do this turn — it is
+finished, reviewed work that currently helps nobody. For a solution <id>:
+
+    git fetch origin review-s-<id>
+    git merge FETCH_HEAD          # resolve the conflicts in the working tree
+    ./verify.sh && ./score.sh     # confirm it still builds and still helps
+    git commit && git push origin HEAD:refs/heads/main
+
+Keep both sides' work. Two agents optimising different query classes in the
+same module is the normal case here, and the union is almost always what was
+intended."
+    fi
     if [ -n "$CONFLICTED" ]; then
         turn_prompt="A merge left unresolved conflict markers in: $CONFLICTED
 
