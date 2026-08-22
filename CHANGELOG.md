@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## [0.5.2] - 2026-08-22
+## 0.5.2 — 2026-08-22
 
 ### Sync is delta-proportional
 
