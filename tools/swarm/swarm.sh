@@ -147,6 +147,13 @@ cmd_init() {
 
     info "creating bare remote"
     git init -q --bare "$REMOTE"
+    # Every agent pushes to this one repo from its own container, and rootless
+    # podman maps each container's uid to a subuid that is not the host user.
+    # Without this, objects are written creator-only and a concurrent push hits
+    # "unable to open loose object ...: Permission denied" — 69 of 478 pushes in
+    # one run, each retried five times. The remote is a throwaway test fixture,
+    # so permissive is the right trade.
+    git --git-dir="$REMOTE" config core.sharedRepository 0666
     ( cd "$SEED"
       git add -A && git commit -q -m "seed: skill" 2>/dev/null
       git remote add origin "$REMOTE"

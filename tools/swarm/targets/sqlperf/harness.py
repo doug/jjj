@@ -80,8 +80,43 @@ def cmd_gen(args):
     print("generated " + ", ".join(f"{t}={n}" for t, n in counts.items()))
 
 
+# Columns the oracle is indexed on. The oracle's speed is not what is being
+# measured — the budgets are absolute — so an unindexed reference just makes
+# every scoring run slower for nothing. Indexed, the reference answers the
+# workload in milliseconds instead of eight seconds, and the score is unchanged
+# because the rows are.
+ORACLE_INDEXES = [
+    "CREATE INDEX IF NOT EXISTS ix_users_id ON users(id)",
+    "CREATE INDEX IF NOT EXISTS ix_users_city ON users(city)",
+    "CREATE INDEX IF NOT EXISTS ix_users_age ON users(age)",
+    "CREATE INDEX IF NOT EXISTS ix_orders_id ON orders(id)",
+    "CREATE INDEX IF NOT EXISTS ix_orders_user ON orders(user_id)",
+    "CREATE INDEX IF NOT EXISTS ix_orders_status ON orders(status)",
+    "CREATE INDEX IF NOT EXISTS ix_orders_amount ON orders(amount)",
+    "CREATE INDEX IF NOT EXISTS ix_items_id ON items(id)",
+    "CREATE INDEX IF NOT EXISTS ix_items_order ON items(order_id)",
+    "CREATE INDEX IF NOT EXISTS ix_items_sku ON items(sku)",
+]
+
+
 def load_sqlite(data):
-    conn = sqlite3.connect(":memory:")
+    """Open the reference database, building it once and caching it on disk.
+
+    Reloading 1.5M rows from CSV on every scoring run cost about ten seconds of
+    every twenty-six — a third of a run's wall clock spent rebuilding an
+    identical reference. Six agents score at least twice a turn, so it was the
+    single largest avoidable cost in the loop.
+
+    The cache is keyed on nothing because the data never changes within a
+    workbench; delete `data/oracle.db` to rebuild it.
+    """
+    cached = pathlib.Path(data) / "oracle.db"
+    if cached.exists():
+        return sqlite3.connect(str(cached))
+
+    tmp = cached.with_suffix(".db.tmp")
+    tmp.unlink(missing_ok=True)
+    conn = sqlite3.connect(str(tmp))
     for t in SCHEMA:
         conn.execute(ddl(t))
         with (pathlib.Path(data) / f"{t}.csv").open() as f:
@@ -90,8 +125,14 @@ def load_sqlite(data):
             conn.executemany(
                 f"INSERT INTO {t} VALUES ({','.join('?' * len(SCHEMA[t]))})",
                 (tuple(coerce(v, ty) for v, (_, ty) in zip(row, SCHEMA[t])) for row in r))
+    for stmt in ORACLE_INDEXES:
+        conn.execute(stmt)
     conn.commit()
-    return conn
+    conn.close()
+    # Rename last, so a run interrupted mid-build does not leave a partial
+    # database that every later run would happily open.
+    tmp.rename(cached)
+    return sqlite3.connect(str(cached))
 
 
 def cmd_score(args):
