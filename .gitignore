@@ -44,3 +44,6 @@ Thumbs.db
 
 # UXR output logs
 uxr/output/
+# Python bytecode from the swarm target harnesses
+__pycache__/
+*.pyc

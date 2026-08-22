@@ -15,6 +15,17 @@ class Database:
     def __init__(self):
         self.tables = {}  # name -> {"columns": [(name, affinity)], "rows": [tuple]}
 
+    def bulk_load(self, table, rows):
+        """Load many rows at once, bypassing the SQL layer.
+
+        The latency target measures queries, not parsing a million INSERT
+        statements, so data arrives already typed. Nothing here builds an index
+        — that is the work.
+        """
+        if table not in self.tables:
+            raise KeyError(f"no such table: {table}")
+        self.tables[table]["rows"].extend(tuple(r) for r in rows)
+
     def execute(self, sql):
         ast = Parser.parse_sql(sql)
         if ast["type"] == "create":

@@ -13,7 +13,7 @@
 # experiment; a bookmark per agent would have quietly designed it away.
 #
 #   ./swarm.sh build                                  build the agent image
-#   ./swarm.sh init  [--target toy|sql|jjj] [--pods N] [--agents N] [--problems N] [--critics N]
+#   ./swarm.sh init  [--target toy|sql|sqlperf|jjj] [--pods N] [--agents N] [--problems N] [--critics N]
 #   ./swarm.sh start [--hours H] [--max-iters N] [--model M] [--stop-when-done]
 #   ./swarm.sh status
 #   ./swarm.sh logs [agent]
@@ -127,7 +127,17 @@ cmd_init() {
                 || { cat "$SWARM_ROOT/logs/seed.log"; die "seeding failed"; }
             grep -E '^(baseline|problems)' "$SWARM_ROOT/logs/seed.log" | sed 's/^/  /'
             ;;
-        *) die "unknown target '$target' (expected toy, sql or jjj)" ;;
+        sqlperf)
+            # Correctness is the starting point here, not the goal: the engine
+            # already works. Latency has no ceiling to saturate against, which
+            # is what the correctness target failed to provide.
+            info "seeding the SQL latency workbench (budgets, oracle = SQLite)"
+            "$SWARM_DIR/targets/sqlperf/seed.sh" "$SEED" "$REPO_ROOT" "$JJJ_BIN" \
+                >"$SWARM_ROOT/logs/seed.log" 2>&1 \
+                || { cat "$SWARM_ROOT/logs/seed.log"; die "seeding failed"; }
+            grep -E '^(baseline|problems)' "$SWARM_ROOT/logs/seed.log" | sed 's/^/  /'
+            ;;
+        *) die "unknown target '$target' (expected toy, sql, sqlperf or jjj)" ;;
     esac
 
     # The skill is half of what is under test, so it ships inside the repo the
