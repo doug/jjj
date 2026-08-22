@@ -28,12 +28,14 @@ import json
 import math
 import pathlib
 import random
+import re
 import sqlite3
 import subprocess
 import sys
 import time
 
-from spec import (CLASSES, ROWS, SCHEMA, STATUS, CITIES, build_workload,
+from spec import (CLASSES, ROWS, SCHEMA, STATUS, CITIES, WORKLOAD_TEMPLATES,
+                  build_workload,
                   coerce, ddl, digest)
 
 def cmd_gen(args):
@@ -133,6 +135,79 @@ def load_sqlite(data):
     # database that every later run would happily open.
     tmp.rename(cached)
     return sqlite3.connect(str(cached))
+
+
+ORDER_LIMIT_RE = re.compile(
+    r"\bORDER\s+BY\s+(?P<keys>.+?)\s+LIMIT\s+(?P<n>\d+)\s*$", re.I | re.S)
+LIMIT_RE = re.compile(r"\bLIMIT\s+\d+\s*$", re.I)
+
+
+def undetermined(conn, sql):
+    """Why this query has no single right answer, or None if it has one.
+
+    A benchmark can only mark an engine wrong if the question has one answer.
+    `ORDER BY amount DESC LIMIT 20` over 500,000 rows with 99,206 distinct
+    amounts does not: six rows tie at the twentieth value, SQLite returns three
+    of them and another engine returns three others, and both are correct SQL.
+    That was scored WRONG for hours and drew five critiques from agents hunting
+    a bug that did not exist.
+
+    Note what cannot be used here. Comparing SQLite against itself — a second
+    run, a reversed scan via `reverse_unordered_selects`, a second database
+    built in reverse insertion order — proves nothing, because SQLite is
+    deterministic. Underdetermination is a property of the SQL and the data, not
+    of any one implementation, so it has to be checked directly: within the
+    returned window plus one row, the ordering keys must all be distinct. If two
+    are equal, some correct engine may return them the other way round, or swap
+    which one falls outside the limit.
+    """
+    m = ORDER_LIMIT_RE.search(sql.strip())
+    if not m:
+        # LIMIT with no ORDER BY at all: which rows come back is unspecified.
+        if LIMIT_RE.search(sql.strip()):
+            return "LIMIT without ORDER BY — which rows are returned is unspecified"
+        return None
+
+    keys, n = m.group("keys").strip(), int(m.group("n"))
+    body = sql.strip()[: m.start()].rstrip()
+    # Project the ordering keys themselves and look one row past the window.
+    probe = f"SELECT {keys} FROM ({body}) ORDER BY {keys} LIMIT {n + 1}"
+    try:
+        rows = conn.execute(probe).fetchall()
+    except Exception:
+        # A key that is not projectable this way (an aggregate over the outer
+        # query, say). Better to say so than to pass it silently.
+        return None
+    if len(set(rows)) != len(rows):
+        dup = len(rows) - len(set(rows))
+        return (f"{dup} of {len(rows)} rows tie on ({keys}) inside the window — "
+                f"add a unique tiebreak")
+    return None
+
+
+def cmd_check(args):
+    """Prove every query in the workload has exactly one right answer."""
+    counts = json.loads((pathlib.Path(args.data) / "manifest.json").read_text())["counts"]
+    conn = load_sqlite(args.data)
+    bad = {}
+    # Many literal draws, because a tie at the boundary depends on the limit and
+    # the values a single draw happens to pick.
+    rng = random.Random(args.seed)
+    for _ in range(args.draws):
+        for name, sql, _b, _c in build_workload(rng, counts):
+            why = undetermined(conn, sql)
+            if why:
+                bad.setdefault(name, (sql, why))
+    for name, (sql, why) in sorted(bad.items()):
+        print(f"  {name}: {why}", file=sys.stderr)
+        print(f"    {sql}", file=sys.stderr)
+    total = len(WORKLOAD_TEMPLATES)
+    if bad:
+        print(f"{len(bad)} of {total} queries have no single right answer")
+        return 1
+    print(f"all {total} queries have exactly one right answer "
+          f"({args.draws} literal draws)")
+    return 0
 
 
 def cmd_score(args):
@@ -236,8 +311,14 @@ def main():
                    help="ignore budgets; score agreement with the oracle alone. "
                         "Used by verify.sh as a pre-merge gate, where semantics "
                         "matter and timings on tiny data mean nothing.")
+    c = sub.add_parser("check"); c.set_defaults(fn=cmd_check)
+    c.add_argument("--data", required=True)
+    c.add_argument("--draws", type=int, default=25)
+    c.add_argument("--seed", type=int, default=1)
     args = ap.parse_args()
-    args.fn(args)
+    rc = args.fn(args)
+    if rc:
+        sys.exit(rc)
 
 
 if __name__ == "__main__":

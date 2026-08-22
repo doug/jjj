@@ -213,6 +213,22 @@ else
     bad "approved work did not reach main" "$(echo "$merge_out" | grep '^STEP' | tail -1) — this is the failure that produced a whole run of approvals and no merges"
 fi
 
+step "questions"
+
+# A benchmark can only mark an engine wrong if the question has one right
+# answer. `ORDER BY amount DESC LIMIT 20` over a corpus with ties does not, and
+# scoring it as WRONG cost a fleet hours and drew five critiques against a bug
+# that did not exist.
+if [ -f "$ROOT/seed/harness.py" ] && python3 "$ROOT/seed/harness.py" check --help >/dev/null 2>&1; then
+    if out="$( (cd "$ROOT/seed" && python3 harness.py check --data data --draws 15 2>&1) )"; then
+        ok "$(printf '%s' "$out" | tail -1)"
+    else
+        bad "some queries have no single right answer" "$(printf '%s' "$out" | head -2 | tr '\n' ' ')"
+    fi
+else
+    ok "target defines no determinism check"
+fi
+
 step "metric"
 
 # A fitness function noisier than the effect it measures makes reviewers accept
