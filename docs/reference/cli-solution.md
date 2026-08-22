@@ -253,6 +253,7 @@ jjj solution lgtm <solution_id> [OPTIONS]
 |------|------|-------------|
 | `--rationale` | string | Record why you signed off — the evidence behind the approval |
 | `--approve` | bool | Approve too, if nothing is left blocking |
+| `--json` | bool | Print the updated solution as JSON (suppresses the prose) |
 
 ```bash
 jjj solution lgtm "Add connection"

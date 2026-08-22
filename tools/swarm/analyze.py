@@ -75,10 +75,26 @@ def analyze_claims(records):
 
 def analyze_critique_gate(records):
     section("Critique gate")
-    approvals = [r for r in records if r["cmd"] == "solution approve"]
-    blocked = [r for r in approvals if r["exit"] != 0 and "critique" in r.get("stderr", "").lower()]
+    # Two paths reach Approved, and counting only the explicit one badly
+    # understates the gate: a run with 23 approvals reported 2, because 21 came
+    # through `lgtm --approve`, which is the path the agent guidance actually
+    # recommends.
+    lgtm_approve = [r for r in records
+                    if r["cmd"] == "solution lgtm" and "--approve" in r["argv"]]
+    approvals = [r for r in records if r["cmd"] == "solution approve"] + lgtm_approve
+    blocked = [r for r in approvals
+               if r["exit"] != 0 and "critique" in r.get("stderr", "").lower()]
+    # `lgtm --approve` refuses in-band rather than by exiting non-zero, so a
+    # blocked one is visible only in what it printed.
+    blocked += [r for r in lgtm_approve
+                if r["exit"] == 0 and "still open" in r.get("stdout", "")]
     forced = [r for r in approvals if "--force" in r["argv"]]
-    print(f"  {len(approvals)} approval attempts, {len(blocked)} blocked by an open critique")
+    landed = sum(1 for r in approvals
+                 if r["exit"] == 0 and "still open" not in r.get("stdout", ""))
+    print(f"  {len(approvals)} approval attempts, {landed} approved, "
+          f"{len(blocked)} blocked by an open critique")
+    print(f"    (via `lgtm --approve`: {len(lgtm_approve)}; "
+          f"via `solution approve`: {len(approvals) - len(lgtm_approve)})")
     if forced:
         print(f"  !! {len(forced)} used --force, bypassing the gate:")
         for r in forced[:5]:

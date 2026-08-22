@@ -407,14 +407,14 @@ jjj solution submit ID              # open for critique
 jjj solution approve ID [--rationale "..." | --no-rationale] [--force]
 jjj solution withdraw ID [--rationale "..."]
 jjj solution list [--json]          jjj solution show ID [--json]
-jjj solution diff ID [--json]       jjj solution lgtm ID [--approve]
+jjj solution diff ID [--json]       jjj solution lgtm ID [--approve] [--json]
 
 # Critiques
 jjj critique new SOLUTION_ID "Title" [--body TEXT | --body -]
                                      [--severity critical|high|medium|low]
                                      [--file F --line N] [--reviewer WHO]
-jjj critique address ID             jjj critique validate ID
-jjj critique dismiss ID             jjj critique reply ID "..."
+jjj critique address ID [--json]    jjj critique validate ID [--json]
+jjj critique dismiss ID [--json]    jjj critique reply ID "..."
 jjj critique list [--json]          jjj critique show ID [--json]
 
 # Milestones and ranking

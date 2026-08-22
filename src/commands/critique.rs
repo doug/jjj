@@ -54,9 +54,9 @@ pub fn execute(ctx: &CommandContext, action: CritiqueAction) -> Result<()> {
             severity,
             status,
         } => edit_critique(ctx, critique_id, title, severity, status),
-        CritiqueAction::Address { critique_id } => address_critique(ctx, critique_id),
-        CritiqueAction::Validate { critique_id } => validate_critique(ctx, critique_id),
-        CritiqueAction::Dismiss { critique_id } => dismiss_critique(ctx, critique_id),
+        CritiqueAction::Address { critique_id, json } => address_critique(ctx, critique_id, json),
+        CritiqueAction::Validate { critique_id, json } => validate_critique(ctx, critique_id, json),
+        CritiqueAction::Dismiss { critique_id, json } => dismiss_critique(ctx, critique_id, json),
         CritiqueAction::Reply { critique_id, body } => reply_to_critique(ctx, critique_id, body),
     }
 }
@@ -422,9 +422,24 @@ fn edit_critique(
     })
 }
 
-fn address_critique(ctx: &CommandContext, critique_input: String) -> Result<()> {
+/// Print the updated critique as JSON, for a caller that is scripting.
+///
+/// State transitions had no `--json` while `new`, `list` and `show` did, so an
+/// agent scripting a review reached for it and got an error. Emitting the
+/// entity after the change is what a caller wants: the new status, without a
+/// second `show` round trip.
+fn emit_critique_json(ctx: &CommandContext, critique_id: &str) -> Result<()> {
+    let critique = ctx.store.load_critique(critique_id)?;
+    println!("{}", serde_json::to_string_pretty(&critique)?);
+    Ok(())
+}
+
+fn address_critique(ctx: &CommandContext, critique_input: String, json: bool) -> Result<()> {
     let critique_id = ctx.resolve_critique(&critique_input)?;
     crate::domain::address_critique(&ctx.store, &critique_id)?;
+    if json {
+        return emit_critique_json(ctx, &critique_id);
+    }
     println!(
         "Critique {} marked as addressed (solution was modified to address it)",
         critique_id
@@ -432,7 +447,7 @@ fn address_critique(ctx: &CommandContext, critique_input: String) -> Result<()> 
     Ok(())
 }
 
-fn validate_critique(ctx: &CommandContext, critique_input: String) -> Result<()> {
+fn validate_critique(ctx: &CommandContext, critique_input: String, json: bool) -> Result<()> {
     let critique_id = ctx.resolve_critique(&critique_input)?;
     let store = &ctx.store;
 
@@ -453,6 +468,9 @@ fn validate_critique(ctx: &CommandContext, critique_input: String) -> Result<()>
             "\nThe target solution {} should likely be withdrawn.",
             solution_id
         );
+        if json {
+            return emit_critique_json(ctx, &critique_id);
+        }
         println!(
             "Use 'jjj solution withdraw {}' to withdraw it.",
             solution_id
@@ -462,9 +480,12 @@ fn validate_critique(ctx: &CommandContext, critique_input: String) -> Result<()>
     Ok(())
 }
 
-fn dismiss_critique(ctx: &CommandContext, critique_input: String) -> Result<()> {
+fn dismiss_critique(ctx: &CommandContext, critique_input: String, json: bool) -> Result<()> {
     let critique_id = ctx.resolve_critique(&critique_input)?;
     crate::domain::dismiss_critique(&ctx.store, &critique_id)?;
+    if json {
+        return emit_critique_json(ctx, &critique_id);
+    }
     println!(
         "Critique {} dismissed (shown to be incorrect or irrelevant)",
         critique_id

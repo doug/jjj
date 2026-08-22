@@ -94,7 +94,8 @@ pub fn execute(ctx: &CommandContext, action: SolutionAction) -> Result<()> {
             solution_id,
             rationale,
             approve,
-        } => lgtm_solution(ctx, solution_id, rationale, approve),
+            json,
+        } => lgtm_solution(ctx, solution_id, rationale, approve, json),
         SolutionAction::Comment {
             solution_id,
             critique,
@@ -900,6 +901,7 @@ fn lgtm_solution(
     solution_input: String,
     rationale: Option<String>,
     approve: bool,
+    json: bool,
 ) -> Result<()> {
     let store = &ctx.store;
     let solution_id = ctx.resolve_solution(&solution_input)?;
@@ -1005,8 +1007,12 @@ fn lgtm_solution(
     }
 
     crate::domain::address_critique(store, &critique_id)?;
-    println!("Signed off on '{}' as @{}", solution.title, current_user);
-    if rationale.is_some() {
+    // Under --json the only thing on stdout must be the JSON document, or a
+    // caller piping it into a parser gets a syntax error on the prose.
+    if !json {
+        println!("Signed off on '{}' as @{}", solution.title, current_user);
+    }
+    if rationale.is_some() && !json {
         println!("  rationale recorded on the review critique");
     }
 
@@ -1016,6 +1022,20 @@ fn lgtm_solution(
         .into_iter()
         .filter(|c| c.status == CritiqueStatus::Open || c.status == CritiqueStatus::Valid)
         .count();
+
+    if json {
+        let updated = store.load_solution(&solution_id)?;
+        if remaining == 0 && approve {
+            crate::domain::approve_solution(store, &solution_id, false, rationale.as_deref())?;
+        }
+        let updated = if remaining == 0 && approve {
+            store.load_solution(&solution_id)?
+        } else {
+            updated
+        };
+        println!("{}", serde_json::to_string_pretty(&updated)?);
+        return Ok(());
+    }
 
     if remaining == 0 {
         if approve {

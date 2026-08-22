@@ -1,6 +1,6 @@
 mod test_helpers;
 
-use test_helpers::{jj_available, run_jjj, run_jjj_success, setup_test_repo};
+use test_helpers::{jj_available, run_jjj, run_jjj_env, run_jjj_success, setup_test_repo};
 
 #[test]
 fn test_critique_new_creates_critique() {
@@ -570,5 +570,72 @@ fn test_critique_on_finalized_solution_warns() {
             || combined.contains("already"),
         "Expected warning about finalized solution: {}",
         combined
+    );
+}
+
+/// State transitions must be scriptable, like the commands around them.
+///
+/// `new`, `list` and `show` all accepted `--json` while `address`, `validate`,
+/// `dismiss` and `solution lgtm` did not, so agents scripting a review reached
+/// for it and got "unexpected argument". Thirteen calls in one trial died on
+/// flags inferred from the rest of the surface, and this was the most common.
+#[test]
+fn critique_transitions_can_emit_json() {
+    if !jj_available() {
+        return;
+    }
+    let dir = setup_test_repo();
+    run_jjj_success(&dir, &["problem", "new", "Problem"]);
+    run_jjj_success(
+        &dir,
+        &["solution", "new", "Solution", "--problem", "Problem"],
+    );
+    run_jjj_success(&dir, &["critique", "new", "Solution", "Objection"]);
+    let id = run_jjj_success(&dir, &["critique", "list", "--json"]);
+    let id = id
+        .split("\"id\": \"")
+        .nth(1)
+        .and_then(|s| s.split('"').next())
+        .expect("an id in the json")
+        .to_string();
+
+    let out = run_jjj_success(&dir, &["critique", "address", &id, "--json"]);
+    assert!(
+        out.trim_start().starts_with('{'),
+        "--json must emit only JSON: {out}"
+    );
+    assert!(
+        out.contains("\"status\": \"addressed\""),
+        "the emitted entity should carry the new status: {out}"
+    );
+}
+
+/// Signing off with --json must not put prose on stdout ahead of the document.
+#[test]
+fn lgtm_json_is_parseable() {
+    if !jj_available() {
+        return;
+    }
+    let dir = setup_test_repo();
+    run_jjj_success(&dir, &["problem", "new", "Problem"]);
+    run_jjj_success(
+        &dir,
+        &["solution", "new", "Solution", "--problem", "Problem"],
+    );
+    run_jjj_success(&dir, &["solution", "submit", "Solution"]);
+
+    let out = run_jjj_env(
+        &dir,
+        &[("JJJ_USER", "reviewer")],
+        &["solution", "lgtm", "Solution", "--approve", "--json"],
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.trim_start().starts_with('{'),
+        "prose before the JSON breaks any caller that parses it: {stdout}"
+    );
+    assert!(
+        stdout.contains("\"status\": \"approved\""),
+        "the emitted solution should be approved: {stdout}"
     );
 }

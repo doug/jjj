@@ -551,7 +551,10 @@ pub enum ProblemAction {
         problem_id: String,
 
         /// Explanation of why the problem turned out to be misconceived
-        #[arg(long)]
+        // `--rationale` is accepted too: every other command that records why a
+        // decision was made spells it that way, and agents reasonably assume the
+        // surface is consistent — several reached for it and got an error.
+        #[arg(long, alias = "rationale")]
         reason: Option<String>,
 
         /// Close the linked GitHub issue after dissolving
@@ -822,6 +825,10 @@ pub enum SolutionAction {
         /// stranded, which is easy to miss in an automated loop.
         #[arg(long)]
         approve: bool,
+
+        /// Print the updated entity as JSON (for scripting and agents)
+        #[arg(long)]
+        json: bool,
     },
 
     /// Leave a reply on a critique of this solution
@@ -957,6 +964,10 @@ pub enum CritiqueAction {
     Address {
         /// Critique ID, short prefix, or fuzzy title
         critique_id: String,
+
+        /// Print the updated entity as JSON (for scripting and agents)
+        #[arg(long)]
+        json: bool,
     },
 
     /// Validate a critique — confirm it is correct and the solution should be withdrawn
@@ -964,6 +975,10 @@ pub enum CritiqueAction {
     Validate {
         /// Critique ID, short prefix, or fuzzy title
         critique_id: String,
+
+        /// Print the updated entity as JSON (for scripting and agents)
+        #[arg(long)]
+        json: bool,
     },
 
     /// Dismiss a critique — it is incorrect or no longer relevant
@@ -971,6 +986,10 @@ pub enum CritiqueAction {
     Dismiss {
         /// Critique ID, short prefix, or fuzzy title
         critique_id: String,
+
+        /// Print the updated entity as JSON (for scripting and agents)
+        #[arg(long)]
+        json: bool,
     },
 
     /// Reply to a critique with a comment
