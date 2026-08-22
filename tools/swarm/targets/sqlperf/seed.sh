@@ -21,7 +21,8 @@ mkdir -p "$ROOT"
 
 cp "$HERE/harness.py" "$HERE/runner.py" "$HERE/spec.py" "$ROOT/"
 cp "$HERE/score.sh" "$ROOT/score.sh"
-chmod +x "$ROOT/score.sh"
+cp "$HERE/verify.sh" "$ROOT/verify.sh"
+chmod +x "$ROOT/score.sh" "$ROOT/verify.sh"
 cp -r "$HERE/../sql/reference/sqlengine" "$ROOT/sqlengine"
 rm -rf "$ROOT/sqlengine/__pycache__"
 

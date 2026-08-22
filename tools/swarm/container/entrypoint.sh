@@ -39,6 +39,29 @@ log() { printf '[%s] %s\n' "$(date -u +%H:%M:%S)" "$*"; }
 # refs/heads/swarm-pod-1/agent-02 a directory where a sibling ref is a file.
 SWARM_BRANCH="${JJJ_USER//\//-}"
 
+# Does the tree still build?
+#
+# This was `cargo build --release` at both call sites, which is correct for the
+# jjj target and vacuous everywhere else: on a Python workbench it fails for
+# want of a Cargo.toml, so the pre-push gate refused every push and the
+# integration step refused every approved solution. A fleet ran for an hour with
+# ten approvals, zero merges and zero shared branches — six agents each
+# optimising a private tree, which is the opposite of the thing being tested.
+#
+# A target can define its own check in `verify.sh`; otherwise this guesses from
+# what is in the workbench.
+verify_build() {
+    if [ -x ./verify.sh ]; then
+        ./verify.sh >/dev/null 2>&1
+    elif [ -f Cargo.toml ]; then
+        cargo build --release --quiet 2>/dev/null
+    elif ls ./*.py >/dev/null 2>&1 || [ -d sqlengine ]; then
+        python3 -m compileall -q . >/dev/null 2>&1
+    else
+        return 0
+    fi
+}
+
 log "agent $JJJ_USER starting (pod=$JJJ_POD role=${SWARM_ROLE:-builder} model=$MODEL)"
 
 # --- clone and identify -----------------------------------------------------
@@ -275,7 +298,7 @@ except Exception: pass' 2>/dev/null); do
             # Already in? Nothing to do.
             git merge-base --is-ancestor FETCH_HEAD origin/main 2>/dev/null && continue
             if git merge -q --no-edit FETCH_HEAD 2>/dev/null \
-               && cargo build --release --quiet 2>/dev/null; then
+               && verify_build; then
                 if git push -q origin HEAD:refs/heads/main 2>/dev/null; then
                     log "iter $iter integrated approved solution $sid"
                 fi
@@ -389,7 +412,7 @@ $PROMPT"
                 git clean -qfd 2>/dev/null
                 stuck=0
             fi
-        elif ! cargo build --release --quiet 2>/tmp/pushbuild.err; then
+        elif ! verify_build; then
             # Do not publish a tree that does not compile. The marker guard
             # above catches conflict markers, but a half-finished refactor
             # compiles to nothing just as effectively — and everything here is
@@ -397,7 +420,7 @@ $PROMPT"
             # fleet ended a two-hour run on a shared branch that would not
             # build, with every agent's score at zero, because nothing checked.
             stuck=$((stuck + 1))
-            log "iter $iter not pushing code: build fails (stuck $stuck): $(tail -1 /tmp/pushbuild.err)"
+            log "iter $iter not pushing code: the tree does not build (stuck $stuck)"
             if [ "$stuck" -ge 3 ]; then
                 log "iter $iter RESETTING to origin after $stuck stuck turns; local work discarded"
                 git merge --abort 2>/dev/null
