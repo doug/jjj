@@ -398,6 +398,18 @@ $PROMPT"
         # again in a second; spinning on it burns the run and buries the real
         # signal in noise.
         backoff=$(( failures * failures * 5 )); [ "$backoff" -gt 300 ] && backoff=300
+
+        # An expired OAuth session is not a transient failure: every turn will
+        # fail in about a second until a person logs in on the host. Spinning
+        # through it burns the run — 400 turns of one run died this way, at a
+        # 90% failure rate, while the containers looked healthy. Wait long
+        # enough that recovery costs one turn rather than hundreds.
+        case "$out" in
+            *"OAuth session expired"*|*"Failed to authenticate"*)
+                backoff=300
+                log "iter $iter AUTH: the host session has expired — run \`claude\` there and log in"
+                ;;
+        esac
         log "iter $iter backing off ${backoff}s after $failures consecutive failures"
         sleep "$backoff"
     else

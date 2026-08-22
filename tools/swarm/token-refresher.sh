@@ -83,6 +83,23 @@ while true; do
                 log "WARNING: refresh call failed; token may expire"
             left="$(remaining || echo 0)"
             log "after refresh: ${left}s remaining"
+
+            # A refresh that leaves the token already expired means the OAuth
+            # *session* is gone, not just the access token, and no amount of
+            # retrying fixes that — only an interactive `claude /login` does.
+            #
+            # This has to be loud. A fleet once spent 6.8 hours of a 24-hour run
+            # failing 400 turns in a second each while this logged a warning
+            # nobody was watching; the score sat frozen and every container
+            # looked healthy from the outside. The marker file lets the agents
+            # stop asking, and lets a person see the cause without reading logs.
+            if [ "${left:-0}" -le 0 ]; then
+                log "FATAL: the OAuth session has expired and cannot be renewed"
+                log "       run \`claude\` on this host and log in; the fleet will resume"
+                touch "$(dirname "$OUT")/AUTH_DEAD"
+            else
+                rm -f "$(dirname "$OUT")/AUTH_DEAD"
+            fi
         fi
 
         # Write via a temp file and rename, so a container never reads a
