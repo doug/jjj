@@ -375,10 +375,19 @@ cmd_health() {
     # 3. Do the agents agree? They score the same shared tree, so a wide spread
     #    means they are NOT sharing — which is how a run of six private trees
     #    passed for a healthy fleet, scores climbing apart from 18 to 55.
+    # The best of each agent's last few *completed* turns, not the score its
+    # current turn opened with.
+    #
+    # A turn can legitimately open at zero — a merge left the tree unbuildable —
+    # and the agent then fixes it within that same turn. Reading the opening
+    # score reported three of six agents at 0 while they were in fact at 73, so
+    # the check cried wolf on exactly the transient it should ignore. Sustained
+    # divergence, which is the thing worth alarming on, survives taking a
+    # maximum over several turns; a transient does not.
     local scores lo hi
     scores="$(for c in $running; do
-                  podman logs "$c" 2>&1 | grep -oE "iter [0-9]+ begin \(score [0-9]+" \
-                      | tail -1 | grep -oE "[0-9]+$"
+                  podman logs "$c" 2>&1 | grep -oE "iter [0-9]+ end score=[0-9]+" \
+                      | tail -4 | grep -oE "[0-9]+$" | sort -n | tail -1
               done | sort -n)"
     lo="$(echo "$scores" | head -1)"; hi="$(echo "$scores" | tail -1)"
     if [ -n "$lo" ] && [ -n "$hi" ] && [ "$hi" -gt 0 ]; then
