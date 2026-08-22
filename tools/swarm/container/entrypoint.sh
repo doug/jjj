@@ -98,13 +98,20 @@ if [ -n "$fetch_err" ]; then
     exit 1
 fi
 
-visible="$(jjj problem list 2>/dev/null | tail -n +3 | wc -l | tr -d ' ')"
+# `--status all`, not the default. The default lists only *open* problems, so a
+# fleet that had solved its entire backlog looked identical to one whose fetch
+# was silently broken, and six agents killed themselves on arrival at the moment
+# they succeeded. What this guard is actually for is proving the metadata
+# arrived; whether any of it is still open is the loop's business, not the
+# startup check's.
+visible="$(jjj problem list --status all 2>/dev/null | tail -n +3 | grep -c .)"
+open_now="$(jjj problem list 2>/dev/null | tail -n +3 | grep -c .)"
 if [ "${visible:-0}" -eq 0 ]; then
-    log "FATAL: fetch succeeded but no problems are visible — nothing to work on"
+    log "FATAL: fetch succeeded but no metadata is visible — the workbench looks empty"
     exit 1
 fi
 
-log "clone ready; $visible problems visible"
+log "clone ready; $visible problems visible ($open_now open)"
 
 # The identity line is emphatic because agents got it wrong: two of six in an
 # earlier trial *set* JJJ_USER rather than reading it, and their work landed
