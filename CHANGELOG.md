@@ -2,6 +2,73 @@
 
 ## Unreleased
 
+## [0.5.2] - 2026-08-22
+
+### Sync is delta-proportional
+
+A swarm of agents working on jjj itself found and fixed the two paths that made
+sync cost scale with how much history exists rather than how much changed.
+
+- **Fetch no longer pays a cold start every time.** `last_synced_rev` advanced
+  only on push, so a clone that only ever fetches — a review-only agent, or any
+  pod between pushes — stayed at `None` forever and re-derived the whole corpus
+  on every fetch. Measured on a 25,000-entity corpus: `warm_delta_fetch` for 100
+  changed files goes from 6.9s to 0.88s.
+
+- **Push validates and copies incrementally.** Validation reloaded every entity
+  file into SQLite and the sync workspace rewrote every `.md`, on every push,
+  however small the delta. Both now do work proportional to what changed:
+  `delta_push` goes from 12.5s to 3.6s. A first push is faster too, 18.3s to
+  13.6s, because it routes through the bulk path rather than building the search
+  index a row at a time.
+
+  The tempting shortcut here is wrong and was rejected twice: skipping
+  validation when the cache looks clean, or keying the skip on `(mtime, size)`,
+  both let a stale cache publish a dangling reference or a conflict-marked body
+  to every clone. Timestamp-preserving copies (`rsync -t`, `cp -p`, `tar`)
+  defeat the second by design. The cache is keyed on content.
+
+### Review works between clones
+
+- **`jjj solution submit` publishes the code.** Attaching recorded a change id
+  but never shared the commit, so a reviewer who fetched saw a solution pointing
+  at a revision that did not exist for them. Submit now pushes a
+  `review-s-<id>` branch, and reviewers can read the actual diff.
+
+- **`jjj solution lgtm --approve`** finishes a review in one step. Signing off
+  did not approve, and a reviewer who stopped there left the work stranded —
+  eight reviewed solutions and nothing merged, in one trial. It still refuses
+  while any critique is open.
+
+### Every entity body is writable without an editor
+
+`problem`, `solution`, `critique` and `milestone` creation all take `--body`
+(and `--body -` to read stdin). The only way to write a description, an
+approach or an argument used to be an interactive `$EDITOR`, which a scripted
+or headless caller does not have — so arguments ended up in titles.
+
+### Fixed
+
+- **Review branches no longer collide with metadata bookmarks.** They were named
+  `jjj-s-<id>`, which matches the `jjj*` glob that finds metadata bookmarks, so
+  a solution's *code* commit was merged into the *metadata* commit: the sync
+  commit picked up the whole source tree, conflicted, and jj refused to push it.
+  84% of metadata pushes failed this way in one trial, while the remote stayed
+  perfectly clean — the contamination existed only in the commit being built.
+
+- **State transitions are scriptable.** `critique address|validate|dismiss` and
+  `solution lgtm` accept `--json` like `new`, `list` and `show` already did, and
+  emit the updated entity so a caller need not follow up with `show`.
+
+- **`problem dissolve` accepts `--rationale`**, the spelling every other command
+  that records a decision uses.
+
+- **The MSRV job now tests the MSRV.** `rust-toolchain.toml` overrides whatever
+  rustup is told to default to, so the job installed the declared MSRV and then
+  built with something else. It has proved nothing for as long as it has
+  existed; the declared 1.88 is, as it happens, true.
+
+
 ### Added
 
 - **`jjj solution lgtm` works for pull-based review.** It previously required a
