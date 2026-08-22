@@ -1,2 +1,14 @@
+# Pinned, not "stable".
+#
+# A floating channel means the toolchain that gates CI is whatever stable
+# happened to be that morning, while a contributor's is whatever rustup last
+# fetched. The two drift, and the drift shows up as a lint that passes locally
+# and fails on every runner: CI sat red for a day on
+# `clippy::chunks_exact_to_as_chunks`, a lint that did not exist in the
+# toolchain the code was written against.
+#
+# Bumping this is a deliberate change with its own commit, where any new lints
+# are dealt with once, rather than a surprise on an unrelated pull request.
 [toolchain]
-channel = "stable"
+channel = "1.97.1"
+components = ["clippy", "rustfmt"]

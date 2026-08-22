@@ -57,8 +57,14 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       # Building, not testing: the point is that the declared MSRV is true, and
       # dev-dependencies routinely require newer toolchains than the crate does.
+      #
+      # `cargo +TOOLCHAIN` is required, not decoration. `rust-toolchain.toml`
+      # overrides whatever rustup has been told to default to, so a plain
+      # `cargo build` here silently used the pinned toolchain instead of the
+      # MSRV — this job installed 1.88, built with something else, and proved
+      # nothing for as long as it has existed.
       - name: Build at the declared MSRV
-        run: cargo build --locked
+        run: cargo +${{ steps.msrv.outputs.version }} build --locked
 
   features:
     name: feature matrix
