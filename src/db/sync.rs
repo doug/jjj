@@ -155,6 +155,17 @@ fn remove_content_hash(conn: &Connection, entity_type: &str, entity_id: &str) ->
 /// New files always miss the hash cache (nothing recorded for an id that was
 /// never seen), so a freshly added dangling reference or conflict-marked body
 /// is loaded and validated exactly as it would be by a full reload.
+/// Has the content-hash cache ever been populated?
+///
+/// Distinguishes a first load from an incremental one. `EXISTS` rather than a
+/// count: the answer is the same and it stops at the first row.
+fn content_cache_is_empty(conn: &Connection) -> Result<bool> {
+    let any: i64 = conn.query_row("SELECT EXISTS(SELECT 1 FROM content_cache)", [], |r| {
+        r.get(0)
+    })?;
+    Ok(any == 0)
+}
+
 pub fn load_from_markdown_incremental(db: &Database, store: &MetadataStore) -> Result<()> {
     let conn = db.conn();
 
@@ -164,12 +175,29 @@ pub fn load_from_markdown_incremental(db: &Database, store: &MetadataStore) -> R
     let result = (|| -> Result<()> {
         use crate::models::{Critique, Milestone, Problem, Solution};
 
+        // Is there a baseline to be incremental against?
+        //
+        // With none, every entity is "changed" and the per-entity path is
+        // strictly worse than the bulk one: `sync_*_to_cache` deletes and
+        // reinserts one FTS row at a time, where a full load upserts without
+        // touching FTS and rebuilds the index once at the end. On a 25,000
+        // entity corpus that difference is 16s versus 110s — a 7x regression on
+        // cold push, caught by the release benchmark.
+        //
+        // So: bulk when starting from nothing, incremental when there is a
+        // delta to be small about, which is the case this path was written for.
+        let cold = content_cache_is_empty(conn)?;
+
         macro_rules! reconcile {
-            ($ty:ty, $entity_type:expr, $sync_fn:path) => {{
+            ($ty:ty, $entity_type:expr, $sync_fn:path, $upsert_fn:path) => {{
                 let known = load_content_hashes(conn, $entity_type)?;
                 let (changed, removed, current) = store.list_fs_changed::<$ty>(&known)?;
                 for entity in &changed {
-                    $sync_fn(db, entity)?;
+                    if cold {
+                        $upsert_fn(conn, entity)?;
+                    } else {
+                        $sync_fn(db, entity)?;
+                    }
                     if let Some(hash) = current.get(entity.id()) {
                         save_content_hash(conn, $entity_type, entity.id(), *hash)?;
                     }
@@ -183,10 +211,30 @@ pub fn load_from_markdown_incremental(db: &Database, store: &MetadataStore) -> R
 
         // Same dependency order as the full reload: milestones and problems
         // before the solutions/critiques that reference them.
-        reconcile!(Milestone, "milestone", sync_milestone_to_cache);
-        reconcile!(Problem, "problem", sync_problem_to_cache);
-        reconcile!(Solution, "solution", sync_solution_to_cache);
-        reconcile!(Critique, "critique", sync_critique_to_cache);
+        reconcile!(
+            Milestone,
+            "milestone",
+            sync_milestone_to_cache,
+            upsert_milestone
+        );
+        reconcile!(Problem, "problem", sync_problem_to_cache, upsert_problem);
+        reconcile!(
+            Solution,
+            "solution",
+            sync_solution_to_cache,
+            upsert_solution
+        );
+        reconcile!(
+            Critique,
+            "critique",
+            sync_critique_to_cache,
+            upsert_critique
+        );
+
+        // One bulk index build, rather than 25,000 delete/insert pairs.
+        if cold {
+            rebuild_fts_conn(conn)?;
+        }
 
         // Ingest only newly-appended events (Pillar 3's offset-tracked path),
         // not a full clear + replay of the whole log.
@@ -221,8 +269,15 @@ pub fn load_from_markdown_incremental(db: &Database, store: &MetadataStore) -> R
 
 /// Rebuild the full-text search index from all entities.
 pub fn rebuild_fts(db: &Database) -> Result<()> {
-    let conn = db.conn();
+    rebuild_fts_conn(db.conn())
+}
 
+/// Rebuild the index from an existing connection.
+///
+/// The incremental loader runs inside its own transaction and holds a
+/// `&Connection`, so it cannot borrow the `Database` again to call
+/// [`rebuild_fts`].
+pub fn rebuild_fts_conn(conn: &Connection) -> Result<()> {
     // Clear existing FTS data
     conn.execute("DELETE FROM fts", [])?;
 

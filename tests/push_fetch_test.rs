@@ -1609,3 +1609,49 @@ fn a_review_branch_is_not_mistaken_for_a_metadata_bookmark() {
         String::from_utf8_lossy(&out.stderr)
     );
 }
+
+/// A first push must build the search index, and must not do it row by row.
+///
+/// Push validates by loading markdown into SQLite. Making that load incremental
+/// sped up the common case and quietly wrecked the first one: with no baseline
+/// every entity counts as changed, and the incremental path deletes and
+/// reinserts one FTS row at a time where a full load upserts without touching
+/// FTS and rebuilds the index once. On a 25,000-entity corpus that was 16s
+/// versus 110s — a 7x regression the release benchmark caught and the test
+/// suite did not.
+///
+/// The bulk path skips per-entity FTS entirely, so the thing most likely to
+/// break silently is search itself. This asserts it works after a cold push.
+#[test]
+fn a_cold_push_still_builds_a_working_search_index() {
+    if !jj_available() {
+        return;
+    }
+    let remote = create_bare_remote();
+    let author = setup_repo_with_remote(remote.path());
+    run_jjj_success(author.path(), &["init"]);
+    run_jjj_success(
+        author.path(),
+        &[
+            "problem",
+            "new",
+            "Distinctive kumquat phrase",
+            "--body",
+            "a searchable body",
+            "--force",
+        ],
+    );
+    run_jjj_success(author.path(), &["problem", "new", "Unrelated", "--force"]);
+
+    // Remove the cache so the push has no baseline: this is the cold path.
+    let db = author.path().join(".jj/jjj-meta/jjj.db");
+    let _ = std::fs::remove_file(&db);
+
+    run_jjj_success(author.path(), &["push"]);
+
+    let found = run_jjj_success(author.path(), &["problem", "list", "--search", "kumquat"]);
+    assert!(
+        found.to_lowercase().contains("kumquat"),
+        "a cold push left the search index empty: {found}"
+    );
+}
