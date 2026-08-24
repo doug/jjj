@@ -243,6 +243,11 @@ if [ -x "$ROOT/seed/score.sh" ]; then
     kill $spin 2>/dev/null; wait 2>/dev/null
     if [ -z "$a" ] || [ -z "$b" ]; then
         bad "could not score the seed twice"
+    elif [ "$a" -eq 0 ] && [ "$b" -eq 0 ]; then
+        # Two zeros are equal, and reporting that as stability is how a broken
+        # scorer passes its own stability check.
+        bad "the seed scores 0 under both conditions" \
+            "stability is meaningless at zero — fix the scorer first"
     else
         d=$(( a > b ? a - b : b - a ))
         if [ "$d" -le 5 ]; then

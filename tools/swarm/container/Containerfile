@@ -30,6 +30,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && git --version
 
+# Go, for the gophics target. Pinned, so a toolchain bump is a deliberate
+# change rather than a surprise in the middle of a trial.
+ARG GO_VERSION=1.26.6
+RUN set -eux; \
+    arch="$(dpkg --print-architecture)"; \
+    case "$arch" in arm64) goarch=arm64 ;; amd64) goarch=amd64 ;; \
+        *) echo "unsupported arch $arch" >&2; exit 1 ;; esac; \
+    curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-${goarch}.tar.gz" \
+        | tar -C /usr/local -xz; \
+    /usr/local/go/bin/go version
+ENV PATH=/usr/local/go/bin:$PATH GOPATH=/home/swarm/go GOTOOLCHAIN=local
+
 # Rust, for agents that build and test the tree they are modifying.
 ENV RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/usr/local/cargo \
     PATH=/usr/local/cargo/bin:$PATH

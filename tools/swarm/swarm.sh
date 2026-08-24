@@ -13,7 +13,7 @@
 # experiment; a bookmark per agent would have quietly designed it away.
 #
 #   ./swarm.sh build                                  build the agent image
-#   ./swarm.sh init  [--target toy|sql|sqlperf|jjj] [--pods N] [--agents N] [--problems N] [--critics N]
+#   ./swarm.sh init  [--target toy|sql|sqlperf|gophics|jjj] [--pods N] [--agents N] [--problems N] [--critics N]
 #   ./swarm.sh start [--hours H] [--max-iters N] [--model M] [--stop-when-done]
 #       SWARM_STRATEGIES=1 gives each builder a different approach (measure,
 #       structure, algorithm, correctness, simplify) instead of one shared
@@ -147,7 +147,16 @@ cmd_init() {
                 || { cat "$SWARM_ROOT/logs/seed.log"; die "seeding failed"; }
             grep -E '^(baseline|problems)' "$SWARM_ROOT/logs/seed.log" | sed 's/^/  /'
             ;;
-        *) die "unknown target '$target' (expected toy, sql, sqlperf or jjj)" ;;
+        gophics)
+            # A clone of a real project with no origin. The source is read and
+            # never written; whatever survives is merge-gated by hand.
+            info "cloning gophics as the workbench (frame-cost target)"
+            "$SWARM_DIR/targets/gophics/seed.sh" "$SEED" "$REPO_ROOT" "$JJJ_BIN" \
+                >"$SWARM_ROOT/logs/seed.log" 2>&1 \
+                || { cat "$SWARM_ROOT/logs/seed.log"; die "seeding failed"; }
+            grep -E '^(baseline|problems)' "$SWARM_ROOT/logs/seed.log" | sed 's/^/  /'
+            ;;
+        *) die "unknown target '$target' (expected toy, sql, sqlperf, gophics or jjj)" ;;
     esac
 
     # The skill is half of what is under test, so it ships inside the repo the
