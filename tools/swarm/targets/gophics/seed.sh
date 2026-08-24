@@ -99,7 +99,25 @@ with allocations or the reverse:
 | bytes | B/op — bytes allocated per frame |
 | allocs | allocs/op — allocation count per frame |
 
-Baseline is about 51.
+Baseline is about 33.
+
+## What a previous trial already established
+
+Read this before starting; it is an hour of work you do not have to repeat.
+
+- **The unchanged and localized paths have a large win available.** A one-hour
+  trial took `FrameUnchanged` from 303µs/5.12MB/2allocs to 2.3µs/1.1KB/0allocs
+  and `FrameLocalizedChange` from 332µs/5.13MB to 19µs/10KB, with 76 lines
+  across `widget/element.go`, `paint/paint.go` and `internal/gfx/gg/software.go`
+  — essentially an early-out when nothing changed, plus not rebuilding
+  reconciliation maps for static child lists. Expect to find something similar
+  quickly. Do not spend the run there.
+
+- **The hard problem is the full repaint, and it barely moved.**
+  `FrameFullRepaint` went 26.7ms to 22.6ms and still misses the 16.67ms frame
+  budget, while its allocations stayed at 5.20MB. That is where the remaining
+  score is, and nobody has yet found the shape of it. Profile before
+  conjecturing.
 
 **Two kinds of budget, deliberately.** Latency has a real external bar: 16.67ms
 is a 60fps frame, and a full repaint takes ~27ms, so that reads zero until it is
