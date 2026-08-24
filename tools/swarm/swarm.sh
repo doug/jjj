@@ -400,8 +400,19 @@ cmd_health() {
               done | sort -n)"
     lo="$(echo "$scores" | head -1)"; hi="$(echo "$scores" | tail -1)"
     if [ -n "$lo" ] && [ -n "$hi" ] && [ "$hi" -gt 0 ]; then
-        if [ $(( hi - lo )) -gt 25 ]; then
-            echo "  agreement:  !! scores span $lo-$hi — agents are not sharing work"; warn=1
+        # A wide spread alone is not a fault under the merge gate: an agent
+        # holding an improvement that has not been reviewed yet *should* score
+        # above one working from main, and a gophics run showed 27 against 68
+        # for exactly that reason — three agents with real unmerged work.
+        #
+        # What distinguishes "waiting for review" from "not sharing" is whether
+        # anything is landing. A wide spread with main advancing is the system
+        # working; a wide spread with main stale is the merge path broken, which
+        # is the case worth waking someone for.
+        if [ $(( hi - lo )) -gt 25 ] && [ "${age:-0}" -gt 30 ]; then
+            echo "  agreement:  !! scores span $lo-$hi and main is stale — work is not landing"; warn=1
+        elif [ $(( hi - lo )) -gt 25 ]; then
+            echo "  agreement:  scores $lo-$hi (spread is unmerged work awaiting review)"
         else
             echo "  agreement:  scores $lo-$hi"
         fi
