@@ -78,8 +78,13 @@ import re, sys
 # zero with no gradient, which tells an agent nothing about whether it is
 # getting warmer.
 BUDGETS = {
-    "BenchmarkFrameUnchanged":       {"ns": 1_000_000,  "b": 5_150_000, "allocs": 4},
-    "BenchmarkFrameLocalizedChange": {"ns": 4_000_000,  "b": 5_180_000, "allocs": 320},
+    # A frame in which nothing changed should cost almost nothing; one in which
+    # a single widget changed should cost a fraction of a full repaint. The
+    # first pair were 1ms and 4ms, loose enough that a localized change was
+    # already eight times inside and could earn nothing more however much it
+    # improved — a budget nobody can beat is not a budget.
+    "BenchmarkFrameUnchanged":       {"ns": 500_000,    "b": 5_150_000, "allocs": 4},
+    "BenchmarkFrameLocalizedChange": {"ns": 1_000_000,  "b": 5_180_000, "allocs": 320},
     "BenchmarkFrameFullRepaint":     {"ns": 16_670_000, "b": 5_250_000, "allocs": 620},
 }
 
@@ -101,18 +106,27 @@ if len(best) != len(BUDGETS):
     print("0 100")
     raise SystemExit
 
+MEET = 0.25   # meeting the budget is table stakes
+BEAT = 0.75   # the rest is earned by going under it
+
+
 def points(measured, budget):
-    """Half for meeting the budget, the rest logarithmically for beating it.
+    """A quarter for meeting the budget, the rest for beating it.
+
+    Meeting is worth little on purpose. An earlier split awarded half, which put
+    the starting score at 51 before anything had been improved — half the marks
+    banked for the status quo, which reads as "half done" when nothing has been
+    done. Most of the scale should be the part that has to be earned.
 
     Full marks need to be eight times inside, so the scale never stops paying
-    for an improvement — a ceiling that can be reached is a checklist, and a
+    for an improvement: a ceiling that can be reached is a checklist, and a
     fleet finishes a checklist in an afternoon.
     """
     import math
     if measured > budget:
         return 0.0
     ratio = budget / max(measured, 1e-9)
-    return 0.5 + 0.5 * min(1.0, math.log(ratio) / math.log(8))
+    return MEET + BEAT * min(1.0, math.log(ratio) / math.log(8))
 
 # Three classes, equally weighted, so no single win carries the run — and in
 # particular so latency cannot be bought with allocations or the reverse.
