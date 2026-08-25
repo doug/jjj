@@ -419,6 +419,11 @@ jjj critique list [--json]          jjj critique show ID [--json]
 
 # Milestones and ranking
 jjj milestone new "Title" [--body TEXT] [--date YYYY-MM-DD]
+
+# Ranking — which problems matter most, and by how much
+jjj rank set PROBLEM... [--gap PROBLEM:S|M|L|XL] [--milestone M] [--json]
+jjj rank move PROBLEM top|bottom|up|down|before:OTHER [--milestone M]
+jjj rank show [MILESTONE] [--by-user] [--json]
 jjj milestone add-problem M P       jjj milestone status M [--json]
 jjj rank show [MILESTONE] [--by-user] [--json]
 

@@ -143,6 +143,13 @@ Do ONE unit of work this turn, then stop. In priority order:
 Your job is to make ./score.sh go up. Reviewing is not your job unless there is
 genuinely nothing left to build.
 
+REBASE BEFORE YOU SUBMIT. Your turn takes tens of minutes and main moves under
+you while it runs: `git fetch origin && git merge origin/main`, re-run
+./score.sh, and only then submit. Half of all solutions in one run were
+withdrawn, most of them as "rebased onto current main" or "superseded by what
+landed while I was working" — that is your own effort thrown away, and a
+reviewer's on top of it.
+
 Measure before and after — ./score.sh is the arbiter, not your judgement of
 whether a change ought to help. Say the numbers in your solution, and put your
 reasoning in the body: `jjj solution new "Title" --body "..."` (or `--body -`
@@ -433,6 +440,37 @@ except Exception: pass' 2>/dev/null); do
     if [ "$(jjj next --json 2>/dev/null)" = "null" ] \
        && [ -z "$(jjj solution list --status submitted --json 2>/dev/null | tr -d '[] \n')" ]; then
         idle=$((idle + 1))
+        # An empty backlog is not the same as a finished job. A four-hour run
+        # cleared its seven seeded problems in the first hour and then idled for
+        # two and a half — 58% of the run producing nothing, with the score
+        # nowhere near its ceiling. Six agents empty a hand-written backlog far
+        # faster than anyone can write one, so after a couple of idle turns the
+        # fleet is asked to find its own work rather than wait for more.
+        if [ "$idle" -ge 2 ] && [ "${SWARM_SELF_SEED:-1}" = "1" ]; then
+            log "iter $iter backlog empty (idle $idle); asking for new problems"
+            turn_prompt="$PROMPT
+
+THE BACKLOG IS EMPTY AND THE SCORE IS NOT AT ITS CEILING. Nobody is going to
+hand you more work, so find some.
+
+Profile or measure first, then write down what you found as new problems:
+
+    jjj problem new \"...\" --body \"what the measurement says, and why it is
+    worth doing\" --priority high
+
+Ground every one in a number you took this turn. A problem that says
+'harfbuzz is 2MB of the 12MB binary, here is the symbol breakdown' is work
+somebody can pick up; 'improve performance' is not, and will waste six agents'
+time rather than one's.
+
+Two or three good problems is a better turn than one mediocre solution."
+            out=$(timeout "${SWARM_TURN_TIMEOUT:-1500}" claude -p "$turn_prompt" \
+                    --dangerously-skip-permissions --model "$MODEL" 2>&1)
+            log "iter $iter seeded work: $(printf '%s' "$out" | tail -1 | cut -c1-160)"
+            jjj push >/dev/null 2>&1
+            idle=0
+            continue
+        fi
         log "iter $iter nothing to do (idle $idle); waiting"
         sleep $(( idle < 6 ? idle * 30 : 180 ))
         continue
@@ -441,7 +479,51 @@ except Exception: pass' 2>/dev/null); do
 
     log "iter $iter begin (score $before)"
 
+    # A briefing, because every turn starts with no memory and re-derives the
+    # world: one run made 2,322 orientation calls against 138 that produced
+    # anything, a ratio of 17 to 1. The harness already knows this state and can
+    # hand it over for four cheap queries instead of each agent paying for
+    # twenty.
+    brief="$(jjj next --json 2>/dev/null | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin) or {}
+except Exception:
+    d = {}
+if d:
+    print(f"  next up: [{d.get(\"category\",\"?\")}] {d.get(\"title\",\"?\")}")
+    print(f"           id {d.get(\"entity_id\",\"?\")} — {d.get(\"summary\",\"\")}")
+' 2>/dev/null)
+$(jjj solution list --status submitted --json 2>/dev/null | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin) or []
+except Exception:
+    d = []
+if d:
+    print(f"  awaiting review ({len(d)}):")
+    for x in d[:5]:
+        print(f"    {x[\"id\"][:8]}  {x[\"title\"][:66]}")
+' 2>/dev/null)
+$(jjj critique list --status open --json 2>/dev/null | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin) or []
+except Exception:
+    d = []
+if d:
+    print(f"  open critiques ({len(d)}):")
+    for x in d[:5]:
+        print(f"    on {x.get(\"solution_id\",\"?\")[:8]}  {x[\"title\"][:62]}")
+' 2>/dev/null)"
+
     turn_prompt="$PROMPT"
+    if [ -n "$(printf '%s' "$brief" | tr -d '[:space:]')" ]; then
+        turn_prompt="$turn_prompt
+
+STATE AS OF THIS TURN (already fetched; you do not need to re-query it):
+$brief"
+    fi
     if [ -n "$UNMERGED" ]; then
         turn_prompt="$turn_prompt
 

@@ -17,7 +17,193 @@ pub fn execute(ctx: &CommandContext, action: RankAction) -> Result<()> {
             by_user,
             json,
         } => show(ctx, milestone, by_user, json),
+        RankAction::Set {
+            problems,
+            milestone,
+            gaps,
+            json,
+        } => set_order(ctx, problems, milestone, gaps, json),
+        RankAction::Move {
+            problem,
+            position,
+            milestone,
+            json,
+        } => move_one(ctx, problem, position, milestone, json),
     }
+}
+
+/// Record a full priority order for a milestone.
+///
+/// Ordering used to be reachable only through the TUI, so anything without a
+/// terminal could read a ranking but never author one — which left a whole half
+/// of jjj's model unusable by the agents it was designed to coordinate.
+fn set_order(
+    ctx: &CommandContext,
+    problems: Vec<String>,
+    milestone: Option<String>,
+    gaps: Vec<String>,
+    json: bool,
+) -> Result<()> {
+    if problems.is_empty() {
+        return Err(crate::error::JjjError::Validation(
+            "no problems given — pass them in priority order, highest first".to_string(),
+        ));
+    }
+    let milestone_id = resolve_milestone_for_rank(ctx, milestone)?;
+    let user = ctx.store.get_current_user()?;
+
+    let mut order = Vec::with_capacity(problems.len());
+    for p in &problems {
+        let id = ctx.resolve_problem(p)?;
+        if order.contains(&id) {
+            return Err(crate::error::JjjError::Validation(format!(
+                "'{p}' appears twice — an ordering is a sequence, not a multiset"
+            )));
+        }
+        order.push(id);
+    }
+
+    let gap_map = parse_gaps(ctx, &gaps, &order)?;
+    write_ordering(ctx, &milestone_id, &user, order, gap_map, json)
+}
+
+/// Move one problem within an existing order.
+///
+/// Restating a whole ordering to move one item is how orderings get corrupted
+/// by callers that only meant to change one thing.
+fn move_one(
+    ctx: &CommandContext,
+    problem: String,
+    position: String,
+    milestone: Option<String>,
+    json: bool,
+) -> Result<()> {
+    let milestone_id = resolve_milestone_for_rank(ctx, milestone)?;
+    let user = ctx.store.get_current_user()?;
+    let id = ctx.resolve_problem(&problem)?;
+
+    let base = ctx.store.meta_path();
+    let existing = crate::ranking::ordering::load_user_ordering(base, &milestone_id, &user)?
+        .ok_or_else(|| {
+            crate::error::JjjError::Validation(
+                "you have no ordering for this milestone yet — use `jjj rank set` first"
+                    .to_string(),
+            )
+        })?;
+
+    let mut order = existing.order.clone();
+    let from = order.iter().position(|x| x == &id).ok_or_else(|| {
+        crate::error::JjjError::Validation(format!(
+            "'{problem}' is not in your ordering — add it with `jjj rank set`"
+        ))
+    })?;
+    order.remove(from);
+
+    let to = match position.as_str() {
+        "top" => 0,
+        "bottom" => order.len(),
+        "up" => from.saturating_sub(1),
+        "down" => (from + 1).min(order.len()),
+        other => match other.strip_prefix("before:") {
+            Some(target) => {
+                let tid = ctx.resolve_problem(target)?;
+                order.iter().position(|x| x == &tid).ok_or_else(|| {
+                    crate::error::JjjError::Validation(format!(
+                        "'{target}' is not in your ordering"
+                    ))
+                })?
+            }
+            None => {
+                return Err(crate::error::JjjError::Validation(format!(
+                    "unknown position '{other}' — use top, bottom, up, down, or before:<problem>"
+                )))
+            }
+        },
+    };
+    order.insert(to, id);
+    write_ordering(ctx, &milestone_id, &user, order, existing.gaps, json)
+}
+
+/// Parse `<problem>:<size>` gap arguments against an ordering.
+fn parse_gaps(
+    ctx: &CommandContext,
+    gaps: &[String],
+    order: &[String],
+) -> Result<std::collections::HashMap<String, crate::ranking::ordering::GapSize>> {
+    use crate::ranking::ordering::GapSize;
+    let mut out = std::collections::HashMap::new();
+    for g in gaps {
+        let (p, size) = g.rsplit_once(':').ok_or_else(|| {
+            crate::error::JjjError::Validation(format!(
+                "malformed --gap '{g}' — expected <problem>:<S|M|L|XL>"
+            ))
+        })?;
+        let size = match size.to_ascii_uppercase().as_str() {
+            "S" => GapSize::S,
+            "M" => GapSize::M,
+            "L" => GapSize::L,
+            "XL" => GapSize::XL,
+            other => {
+                return Err(crate::error::JjjError::Validation(format!(
+                    "unknown gap size '{other}' — use S, M, L or XL"
+                )))
+            }
+        };
+        let id = ctx.resolve_problem(p)?;
+        if !order.contains(&id) {
+            return Err(crate::error::JjjError::Validation(format!(
+                "--gap names '{p}', which is not in the ordering"
+            )));
+        }
+        out.insert(id, size);
+    }
+    Ok(out)
+}
+
+/// Persist an ordering and report it.
+fn write_ordering(
+    ctx: &CommandContext,
+    milestone_id: &str,
+    user: &str,
+    order: Vec<String>,
+    gaps: std::collections::HashMap<String, crate::ranking::ordering::GapSize>,
+    json: bool,
+) -> Result<()> {
+    use crate::ranking::ordering::{save_user_ordering, UserOrdering};
+
+    let ordering = UserOrdering {
+        order,
+        gaps,
+        updated_at: chrono::Utc::now(),
+    };
+    let base = ctx.store.meta_path().to_path_buf();
+    let m = milestone_id.to_string();
+    let u = user.to_string();
+    let o = ordering.clone();
+    ctx.store.with_metadata(
+        &format!("Rank problems for milestone {milestone_id}"),
+        || save_user_ordering(&base, &m, &u, &o),
+    )?;
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&ordering)?);
+        return Ok(());
+    }
+    println!("Ranked {} problem(s) as @{}:", ordering.order.len(), user);
+    for (i, id) in ordering.order.iter().enumerate() {
+        let title = ctx
+            .store
+            .load_problem(id)
+            .map(|p| p.title)
+            .unwrap_or_else(|_| id.clone());
+        let gap = ordering
+            .gaps
+            .get(id)
+            .map(|g| format!("  [{} gap below]", g.label()))
+            .unwrap_or_default();
+        println!("  {}. {}{}", i + 1, title, gap);
+    }
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -129,7 +315,7 @@ fn show(ctx: &CommandContext, milestone: Option<String>, by_user: bool, json: bo
             println!("[]");
         } else {
             println!(
-                "No rankings yet for milestone '{}'. Open the TUI (`jjj ui`) and use the ranking view to set priorities.",
+                "No rankings yet for milestone '{}'. Set one with `jjj rank set <problem>... [--gap <problem>:<S|M|L|XL>]`, or open the TUI (`jjj ui`) and use the ranking view.",
                 ms.title,
             );
         }

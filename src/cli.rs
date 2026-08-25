@@ -1194,4 +1194,44 @@ pub enum RankAction {
         #[arg(long)]
         json: bool,
     },
+
+    /// Record your priority order for a milestone's problems
+    ///
+    /// Ordering was TUI-only, which meant anything without a terminal — a
+    /// script, an agent, CI — could read a ranking but never express one.
+    Set {
+        /// Problem references in priority order, highest first
+        problems: Vec<String>,
+
+        /// Milestone reference; defaults to the first active one
+        #[arg(long)]
+        milestone: Option<String>,
+
+        /// A priority cliff below a problem, as `<problem>:<S|M|L|XL>`.
+        /// Repeatable. A gap says "everything under this is a different
+        /// league", which a bare ordering cannot express.
+        #[arg(long = "gap")]
+        gaps: Vec<String>,
+
+        /// Print the resulting ordering as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Move one problem within your existing order, without restating the rest
+    Move {
+        /// Problem reference to move
+        problem: String,
+
+        /// Where to put it: `top`, `bottom`, `up`, `down`, or `before:<other>`
+        position: String,
+
+        /// Milestone reference; defaults to the first active one
+        #[arg(long)]
+        milestone: Option<String>,
+
+        /// Print the resulting ordering as JSON
+        #[arg(long)]
+        json: bool,
+    },
 }
