@@ -10,13 +10,11 @@
 # jjj is compiled from the working tree, so a trial always exercises the code
 # under development rather than the last release.
 
-# ubuntu 24.04 rather than the Rust image, which is bookworm-based and ships git
-# 2.39. jj requires git >= 2.41 for `git fetch --porcelain`, so on bookworm every
-# `jjj fetch` fails and agents see an empty repository — a run died on arrival
-# that way, six agents idling because none could see a seeded problem.
-# bookworm-backports does not carry a newer git either, so the base has to change
-# and Rust comes from rustup.
-FROM docker.io/library/ubuntu:24.04
+# debian trixie, for two things ubuntu 24.04 cannot give: a real `chromium`
+# package — ubuntu ships only a snap stub, which does not work in a container —
+# and git 2.47. jj needs git >= 2.41 for `git fetch --porcelain`, and bookworm's
+# 2.39 once left six agents idling against what looked like an empty repository.
+FROM docker.io/library/debian:trixie
 
 ARG JJ_VERSION=0.44.0
 ARG JJJ_VERSION=0.5.1
@@ -27,8 +25,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential pkg-config \
         python3 python3-venv \
         procps less \
+        chromium \
     && rm -rf /var/lib/apt/lists/* \
-    && git --version
+    && git --version && chromium --version
 
 # Go, for the gophics target. Pinned, so a toolchain bump is a deliberate
 # change rather than a surprise in the middle of a trial.
