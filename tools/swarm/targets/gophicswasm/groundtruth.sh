@@ -69,20 +69,15 @@ fi
 # scorer, because it looks like it is working. Make the binary bigger on purpose
 # and require the score to fall.
 base="$(./score.sh 2>/dev/null | tail -1 | cut -d' ' -f1)"
-cat > examples/counter/_bloat.go <<'GO'
-//go:build ignore_me_bloat
 
-package main
-GO
-# Real bloat: a large embedded blob the linker cannot drop.
-python3 - <<'PY'
-import pathlib
-p = pathlib.Path("examples/counter/bloat_gen.go")
-blob = ",".join(str(i % 251) for i in range(400000))
-p.write_text("package main\n\nvar bloatBlob = [...]byte{" + blob + "}\n\nfunc init() { _ = bloatBlob[0] }\n")
-PY
+# Embedded data, not a byte-array literal. The obvious version of this test — a
+# large [...]byte{...} kept alive by `func init() { _ = blob[0] }` — grew the
+# binary by exactly 0.0%, because `_ =` proves the value dead and the linker
+# drops the whole thing. Embedded bytes referenced at runtime survive, and grow
+# this binary about 30%.
+python3 "$(dirname "$0")/_mkbloat.py"
 bloated="$(./score.sh 2>/dev/null | tail -1 | cut -d' ' -f1)"
-rm -f examples/counter/bloat_gen.go examples/counter/_bloat.go
+rm -f examples/counter/bloat_gen.go examples/counter/bloat_blob.bin
 if [ -n "$base" ] && [ -n "$bloated" ] && [ "$bloated" -lt "$base" ]; then
     ok "score falls when the binary grows ($base -> $bloated)"
 else

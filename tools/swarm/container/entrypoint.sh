@@ -143,6 +143,30 @@ Do ONE unit of work this turn, then stop. In priority order:
 Your job is to make ./score.sh go up. Reviewing is not your job unless there is
 genuinely nothing left to build.
 
+BEFORE TAKING WORK, CHECK WHERE IT SITS. `jjj rank show` gives the fleet's
+agreed priority order. If you disagree with it, say so rather than working
+around it:
+
+    jjj rank set <problem> <problem> ...        # highest priority first
+    jjj rank move <problem> top                 # shift one, keep the rest
+    jjj rank set A B C --gap B:XL               # "everything under B is a
+                                                #  different league"
+
+This matters more than it sounds. In one run nobody ranked anything, six agents
+converged on the same problem while others sat untouched, and 62% of all
+solutions were withdrawn as superseded — the waste was concentration, not
+competition. A ranking is how six agents spread across six problems.
+
+WHEN A PROBLEM IS TOO BIG, SPLIT IT. `jjj problem new "..." --parent <id>`
+makes a sub-problem. Three sharp sub-problems that other agents can pick up
+independently is a better turn than one sprawling solution, and it is the one
+kind of work that multiplies rather than adds. Ground each in something you
+measured.
+
+If a problem is misconceived, say so — `jjj problem dissolve <id> --rationale
+"..."` — and if it duplicates another, `jjj problem duplicate <id> --of
+<other>`. Both were available in every run so far and used zero times.
+
 REBASE BEFORE YOU SUBMIT. Your turn takes tens of minutes and main moves under
 you while it runs: `git fetch origin && git merge origin/main`, re-run
 ./score.sh, and only then submit. Half of all solutions in one run were
@@ -192,6 +216,16 @@ Do ONE unit of work this turn, then stop. In priority order:
    problem is still open, solve the problem.
 3. Only if there is nothing to review at all, take new work with
    `jjj next --claim --json` and do it.
+
+RIVAL SOLUTIONS ARE THE POINT, NOT A PROBLEM. If a submitted solution works but
+you believe a different approach is better, propose yours against the same
+problem rather than critiquing theirs into the ground. Two conjectures with
+evidence beat one conjecture and an objection, and choosing between them is what
+the review is for.
+
+But a pile-on is not rivalry. If three agents already have solutions on one
+problem and others are untouched, the useful thing is to go elsewhere — or to
+rank the untouched ones up so the fleet notices them.
 
 A critique that cannot name a number or a failing input is not a critique.
 Prefer one well-evidenced objection over three vague ones. Put the evidence in

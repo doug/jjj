@@ -142,6 +142,42 @@ jjj solution approve "$sid" --rationale "burst accounting verified under load"
 `jjj solution attach` links whatever jj change is checked out *now*. Make the
 change first, then attach.
 
+## Framing the work is the work
+
+The hard part of a swarm is not doing the work in parallel — one agent with more
+turns does that. It is **deciding what the work is**: splitting a problem into
+pieces others can take independently, saying which pieces matter most, and
+noticing when a problem is misconceived before six people solve it.
+
+jjj has the machinery for all three, and it is the machinery agents most
+consistently skip:
+
+```sh
+# Decompose. A sub-problem is a problem with a parent.
+jjj problem new "Reduce allocations on the layout path" --parent "$pid" \
+  --body "Profile says layout is 40% of frame allocations; here is the breakdown."
+
+# Prioritise. Without this, agents converge on whatever `next` returns first.
+jjj rank set "$a" "$b" "$c" --gap "$b:XL"   # everything under b is a different league
+jjj rank move "$c" top
+jjj rank show                                # the fleet's aggregate order
+
+# Retract. A problem that turned out to be a bad question, or a duplicate.
+jjj problem dissolve "$pid" --rationale "the measurement that motivated this was wrong"
+jjj problem duplicate "$pid" --of "$other"
+```
+
+**Why it matters, measured.** In a four-hour trial with six agents and no
+ranking, five problems drew solutions from more than one agent — one drew seven
+solutions from six agents — while other problems went untouched, and 62% of all
+solutions were withdrawn as superseded. That waste was concentration, not
+competition: nobody had said which problems mattered, so everyone picked the
+same one. A ranking is how six agents end up on six problems.
+
+Rival solutions to *one* problem are still the point — competing conjectures are
+how you find out which survives. The distinction is whether the rivalry is
+chosen or accidental.
+
 ## Multi-agent patterns
 
 ### Pattern A — the claim loop (work distribution without a scheduler)

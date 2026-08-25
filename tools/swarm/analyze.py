@@ -73,6 +73,70 @@ def analyze_claims(records):
         print("  (no collisions — either the work partitioned cleanly or contention was too low)")
 
 
+def analyze_problem_design(records):
+    """How good is the fleet at framing work, not just doing it?
+
+    The interesting claim about a swarm is not that it can grind a fitness
+    function — one agent with more turns does that — but that it can decompose a
+    problem well and tell which parts matter. None of that was measured, and
+    four trials turned out to use none of the machinery for it: zero rankings,
+    zero subproblems, zero duplicate detection. Some of that was agents not
+    trying; most of it was `jjj rank` having no way to author an ordering
+    outside the TUI.
+    """
+    section("Problem design and ranking")
+
+    seeded = [r for r in records if r["cmd"] == "problem new"]
+    by_agent = [r for r in seeded if r["actor"] and "seed" not in r["actor"]]
+    subs = [r for r in seeded if "--parent" in r["argv"]]
+    print(f"  {len(seeded)} problems created, {len(by_agent)} of them by agents")
+    print(f"  {len(subs)} were sub-problems (--parent)")
+
+    ranked = [r for r in records if r["cmd"].startswith("rank set")
+              or r["cmd"].startswith("rank move")]
+    gaps = [r for r in ranked if "--gap" in r["argv"]]
+    if ranked:
+        print(f"  {len(ranked)} ranking edits, {len(gaps)} expressing a priority cliff")
+        print(f"  rankers: {dict(collections.Counter(r['actor'] for r in ranked).most_common(5))}")
+    else:
+        print("  !! no rankings authored — nobody said which problems matter most")
+
+    dups = [r for r in records if r["cmd"].startswith("problem duplicate")]
+    diss = [r for r in records if r["cmd"].startswith("problem dissolve")]
+    print(f"  {len(dups)} marked duplicate, {len(diss)} dissolved as misconceived")
+
+    # Rival conjectures are what jjj exists to support — but a pile-up is not
+    # rivalry. Counting solutions per problem cannot tell the two apart, so
+    # count distinct *authors* too: one agent posting four attempts is
+    # iterating, six agents posting seven is either genuine competition or an
+    # uncoordinated stampede, and the difference shows in how the losers ended.
+    per_problem = collections.defaultdict(list)
+    for r in records:
+        if r["cmd"] == "solution new" and r["exit"] == 0:
+            for i, a in enumerate(r["argv"]):
+                if a == "--problem" and i + 1 < len(r["argv"]):
+                    per_problem[r["argv"][i + 1]].append(r["actor"])
+    rivals = {k: v for k, v in per_problem.items() if len(set(v)) > 1}
+    iterated = {k: v for k, v in per_problem.items()
+                if len(v) > 1 and len(set(v)) == 1}
+    withdrawn = sum(1 for r in records if r["cmd"] == "solution withdraw")
+    created = sum(1 for r in records if r["cmd"] == "solution new" and r["exit"] == 0)
+
+    if rivals:
+        worst = max(rivals.items(), key=lambda kv: len(set(kv[1])))
+        print(f"  {len(rivals)} problems drew solutions from more than one agent "
+              f"(worst: {len(worst[1])} solutions, {len(set(worst[1]))} agents)")
+        print(f"  {len(iterated)} problems saw one agent iterate")
+    else:
+        print("  no problem drew a solution from a second agent")
+
+    if created:
+        pct = 100 * withdrawn // created
+        note = ("— concentration, not competition: agents piled onto the same "
+                "problems while others went untouched" if pct > 35 else "")
+        print(f"  {withdrawn} of {created} solutions withdrawn ({pct}%) {note}")
+
+
 def analyze_critique_gate(records):
     section("Critique gate")
     # Two paths reach Approved, and counting only the explicit one badly
@@ -230,6 +294,7 @@ def main():
 
     analyze_participation(records)
     analyze_claims(records)
+    analyze_problem_design(records)
     analyze_critique_gate(records)
     analyze_conflicts(records)
     analyze_sync(records)

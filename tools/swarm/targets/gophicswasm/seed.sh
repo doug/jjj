@@ -26,8 +26,8 @@ git remote remove origin 2>/dev/null || true
 git config user.name "swarm-seed"
 git config user.email "swarm-seed@example.invalid"
 
-cp "$HERE/score.sh" "$HERE/verify.sh" "$HERE/paint_check.sh" "$ROOT/"
-chmod +x "$ROOT/score.sh" "$ROOT/verify.sh" "$ROOT/paint_check.sh"
+cp "$HERE/score.sh" "$HERE/verify.sh" "$HERE/paint_check.sh" "$HERE/groundtruth.sh" "$HERE/_mkbloat.py" "$ROOT/"
+chmod +x "$ROOT/score.sh" "$ROOT/verify.sh" "$ROOT/paint_check.sh" "$ROOT/groundtruth.sh"
 
 jj git init --colocate >/dev/null 2>&1 || true
 jj config set --repo user.name "swarm-seed" >/dev/null 2>&1 || true

@@ -229,6 +229,28 @@ else
     ok "target defines no determinism check"
 fi
 
+step "ground truth"
+
+# The check whose absence cost more than any bug in the agents' code. A fitness
+# function is the one artifact a swarm cannot critique — agents optimise against
+# it and reviewers verify against it — so an error inside it is invisible to the
+# whole process and amplified by it. Two got through that way: a toolchain
+# measured carrying debug information and written off as a 19% option when
+# stripped it is 3.3x, and a headless browser reporting 11-27 seconds to first
+# paint for an app that paints in 168ms.
+if [ -x "$ROOT/seed/groundtruth.sh" ]; then
+    if out="$( (cd "$ROOT/seed" && ./groundtruth.sh 2>&1) )"; then
+        printf '%s\n' "$out" | grep -E '^\s+(ok|FAIL)' | sed 's/^/  /'
+        ok "the scorer measures what it claims"
+    else
+        printf '%s\n' "$out" | grep -E '^\s+FAIL' | sed 's/^/  /'
+        bad "the scorer does not measure what it claims" \
+            "fix this before a trial — every number downstream inherits it"
+    fi
+else
+    ok "target defines no ground-truth check"
+fi
+
 step "metric"
 
 # A fitness function noisier than the effect it measures makes reviewers accept
