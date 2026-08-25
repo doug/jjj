@@ -41,6 +41,25 @@ RUN set -eux; \
     /usr/local/go/bin/go version
 ENV PATH=/usr/local/go/bin:$PATH GOPATH=/home/swarm/go GOTOOLCHAIN=local
 
+# TinyGo, for the wasm-size target. It produces far smaller WebAssembly than the
+# standard toolchain — an order of magnitude, not a few percent — and is
+# therefore the first thing anyone should try.
+#
+# It cannot build gophics as things stand: TinyGo 0.40 supports Go 1.19 through
+# 1.25 and gophics' go.mod requires >= 1.26.5. That is a version floor rather
+# than a language limitation, so whether it can be lowered is a real question
+# and worth an agent's time. Shipping the toolchain means the answer can be
+# measured instead of guessed.
+ARG TINYGO_VERSION=0.40.0
+RUN set -eux; \
+    arch="$(dpkg --print-architecture)"; \
+    curl -fsSL -o /tmp/tinygo.tar.gz \
+        "https://github.com/tinygo-org/tinygo/releases/download/v${TINYGO_VERSION}/tinygo${TINYGO_VERSION}.linux-${arch}.tar.gz"; \
+    tar -xzf /tmp/tinygo.tar.gz -C /usr/local; \
+    rm -f /tmp/tinygo.tar.gz; \
+    /usr/local/tinygo/bin/tinygo version
+ENV PATH=/usr/local/tinygo/bin:$PATH
+
 # Rust, for agents that build and test the tree they are modifying.
 ENV RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/usr/local/cargo \
     PATH=/usr/local/cargo/bin:$PATH

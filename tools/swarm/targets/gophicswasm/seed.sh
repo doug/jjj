@@ -72,6 +72,32 @@ new_problem "Fonts and other embedded assets" medium "size,assets" \
 Subsetting, compressing, or loading them at runtime are all options — the last
 one trades size for a network round trip, so measure before assuming." >/dev/null
 
+new_problem "Can TinyGo build gophics, and what would it take?" critical "size,tinygo,keystone" \
+"TinyGo produces far smaller WebAssembly than the standard toolchain — an order
+of magnitude, not a few percent — so it is the largest single lever available
+and the first thing worth settling.
+
+It does not work today, and the reason is narrower than it looks. TinyGo 0.40
+(installed; run \\`tinygo version\\`) supports Go 1.19 through 1.25, and gophics'
+go.mod requires >= 1.26.5:
+
+    tinygo build -target wasm ./examples/counter
+    -> requires go version 1.19 through 1.25, got go1.26
+
+That is a version floor, not a language barrier. The questions, in order:
+
+  1. What in gophics actually needs Go 1.26? If nothing does, lowering the
+     go.mod directive to 1.25 costs nothing and unblocks the experiment.
+  2. With the floor lowered, does TinyGo build it — and if not, what breaks?
+     TinyGo's reflection support and standard-library coverage are narrower
+     than the standard toolchain, and gophics may rely on both.
+  3. If it builds, does it still pass the tests and still paint?
+
+**Report the answer even if it is no.** 'TinyGo cannot work because X' is worth
+more to everyone than another 2% shaved elsewhere, and it stops five other
+agents investigating the same thing. If it is a dead end, say precisely where it
+dead-ends." >/dev/null
+
 new_problem "Build flags and linker options worth having" medium "size,build" \
 "\`-ldflags=\"-s -w\"\` saves about 2.6% here, which is small — the bulk is real
 code, not symbols. Look for anything else the toolchain offers, and record what
@@ -91,6 +117,13 @@ Make the gophics WebAssembly binary smaller, without making gophics smaller.
 
 Baseline is about 25. `-ldflags="-s -w"` is worth 2.6%, so the easy win is not
 there: the bulk is real code.
+
+**TinyGo is installed and is the biggest lever available** — an order of
+magnitude on wasm size, not a few percent. It does not build gophics today for
+a narrow reason: TinyGo 0.40 supports Go 1.19 through 1.25 and go.mod requires
+1.26.5. Whether that floor can be lowered is a seeded problem and probably the
+most valuable question here. Settle it early, and report the answer even if it
+is no.
 
 ## The score
 
