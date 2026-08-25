@@ -118,12 +118,24 @@ Make the gophics WebAssembly binary smaller, without making gophics smaller.
 Baseline is about 25. `-ldflags="-s -w"` is worth 2.6%, so the easy win is not
 there: the bulk is real code.
 
-**TinyGo is installed and is the biggest lever available** — an order of
-magnitude on wasm size, not a few percent. It does not build gophics today for
-a narrow reason: TinyGo 0.40 supports Go 1.19 through 1.25 and go.mod requires
-1.26.5. Whether that floor can be lowered is a seeded problem and probably the
-most valuable question here. Settle it early, and report the answer even if it
-is no.
+**TinyGo is installed, it builds gophics, and it is 3.3x smaller.** Measured on
+this tree: `tinygo -no-debug` gives 3.79MB raw / 1.38MB gzipped against standard
+Go `-s -w` at 12.48MB / 3.19MB. A real browser renders both pixel-identically
+and both reach first paint at about 168ms.
+
+Two traps, both of which have already caught someone:
+
+- **Always pass `-no-debug`.** Without it TinyGo carries DWARF and measures
+  11.27MB — 19% smaller, which looks like a rounding error rather than the
+  answer. One flag is the whole difference.
+- **TinyGo checks the installed toolchain, not go.mod.** It shells out to
+  `go version`; lowering the go.mod directive is necessary but not sufficient.
+  A Go 1.25 toolchain must be on PATH for the tinygo invocation.
+
+What TinyGo does *not* buy is first paint. It instantiates about 34ms faster,
+inside roughly 168ms — the remaining ~150ms is app init (fonts, harfbuzz, GPU
+pipeline setup) and is identical under both toolchains. If first paint is the
+goal, that init is the target.
 
 ## The score
 
@@ -141,19 +153,16 @@ Budgets are what the code produces today, so every mark comes from beating them
 and full marks need to be **eight times** under. There is no point at which the
 score stops paying for a smaller binary.
 
-## Why size and not time to first paint
+## Why size, and why first paint is not measured here
 
-Time to first paint is what actually matters, and it was measured directly in
-headless Chromium before this target was written. Two things came out of that:
+Size this environment measures exactly. First paint it cannot measure at all,
+and the harness no longer pretends to: headless, GPU-less and virtual-timed, it
+reported 11-27 seconds for an app that a real browser with WebGPU paints in
+168ms — wrong by a factor of 67 or more, because gophics falls back to software
+rasterization without a GPU and virtual time decouples the clock.
 
-- **Instantiation is essentially all of it.** For the 15MB module, TTFP was
-  14245ms and instantiation was 14245ms. Size is not a proxy for first paint
-  here; it is the cause of it.
-- **It cannot be scored.** Three runs of the same unchanged binary gave 11130ms,
-  11805ms and 16110ms — a 45% spread. A number that noisy makes reviewers accept
-  and reject on coin flips.
-
-So size is scored, and TTFP is measured and reported next to it.
+A conclusion was built on those numbers once and was wrong twice over. Do not
+rebuild it. `./paint_check.sh` now answers only "does it still paint".
 
 ## Correctness gates everything
 

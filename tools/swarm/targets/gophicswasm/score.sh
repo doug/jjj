@@ -7,14 +7,19 @@
 # cheapest way to shrink a binary is to delete features, and a target that only
 # measured the small app would reward exactly that.
 #
-# **Size is scored rather than time to first paint, and the measurement is why.**
-# Instrumenting the real thing in headless Chromium showed instantiation is
-# essentially all of it — TTFP 14245ms against INST 14245ms for a 15MB module —
-# so binary size is the lever, not a proxy for it. Size is also perfectly
-# deterministic, where the same page measured three times gave 11130ms, 11805ms
-# and 16110ms: a 45% spread, far too noisy to review against. TTFP is still
-# measured and reported, and the app must still paint at all, but it does not
-# set the score.
+# **Size is scored, and first paint is not measured here at all.**
+#
+# Size this environment can measure exactly. First paint it cannot: headless,
+# GPU-less and virtual-timed, it reported 11-27 seconds for an app a real
+# browser paints in 168ms. A conclusion was built on those numbers once and was
+# wrong in both directions — see the note in paint_check.sh. The browser gate
+# now answers "does it still paint" and nothing more.
+#
+# **Compare toolchains with their debug information stripped.** TinyGo was once
+# measured at 19% smaller than standard Go, which made it look like a minor
+# option; the binary was carrying DWARF. With `-no-debug` against `-s -w` it is
+# 3.79MB versus 12.48MB raw — 3.3x — and gzips to 1.38MB against 3.19MB. One
+# missing flag is the difference between "not worth it" and "the answer".
 #
 # Correctness gates everything: the full test suite must pass, and the wasm must
 # still boot and draw in a browser. Shrinking a binary that no longer runs is
@@ -100,7 +105,7 @@ for app in sorted(sizes):
     s, b = sizes[app], BUDGETS[app]
     print(f"    {app:<9} raw {s['raw']/1e6:6.2f}MB /{b['raw']/1e6:5.1f}   "
           f"gzip {s['gz']/1e6:5.2f}MB /{b['gz']/1e6:5.2f}", file=sys.stderr)
-print(f"    time to first paint (reported, not scored): {sys.argv[1]}", file=sys.stderr)
+print(f"    paint gate: {sys.argv[1]}", file=sys.stderr)
 
 print(f"{max(0, min(100, round(100 * sum(scores.values()) / len(scores))))} 100")
 PY

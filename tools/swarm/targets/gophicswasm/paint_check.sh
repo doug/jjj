@@ -8,7 +8,8 @@
 # and the length of the canvas as a PNG — a blank canvas compresses to almost
 # nothing, so a few KB of PNG is evidence that pixels actually landed.
 #
-# Prints "TTFP=<ms> ... PNGLEN=<n>" on success, or nothing and a non-zero exit.
+# Prints "PAINTED elapsed=<ms> ... PNGLEN=<n>" on success, or nothing and a
+# non-zero exit. `elapsed` is diagnostic only — see the note below.
 #
 # Usage: paint_check.sh <path-to.wasm>
 
@@ -45,7 +46,7 @@ var poll = setInterval(function(){
     clearInterval(poll);
     var t = performance.now() - t0, px = "na";
     try { px = String(c.toDataURL().length); } catch (e) { px = "err"; }
-    M().textContent = "TTFP=" + t.toFixed(0) + " INST=" + inst.toFixed(0)
+    M().textContent = "PAINTED elapsed=" + t.toFixed(0) + " inst=" + inst.toFixed(0)
                     + " CANVAS=" + c.width + "x" + c.height + " PNGLEN=" + px;
   }
 }, 5);
@@ -57,10 +58,25 @@ python3 -m http.server 8099 >/dev/null 2>&1 &
 SRV=$!
 sleep 1
 
-# Virtual time, so the run terminates deterministically rather than whenever the
-# app happens to settle. The number it yields is virtual and noisy — 45% spread
-# across three runs of an unchanged binary — which is why it is reported and
-# not scored.
+# A gate, not a measurement.
+#
+# This answers "does it still paint" and nothing else. The elapsed number it
+# prints is not a time to first paint and must not be read as one: measured
+# here it came out around 11-27 seconds for an app that a real browser paints in
+# 168ms — off by a factor of 67 or more. Three things conspire, and no flag
+# fixes them, because they are what this environment *is*:
+#
+#   - `--disable-gpu`, so gophics falls back to its software rasterizer and the
+#     first frame is CPU-rasterized rather than drawn through WebGPU
+#   - `--virtual-time-budget`, which decouples performance.now() from real time
+#   - a CPU-capped container shared with five other agents
+#
+# A conclusion was once built on this number — "TinyGo is 5x faster to first
+# paint" — and it was wrong: measured in a real browser with WebGPU, standard Go
+# and TinyGo both reach first paint at about 168ms, and the 34ms TinyGo saves on
+# instantiate sits inside ~150ms of app init (fonts, harfbuzz, pipeline setup)
+# that is identical in both. Score size, which this environment *can* measure
+# exactly, and measure first paint where there is a GPU.
 timeout 180 chromium --headless --no-sandbox --disable-gpu --disable-dev-shm-usage \
     --run-all-compositor-stages-before-draw --virtual-time-budget=60000 \
     --dump-dom http://127.0.0.1:8099/index.html 2>/dev/null > "$DIR/dom.html"
@@ -72,7 +88,7 @@ m = re.search(r'id="__m"[^>]*>([^<]*)<', s)
 v = m.group(1) if m else ""
 # A blank canvas is a few hundred bytes of PNG; real content is kilobytes.
 n = re.search(r"PNGLEN=(\d+)", v)
-if not v.startswith("TTFP=") or not n or int(n.group(1)) < 2000:
+if not v.startswith("PAINTED") or not n or int(n.group(1)) < 2000:
     sys.exit(1)
 print(v)
 PY
