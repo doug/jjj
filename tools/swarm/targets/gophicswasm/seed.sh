@@ -34,8 +34,17 @@ jj config set --repo user.name "swarm-seed" >/dev/null 2>&1 || true
 jj config set --repo user.email "swarm-seed@example.invalid" >/dev/null 2>&1 || true
 "$JJJ" init >/dev/null
 
+# A milestone, because rankings are stored per milestone and `jjj rank set`
+# refuses without one. Every target so far seeded problems and no milestone, so
+# an agent reaching for a ranking hit "No active milestone found" and gave up —
+# the capability existed and was unreachable, which is how it went unused in
+# four trials.
+MILESTONE="Frame cost"
+"$JJJ" milestone new "$MILESTONE" --body "The work this trial is scored on." >/dev/null
+
 new_problem() {
-    "$JJJ" problem new "$1" --priority "$2" --tags "$3" --body "$4" --force --json \
+    "$JJJ" problem new "$1" --priority "$2" --tags "$3" --body "$4" \
+        --milestone "$MILESTONE" --force --json \
         | python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])'
 }
 
