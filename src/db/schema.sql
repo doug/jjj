@@ -23,6 +23,11 @@ CREATE TABLE IF NOT EXISTS problems (
     dissolved_reason TEXT,
     github_issue INTEGER,
     tags TEXT DEFAULT '[]',
+    -- When the claim was taken. A claim is a lease: without this the cached
+    -- read cannot tell a live claim from one held by an agent that died an hour
+    -- ago, and `problem list` was silently returning None for it while the
+    -- markdown on disk had the timestamp all along.
+    claimed_at TEXT,
     FOREIGN KEY (parent_id) REFERENCES problems(id),
     FOREIGN KEY (milestone_id) REFERENCES milestones(id)
 );
@@ -43,6 +48,9 @@ CREATE TABLE IF NOT EXISTS solutions (
     github_pr INTEGER,
     github_branch TEXT,
     tags TEXT DEFAULT '[]',
+    -- See the note on problems.claimed_at: a claim is a lease, and the cached
+    -- read has to carry its age or nobody can tell a live one from a stale one.
+    claimed_at TEXT,
     FOREIGN KEY (problem_id) REFERENCES problems(id),
     FOREIGN KEY (supersedes) REFERENCES solutions(id)
 );

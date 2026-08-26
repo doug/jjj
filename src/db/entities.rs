@@ -98,7 +98,7 @@ impl DbEntity for Problem {
     const TABLE: &'static str = "problems";
     const COLUMNS: &'static str = "id, title, status, priority, confidence, parent_id, \
         milestone_id, assignee, created_at, updated_at, description, dissolved_reason, \
-        github_issue, tags";
+        github_issue, tags, claimed_at";
     fn from_row(row: &rusqlite::Row) -> SqliteResult<Self> {
         row_to_problem(row)
     }
@@ -107,7 +107,8 @@ impl DbEntity for Problem {
 impl DbEntity for Solution {
     const TABLE: &'static str = "solutions";
     const COLUMNS: &'static str = "id, title, status, problem_id, change_ids, supersedes, \
-        assignee, force_approved, created_at, updated_at, approach, github_pr, github_branch, tags";
+        assignee, force_approved, created_at, updated_at, approach, github_pr, github_branch, \
+        tags, claimed_at";
     fn from_row(row: &rusqlite::Row) -> SqliteResult<Self> {
         row_to_solution(row)
     }
@@ -143,8 +144,9 @@ pub fn upsert_problem(conn: &Connection, problem: &Problem) -> SqliteResult<()> 
     conn.execute(
         "INSERT OR REPLACE INTO problems (
             id, title, status, priority, confidence, parent_id, milestone_id, assignee,
-            created_at, updated_at, description, dissolved_reason, github_issue, tags
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+            created_at, updated_at, description, dissolved_reason, github_issue, tags,
+            claimed_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
         params![
             problem.id,
             problem.title,
@@ -170,6 +172,7 @@ pub fn upsert_problem(conn: &Connection, problem: &Problem) -> SqliteResult<()> 
             problem.dissolved_reason,
             problem.github_issue.map(|n| n as i64),
             tags_json,
+            problem.claimed_at.map(|t| t.to_rfc3339()),
         ],
     )?;
     Ok(())
@@ -194,7 +197,7 @@ fn row_to_problem(row: &rusqlite::Row) -> SqliteResult<Problem> {
     // Column order: id(0), title(1), status(2), priority(3), confidence(4),
     //   parent_id(5), milestone_id(6), assignee(7),
     //   created_at(8), updated_at(9), description(10),
-    //   dissolved_reason(11), github_issue(12), tags(13)
+    //   dissolved_reason(11), github_issue(12), tags(13), claimed_at(14)
     let status_str: String = row.get(2)?;
     let priority_str: String = row.get(3)?;
     let confidence_str: String = row
@@ -215,7 +218,10 @@ fn row_to_problem(row: &rusqlite::Row) -> SqliteResult<Problem> {
         parent_id: row.get(5)?,
         milestone_id: row.get(6)?,
         assignee: row.get(7)?,
-        claimed_at: None,
+        claimed_at: row
+            .get::<_, Option<String>>(14)?
+            .and_then(|t| DateTime::parse_from_rfc3339(&t).ok())
+            .map(|t| t.with_timezone(&Utc)),
         created_at: parse_datetime(&created_at_str, "created_at", "problem"),
         updated_at: parse_datetime(&updated_at_str, "updated_at", "problem"),
         description: row.get::<_, Option<String>>(10)?.unwrap_or_default(),
@@ -241,8 +247,8 @@ pub fn upsert_solution(conn: &Connection, solution: &Solution) -> SqliteResult<(
         "INSERT OR REPLACE INTO solutions (
             id, title, status, problem_id, change_ids, supersedes, assignee,
             force_approved, created_at, updated_at, approach,
-            github_pr, github_branch, tags
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+            github_pr, github_branch, tags, claimed_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
         params![
             solution.id,
             solution.title,
@@ -258,6 +264,7 @@ pub fn upsert_solution(conn: &Connection, solution: &Solution) -> SqliteResult<(
             solution.github_pr.map(|n| n as i64),
             solution.github_branch,
             tags_json,
+            solution.claimed_at.map(|t| t.to_rfc3339()),
         ],
     )?;
     Ok(())
@@ -281,7 +288,7 @@ pub fn list_solutions_for_problem(
     let mut stmt = conn.prepare(
         "SELECT id, title, status, problem_id, change_ids, supersedes, assignee,
                 force_approved, created_at, updated_at, approach,
-                github_pr, github_branch, tags
+                github_pr, github_branch, tags, claimed_at
          FROM solutions WHERE problem_id = ?1 ORDER BY created_at DESC",
     )?;
 
@@ -299,7 +306,7 @@ fn row_to_solution(row: &rusqlite::Row) -> SqliteResult<Solution> {
     // Column order: id(0), title(1), status(2), problem_id(3), change_ids(4),
     //   supersedes(5), assignee(6), force_approved(7),
     //   created_at(8), updated_at(9), approach(10),
-    //   github_pr(11), github_branch(12), tags(13)
+    //   github_pr(11), github_branch(12), tags(13), claimed_at(14)
     let status_str: String = row.get(2)?;
     let change_ids_json: String = row
         .get::<_, Option<String>>(4)?
@@ -318,7 +325,10 @@ fn row_to_solution(row: &rusqlite::Row) -> SqliteResult<Solution> {
         change_ids: parse_json_vec(&change_ids_json, "change_ids"),
         supersedes: row.get(5)?,
         assignee: row.get(6)?,
-        claimed_at: None,
+        claimed_at: row
+            .get::<_, Option<String>>(14)?
+            .and_then(|t| DateTime::parse_from_rfc3339(&t).ok())
+            .map(|t| t.with_timezone(&Utc)),
         force_approved: row.get(7)?,
         created_at: parse_datetime(&created_at_str, "created_at", "solution"),
         updated_at: parse_datetime(&updated_at_str, "updated_at", "solution"),

@@ -147,6 +147,24 @@ pub fn all_migrations() -> Vec<Migration> {
                 Ok(())
             },
         },
+        Migration {
+            version: 12,
+            description: "Add claimed_at to problems and solutions for claim leases",
+            requires_rebuild: false,
+            up: |conn| {
+                // A claim is a lease, and the cached read was dropping its age:
+                // `problem list --json` returned no claimed_at while the
+                // markdown on disk had it all along, so a caller could see who
+                // held work but not whether the hold was still good.
+                //
+                // Tolerated failure: an ALTER on a column that already exists
+                // errors, and a cache built from the current schema.sql already
+                // has it.
+                let _ = conn.execute("ALTER TABLE problems ADD COLUMN claimed_at TEXT", []);
+                let _ = conn.execute("ALTER TABLE solutions ADD COLUMN claimed_at TEXT", []);
+                Ok(())
+            },
+        },
     ]
 }
 

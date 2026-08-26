@@ -9,7 +9,7 @@
 
 mod test_helpers;
 
-use test_helpers::{jj_available, run_jjj, run_jjj_success, setup_test_repo};
+use test_helpers::{jj_available, run_jjj, run_jjj_stdin, run_jjj_success, setup_test_repo};
 
 fn with_three_problems() -> tempfile::TempDir {
     let dir = setup_test_repo();
@@ -101,6 +101,96 @@ fn moving_without_an_ordering_says_so() {
     assert!(
         String::from_utf8_lossy(&out.stderr).contains("rank set"),
         "the error should name the way forward: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+/// A long ordering should be pipeable, not typed out.
+///
+/// Four of nine ranking attempts in one trial failed with "the reference was
+/// empty" — a shell variable that expanded to nothing, silently shortening the
+/// argument list. Piping the list is how a script hands over something it just
+/// computed, and it cannot lose an element to an unset variable.
+#[test]
+fn an_ordering_can_be_piped_in() {
+    if !jj_available() {
+        return;
+    }
+    let dir = with_three_problems();
+    let out = run_jjj_stdin(&dir, "Gamma\nAlpha:XL\nBeta\n", &["rank", "set", "-"]);
+    assert!(
+        out.status.success(),
+        "piped ordering failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("XL gap below"), "inline gap lost: {stdout}");
+    let g = stdout.find("Gamma").expect("Gamma");
+    let b = stdout.find("Beta").expect("Beta");
+    assert!(g < b, "piped order not honoured: {stdout}");
+}
+
+/// The JSON this command prints must be accepted back.
+#[test]
+fn an_ordering_round_trips_through_json() {
+    if !jj_available() {
+        return;
+    }
+    let dir = with_three_problems();
+    let json = run_jjj_success(
+        &dir,
+        &[
+            "rank", "set", "Gamma", "Beta", "Alpha", "--gap", "Beta:L", "--json",
+        ],
+    );
+    let out = run_jjj_stdin(&dir, &json, &["rank", "set", "-"]);
+    assert!(
+        out.status.success(),
+        "round-trip failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("L gap below"),
+        "the gap did not survive the round trip: {stdout}"
+    );
+    let g = stdout.find("Gamma").expect("Gamma");
+    let a = stdout.find("Alpha").expect("Alpha");
+    assert!(g < a, "order did not survive the round trip: {stdout}");
+}
+
+/// Blank lines and comments are ignored, so a generated list stays readable.
+#[test]
+fn piped_input_tolerates_blanks_and_comments() {
+    if !jj_available() {
+        return;
+    }
+    let dir = with_three_problems();
+    let out = run_jjj_stdin(
+        &dir,
+        "# highest first\nAlpha\n\n  Beta  # the middle one\nGamma\n",
+        &["rank", "set", "-"],
+    );
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(String::from_utf8_lossy(&out.stdout).contains("Ranked 3"));
+}
+
+/// Empty stdin must say so rather than record an empty ordering.
+#[test]
+fn empty_stdin_is_refused() {
+    if !jj_available() {
+        return;
+    }
+    let dir = with_three_problems();
+    let out = run_jjj_stdin(&dir, "", &["rank", "set", "-"]);
+    assert!(!out.status.success());
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("nothing on stdin"),
+        "{}",
         String::from_utf8_lossy(&out.stderr)
     );
 }

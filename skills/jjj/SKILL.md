@@ -162,6 +162,16 @@ jjj rank set "$a" "$b" "$c" --gap "$b:XL"   # everything under b is a different 
 jjj rank move "$c" top
 jjj rank show                                # the fleet's aggregate order
 
+# Pipe the list rather than typing it. A `-` reads one reference per line, each
+# optionally suffixed with its gap — safer than a long positional list, where an
+# unset variable expands to nothing and silently shortens the ordering.
+jjj problem list --json | jq -r '.[].id' | jjj rank set -
+printf 'parser\nlexer:XL\nformatter\n' | jjj rank set -
+
+# `--json` output is accepted back, so an ordering round-trips.
+jjj rank set "$a" "$b" --json > order.json
+jjj rank set - < order.json
+
 # Retract. A problem that turned out to be a bad question, or a duplicate.
 jjj problem dissolve "$pid" --rationale "the measurement that motivated this was wrong"
 jjj problem duplicate "$pid" --of "$other"
@@ -484,6 +494,7 @@ jjj milestone new "Title" [--body TEXT] [--date YYYY-MM-DD]
 
 # Ranking — which problems matter most, and by how much
 jjj rank set PROBLEM... [--gap PROBLEM:S|M|L|XL] [--milestone M] [--json]
+jjj rank set -                      # read the order from stdin instead
 jjj rank move PROBLEM top|bottom|up|down|before:OTHER [--milestone M]
 jjj rank show [MILESTONE] [--by-user] [--json]
 jjj milestone add-problem M P       jjj milestone status M [--json]

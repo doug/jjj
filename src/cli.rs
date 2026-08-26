@@ -1200,7 +1200,13 @@ pub enum RankAction {
     /// Ordering was TUI-only, which meant anything without a terminal — a
     /// script, an agent, CI — could read a ranking but never express one.
     Set {
-        /// Problem references in priority order, highest first
+        /// Problem references in priority order, highest first.
+        ///
+        /// A single `-` reads them from stdin instead: either one reference per
+        /// line, each optionally suffixed `:S|M|L|XL` for the gap below it, or
+        /// the JSON this command prints with `--json`. Passing a long list
+        /// positionally is error-prone from a script — four of nine attempts in
+        /// one trial died on an unset shell variable expanding to nothing.
         problems: Vec<String>,
 
         /// Milestone reference; defaults to the first active one

@@ -44,9 +44,21 @@ fn set_order(
     gaps: Vec<String>,
     json: bool,
 ) -> Result<()> {
+    // `-` means "read the list from stdin". Piping is the natural way for a
+    // script to hand over a list it just computed, and avoids the failure that
+    // killed four of nine ranking attempts in one trial: a shell variable that
+    // expanded to nothing, silently shortening the argument list.
+    let (problems, stdin_gaps) = if problems.len() == 1 && problems[0] == "-" {
+        read_order_from_stdin()?
+    } else {
+        (problems, Vec::new())
+    };
+
     if problems.is_empty() {
         return Err(crate::error::JjjError::Validation(
-            "no problems given — pass them in priority order, highest first".to_string(),
+            "no problems given — pass them in priority order, highest first, \
+             or `-` to read them from stdin"
+                .to_string(),
         ));
     }
     let milestone_id = resolve_milestone_for_rank(ctx, milestone)?;
@@ -63,8 +75,73 @@ fn set_order(
         order.push(id);
     }
 
-    let gap_map = parse_gaps(ctx, &gaps, &order)?;
+    // Gaps may arrive either way; the flag wins on a conflict so an explicit
+    // argument is never silently overridden by piped input.
+    let mut all_gaps = stdin_gaps;
+    all_gaps.extend(gaps);
+    let gap_map = parse_gaps(ctx, &all_gaps, &order)?;
     write_ordering(ctx, &milestone_id, &user, order, gap_map, json)
+}
+
+/// Read a priority order from stdin.
+///
+/// Accepts either the JSON this command prints with `--json` — so an ordering
+/// round-trips — or the plainer form of one reference per line, each optionally
+/// suffixed with `:S`, `:M`, `:L` or `:XL` for the gap below it. Blank lines and
+/// `#` comments are ignored, so a generated list stays readable.
+fn read_order_from_stdin() -> Result<(Vec<String>, Vec<String>)> {
+    use std::io::Read;
+
+    let mut buf = String::new();
+    std::io::stdin()
+        .read_to_string(&mut buf)
+        .map_err(crate::error::JjjError::Io)?;
+
+    let trimmed = buf.trim();
+    if trimmed.is_empty() {
+        return Err(crate::error::JjjError::Validation(
+            "nothing on stdin — expected one problem reference per line".to_string(),
+        ));
+    }
+
+    if trimmed.starts_with('{') {
+        #[derive(serde::Deserialize)]
+        struct Piped {
+            order: Vec<String>,
+            #[serde(default)]
+            gaps: std::collections::HashMap<String, String>,
+        }
+        let piped: Piped = serde_json::from_str(trimmed).map_err(|e| {
+            crate::error::JjjError::Validation(format!(
+                "stdin looked like JSON but did not parse: {e}"
+            ))
+        })?;
+        let gaps = piped
+            .gaps
+            .iter()
+            .map(|(id, size)| format!("{id}:{size}"))
+            .collect();
+        return Ok((piped.order, gaps));
+    }
+
+    let mut order = Vec::new();
+    let mut gaps = Vec::new();
+    for line in trimmed.lines() {
+        let line = line.split('#').next().unwrap_or("").trim();
+        if line.is_empty() {
+            continue;
+        }
+        match line.rsplit_once(':') {
+            Some((reference, size))
+                if matches!(size.to_ascii_uppercase().as_str(), "S" | "M" | "L" | "XL") =>
+            {
+                order.push(reference.trim().to_string());
+                gaps.push(line.to_string());
+            }
+            _ => order.push(line.to_string()),
+        }
+    }
+    Ok((order, gaps))
 }
 
 /// Move one problem within an existing order.
