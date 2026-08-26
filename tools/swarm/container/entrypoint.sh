@@ -154,6 +154,16 @@ for the other to notice.
 So the first thing you do on a problem is publish the plan, not the code:
 
     jjj next --claim                       # take it, so others see it is held
+    jjj fetch                              # then look again — did you keep it?
+    jjj problem show <id> --json           # assignee should be you
+
+A claim is advisory, not a lock: two agents who claim within the same second
+both succeed locally, and the conflict only resolves when their metadata meets.
+The convergence rule is that the *earliest* claim wins, so after a fetch you may
+find the problem is someone else's. If it is, take something else — you have
+lost nothing but a few seconds, which is the entire point of checking before
+building rather than after.
+
     jjj solution new "Decode once per record, share across stages" \
         --problem <id> \
         --body "What I am going to change, why I think it works, and what I
@@ -165,6 +175,19 @@ theirs and go elsewhere, all before anyone has spent a turn writing it.
 
 Then, and only then, implement it, `jjj solution attach <id>`, and
 `jjj solution submit <id>`.
+
+AND CHECK ONE LAST TIME BEFORE YOU IMPLEMENT. Between proposing and writing
+code you have spent minutes, and the fleet has not been idle. `jjj fetch` and
+re-read `jjj solution list --status proposed --json`. If somebody has proposed
+the same idea, stop: either critique theirs if you think it is wrong, or go
+elsewhere. Withdrawing your own proposal costs a sentence; discovering the
+overlap after implementing costs a turn, and in one run that happened 40 times.
+
+Note what is *not* being asked. Two solutions to one problem are welcome when
+they are genuinely different ideas — that is the whole method, and the better
+one wins by surviving criticism. What is waste is two agents building the *same*
+idea without knowing. If your approach differs from an existing proposal, say
+how it differs in your body, and build it.
 
 READ THE OTHER PROPOSALS FIRST. `jjj solution list --status proposed` is what
 the rest of the fleet is about to build. If yours is the same idea, do not race
@@ -431,6 +454,33 @@ Rules:
 Report in one line what you did, including the score before and after."
 
 # --- loop -------------------------------------------------------------------
+
+# Stagger the start, so the fleet does not decide everything at once.
+#
+# Six agents used to begin within one second of each other, and then every
+# mechanism meant to stop them duplicating work was asked to order events that
+# had no order. Five agents proposed on the same problem inside sixty seconds —
+# gaps of 0m, 0m, 0m, 1m — because when each of them ran `jjj next` the others
+# had not claimed anything yet, and when each published a plan the others had
+# already chosen. 40 of 47 withdrawals in that run were "superseded, submitted
+# first with an equivalent fix": not criticism doing its work, just identical
+# effort racing.
+#
+# Deterministic rather than random, so a trial stays reproducible: agent N of a
+# pod waits N * SWARM_STAGGER seconds. Enough for a claim and a plan to become
+# visible before the next agent picks.
+STAGGER="${SWARM_STAGGER:-45}"
+if [ "$STAGGER" -gt 0 ]; then
+    slot="$(printf '%s' "${SWARM_AGENT:-agent-01}" | tr -dc '0-9' | sed 's/^0*//')"
+    slot="${slot:-1}"
+    pod_slot="$(printf '%s' "${JJJ_POD:-pod-1}" | tr -dc '0-9' | sed 's/^0*//')"
+    pod_slot="${pod_slot:-1}"
+    wait_for=$(( ((pod_slot - 1) * 3 + (slot - 1)) * STAGGER ))
+    if [ "$wait_for" -gt 0 ]; then
+        log "staggering ${wait_for}s so the fleet does not all choose at once"
+        sleep "$wait_for"
+    fi
+fi
 
 iter=0
 stuck=0
@@ -846,6 +896,11 @@ $PROMPT"
 
     after=$($SCORER 2>/dev/null | tail -1 || echo "? ?")
     log "iter $iter end score=$after"
+
+    # A little jitter between turns. Turn lengths vary enough to spread the
+    # fleet on their own most of the time, but a run where every agent finishes
+    # a cheap turn together walks straight back into the herd it started in.
+    [ "$STAGGER" -gt 0 ] && sleep $(( (RANDOM % STAGGER) + 1 ))
     # Publish the latest score for the host-side sampler. Best of whatever the
     # agents last measured — any one of them is representative, since they all
     # score the same shared tree.

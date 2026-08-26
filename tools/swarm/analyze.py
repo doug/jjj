@@ -144,6 +144,34 @@ def analyze_problem_design(records):
     else:
         print("  no problem drew a solution from a second agent")
 
+    # Why work was thrown away, which is a different question from how much.
+    # Criticism eliminating a conjecture is the method working; identical effort
+    # racing and losing is pure waste. One run withdrew 47 solutions, of which
+    # 40 were "superseded, submitted first with an equivalent fix" and exactly
+    # one was refuted.
+    lost, refuted, other = 0, 0, 0
+    for r in records:
+        if r["cmd"] != "solution withdraw" or r["exit"] != 0:
+            continue
+        argv = r["argv"]
+        why = ""
+        for i, a in enumerate(argv):
+            if a == "--rationale" and i + 1 < len(argv):
+                why = argv[i + 1].lower()
+        if any(k in why for k in ("supersed", "duplicate", "same as", "already",
+                                  "redundant", "covered by", "equivalent")):
+            lost += 1
+        elif any(k in why for k in ("wrong", "incorrect", "breaks", "fails",
+                                    "regress", "critique")):
+            refuted += 1
+        else:
+            other += 1
+    if lost or refuted:
+        print(f"  withdrawn because: {lost} lost a race, {refuted} refuted, "
+              f"{other} unexplained")
+        if lost > refuted * 3:
+            print("    -> the waste is duplicated effort, not criticism working")
+
     if created:
         pct = 100 * withdrawn // created
         note = ("— concentration, not competition: agents piled onto the same "
