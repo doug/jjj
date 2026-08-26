@@ -165,7 +165,16 @@ cmd_init() {
                 || { cat "$SWARM_ROOT/logs/seed.log"; die "seeding failed"; }
             grep -E '^(baseline|problems)' "$SWARM_ROOT/logs/seed.log" | sed 's/^/  /'
             ;;
-        *) die "unknown target '$target' (expected toy, sql, sqlperf, gophics, gophicswasm or jjj)" ;;
+        synth)
+            # One seeded problem, on purpose: decomposition is the thing under
+            # test, not a preliminary to it.
+            info "seeding the synthetic decomposition target"
+            "$SWARM_DIR/targets/synth/seed.sh" "$SEED" "$REPO_ROOT" "$JJJ_BIN" \
+                >"$SWARM_ROOT/logs/seed.log" 2>&1 \
+                || { cat "$SWARM_ROOT/logs/seed.log"; die "seeding failed"; }
+            grep -E '^(baseline|problems)' "$SWARM_ROOT/logs/seed.log" | sed 's/^/  /'
+            ;;
+        *) die "unknown target '$target' (expected toy, sql, sqlperf, gophics, gophicswasm, synth or jjj)" ;;
     esac
 
     # The skill is half of what is under test, so it ships inside the repo the
