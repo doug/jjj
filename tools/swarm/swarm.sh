@@ -335,7 +335,25 @@ cmd_start() {
     echo "  sampling every $(( ${SWARM_SAMPLE_INTERVAL:-300} / 60 ))m to $SWARM_ROOT/trajectory.tsv"
 
     if [ "$stop_when_done" = 1 ]; then
-        SWARM_WATCHDOG_PATIENCE="${SWARM_WATCHDOG_PATIENCE:-5}" \
+        # A watchdog that cannot fire before the deadline is decoration. With
+        # patience 60 at a 120s poll it needs two hours of no movement, which on
+        # a two-hour run is never: one trial reached its ceiling at minute 40 and
+        # then sat there for eighty more, watchdog counting stable=27/60 as the
+        # deadline arrived.
+        local wd_patience="${SWARM_WATCHDOG_PATIENCE:-5}"
+        local wd_interval="${SWARM_WATCHDOG_INTERVAL:-120}"
+        if [ "$hours" != "0" ]; then
+            local budget=$(( $(printf '%.0f' "$(echo "$hours * 3600" | bc -l 2>/dev/null || echo 0)") ))
+            local needed=$(( wd_patience * wd_interval ))
+            if [ "$budget" -gt 0 ] && [ "$needed" -ge "$budget" ]; then
+                local capped=$(( budget / wd_interval / 2 ))
+                [ "$capped" -lt 3 ] && capped=3
+                info "watchdog patience $wd_patience would need $((needed/60))m of stillness on a $((budget/60))m run; using $capped"
+                wd_patience="$capped"
+            fi
+        fi
+        SWARM_WATCHDOG_PATIENCE="$wd_patience" \
+        SWARM_WATCHDOG_INTERVAL="$wd_interval" \
         nohup "$SWARM_DIR/watchdog.sh" "$SWARM_ROOT" >"$SWARM_ROOT/logs/watchdog.log" 2>&1 &
         echo "$!" > "$SWARM_ROOT/watchdog.pid"
         echo "  watchdog running: will stop the fleet once the work converges"
