@@ -275,6 +275,22 @@ cmd_start() {
             # is reproducible and two runs differ only in this. Critics keep
             # their own brief; the question is whether *builders* searching from
             # different priors get stuck less often than six copies of one.
+            # Exactly one integrator, and only when the merge gate is on.
+            #
+            # Integration used to be something every agent did at the top of its
+            # turn: whoever noticed an approved solution first merged it. That
+            # is not a decision, it is a race, and it shows — seven rival
+            # solutions to one problem were merged and withdrawn in whatever
+            # order agents happened to wake up.
+            #
+            # Choosing among solutions that have survived criticism is a
+            # judgement someone should make deliberately, looking at all the
+            # candidates and the objections against each. So one agent does it,
+            # and nobody else merges.
+            if [ "${SWARM_MERGE_GATE:-0}" = "1" ] && [ "$p" -eq "$pods" ] \
+               && [ "$a" -eq "$agents" ]; then
+                role="integrator"
+            fi
             if [ "$STRATEGIES" = 1 ] && [ "$role" = "builder" ]; then
                 local idx=$(( ( (p - 1) * agents + a - 1 ) % ${#STRATEGY_NAMES[@]} ))
                 strategy="${STRATEGY_NAMES[$idx]}"

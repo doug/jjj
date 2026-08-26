@@ -152,6 +152,13 @@ around it:
     jjj rank set A B C --gap B:XL               # "everything under B is a
                                                 #  different league"
 
+A ranking is a judgement, not a measurement. It says what you think will matter
+to what comes after — what unblocks other work, what you will regret not knowing
+early, what is foundational rather than merely large. The biggest number today
+is often not the top of the list. That judgement is yours to make and yours to
+be wrong about; it is not a critique of anyone and nobody has to agree, because
+every agent's ordering is aggregated rather than overwritten.
+
 This matters more than it sounds. In one run nobody ranked anything, six agents
 converged on the same problem while others sat untouched, and 62% of all
 solutions were withdrawn as superseded — the waste was concentration, not
@@ -206,12 +213,11 @@ Do ONE unit of work this turn, then stop. In priority order:
    You do not need to be assigned a review to sign off; take submitted work off
    the queue. You cannot sign off your own solution.
 
-   SIGNING OFF IS NOT APPROVING, and nothing merges until a solution is
-   Approved. Sign off and approve in one step:
-       jjj solution lgtm <id> --approve --rationale "ran ./score.sh: 29 -> 48"
-   It refuses while any critique is still open, which is what you want. An lgtm
-   you do not follow through leaves the work stranded on its branch — which is
-   where a whole trial's output ended up: eight reviewed solutions, none landed.
+   Sign off with `jjj solution lgtm <id> --rationale "ran ./score.sh: 29 -> 48"`.
+   You are not the accepting authority: one integrator reads the whole critique
+   record and decides what lands. Your sign-off is evidence for that decision,
+   not the decision — so say what you actually checked and what you could not
+   break, because that is what it is worth.
 2. If every submitted solution has your review, and an approved solution's
    problem is still open, solve the problem.
 3. Only if there is nothing to review at all, take new work with
@@ -309,8 +315,66 @@ EOF
     esac
 }
 
+read -r -d '' INTEGRATOR_PROMPT <<'PROMPT_EOF' || true
+You are the INTEGRATOR in a swarm. Other agents propose solutions and critique
+each other's; you decide what lands. You are the only one who merges to main.
+You have no memory of previous turns; read the state.
+
+Read SWARM.md for the target, and skills/jjj/SKILL.md for how to use jjj.
+
+You are the accepting authority. Critics raise objections; nobody but you turns
+a submitted solution into an accepted one. Work the queue in this order:
+
+1. READ THE OBJECTIONS FIRST. `jjj solution list --status submitted --json` is
+   your queue; `jjj critique list --status open --json` is what stands against
+   it. For each open critique, decide one thing: does it survive?
+
+       jjj critique dismiss <id>   # the objection is refuted — say why in a reply
+       jjj critique validate <id>  # the objection stands; the solution should go
+
+   Dismissing is not overruling. It is a claim that the objection is wrong, and
+   you have to be able to say how. An objection you cannot answer is one that
+   stands, and the solution does not land — tell the author what would change
+   your mind.
+
+2. ACCEPT WHAT SURVIVED. Once nothing open or upheld remains against it:
+
+       jjj solution approve <id> --rationale "what survived, and why it lands"
+
+   Where several solutions target the same problem, read them together before
+   accepting any. Surviving criticism is not the same as being the one to land:
+   accept one, and withdraw the rest with a rationale naming the winner —
+   `jjj solution withdraw <id> --rationale "superseded by <id>: <reason>"`.
+   Rejecting all of them is a legitimate outcome and a better one than landing
+   something you do not believe in.
+
+3. MERGE WHAT YOU ACCEPTED:
+
+       git fetch origin review-s-<id>
+       git merge FETCH_HEAD
+       ./verify.sh && ./score.sh
+       git push origin HEAD:refs/heads/main
+
+   If it does not merge or does not verify, that is information about the
+   solution, not just an obstacle: say so in a critique.
+
+4. IF THE QUEUE IS EMPTY, look at where the fleet is spending itself. If several
+   agents are converging on one problem while others go untouched, re-rank so
+   the untouched ones surface: `jjj rank move <problem> top`.
+
+Two things you are not. You are not a builder — do not write solutions, there
+are agents for that. And you are not a second critic: do not invent fresh
+objections at acceptance time that nobody raised during review. If you find a
+real problem nobody caught, raise it as a critique like anyone else and let it
+go back round; do not silently refuse to land work over an objection its author
+never got to answer.
+
+Report in one line what you landed, what you rejected, and why.
+PROMPT_EOF
+
 case "${SWARM_ROLE:-builder}" in
-    critic) PROMPT="$CRITIC_PROMPT" ;;
+    critic)     PROMPT="$CRITIC_PROMPT" ;;
+    integrator) PROMPT="$INTEGRATOR_PROMPT" ;;
     *)      PROMPT="$BUILDER_PROMPT" ;;
 esac
 PROMPT="$PROMPT$(strategy_brief "${SWARM_STRATEGY:-}")
@@ -401,7 +465,7 @@ while true; do
     # That measures six agents editing a shared branch, not an economy of
     # critique. `jjj solution submit` now publishes a review-s-<id> branch, so a
     # reviewer can read the actual diff — and approval can mean something.
-    if [ "${SWARM_MERGE_GATE:-0}" = "1" ]; then
+    if [ "${SWARM_MERGE_GATE:-0}" = "1" ] && [ "${SWARM_ROLE:-builder}" = "integrator" ]; then
         for sid in $(jjj solution list --status approved --json 2>/dev/null \
                      | python3 -c 'import json,sys
 try: print(" ".join(s["id"] for s in json.load(sys.stdin)))

@@ -167,6 +167,32 @@ jjj problem dissolve "$pid" --rationale "the measurement that motivated this was
 jjj problem duplicate "$pid" --of "$other"
 ```
 
+**Ranking and critique are different acts, and jjj keeps them apart on purpose.**
+
+A ranking is a *judgement about what will matter next* — what unblocks other
+work, what is foundational, what you would regret learning late. It is
+forward-looking, legitimately subjective, and aggregated across everyone rather
+than settled by argument: your ordering and mine both count, weighted by the
+cliffs each of us drew.
+
+A critique is the opposite in every respect. It is an attempt to *refute* a
+specific conjecture, and it either stands or is answered. Solutions are never
+scored, ranked or voted on — a solution passes because no objection against it
+survives:
+
+| critique status | effect on approval |
+|---|---|
+| `Open` | blocks |
+| `Valid` (upheld) | blocks |
+| `Addressed` (fixed) | passes |
+| `Dismissed` (refuted) | passes |
+
+So do not reach for a ranking to decide which solution is better. Raise the
+objection you actually have; if it cannot be answered, the solution should not
+land. Where several solutions survive criticism, choosing between them is an
+*integration* decision — someone looks at the survivors and the objections
+raised against each and picks one, or rejects them all.
+
 **Why it matters, measured.** In a four-hour trial with six agents and no
 ranking, five problems drew solutions from more than one agent — one drew seven
 solutions from six agents — while other problems went untouched, and 62% of all
