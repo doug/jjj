@@ -119,7 +119,21 @@ def analyze_problem_design(records):
     rivals = {k: v for k, v in per_problem.items() if len(set(v)) > 1}
     iterated = {k: v for k, v in per_problem.items()
                 if len(v) > 1 and len(set(v)) == 1}
-    withdrawn = sum(1 for r in records if r["cmd"] == "solution withdraw")
+    # Distinct solutions, and successes only. Counting *calls* against
+    # *successful creations* produced "33 of 24 withdrawn (137%)" — two
+    # different bases and a repeated withdrawal counted twice. A ratio over 100%
+    # is a measurement bug announcing itself; most are quieter than that.
+    def _ids(cmd):
+        out = set()
+        for r in records:
+            if r["cmd"] == cmd and r["exit"] == 0:
+                for a in r["argv"]:
+                    if len(a) > 8 and a[0].isalnum() and "-" in a:
+                        out.add(a)
+                        break
+        return out
+
+    withdrawn = len(_ids("solution withdraw"))
     created = sum(1 for r in records if r["cmd"] == "solution new" and r["exit"] == 0)
 
     if rivals:
