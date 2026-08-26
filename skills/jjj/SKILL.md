@@ -142,6 +142,40 @@ jjj solution approve "$sid" --rationale "burst accounting verified under load"
 `jjj solution attach` links whatever jj change is checked out *now*. Make the
 change first, then attach.
 
+## Say what you will do before you do it
+
+A solution starts *proposed*: a conjecture on the record with no implementation
+behind it. That state is the coordination mechanism, and it is the one most
+often skipped.
+
+```sh
+jjj next --claim                          # take it, so others can see it is held
+jjj solution new "Decode once per record, share across stages" \
+  --problem "$pid" \
+  --body "What I intend to change, why I think it works, what I expect it to
+          save. No code yet."
+
+# What everyone else is about to build:
+jjj solution list --status proposed
+# Who holds what, and whether the hold is still fresh:
+jjj problem list --json | jq -r '.[] | select(.assignee) | "\(.assignee) \(.claimed_at) \(.title)"'
+```
+
+Only then implement, `jjj solution attach`, and `jjj solution submit`.
+
+**Why this ordering.** The expensive duplication is the kind discovered after
+the work is written. In one trial 62% of solutions were withdrawn, most of them
+as "superseded by what landed while I was working" — six agents converging on
+one problem while others went untouched. Care does not prevent that; announcing
+intent early enough for someone else to notice does. A proposed solution costs a
+sentence and can save a turn.
+
+Claims are **leases**, not locks. `claimed_at` carries the age, and a claim older
+than the TTL is fair game — so a dead agent's work returns to the pool rather
+than being held forever. Two agents *may* both claim the same problem: that is
+allowed on purpose, because rival conjectures are the point. What is wasteful is
+two agents building the *same* conjecture without knowing.
+
 ## Framing the work is the work
 
 The hard part of a swarm is not doing the work in parallel — one agent with more

@@ -143,6 +143,36 @@ Do ONE unit of work this turn, then stop. In priority order:
 Your job is to make ./score.sh go up. Reviewing is not your job unless there is
 genuinely nothing left to build.
 
+SAY WHAT YOU ARE GOING TO DO BEFORE YOU DO IT.
+
+The expensive kind of duplicated work is the kind discovered after it is
+written: in one trial 62% of solutions were withdrawn, most of them as
+"superseded by what landed while I was working". Two agents cannot avoid that by
+being careful; they can only avoid it by saying what they intend early enough
+for the other to notice.
+
+So the first thing you do on a problem is publish the plan, not the code:
+
+    jjj next --claim                       # take it, so others see it is held
+    jjj solution new "Decode once per record, share across stages" \
+        --problem <id> \
+        --body "What I am going to change, why I think it works, and what I
+                expect it to save. No code yet."
+
+That creates a *proposed* solution — a conjecture on the record with no
+implementation behind it. Others can read it, critique it, or realise it is
+theirs and go elsewhere, all before anyone has spent a turn writing it.
+
+Then, and only then, implement it, `jjj solution attach <id>`, and
+`jjj solution submit <id>`.
+
+READ THE OTHER PROPOSALS FIRST. `jjj solution list --status proposed` is what
+the rest of the fleet is about to build. If yours is the same idea, do not race
+it — critique theirs if you think it is wrong, or take something nobody is on.
+`jjj problem list --json` carries `assignee` and `claimed_at`, so you can see
+who holds what and whether the hold is fresh; a claim older than an hour is
+stale and fair game.
+
 BEFORE TAKING WORK, CHECK WHERE IT SITS. `jjj rank show` gives the fleet's
 agreed priority order. If you disagree with it, say so rather than working
 around it:
@@ -602,6 +632,38 @@ if d:
     print(f"  awaiting review ({len(d)}):")
     for x in d[:5]:
         print(f"    {x[\"id\"][:8]}  {x[\"title\"][:66]}")
+' 2>/dev/null)
+$(jjj solution list --status proposed --json 2>/dev/null | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin) or []
+except Exception:
+    d = []
+if d:
+    print(f"  approaches already proposed ({len(d)}) — read these before starting:")
+    for x in d[:6]:
+        who = x.get("assignee") or x.get("author") or "?"
+        print(f"    {x[\"id\"][:8]}  @{who}: {x[\"title\"][:58]}")
+' 2>/dev/null)
+$(jjj problem list --json 2>/dev/null | python3 -c '
+import json, sys, datetime
+try:
+    d = json.load(sys.stdin) or []
+except Exception:
+    d = []
+held = [p for p in d if p.get("assignee")]
+if held:
+    now = datetime.datetime.now(datetime.timezone.utc)
+    print(f"  claimed right now ({len(held)}):")
+    for p in held[:6]:
+        age = ""
+        if p.get("claimed_at"):
+            try:
+                t = datetime.datetime.fromisoformat(p["claimed_at"])
+                age = f" ({int((now - t).total_seconds() // 60)}m ago)"
+            except Exception:
+                pass
+        print(f"    @{p[\"assignee\"]}{age}: {p[\"title\"][:52]}")
 ' 2>/dev/null)
 $(jjj critique list --status open --json 2>/dev/null | python3 -c '
 import json, sys
