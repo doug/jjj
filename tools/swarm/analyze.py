@@ -16,6 +16,7 @@ Usage: analyze.py <swarm-root>
 """
 
 import collections
+import re
 import json
 import subprocess
 import sys
@@ -149,7 +150,7 @@ def analyze_problem_design(records):
     # racing and losing is pure waste. One run withdrew 47 solutions, of which
     # 40 were "superseded, submitted first with an equivalent fix" and exactly
     # one was refuted.
-    lost, refuted, other = 0, 0, 0
+    lost, selected, refuted, other = 0, 0, 0, 0
     for r in records:
         if r["cmd"] != "solution withdraw" or r["exit"] != 0:
             continue
@@ -158,24 +159,49 @@ def analyze_problem_design(records):
         for i, a in enumerate(argv):
             if a == "--rationale" and i + 1 < len(argv):
                 why = argv[i + 1].lower()
-        if any(k in why for k in ("supersed", "duplicate", "same as", "already",
-                                  "redundant", "covered by", "equivalent")):
+        superseded = any(k in why for k in ("supersed", "duplicate", "same as",
+                                            "already", "redundant", "covered by",
+                                            "equivalent"))
+        # Two different reasons hide under "superseded", and only one is waste.
+        # "Submitted first with an equivalent fix" is duplicated effort. "Theirs
+        # reaches 200,004 ops against my 280,004" is the method working: rival
+        # conjectures, measured, the better one kept. A rationale that cites
+        # competing numbers is making a comparison, not conceding a race.
+        compared = superseded and (
+            re.search(r"\d[\d,]{3,}", why) is not None
+            or any(k in why for k in ("better", "further", "vs ", "than mine",
+                                      "outperform", "goes further"))
+        )
+        if compared:
+            selected += 1
+        elif superseded:
             lost += 1
         elif any(k in why for k in ("wrong", "incorrect", "breaks", "fails",
                                     "regress", "critique")):
             refuted += 1
         else:
             other += 1
-    if lost or refuted:
-        print(f"  withdrawn because: {lost} lost a race, {refuted} refuted, "
+    if lost or refuted or selected:
+        print(f"  withdrawn because: {lost} duplicated another, "
+              f"{selected} lost on the merits, {refuted} refuted, "
               f"{other} unexplained")
-        if lost > refuted * 3:
-            print("    -> the waste is duplicated effort, not criticism working")
+        if lost > (selected + refuted):
+            print("    -> the waste is duplicated effort, not selection working")
+        elif selected + refuted > 0:
+            print("    -> most discarded work lost to a better idea or an "
+                  "objection, which is the method")
 
     if created:
         pct = 100 * withdrawn // created
-        note = ("— concentration, not competition: agents piled onto the same "
-                "problems while others went untouched" if pct > 35 else "")
+        # A high withdrawal rate is not automatically waste, and reading it that
+        # way was a mistake: 47 withdrawals once looked like duplicated effort
+        # and were mostly rival conjectures losing on measured merit. The rate
+        # only indicates a problem when the *reasons* say duplication.
+        note = ""
+        if lost > (selected + refuted):
+            note = "— mostly duplicated effort, which is waste"
+        elif pct > 35:
+            note = "— mostly rival conjectures being eliminated, which is the method"
         print(f"  {withdrawn} of {created} solutions withdrawn ({pct}%) {note}")
 
 
