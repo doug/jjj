@@ -52,6 +52,8 @@ while [ $# -gt 0 ]; do
 done
 
 JJJ="${JJJ_BIN:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/target/release/jjj}"
+# shellcheck disable=SC1091
+. "$(dirname "${BASH_SOURCE[0]}")/lib-remote.sh"
 log() { printf '[%s] watchdog: %s\n' "$(date +%H:%M:%S)" "$*"; }
 
 log "watching $ROOT (every ${INTERVAL}s, patience $PATIENCE)"
@@ -59,8 +61,50 @@ log "watching $ROOT (every ${INTERVAL}s, patience $PATIENCE)"
 last_score=""
 stable=0
 
+# What the last full poll saw, so an unchanged fingerprint can be answered from
+# memory instead of from another clone.
+last_fingerprint=""
+escalations=0
+oldest_escalation=0
+escalation_measured_at=0
+open_problems=1
+awaiting_review=1
+
 while [ -n "$(podman ps -q --filter 'name=swarm-' 2>/dev/null)" ]; do
     sleep "$INTERVAL"
+
+    # Nothing has been pushed since the last poll, so a clone would produce a
+    # byte-identical tree and the scorer a byte-identical number. Skip all of it
+    # and answer from what the last poll measured — this is the whole of M4 on
+    # the watchdog side, and it is sound rather than merely cheap: the refs
+    # *determine* the answers.
+    fingerprint="$(remote_fingerprint "$ROOT/remote.git")"
+    if [ -n "$fingerprint" ] && [ "$fingerprint" = "$last_fingerprint" ]; then
+        stable=$((stable + 1))
+        # Age still advances while nothing moves — that is the point of a grace
+        # period — so extrapolate it rather than re-measuring.
+        if [ "${escalations:-0}" -gt 0 ] && [ "${escalation_measured_at:-0}" -gt 0 ]; then
+            oldest_escalation=$(( oldest_escalation + ( $(date +%s) - escalation_measured_at ) ))
+            escalation_measured_at=$(date +%s)
+            log "!! $escalations open escalation(s); oldest ${oldest_escalation}s — a person is needed"
+            if [ "$oldest_escalation" -ge "$ESCALATION_GRACE" ]; then
+                log "escalation unanswered for ${oldest_escalation}s (grace ${ESCALATION_GRACE}s)"
+                log "stopping the fleet rather than spending the rest of the run blocked"
+                touch "$ROOT/STOP"
+                exit 0
+            fi
+        fi
+        log "unchanged (score=$last_score stable=$stable/$PATIENCE) — no clone needed"
+        if [ "$stable" -ge "$PATIENCE" ] && [ "${open_problems:-1}" -eq 0 ] \
+           && [ "${awaiting_review:-1}" -eq 0 ]; then
+            log "converged: nothing has moved and nothing is open"
+            log "stopping the fleet"
+            touch "$ROOT/STOP"
+            exit 0
+        fi
+        continue
+    fi
+    last_fingerprint="$fingerprint"
 
     work="$(mktemp -d)"
     if ! git clone -q "$ROOT/remote.git" "$work/repo" 2>/dev/null; then
@@ -76,6 +120,7 @@ while [ -n "$(podman ps -q --filter 'name=swarm-' 2>/dev/null)" ]; do
     awaiting_review=0
     escalations=0
     oldest_escalation=0
+    escalation_measured_at=$(date +%s)
     if (cd "$work/repo" && jj git init --colocate >/dev/null 2>&1 \
         && jj config set --repo user.name watchdog >/dev/null 2>&1 \
         && jj config set --repo user.email watchdog@invalid >/dev/null 2>&1 \

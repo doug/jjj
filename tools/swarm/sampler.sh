@@ -9,7 +9,11 @@
 # time-series at all and the question was unanswerable after the fact.
 #
 # Cheap by construction: it reads the shared metadata through a throwaway clone
-# and never touches an agent's repo.
+# and never touches an agent's repo. Cheaper still when nothing is happening —
+# a container run per tick is the wrong price for a fleet that has stopped
+# moving, so a tick whose ref fingerprint matches the last one reuses the
+# previous counts and starts no container. The time series keeps its regular
+# rows either way; only the cost of producing them goes away.
 #
 # Usage: sampler.sh <swarm-root> [interval-seconds]
 
@@ -21,6 +25,8 @@ OUT="$ROOT/trajectory.tsv"
 # Match swarm.sh's namespacing so a sampler watches only its own workbench.
 NS="${SWARM_NS:-$(basename "$ROOT" | sed 's/^\.//; s/^jjj-swarm$/swarm/; s/^jjj-//')}"
 IMAGE="${SWARM_IMAGE:-jjj-swarm-agent:0.5.1}"
+# shellcheck disable=SC1091
+. "$(dirname "${BASH_SOURCE[0]}")/lib-remote.sh"
 
 # `agent_score` is the last score any agent measured in ITS OWN tree, which is
 # not the shared branch's score: under the merge gate an agent's work sits on
@@ -37,6 +43,8 @@ started=$(date +%s)
 # the trial with no trajectory at all, which is the exact failure this script
 # exists to prevent.
 misses=0
+last_fingerprint=""
+stats=""
 
 while true; do
     if [ -e "$ROOT/STOP" ]; then
@@ -60,7 +68,16 @@ while true; do
         continue
     fi
 
-    stats=$(podman run --rm -u swarm -v "$ROOT:/swarm:rw" --entrypoint /bin/bash "$IMAGE" -c '
+    # Every effect the fleet can have on shared state is a ref update in the
+    # bare remote, so an unchanged fingerprint means the counts below are
+    # unchanged too. Reuse them rather than starting a container to be told the
+    # same four numbers.
+    fingerprint="$(remote_fingerprint "$ROOT/remote.git")"
+    if [ -n "$fingerprint" ] && [ "$fingerprint" = "$last_fingerprint" ] && [ -n "$stats" ]; then
+        : # keep the previous $stats
+    else
+        last_fingerprint="$fingerprint"
+        stats=$(podman run --rm -u swarm -v "$ROOT:/swarm:rw" --entrypoint /bin/bash "$IMAGE" -c '
         git clone -q /swarm/remote.git /tmp/s 2>/dev/null && cd /tmp/s || exit 1
         jj git init --colocate >/dev/null 2>&1
         export JJJ_USER=sampler
@@ -71,6 +88,7 @@ while true; do
         co=$(jjj.real critique list --status open --json 2>/dev/null | python3 -c "import json,sys;print(len(json.load(sys.stdin)))" 2>/dev/null || echo 0)
         printf "%s\t%s\t%s\t%s\n" "$po" "$ss" "$sa" "$co"
     ' 2>/dev/null | tail -1)
+    fi
 
     log="$ROOT/jjj-invocations.jsonl"
     calls=$(wc -l < "$log" 2>/dev/null | tr -d ' ')

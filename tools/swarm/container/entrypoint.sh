@@ -716,12 +716,52 @@ except Exception: pass' 2>/dev/null); do
         log "iter $iter scorer gate FAILED: $(tail -2 /tmp/score.err | tr '\n' ' ')"
     fi
 
-    # If there is no work and nothing to review, wait rather than paying for a
-    # model call to be told there is nothing to do. A finished backlog otherwise
-    # costs exactly as much as a busy one: after the score maxed out at minute
-    # 35 of a one-hour run, nine agents made 4,100 further jjj calls for no gain.
-    if [ "$(jjj next --json 2>/dev/null)" = "null" ] \
-       && [ -z "$(jjj solution list --status submitted --json 2>/dev/null | tr -d '[] \n')" ]; then
+    # The turn-end backstop.
+    #
+    # Idling is right only when there is genuinely nothing to do, and `jjj next`
+    # returning null does not establish that: work sits in states it does not
+    # offer. A submitted solution nobody has read, an open critique nobody has
+    # answered, an approved solution whose problem is still open — each is real
+    # work, and an agent that slept through them would be idle beside a queue.
+    #
+    # So enumerate the states explicitly and say which one held. Waiting is
+    # still the right move when they are all empty: after the score maxed out at
+    # minute 35 of a one-hour run, nine agents made 4,100 further jjj calls for
+    # no gain, and a model call to be told there is nothing to do costs the same
+    # as a productive one.
+    # `jjj next` is the only authority on "is there work *for me*" — it honours
+    # another agent's live claim, where a raw count of open problems does not,
+    # and a false positive here costs a full model call to be told there is
+    # nothing to do.
+    pending_reason=""
+    [ "$(jjj next --json 2>/dev/null)" != "null" ] && pending_reason="work is queued"
+
+    # Everything else comes from one `status --json`, whose summary already
+    # carries the counts. Three separate list calls per idle check was three
+    # times the price of the same answer.
+    if [ -z "$pending_reason" ]; then
+        pending_reason="$(jjj status --json 2>/dev/null | python3 -c "
+import json, sys
+try:
+    s = json.load(sys.stdin).get('summary', {})
+except Exception:
+    # Unreadable status is not evidence of an empty queue. Say so, and let the
+    # turn proceed: a spurious turn is cheaper than an agent that sleeps
+    # through a full queue because one command hiccuped.
+    print('status unreadable; not assuming idle'); raise SystemExit
+if s.get('review_solutions'):
+    print('a solution is awaiting review')
+elif s.get('open_critiques'):
+    print('a critique is unanswered')
+" 2>/dev/null)"
+    fi
+
+    if [ -z "$pending_reason" ] && [ "${SWARM_ROLE:-builder}" = "integrator" ] \
+       && [ -n "$(jjj solution list --status approved --json 2>/dev/null | tr -d '[] \n')" ]; then
+        pending_reason="approved work may not have been merged"
+    fi
+
+    if [ -z "$pending_reason" ]; then
         idle=$((idle + 1))
         # An empty backlog is not the same as a finished job. A four-hour run
         # cleared its seven seeded problems in the first hour and then idled for
@@ -758,6 +798,7 @@ Two or three good problems is a better turn than one mediocre solution."
         sleep $(( idle < 6 ? idle * 30 : 180 ))
         continue
     fi
+    [ "$idle" -gt 0 ] && log "iter $iter resuming: $pending_reason"
     idle=0
 
     log "iter $iter begin (score $before)"
