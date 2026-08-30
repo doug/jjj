@@ -20,6 +20,7 @@ pub mod domain;
 pub mod embeddings;
 pub mod entity_type;
 pub mod error;
+pub mod escalation;
 pub mod id;
 pub mod identity;
 pub mod jj;

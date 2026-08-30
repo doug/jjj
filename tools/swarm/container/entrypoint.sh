@@ -263,6 +263,34 @@ whether a change ought to help. Say the numbers in your solution, and put your
 reasoning in the body: `jjj solution new "Title" --body "..."` (or `--body -`
 to read stdin for anything long). A title is a label, not an argument.
 
+WHEN ONLY A PERSON CAN UNBLOCK YOU, SAY SO:
+
+    jjj escalate "the reason, stated as what a human has to do" [--about <id>]
+
+Escalate for exactly these:
+  * a credential that is dead or missing, or any authentication you cannot fix
+  * a step that is destructive or security-sensitive and wants a decision
+  * a blocker you have genuinely exhausted — you tried, you read the state, and
+    nothing in the repository can resolve it
+  * the target itself being broken: ./score.sh cannot run at all, the tree does
+    not build from a clean clone, the fixture is missing
+
+DO NOT escalate any of these:
+  * routine progress, or "I finished a turn"
+  * something you retried and it worked
+  * a failing test you can fix
+  * a solution being critiqued, or a critique you disagree with — that is the
+    method working, not a blockage
+  * anything another agent could pick up
+
+That second list is the important one. An escalation channel carrying routine
+progress is a channel nobody reads, and the whole point is that a person looks
+when it fires. One open escalation stops the fleet after a grace period, so
+raising one spuriously costs everybody the rest of the run.
+
+Before raising one, check whether it is already raised: `jjj escalate` lists what
+is open. Do not add a second escalation for the same cause.
+
 YOUR CODE ONLY REACHES THE OTHERS IF IT IS APPROVED. Working, submitting and
 being reviewed is the whole loop:
   jjj solution new "..." --body "what you changed and why" --problem <id>
@@ -337,6 +365,34 @@ without it. That cuts both ways: waving through a change that lowers the score,
 or that makes a number look good by removing a correctness check, costs
 everyone. ./score.sh already refuses to score a tree that fails the sync
 correctness tests; if it prints 0, the change is broken, not fast.
+
+WHEN ONLY A PERSON CAN UNBLOCK YOU, SAY SO:
+
+    jjj escalate "the reason, stated as what a human has to do" [--about <id>]
+
+Escalate for exactly these:
+  * a credential that is dead or missing, or any authentication you cannot fix
+  * a step that is destructive or security-sensitive and wants a decision
+  * a blocker you have genuinely exhausted — you tried, you read the state, and
+    nothing in the repository can resolve it
+  * the target itself being broken: ./score.sh cannot run at all, the tree does
+    not build from a clean clone, the fixture is missing
+
+DO NOT escalate any of these:
+  * routine progress, or "I finished a turn"
+  * something you retried and it worked
+  * a failing test you can fix
+  * a solution being critiqued, or a critique you disagree with — that is the
+    method working, not a blockage
+  * anything another agent could pick up
+
+That second list is the important one. An escalation channel carrying routine
+progress is a channel nobody reads, and the whole point is that a person looks
+when it fires. One open escalation stops the fleet after a grace period, so
+raising one spuriously costs everybody the rest of the run.
+
+Before raising one, check whether it is already raised: `jjj escalate` lists what
+is open. Do not add a second escalation for the same cause.
 
 Useful: `jjj solution list --status submitted --json` is your queue;
 `jjj events --user <agent>` shows what another agent has been doing.
@@ -452,6 +508,17 @@ a submitted solution into an accepted one. Work the queue in this order:
 4. IF THE QUEUE IS EMPTY, look at where the fleet is spending itself. If several
    agents are converging on one problem while others go untouched, re-rank so
    the untouched ones surface: `jjj rank move <problem> top`.
+
+WHEN ONLY A PERSON CAN UNBLOCK THE FLEET, SAY SO:
+
+    jjj escalate "what a human has to do" [--about <id>]
+
+You see this before anyone: nothing merging, every submission failing to verify,
+the target itself broken from a clean clone. Escalate that. Do not escalate a
+busy queue, a solution you rejected, or a critique you dismissed — those are the
+method working. Check `jjj escalate` first; do not raise a second one for a
+cause already reported. One open escalation stops the fleet after a grace
+period, so a spurious one costs everybody the rest of the run.
 
 Two things you are not. You are not a builder — do not write solutions, there
 are agents for that. And you are not a second critic: do not invent fresh

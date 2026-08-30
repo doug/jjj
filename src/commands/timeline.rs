@@ -129,6 +129,8 @@ fn format_event_description(event: &Event) -> String {
             format!("{} recorded{}", event.entity, title)
         }
         EventType::FindingSuperseded => format!("{} superseded", event.entity),
+        EventType::EscalationRaised => "escalated to a human".to_string(),
+        EventType::EscalationCleared => "escalation cleared".to_string(),
         EventType::MilestoneCreated => format!("{} created", event.entity),
         EventType::MilestoneCompleted => format!("{} completed", event.entity),
         EventType::ConflictResolved => format!("{} conflict resolved", event.entity),

@@ -295,6 +295,10 @@ fn populate_entity_vars(
         EventType::MilestoneCreated
         | EventType::MilestoneCompleted
         | EventType::ConflictResolved
+        // An escalation's entity id names no entity — it is the escalation
+        // itself — so there is nothing to load variables from.
+        | EventType::EscalationRaised
+        | EventType::EscalationCleared
         | EventType::GithubIssueCreated
         | EventType::GithubIssueImported
         | EventType::GithubIssueClosed

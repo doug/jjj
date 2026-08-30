@@ -4,6 +4,7 @@ pub mod conflicts;
 pub mod critique;
 pub mod db;
 pub mod doctor;
+pub mod escalate;
 pub mod events;
 pub mod fetch;
 pub mod finding;
@@ -103,6 +104,15 @@ fn execute_with_context(ctx: &CommandContext, command: Commands) -> Result<()> {
             json,
             claim,
         } => next::execute(ctx, top, mine, json, claim),
+
+        // Escalation: the swarm asking for a person
+        Commands::Escalate {
+            reason,
+            about,
+            list,
+            clear,
+            json,
+        } => escalate::execute(ctx, reason, about, list, clear, json),
 
         // Overlap detection
         Commands::Overlaps { json } => overlaps::execute(ctx, json),

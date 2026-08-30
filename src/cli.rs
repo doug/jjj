@@ -143,6 +143,35 @@ pub enum Commands {
         json: bool,
     },
 
+    /// Say a person is needed — the one signal a swarm cannot resolve itself
+    ///
+    /// With no arguments, lists what is currently blocked. An escalation is for
+    /// something only a human can do: a dead credential, a destructive step, a
+    /// blocker the playbook does not cover. It is NOT for routine progress,
+    /// retries, or anything the fleet will fix by itself — a channel carrying
+    /// those is a channel nobody reads.
+    #[command(display_order = 4)]
+    Escalate {
+        /// What a person has to do. Omit to list open escalations.
+        reason: Option<String>,
+
+        /// Entities this concerns — any kind (repeatable)
+        #[arg(long = "about", value_name = "ID")]
+        about: Vec<String>,
+
+        /// List open escalations instead of raising one
+        #[arg(long)]
+        list: bool,
+
+        /// Mark an escalation resolved, by id or prefix
+        #[arg(long, value_name = "ID")]
+        clear: Option<String>,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
     /// Show files touched by multiple in-progress solutions (conflict detection)
     #[command(display_order = 3)]
     Overlaps {

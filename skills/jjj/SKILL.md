@@ -142,6 +142,32 @@ is what stops the same investigation being run a third time.
 | You think someone else's solution is wrong | Critique |
 | You found a better number than an earlier finding | Finding, then `supersede` |
 
+## When only a person can unblock you
+
+`jjj escalate "<what a human has to do>"` is the one signal the fleet cannot
+resolve itself. It exists because a fleet once failed 400 consecutive turns over
+6.8 hours on an expired credential with no way to say so — every container up,
+every log green, the score frozen.
+
+```sh
+jjj escalate "Production credentials are missing; I cannot deploy" --about "$pid"
+jjj escalate                      # what is currently blocked
+jjj escalate --clear <id>         # after a person has acted
+```
+
+Escalate for: a dead or missing credential, a destructive or security-sensitive
+step wanting a decision, a blocker you have genuinely exhausted, or the target
+itself being broken.
+
+**Do not** escalate routine progress, a retry that worked, a test you can fix, or
+a critique you disagree with — that last one is the method working. The
+blacklist matters more than the whitelist: a channel carrying routine progress
+is a channel nobody reads. Check `jjj escalate` before raising one; a second
+escalation for the same cause buries the first.
+
+Open escalations lead `jjj status` and appear in `jjj status --json` under
+`escalations`, so a supervisor reads one field rather than scraping logs.
+
 ## Write the argument in the body, not the title
 
 Every entity has one free-form body: a problem's `description`, a solution's

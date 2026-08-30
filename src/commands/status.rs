@@ -73,7 +73,12 @@ pub fn execute(
             })
             .collect();
 
+        // Escalations are first in the object as well as first on screen: a
+        // supervisor script reading this should not have to know to look.
+        let escalations = crate::escalation::open_escalations(&store.list_events_cached()?);
+
         let output = serde_json::json!({
+            "escalations": escalations,
             "active_solution": active_json,
             "items": items,
             "total_count": total_count,
@@ -82,6 +87,7 @@ pub fn execute(
                 "open_problems": open_problems,
                 "review_solutions": review_solutions,
                 "open_critiques": open_critiques,
+                "open_escalations": escalations.len(),
             },
             "overlaps": overlaps_json,
         });
@@ -105,6 +111,35 @@ pub fn execute(
             let prefix = prefix_map.get(id).copied().unwrap_or(id);
             format_with_type_prefix(entity_type, prefix)
         };
+
+        // 0. Escalations, above everything. A swarm that has stopped being able
+        //    to make progress must not have that fact ranked below its next
+        //    actions — that is exactly how a 6.8-hour outage went unnoticed.
+        let open = crate::escalation::open_escalations(&store.list_events_cached()?);
+        if !open.is_empty() {
+            let now = chrono::Utc::now();
+            println!(
+                "!! {} open escalation{} — a person is needed",
+                open.len(),
+                if open.len() == 1 { "" } else { "s" }
+            );
+            for e in &open {
+                let age = e.age(now);
+                let waited = if age.num_hours() >= 1 {
+                    format!("{}h", age.num_hours())
+                } else {
+                    format!("{}m", age.num_minutes().max(0))
+                };
+                println!(
+                    "   {} [{} ago, {}] {}",
+                    crate::display::short_id(&e.id),
+                    waited,
+                    e.by,
+                    e.reason
+                );
+            }
+            println!("   Clear with: jjj escalate --clear <id>\n");
+        }
 
         // 1. Active Solution section
         let current_change = jj_client.current_change_id().ok();

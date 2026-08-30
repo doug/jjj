@@ -391,6 +391,28 @@ cmd_health() {
 
     echo "health:"
 
+    # 0. Has anyone asked for a person? Above every other check, because it is
+    #    the only one the fleet cannot resolve by itself — and because the
+    #    outage this whole function exists for was precisely a fleet with no way
+    #    to say "I am blocked on something only you can fix".
+    if [ -d "$SEED/.jj" ] && [ -x "$JJJ_BIN" ]; then
+        ( cd "$SEED" && "$JJJ_BIN" fetch >/dev/null 2>&1 ) || true
+        local esc_json esc_n
+        esc_json="$(cd "$SEED" && "$JJJ_BIN" escalate --json 2>/dev/null || echo '[]')"
+        esc_n="$(printf '%s' "$esc_json" | grep -c '"reason"' || true)"
+        if [ "${esc_n:-0}" -gt 0 ]; then
+            echo "  escalation: !! $esc_n open — a person is needed"; warn=1
+            printf '%s' "$esc_json" | python3 -c "
+import json, sys
+try:
+    for r in json.load(sys.stdin):
+        print('                {} [{}] {}'.format(r['id'][:8], r['by'], r['reason']))
+except Exception:
+    pass" 2>/dev/null
+            echo "              clear with: (cd $SEED && jjj escalate --clear <id>)"
+        fi
+    fi
+
     # 1. Are turns succeeding? An expired host login fails every turn in about a
     #    second, which quadratic backoff never escapes.
     # A recent window, not the whole run. Cumulative counts stay red forever

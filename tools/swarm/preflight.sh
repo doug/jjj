@@ -122,6 +122,25 @@ d = json.load(open(\"/tmp/n.json\")) or {}
 print(d.get(\"entity_id\") or d.get(\"id\") or \"\")" 2>/dev/null)
 [ -n "$pid" ] && say claim ok || say claim fail
 
+# Evidence, and a conjecture that cites it. The whole reason findings exist is
+# that agents were filing investigations as solutions; if this path does not work
+# end to end they will go straight back to doing that.
+jjj.real finding new "$pid" "Preflight measured the workbench" \
+    --method "preflight.sh, scripted" --body "A rehearsal measurement." \
+    --json >/tmp/f.json 2>/dev/null
+fid=$(python3 -c "import json;print(json.load(open(\"/tmp/f.json\"))[\"id\"])" 2>/dev/null)
+[ -n "$fid" ] && say finding ok || say finding fail
+
+# The escalation channel, raised and cleared. Its failure mode is silence, so it
+# is exactly the kind of path that stays broken until something exercises it.
+jjj.real escalate "Preflight rehearsal escalation" --json >/tmp/e.json 2>/dev/null
+eid=$(python3 -c "import json;print(json.load(open(\"/tmp/e.json\"))[\"id\"])" 2>/dev/null)
+open_n=$(jjj.real escalate --json 2>/dev/null | grep -c "\"reason\"")
+[ -n "$eid" ] && [ "${open_n:-0}" -gt 0 ] && say escalate ok || say escalate fail
+jjj.real escalate --clear "$eid" >/dev/null 2>&1
+still=$(jjj.real escalate --json 2>/dev/null | grep -c "\"reason\"")
+[ "${still:-1}" -eq 0 ] && say escclear ok || say escclear fail
+
 # A real edit, so the merge path is exercised with actual content.
 printf "\n# preflight touched this\n" >> "$(ls *.py 2>/dev/null | head -1 || echo README.md)"
 [ -x ./verify.sh ] && { ./verify.sh >/dev/null 2>&1 && say verify ok || say verify fail; } || say verify absent
@@ -132,6 +151,7 @@ ch=$(jj log -r @- --no-graph -T "change_id" 2>/dev/null | head -1)
 
 jjj.real solution new "Preflight rehearsal solution" --problem "$pid" \
     --body "A scripted change, to prove the loop carries code end to end." \
+    ${fid:+--cites "$fid"} \
     --force --json >/tmp/s.json 2>/dev/null
 sid=$(python3 -c "import json;print(json.load(open(\"/tmp/s.json\"))[\"id\"])" 2>/dev/null)
 [ -n "$sid" ] && say solution ok || { say solution fail; exit 0; }
@@ -172,6 +192,12 @@ check publish ok  && ok "submit published a reviewable branch" \
 check branch ok   && ok "the review branch reached the remote" || bad "review branch missing from remote"
 check verify ok   && ok "verify.sh passes on the seed" \
                   || { check verify absent && ok "no verify.sh (target defines none)" || bad "verify.sh rejects its own seed"; }
+check finding ok  && ok "a finding records evidence on a problem" \
+                  || bad "finding new failed" "investigations will go back to being filed as solutions"
+check escalate ok && ok "an escalation is raised and visible" \
+                  || bad "escalate failed" "a blocked fleet would have no way to say so"
+check escclear ok && ok "an escalation can be cleared" \
+                  || bad "escalate --clear failed" "the banner would be permanent and stop meaning anything"
 check selfblock ok && ok "an author cannot sign off their own solution" || bad "self-approval was allowed"
 check approve ok  && ok "a reviewer can approve" || bad "approval failed" "nothing will ever merge"
 

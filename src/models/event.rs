@@ -35,6 +35,10 @@ pub enum EventType {
     // Coordination events
     ConflictResolved,
 
+    // Escalation: the swarm asking for a person
+    EscalationRaised,
+    EscalationCleared,
+
     // GitHub sync events
     GithubIssueCreated,
     GithubIssueImported,
@@ -66,6 +70,8 @@ impl EventType {
             Self::MilestoneCreated => "milestone_created",
             Self::MilestoneCompleted => "milestone_completed",
             Self::ConflictResolved => "conflict_resolved",
+            Self::EscalationRaised => "escalation_raised",
+            Self::EscalationCleared => "escalation_cleared",
             Self::GithubIssueCreated => "github_issue_created",
             Self::GithubIssueImported => "github_issue_imported",
             Self::GithubIssueClosed => "github_issue_closed",

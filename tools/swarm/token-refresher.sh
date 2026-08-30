@@ -68,6 +68,46 @@ fi
 
 log "started; exporting to $OUT every ${INTERVAL}s, refreshing under ${MARGIN}s validity"
 
+
+# Raise or clear the auth escalation through jjj, in the seed clone.
+#
+# Best-effort throughout: a refresher that dies because the seed is mid-fetch
+# would take the credential supply down with it, and a missing escalation is a
+# worse outcome only than no credentials at all.
+escalate_auth() {
+    local root="$1" action="$2"
+    local seed="$root/seed"
+    local jjj="${JJJ_BIN:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/target/release/jjj}"
+    [ -d "$seed/.jj" ] && [ -x "$jjj" ] || return 0
+
+    case "$action" in
+        raise)
+            ( cd "$seed" \
+              && "$jjj" escalate "The host OAuth session has expired. Run \`claude\` on the host and log in; the fleet cannot make any progress until then." \
+                 >/dev/null 2>&1 \
+              && "$jjj" push >/dev/null 2>&1 ) || log "warning: could not publish the auth escalation"
+            ;;
+        clear)
+            # Clear every open escalation whose reason names the session, not
+            # just the one we raised: a restarted refresher does not remember
+            # which id it used, and a stale auth escalation would stop the fleet
+            # after the credential came back.
+            ( cd "$seed" \
+              && "$jjj" escalate --json 2>/dev/null \
+                 | python3 -c "
+import json, sys
+try:
+    for r in json.load(sys.stdin):
+        if 'OAuth session' in r.get('reason', ''):
+            print(r['id'])
+except Exception:
+    pass" \
+                 | while read -r id; do "$jjj" escalate --clear "$id" >/dev/null 2>&1; done \
+              && "$jjj" push >/dev/null 2>&1 ) || true
+            ;;
+    esac
+}
+
 while true; do
     left="$(remaining || true)"
 
@@ -93,12 +133,27 @@ while true; do
             # nobody was watching; the score sat frozen and every container
             # looked healthy from the outside. The marker file lets the agents
             # stop asking, and lets a person see the cause without reading logs.
+            #
+            # The marker was the first fix and is a patch for one instance of a
+            # general gap. `jjj escalate` is the general form: it travels with
+            # the metadata, so every agent and every clone sees the same signal,
+            # and the watchdog stops the fleet rather than spending the rest of
+            # the deadline on turns that cannot succeed.
+            root="$(dirname "$OUT")"
             if [ "${left:-0}" -le 0 ]; then
                 log "FATAL: the OAuth session has expired and cannot be renewed"
                 log "       run \`claude\` on this host and log in; the fleet will resume"
-                touch "$(dirname "$OUT")/AUTH_DEAD"
+                if [ ! -f "$root/AUTH_DEAD" ]; then
+                    # Only on the transition into the dead state: re-raising every
+                    # poll would bury the real one under identical copies.
+                    touch "$root/AUTH_DEAD"
+                    escalate_auth "$root" raise
+                fi
             else
-                rm -f "$(dirname "$OUT")/AUTH_DEAD"
+                if [ -f "$root/AUTH_DEAD" ]; then
+                    rm -f "$root/AUTH_DEAD"
+                    escalate_auth "$root" clear
+                fi
             fi
         fi
 
