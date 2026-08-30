@@ -67,17 +67,34 @@ break the host login. (Mounting it read-only fails with
 
 ## What gets measured
 
-`jjj-shim` shadows the real binary on the container's PATH, so every invocation
-is recorded as JSONL — actor, pod, argv, exit, duration, output — whether or not
-the agent cooperates. `analyze.py` turns that into answers to questions the
+`analyze.py` reads the fleet's shared metadata — jjj entities and the event log,
+the same thing any agent sees after a fetch — and answers the questions the
 design's locked decisions assert but never verified:
 
-- Did agents contend for claims, and is `--claim` really advisory? (decision 4)
-- Did the critique gate hold, or did anything `--force` past an objection?
-- Were conflicts produced, and did agents resolve them? (decision 10)
-- Did per-pod bookmarks keep pushes from serialising? (decision 5)
-- Did agents follow the skill — identity set, ids not titles?
-- Did the fitness actually climb, or were agents merely busy?
+- Did the critique gate hold? (checked against final state: no approved solution
+  may carry an open or upheld critique)
+- Did the fleet frame work well — sub-problems, dissolutions, rankings?
+- Was discarded work duplicated effort, or rival conjectures losing on merit?
+- Did anyone record what they measured, and did later work cite it?
+- Did anything block on a person, and was it noticed?
+
+It therefore runs against **any** jjj repository, not only a trial:
+`analyze.py <repo>`. That is deliberate. Every misreading across six trials came
+through a side channel — "0 failures" during a 90%-failure outage, three agents
+reported at 0 while they were at 73, "137% of solutions withdrawn" from counting
+calls against creations. A figure derived from the shim is a fact about the rig,
+not about the work, so those now live in clearly-labelled `Harness:` sections:
+command latency, skill adherence, the fitness trajectory, container health.
+
+`jjj-shim` still shadows the real binary on the container's PATH and records
+every invocation as JSONL — actor, pod, argv, exit, duration, output — because it
+is the right tool for debugging the harness. It is no longer where the
+coordination numbers come from.
+
+Questions jjj cannot currently answer are printed under **Not answerable from
+jjj** rather than approximated. Each one is a candidate change to the model —
+claim contention, for instance, is invisible because a claim is last-writer state
+rather than an event.
 
 ## Findings so far
 
