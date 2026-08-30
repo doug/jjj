@@ -8,8 +8,8 @@ use std::collections::HashMap;
 use rusqlite::{params, Connection};
 
 use crate::db::entities::{
-    list_critiques, list_milestones, list_problems, list_solutions, upsert_critique,
-    upsert_milestone, upsert_problem, upsert_solution,
+    list_critiques, list_findings, list_milestones, list_problems, list_solutions, upsert_critique,
+    upsert_finding, upsert_milestone, upsert_problem, upsert_solution,
 };
 use crate::db::events::{clear_events, insert_event};
 use crate::db::Database;
@@ -38,7 +38,7 @@ pub fn load_from_markdown(db: &Database, store: &MetadataStore) -> Result<()> {
         // methods (Pillar 2): those would read from the very DB we are
         // rebuilding — which we just cleared — and load nothing. Markdown is
         // canonical; the rebuild must walk it.
-        use crate::models::{Critique, Milestone, Problem, Solution};
+        use crate::models::{Critique, Finding, Milestone, Problem, Solution};
 
         // Load milestones first (problems reference milestones via FK)
         let milestones = store.list_fs::<Milestone>()?;
@@ -62,6 +62,12 @@ pub fn load_from_markdown(db: &Database, store: &MetadataStore) -> Result<()> {
         let critiques = store.list_fs::<Critique>()?;
         for critique in &critiques {
             upsert_critique(conn, critique)?;
+        }
+
+        // Load findings (they reference problems via FK)
+        let findings = store.list_fs::<Finding>()?;
+        for finding in &findings {
+            upsert_finding(conn, finding)?;
         }
 
         // Load events from the jjj commit history (the canonical source)
@@ -173,7 +179,7 @@ pub fn load_from_markdown_incremental(db: &Database, store: &MetadataStore) -> R
     conn.execute_batch("BEGIN")?;
 
     let result = (|| -> Result<()> {
-        use crate::models::{Critique, Milestone, Problem, Solution};
+        use crate::models::{Critique, Finding, Milestone, Problem, Solution};
 
         // Is there a baseline to be incremental against?
         //
@@ -230,6 +236,7 @@ pub fn load_from_markdown_incremental(db: &Database, store: &MetadataStore) -> R
             sync_critique_to_cache,
             upsert_critique
         );
+        reconcile!(Finding, "finding", sync_finding_to_cache, upsert_finding);
 
         // One bulk index build, rather than 25,000 delete/insert pairs.
         if cold {
@@ -311,6 +318,23 @@ pub fn rebuild_fts_conn(conn: &Connection) -> Result<()> {
         )?;
     }
 
+    // Index findings. The method is part of the indexed body: "how was this
+    // measured" is exactly the phrase someone searches for when deciding whether
+    // to trust a number or re-derive it.
+    let findings = list_findings(conn)?;
+    for finding in &findings {
+        let body = format!(
+            "{}\n{}\n{}",
+            finding.evidence,
+            finding.method.clone().unwrap_or_default(),
+            finding.tags.join(" ")
+        );
+        conn.execute(
+            "INSERT INTO fts (entity_type, entity_id, title, body) VALUES (?1, ?2, ?3, ?4)",
+            params!["finding", &finding.id, &finding.title, &body],
+        )?;
+    }
+
     // Index milestones
     let milestones = list_milestones(conn)?;
     for milestone in &milestones {
@@ -373,7 +397,7 @@ pub fn remove_fts_entry(
 // detect failure but the storage layer typically logs and continues, since
 // the markdown remains canonical.
 
-use crate::models::{Critique, Milestone, Problem, Solution};
+use crate::models::{Critique, Finding, Milestone, Problem, Solution};
 
 /// Sync a problem to SQLite (entity row + FTS).
 ///
@@ -408,6 +432,20 @@ pub fn sync_critique_to_cache(db: &Database, critique: &Critique) -> Result<()> 
         &critique.title,
         &critique.argument,
     )?;
+    Ok(())
+}
+
+/// Sync a finding to SQLite (entity row + FTS).
+pub fn sync_finding_to_cache(db: &Database, finding: &Finding) -> Result<()> {
+    let conn = db.conn();
+    crate::db::entities::upsert_finding(conn, finding)?;
+    let body = format!(
+        "{}\n{}\n{}",
+        finding.evidence,
+        finding.method.clone().unwrap_or_default(),
+        finding.tags.join(" ")
+    );
+    update_fts_entry(conn, "finding", &finding.id, &finding.title, &body)?;
     Ok(())
 }
 
@@ -594,6 +632,7 @@ fn clear_all_tables(conn: &Connection) -> Result<()> {
     // permanently degrading hybrid search to FTS-only. We instead keep them
     // across reloads and prune orphans afterward (see prune_orphan_embeddings).
     conn.execute("DELETE FROM critiques", [])?;
+    conn.execute("DELETE FROM findings", [])?;
     conn.execute("DELETE FROM solutions", [])?;
     conn.execute("DELETE FROM problems", [])?;
     conn.execute("DELETE FROM milestones", [])?;
@@ -612,6 +651,7 @@ fn prune_orphan_embeddings(conn: &Connection) -> Result<()> {
          WHERE entity_id NOT IN (
              SELECT id FROM problems
              UNION SELECT id FROM solutions
+             UNION SELECT id FROM findings
              UNION SELECT id FROM critiques
              UNION SELECT id FROM milestones
          )",

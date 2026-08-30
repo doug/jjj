@@ -73,6 +73,16 @@ pub struct Solution {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
 
+    /// Findings cited as the evidence for this conjecture.
+    ///
+    /// A conjecture that rests on a measurement should say which one. Without a
+    /// machine-readable citation the link lives only in prose, and nothing can
+    /// answer whether an investigation was ever actually used — which is exactly
+    /// the question that decides whether recording evidence separately was worth
+    /// doing.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cites: Vec<String>,
+
     /// Creation timestamp
     pub created_at: DateTime<Utc>,
 
@@ -148,6 +158,7 @@ impl Solution {
             github_pr: None,
             github_branch: None,
             tags: Vec::new(),
+            cites: Vec::new(),
         }
     }
 

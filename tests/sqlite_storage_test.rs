@@ -54,6 +54,7 @@ fn test_full_sync_cycle() {
         github_pr: None,
         github_branch: None,
         tags: vec![],
+        cites: vec![],
     };
     db::entities::upsert_solution(db.conn(), &solution).unwrap();
 
@@ -113,6 +114,7 @@ fn test_validation_catches_invalid_refs() {
         github_pr: None,
         github_branch: None,
         tags: vec![],
+        cites: vec![],
     };
     db::entities::upsert_solution(db.conn(), &solution).unwrap();
 

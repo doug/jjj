@@ -74,6 +74,16 @@ pub struct Critique {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub replies: Vec<Reply>,
 
+    /// Findings cited as the evidence for this refutation.
+    ///
+    /// A conjecture that rests on a measurement should say which one. Without a
+    /// machine-readable citation the link lives only in prose, and nothing can
+    /// answer whether an investigation was ever actually used — which is exactly
+    /// the question that decides whether recording evidence separately was worth
+    /// doing.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cites: Vec<String>,
+
     /// Markdown body. Not stored in the YAML frontmatter; stripped by
     /// `to_markdown_strip` on save and assigned from the body on load.
     #[serde(default)]
@@ -196,6 +206,7 @@ impl Critique {
             context_before: Vec::new(),
             context_after: Vec::new(),
             replies: Vec::new(),
+            cites: Vec::new(),
             github_review_id: None,
         }
     }

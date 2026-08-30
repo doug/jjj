@@ -24,6 +24,10 @@ pub enum EventType {
     CritiqueValidated,
     CritiqueReplied,
 
+    // Finding events
+    FindingRecorded,
+    FindingSuperseded,
+
     // Milestone events
     MilestoneCreated,
     MilestoneCompleted,
@@ -57,6 +61,8 @@ impl EventType {
             Self::CritiqueDismissed => "critique_dismissed",
             Self::CritiqueValidated => "critique_validated",
             Self::CritiqueReplied => "critique_replied",
+            Self::FindingRecorded => "finding_recorded",
+            Self::FindingSuperseded => "finding_superseded",
             Self::MilestoneCreated => "milestone_created",
             Self::MilestoneCompleted => "milestone_completed",
             Self::ConflictResolved => "conflict_resolved",

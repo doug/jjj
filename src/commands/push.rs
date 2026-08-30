@@ -207,7 +207,13 @@ fn sync_meta_to_bookmark(
     // also what lets jj's own working-copy snapshot skip rehashing it on the
     // next `jj new`/`describe`, which is where most of the O(corpus) cost of
     // this step came from (see docs/design/sync-scaling-investigation.md).
-    for dir in &["problems", "solutions", "critiques", "milestones"] {
+    for dir in &[
+        "problems",
+        "solutions",
+        "critiques",
+        "milestones",
+        "findings",
+    ] {
         let src_dir = meta_path.join(dir);
         let dst_dir = sync_path.join(dir);
         fs::create_dir_all(&dst_dir)?;

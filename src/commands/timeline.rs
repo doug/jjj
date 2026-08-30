@@ -14,7 +14,7 @@ pub fn execute(ctx: &CommandContext, problem_input: String, json: bool) -> Resul
     // Get all events related to this problem
     let all_events = store.list_events_cached()?;
 
-    // Find related entity IDs (solutions and critiques for this problem)
+    // Find related entity IDs (solutions, critiques and findings for this problem)
     let solutions = store.list_solutions_for_problem(&problem_id)?;
     let solution_ids: Vec<String> = solutions.iter().map(|s| s.id.clone()).collect();
 
@@ -25,6 +25,15 @@ pub fn execute(ctx: &CommandContext, problem_input: String, json: bool) -> Resul
             critique_ids.push(c.id.clone());
         }
     }
+
+    // Findings are evidence about the problem, so their events belong on its
+    // timeline — otherwise the record shows conjectures appearing from nowhere
+    // and says nothing about what was measured in between.
+    let finding_ids: Vec<String> = store
+        .list_findings_for_problem(&problem_id)?
+        .iter()
+        .map(|f| f.id.clone())
+        .collect();
 
     // Filter events related to this problem
     let mut events: Vec<&Event> = all_events
@@ -37,6 +46,9 @@ pub fn execute(ctx: &CommandContext, problem_input: String, json: bool) -> Resul
                 return true;
             }
             if critique_ids.contains(&e.entity) {
+                return true;
+            }
+            if finding_ids.contains(&e.entity) {
                 return true;
             }
             if e.refs.contains(&problem_id) {
@@ -107,6 +119,16 @@ fn format_event_description(event: &Event) -> String {
         EventType::CritiqueValidated => format!("{} validated", event.entity),
         EventType::CritiqueReplied => format!("{} replied to", event.entity),
         EventType::SolutionSubmitted => format!("{} moved to review", event.entity),
+        EventType::FindingRecorded => {
+            let title = event
+                .extra
+                .title
+                .as_ref()
+                .map(|t| format!(": \"{}\"", crate::utils::truncate(t, 25)))
+                .unwrap_or_default();
+            format!("{} recorded{}", event.entity, title)
+        }
+        EventType::FindingSuperseded => format!("{} superseded", event.entity),
         EventType::MilestoneCreated => format!("{} created", event.entity),
         EventType::MilestoneCompleted => format!("{} completed", event.entity),
         EventType::ConflictResolved => format!("{} conflict resolved", event.entity),

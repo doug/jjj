@@ -29,13 +29,16 @@ jjj implements conjecture and refutation as a workflow:
 
 ```
 Problem          a question worth answering (not a task)
+  ├── Finding    evidence measured about it — cited, never approved
   └── Solution   a conjecture, attached to a jj change
         └── Critique   an attempted refutation — blocks approval until resolved
 ```
 
 A **problem** is solved when a solution survives criticism, or *dissolved* when
 it turns out to rest on a false premise. A **solution** is a bold guess you are
-willing to have shot down. A **critique** is the mechanism of selection.
+willing to have shot down. A **critique** is the mechanism of selection. A
+**finding** is an observation — the thing that motivates a conjecture, and the
+one artefact here that carries no approval state.
 
 This maps onto multi-agent work with no translation: many agents propose rival
 conjectures to one problem, other agents attack them, and what survives is what
@@ -83,7 +86,7 @@ Other things worth knowing before scripting:
 
 | Behaviour | Consequence |
 |---|---|
-| `problem new`, `solution new`, `critique new` accept `--json` | Capture the new id directly instead of parsing "Created ..." |
+| `problem new`, `solution new`, `critique new`, `finding new` accept `--json` | Capture the new id directly instead of parsing "Created ..." |
 | Every creator accepts `--body TEXT` or `--body -` (stdin) | Write the argument in the body, not the title — see below |
 | Non-zero exit on failure, message on stderr | Check the status; do not parse stdout for errors |
 | `jjj next --json` emits `null`, one object, or an array | Normalize before iterating |
@@ -93,10 +96,56 @@ Other things worth knowing before scripting:
 | `--mine` works on `next`, `status`, `events`, and `problem`/`solution`/`critique list` | It is shorthand for "assigned to me"; it does not exist elsewhere |
 | Reads are served from a SQLite cache | `jjj db rebuild` after editing metadata files behind jjj's back |
 
+## Investigations are findings, not solutions
+
+**If you measured something and did not change anything, that is a finding.**
+
+The commonest mistake in a swarm is filing an investigation as a solution:
+
+```
+"Symbol-size breakdown of gallery.wasm: harfbuzz 20%, crypto/tls tax ~1MB"
+"Root cause found and documented; not fixed"
+```
+
+Both are real titles from real runs, and both were later withdrawn — because a
+solution that changes nothing cannot survive review, however good the work was.
+The measurement was valuable and the record threw it away.
+
+```sh
+fid=$(jjj finding new "$pid" "decode.parse floors at 120,004 ops" \
+  --method "tools/bench/ops.py --stage decode, 3 runs, counted not timed" \
+  --body - --json <<'EOF'
+Every call re-parses the header. The floor is the header parse itself: 4 ops
+per record over 30,001 records, unchanged by the memoization in s/4f2a1b.
+EOF
+)
+
+# Then the conjecture that rests on it, citing the evidence by id:
+jjj solution new "Memoize the header parse" --problem "$pid" --cites "$fid"
+```
+
+Findings show up on `jjj problem show`, on `jjj timeline`, and in search. A
+finding is never approved or rejected — when a better measurement contradicts it,
+supersede it:
+
+```sh
+jjj finding supersede "$old_fid" --by "$new_fid"
+```
+
+The old one stays. Knowing a number was once believed — and what corrected it —
+is what stops the same investigation being run a third time.
+
+| Situation | What to file |
+|---|---|
+| You changed code and it works | Solution |
+| You measured, profiled, or reproduced something | Finding |
+| You think someone else's solution is wrong | Critique |
+| You found a better number than an earlier finding | Finding, then `supersede` |
+
 ## Write the argument in the body, not the title
 
 Every entity has one free-form body: a problem's `description`, a solution's
-`approach`, a critique's `argument`. That body is the payload — in a system
+`approach`, a critique's `argument`, a finding's `evidence`. That body is the payload — in a system
 built on conjecture and refutation, the reasoning *is* the content, and a title
 is only a label for it.
 

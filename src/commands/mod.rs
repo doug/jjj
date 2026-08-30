@@ -6,6 +6,7 @@ pub mod db;
 pub mod doctor;
 pub mod events;
 pub mod fetch;
+pub mod finding;
 pub mod init;
 pub mod insights;
 pub mod milestone;
@@ -86,6 +87,7 @@ fn execute_with_context(ctx: &CommandContext, command: Commands) -> Result<()> {
         Commands::Problem { action } => problem::execute(ctx, action),
         Commands::Solution { action } => solution::execute(ctx, action),
         Commands::Critique { action } => critique::execute(ctx, action),
+        Commands::Finding { action } => finding::execute(ctx, action),
         Commands::Milestone { action } => milestone::execute(ctx, action),
         // Status (replaces dashboard + next)
         Commands::Status {

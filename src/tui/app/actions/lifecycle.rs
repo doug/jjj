@@ -9,7 +9,9 @@ impl App {
             match entity_type {
                 EntityType::Solution => self.approve_solution(&id)?,
                 EntityType::Critique => self.address_critique(&id)?,
-                EntityType::Problem | EntityType::Milestone => {}
+                // A finding has no approval state: evidence is cited or
+                // contradicted, never accepted.
+                EntityType::Problem | EntityType::Milestone | EntityType::Finding => {}
             }
         }
         Ok(())
@@ -62,6 +64,7 @@ impl App {
                     }
                     return Ok(());
                 }
+                EntityType::Finding => return Ok(()),
                 EntityType::Milestone => {
                     if let Some(item) = self.cache.tree_items.get(self.ui.tree_index) {
                         if let TreeNode::Milestone { status, .. } = &item.node {
@@ -168,6 +171,9 @@ impl App {
                                 }
                             }
                         }
+                        // Nothing to decline: a finding is superseded by a
+                        // better measurement, not rejected by a decision.
+                        EntityType::Finding => {}
                     }
                 }
                 Ok(())
@@ -452,7 +458,10 @@ impl App {
                             milestone.assignee = Some(user.clone());
                             self.store.save_milestone(&milestone)
                         }
-                        EntityType::Critique => continue,
+                        // Neither carries an assignee: a critique is addressed
+                        // by the solution's author, and a finding is already
+                        // attributed to whoever measured it.
+                        EntityType::Critique | EntityType::Finding => continue,
                     };
                     if result.is_ok() {
                         assigned += 1;

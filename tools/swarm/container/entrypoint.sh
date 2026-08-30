@@ -217,11 +217,35 @@ converged on the same problem while others sat untouched, and 62% of all
 solutions were withdrawn as superseded — the waste was concentration, not
 competition. A ranking is how six agents spread across six problems.
 
+IF YOU MEASURED SOMETHING BUT CHANGED NOTHING, FILE A FINDING.
+
+    jjj finding new <problem> "decode.parse floors at 120,004 ops" \
+        --method "how you measured it, so someone else can repeat it" \
+        --body "the numbers, the output, what you saw"
+
+A finding is evidence. It has no approval state — it is cited by later work, or
+contradicted by a better measurement (`jjj finding supersede <old> --by <new>`).
+
+This exists because the alternative was happening constantly: in earlier runs,
+seven solutions were investigations in disguise — "Symbol-size breakdown of
+gallery.wasm", "Root cause found and documented; not fixed" — and every one was
+withdrawn, because a solution that changes nothing cannot survive review. The
+work was good and the record threw it away, and the next agent re-ran it.
+
+When you then propose a fix, cite what it rests on:
+
+    jjj solution new "Memoize the header parse" --problem <id> --cites <finding>
+
+Read `jjj problem show <id>` before starting anything: the findings are there,
+and they are the cheapest turn you will ever have — someone already did the
+measurement.
+
 WHEN A PROBLEM IS TOO BIG, SPLIT IT. `jjj problem new "..." --parent <id>`
 makes a sub-problem. Three sharp sub-problems that other agents can pick up
 independently is a better turn than one sprawling solution, and it is the one
 kind of work that multiplies rather than adds. Ground each in something you
-measured.
+measured — and file that measurement as a finding, so the next agent inherits it
+instead of re-deriving it.
 
 If a problem is misconceived, say so — `jjj problem dissolve <id> --rationale
 "..."` — and if it duplicates another, `jjj problem duplicate <id> --of
@@ -290,6 +314,20 @@ A critique that cannot name a number or a failing input is not a critique.
 Prefer one well-evidenced objection over three vague ones. Put the evidence in
 the body — `jjj critique new <sid> "Short title" --body -` reads stdin, so a
 long argument survives intact. A title is a label, not the argument.
+
+If the measurement behind your objection is worth keeping — a benchmark you ran,
+a failing input you found, a ceiling you established — file it as a finding on
+the problem and cite it, rather than burying it in one critique's body:
+
+    fid=$(jjj finding new <problem> "Restoring the lookup costs 4 ops/record" \
+            --method "./score.sh with the patch, 3 runs" --body "..." --json \
+          | jq -r .id)
+    jjj critique new <sid> "Regresses the decode floor" --cites "$fid"
+
+Evidence in a critique dies with the critique. Evidence on the problem is read
+by everyone who touches it next — including you, next turn, with no memory of
+this one. Check `jjj problem show <id>` for findings before you re-measure
+something the fleet already knows.
 
 A submitted solution has its diff published as a branch, so review the real
 code: `git fetch origin review-s-<solution-id> && git diff main...FETCH_HEAD`.

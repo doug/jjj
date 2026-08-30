@@ -30,6 +30,16 @@ impl App {
                     },
                 )?;
             }
+            EntityType::Finding => {
+                self.store.with_metadata(
+                    &format!("Update finding title: {}", new_title),
+                    || {
+                        let mut finding = self.store.load_finding(entity_id)?;
+                        finding.title = new_title.to_string();
+                        self.store.save_finding(&finding)
+                    },
+                )?;
+            }
             EntityType::Critique => {
                 self.store.with_metadata(
                     &format!("Update critique title: {}", new_title),
@@ -263,6 +273,14 @@ impl App {
                         self.store.save_solution(&solution)
                     },
                 )?;
+            }
+            EntityType::Finding => {
+                self.store
+                    .with_metadata(&format!("Update finding tags: {}", entity_id), || {
+                        let mut finding = self.store.load_finding(entity_id)?;
+                        finding.tags = tags.clone();
+                        self.store.save_finding(&finding)
+                    })?;
             }
             EntityType::Critique | EntityType::Milestone => return Ok(()),
         }

@@ -1,4 +1,4 @@
--- jjj SQLite schema v9
+-- jjj SQLite schema v13
 -- Runtime cache for fast queries and full-text search
 
 -- Meta table for schema versioning and sync state
@@ -51,6 +51,10 @@ CREATE TABLE IF NOT EXISTS solutions (
     -- See the note on problems.claimed_at: a claim is a lease, and the cached
     -- read has to carry its age or nobody can tell a live one from a stale one.
     claimed_at TEXT,
+    -- Findings this conjecture rests on (JSON array of finding ids). Without a
+    -- machine-readable citation, "the evidence for this" lives only in prose and
+    -- nothing can tell whether a measurement was ever used.
+    cites TEXT DEFAULT '[]',
     FOREIGN KEY (problem_id) REFERENCES problems(id),
     FOREIGN KEY (supersedes) REFERENCES solutions(id)
 );
@@ -78,6 +82,8 @@ CREATE TABLE IF NOT EXISTS critiques (
     code_context TEXT DEFAULT '[]',    -- JSON array
     context_before TEXT DEFAULT '[]',  -- JSON array
     context_after TEXT DEFAULT '[]',   -- JSON array
+    -- Findings this refutation rests on. See solutions.cites.
+    cites TEXT DEFAULT '[]',
     FOREIGN KEY (solution_id) REFERENCES solutions(id)
 );
 
@@ -92,6 +98,28 @@ CREATE TABLE IF NOT EXISTS milestones (
     updated_at TEXT NOT NULL,
     description TEXT DEFAULT '',
     problem_ids TEXT DEFAULT '[]'  -- JSON array
+);
+
+-- Findings table: evidence about a problem.
+--
+-- jjj modelled conjectures and refutations but not the observations that
+-- motivate them, so investigations were filed as solutions and then withdrawn
+-- as "documented, not fixed". A finding has no approval state — a measurement
+-- is cited or contradicted, never accepted.
+CREATE TABLE IF NOT EXISTS findings (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'current',
+    problem_id TEXT NOT NULL,
+    author TEXT,
+    superseded_by TEXT,
+    refs TEXT DEFAULT '[]',   -- JSON array of related entity ids
+    method TEXT,
+    tags TEXT DEFAULT '[]',   -- JSON array
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    evidence TEXT DEFAULT '',
+    FOREIGN KEY (problem_id) REFERENCES problems(id)
 );
 
 -- Events table for decision logging
@@ -126,6 +154,7 @@ CREATE INDEX IF NOT EXISTS idx_problems_parent_id ON problems(parent_id);
 CREATE INDEX IF NOT EXISTS idx_problems_github_issue ON problems(github_issue);
 CREATE INDEX IF NOT EXISTS idx_solutions_github_pr ON solutions(github_pr);
 CREATE INDEX IF NOT EXISTS idx_critiques_github_review_id ON critiques(github_review_id);
+CREATE INDEX IF NOT EXISTS idx_findings_problem_id ON findings(problem_id);
 
 -- Per-file content fingerprints, used by the incremental push-validation
 -- reload to skip re-parsing markdown that has not changed since the cache

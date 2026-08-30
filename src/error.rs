@@ -4,7 +4,8 @@
 //! grouped by concern:
 //! - **jj integration** — `JjNotFound`, `JjCommandFailed`, `JjIo`
 //! - **Entity lookup** — `ProblemNotFound`, `SolutionNotFound`, `CritiqueNotFound`,
-//!   `MilestoneNotFound`, `EntityNotFound`, `AmbiguousId`, `AmbiguousMatch`
+//!   `MilestoneNotFound`, `FindingNotFound`, `EntityNotFound`, `AmbiguousId`,
+//!   `AmbiguousMatch`
 //! - **Parsing / data integrity** — `FrontmatterParse`, `JsonParse`, `YamlParse`,
 //!   `TomlParse`, `TomlSerialize`
 //! - **GitHub sync** — `GhNotFound`, `GhCommandFailed`, `GhAuthFailed`,
@@ -50,6 +51,9 @@ pub enum JjjError {
 
     #[error("Milestone {0} not found.\n\nUse 'jjj milestone list' to see all milestones.")]
     MilestoneNotFound(String),
+
+    #[error("Finding {0} not found.\n\nUse 'jjj finding list' to see all findings.")]
+    FindingNotFound(String),
 
     #[error("Conflict detected in {0}. Run 'jj resolve' to fix conflicts in the working copy.")]
     Conflict(String),

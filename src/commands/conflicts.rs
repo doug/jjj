@@ -18,18 +18,20 @@ use std::fs;
 
 /// Entity directories scanned for conflicts, paired with the singular type name.
 /// Event shards and rankings can't conflict (append-only / last-writer merges),
-/// so only the four entity dirs are relevant.
+/// so only the entity dirs are relevant.
 const ENTITY_DIRS: &[(&str, &str)] = &[
     ("problems", "problem"),
     ("solutions", "solution"),
     ("critiques", "critique"),
     ("milestones", "milestone"),
+    ("findings", "finding"),
 ];
 
 /// One conflicted entity file awaiting resolution.
 #[derive(Debug, serde::Serialize)]
 pub struct ConflictInfo {
-    /// Singular entity type (`problem`, `solution`, `critique`, `milestone`).
+    /// Singular entity type (`problem`, `solution`, `critique`, `milestone`,
+    /// `finding`).
     pub entity_type: String,
     /// The entity's UUID (the file stem).
     pub id: String,
@@ -233,6 +235,7 @@ fn upsert_resolved(
         "solution" => db::sync_solution_to_cache(db, &store.load_solution(id)?),
         "critique" => db::sync_critique_to_cache(db, &store.load_critique(id)?),
         "milestone" => db::sync_milestone_to_cache(db, &store.load_milestone(id)?),
+        "finding" => db::sync_finding_to_cache(db, &store.load_finding(id)?),
         other => Err(JjjError::Validation(format!(
             "unknown entity type for cache refresh: {}",
             other

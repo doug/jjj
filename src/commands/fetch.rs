@@ -74,6 +74,7 @@ const ENTITY_KINDS: &[(&str, &str)] = &[
     ("solutions", "solution"),
     ("critiques", "critique"),
     ("milestones", "milestone"),
+    ("findings", "finding"),
 ];
 
 /// Whether a fetched `config.toml` declares automation rules.

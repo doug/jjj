@@ -1,4 +1,4 @@
-//! The four jjj entity kinds and their canonical string / table / prefix
+//! The five jjj entity kinds and their canonical string / table / prefix
 //! mappings.
 //!
 //! These mappings were previously hand-matched in several layers (display,
@@ -16,15 +16,17 @@ pub enum EntityType {
     Solution,
     Critique,
     Milestone,
+    Finding,
 }
 
 impl EntityType {
     /// All variants, for iteration.
-    pub const ALL: [EntityType; 4] = [
+    pub const ALL: [EntityType; 5] = [
         EntityType::Problem,
         EntityType::Solution,
         EntityType::Critique,
         EntityType::Milestone,
+        EntityType::Finding,
     ];
 
     /// Lowercase singular name (`"problem"`). Matches the serde encoding.
@@ -34,6 +36,7 @@ impl EntityType {
             EntityType::Solution => "solution",
             EntityType::Critique => "critique",
             EntityType::Milestone => "milestone",
+            EntityType::Finding => "finding",
         }
     }
 
@@ -44,6 +47,7 @@ impl EntityType {
             EntityType::Solution => "solutions",
             EntityType::Critique => "critiques",
             EntityType::Milestone => "milestones",
+            EntityType::Finding => "findings",
         }
     }
 
@@ -54,6 +58,7 @@ impl EntityType {
             EntityType::Solution => 's',
             EntityType::Critique => 'c',
             EntityType::Milestone => 'm',
+            EntityType::Finding => 'f',
         }
     }
 
@@ -64,6 +69,7 @@ impl EntityType {
             "solution" => Some(EntityType::Solution),
             "critique" => Some(EntityType::Critique),
             "milestone" => Some(EntityType::Milestone),
+            "finding" => Some(EntityType::Finding),
             _ => None,
         }
     }

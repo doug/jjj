@@ -9,6 +9,7 @@ mod critiques;
 pub mod delta;
 mod event_shards;
 mod events;
+mod findings;
 pub mod merge;
 mod milestones;
 mod problems;
@@ -122,6 +123,7 @@ pub(super) const PROBLEMS_DIR: &str = "problems";
 pub(super) const SOLUTIONS_DIR: &str = "solutions";
 pub(super) const CRITIQUES_DIR: &str = "critiques";
 pub(super) const MILESTONES_DIR: &str = "milestones";
+pub(super) const FINDINGS_DIR: &str = "findings";
 
 /// The core storage abstraction for jjj metadata.
 ///
@@ -532,6 +534,37 @@ impl Persist for crate::models::Milestone {
     const CACHE_FAITHFUL: bool = true;
     fn list_from_cache(db: &crate::db::Database) -> Result<Vec<Self>> {
         Ok(crate::db::entities::list_milestones(db.conn())?)
+    }
+}
+
+impl Persist for crate::models::Finding {
+    const DIR: &'static str = FINDINGS_DIR;
+    const BODY_FIELD: &'static str = "evidence";
+    const ENTITY_TYPE: &'static str = "finding";
+
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn body(&self) -> &str {
+        &self.evidence
+    }
+    fn set_body(&mut self, body: String) {
+        self.evidence = body;
+    }
+    fn not_found(id: &str) -> JjjError {
+        JjjError::FindingNotFound(id.to_string())
+    }
+    fn is_not_found(err: &JjjError) -> bool {
+        matches!(err, JjjError::FindingNotFound(_))
+    }
+    fn sync_to_cache(&self, db: &crate::db::Database) -> Result<()> {
+        crate::db::sync::sync_finding_to_cache(db, self)
+    }
+    // No derived back-references: `refs` is authored, not computed, so the row
+    // round-trips as written.
+    const CACHE_FAITHFUL: bool = true;
+    fn list_from_cache(db: &crate::db::Database) -> Result<Vec<Self>> {
+        Ok(crate::db::entities::list_findings(db.conn())?)
     }
 }
 
@@ -1017,6 +1050,7 @@ impl MetadataStore {
         fs::create_dir_all(self.meta_path.join(SOLUTIONS_DIR))?;
         fs::create_dir_all(self.meta_path.join(CRITIQUES_DIR))?;
         fs::create_dir_all(self.meta_path.join(MILESTONES_DIR))?;
+        fs::create_dir_all(self.meta_path.join(FINDINGS_DIR))?;
         Ok(())
     }
 

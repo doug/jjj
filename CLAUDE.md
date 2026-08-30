@@ -45,6 +45,7 @@ cd docs-site && npm run build  # Build docs
 - **Problems**: Things to solve (can form DAG via parent_id). Support tags for categorization.
 - **Solutions**: Conjectures attached to jj Change IDs (not commit hashes). Support tags for categorization.
 - **Critiques**: Error-elimination feedback that blocks solution approval
+- **Findings**: Evidence measured about a problem. No approval state — a measurement is cited or superseded, never accepted. Solutions and critiques cite findings via `--cites`.
 - **Milestones**: Time-based goals grouping problems
 
 ### Storage: Shadow Graph
@@ -54,6 +55,7 @@ All metadata lives in an orphaned `jjj` bookmark, never touching the working cop
 problems/{uuid}.md
 solutions/{uuid}.md
 critiques/{uuid}.md
+findings/{uuid}.md
 milestones/{uuid}.md
 config.toml
 events.jsonl
@@ -67,6 +69,7 @@ Entity files use YAML frontmatter + markdown body. Each entity has one free-form
 - **Problem**: body = `description`
 - **Solution**: body = `approach`
 - **Critique**: body = `argument`
+- **Finding**: body = `evidence`
 - **Milestone**: body = `description`
 
 Previously separate fields (`context`, `tradeoffs`, `evidence`, `goals`, `success_criteria`) have been removed — all free-form content belongs in the body.
@@ -118,13 +121,14 @@ TUI (src/tui/)               # Ratatui-based interactive UI
   - Truncated hex prefix (minimum 6 chars, e.g., "01957d")
   - Fuzzy title match (e.g., "auth bug")
 - Listings show short prefixes auto-extended for uniqueness
-- Mixed-type listings use type prefixes: p/, s/, c/, m/
+- Mixed-type listings use type prefixes: p/, s/, c/, m/, f/
 - Change IDs: jj-native opaque strings (e.g., "kpqxywon")
 
 ### State Machines
 - **Problems**: Open → InProgress → Solved/Dissolved
 - **Solutions**: Proposed → Submitted → Approved/Withdrawn
 - **Critiques**: Open → Addressed/Valid/Dismissed
+- **Findings**: Current → Superseded (no approval path — evidence is not accepted)
 
 ## Key Files
 
@@ -158,6 +162,9 @@ TUI (src/tui/)               # Ratatui-based interactive UI
 
 ### Events, Insights, and Timeline
 ```bash
+jjj finding new <problem> "title"    # Record evidence (--method, --body -, --ref)
+jjj finding list --problem <id>      # Evidence on a problem
+jjj finding supersede <old> --by <new>  # A better measurement replaced it
 jjj events                           # Recent events
 jjj events --problem 01957d          # Events for a problem (by prefix)
 jjj timeline "auth bug"              # Full timeline (by fuzzy title)

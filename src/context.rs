@@ -103,6 +103,33 @@ impl CommandContext {
         }
     }
 
+    /// Resolve a finding ID from user input.
+    pub fn resolve_finding(&self, input: &str) -> Result<String> {
+        use crate::picker::pick_one;
+
+        // "You gave me nothing" is a different failure from "I looked and found
+        // nothing", and saying so points at the real cause — almost always an
+        // unset variable in a script.
+        if input.trim().is_empty() {
+            return Err(crate::error::JjjError::Validation(
+                "no finding specified (the reference was empty — an unset variable?)".to_string(),
+            ));
+        }
+        use crate::resolve::{resolve, ResolveResult};
+
+        let findings = self.store.list_findings()?;
+        let entities: Vec<(String, String)> = findings
+            .iter()
+            .map(|f| (f.id.clone(), f.title.clone()))
+            .collect();
+
+        match resolve(input, &entities) {
+            ResolveResult::Single(id) => Ok(id),
+            ResolveResult::Multiple(matches) => pick_one(&matches, "finding"),
+            ResolveResult::None => Err(crate::error::JjjError::FindingNotFound(input.to_string())),
+        }
+    }
+
     /// Resolve a milestone ID from user input.
     pub fn resolve_milestone(&self, input: &str) -> Result<String> {
         use crate::picker::pick_one;

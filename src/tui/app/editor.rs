@@ -204,6 +204,22 @@ impl App {
                     critique.argument,
                 ))
             }
+            EntityType::Finding => {
+                let finding = self.store.load_finding(entity_id)?;
+                let tags_line = if finding.tags.is_empty() {
+                    "tags: \n".to_string()
+                } else {
+                    format!("tags: {}\n", finding.tags.join(", "))
+                };
+                Ok(format!(
+                    "---\ntitle: {}\nstatus: {} # current, superseded\nmethod: {}\n{}---\n\n{}\n",
+                    finding.title,
+                    finding.status,
+                    finding.method.clone().unwrap_or_default(),
+                    tags_line,
+                    finding.evidence,
+                ))
+            }
             EntityType::Milestone => {
                 let milestone = self.store.load_milestone(entity_id)?;
                 let target_date_line = match &milestone.target_date {
@@ -377,6 +393,30 @@ impl App {
                             }
                         }
                         self.store.save_critique(&critique)
+                    })?;
+            }
+            EntityType::Finding => {
+                let status = parsed
+                    .fields
+                    .get("status")
+                    .and_then(|s| s.parse::<crate::models::FindingStatus>().ok());
+                let method = parsed
+                    .fields
+                    .get("method")
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty());
+                self.store
+                    .with_metadata(&format!("Edit finding {}", entity_id), || {
+                        let mut finding = self.store.load_finding(entity_id)?;
+                        finding.title = parsed.title.clone();
+                        finding.evidence = parsed.description.clone();
+                        finding.tags = parsed.tags.clone();
+                        finding.method = method.clone();
+                        if let Some(st) = status {
+                            finding.status = st;
+                        }
+                        finding.updated_at = chrono::Utc::now();
+                        self.store.save_finding(&finding)
                     })?;
             }
             EntityType::Milestone => {

@@ -16,6 +16,7 @@ pub use search::{search, search_events, SearchResult};
 pub use sync::{
     is_dirty, load_from_markdown, load_from_markdown_incremental, open_cache_if_present,
     rebuild_embeddings, rebuild_fts, remove_entity_from_cache, set_dirty, sync_critique_to_cache,
-    sync_milestone_to_cache, sync_problem_to_cache, sync_solution_to_cache, update_fts_entry,
+    sync_finding_to_cache, sync_milestone_to_cache, sync_problem_to_cache, sync_solution_to_cache,
+    update_fts_entry,
 };
 pub use validate::{validate, ValidationError};

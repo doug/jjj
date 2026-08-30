@@ -175,19 +175,26 @@ fn check_meta_path(ctx: &CommandContext) -> Check {
             "run `jjj init` in this repository",
         );
     }
-    let counts = ["problems", "solutions", "critiques", "milestones"]
-        .iter()
-        .map(|dir| count_md(&meta.join(dir)))
-        .collect::<Vec<_>>();
+    let counts = [
+        "problems",
+        "solutions",
+        "critiques",
+        "milestones",
+        "findings",
+    ]
+    .iter()
+    .map(|dir| count_md(&meta.join(dir)))
+    .collect::<Vec<_>>();
     Check::ok(
         "metadata",
         format!(
-            "{} — {} problems, {} solutions, {} critiques, {} milestones",
+            "{} — {} problems, {} solutions, {} critiques, {} milestones, {} findings",
             meta.display(),
             counts[0],
             counts[1],
             counts[2],
-            counts[3]
+            counts[3],
+            counts[4]
         ),
     )
 }

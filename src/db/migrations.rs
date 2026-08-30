@@ -165,6 +165,38 @@ pub fn all_migrations() -> Vec<Migration> {
                 Ok(())
             },
         },
+        Migration {
+            version: 13,
+            description: "Add findings table and cites columns for evidence",
+            requires_rebuild: false,
+            up: |conn| {
+                // Findings are additive: an existing cache simply has none until
+                // the next reload walks the markdown.
+                conn.execute_batch(
+                    "CREATE TABLE IF NOT EXISTS findings (
+                         id TEXT PRIMARY KEY,
+                         title TEXT NOT NULL,
+                         status TEXT NOT NULL DEFAULT 'current',
+                         problem_id TEXT NOT NULL,
+                         author TEXT,
+                         superseded_by TEXT,
+                         refs TEXT DEFAULT '[]',
+                         method TEXT,
+                         tags TEXT DEFAULT '[]',
+                         created_at TEXT NOT NULL,
+                         updated_at TEXT NOT NULL,
+                         evidence TEXT DEFAULT '',
+                         FOREIGN KEY (problem_id) REFERENCES problems(id)
+                     );
+                     CREATE INDEX IF NOT EXISTS idx_findings_problem_id ON findings(problem_id);",
+                )?;
+                // Tolerated failure, as in v12: a cache built from the current
+                // schema.sql already has these columns.
+                let _ = conn.execute("ALTER TABLE solutions ADD COLUMN cites TEXT DEFAULT '[]'", []);
+                let _ = conn.execute("ALTER TABLE critiques ADD COLUMN cites TEXT DEFAULT '[]'", []);
+                Ok(())
+            },
+        },
     ]
 }
 

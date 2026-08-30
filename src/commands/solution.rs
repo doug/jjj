@@ -21,6 +21,7 @@ pub fn execute(ctx: &CommandContext, action: SolutionAction) -> Result<()> {
             reviewer,
             force,
             tags,
+            cites,
             json,
         } => new_solution(
             ctx,
@@ -31,6 +32,7 @@ pub fn execute(ctx: &CommandContext, action: SolutionAction) -> Result<()> {
             reviewer,
             force,
             tags,
+            cites,
             json,
         ),
 
@@ -115,9 +117,13 @@ fn new_solution(
     reviewer_critiques: Vec<String>,
     force: bool,
     tags: Vec<String>,
+    cites: Vec<String>,
     json: bool,
 ) -> Result<()> {
     let store = &ctx.store;
+    // Resolve citations before any write: an unresolvable --cites is a typo, and
+    // failing here beats storing a dangling id nothing will ever notice.
+    let cited = crate::commands::finding::resolve_cites(ctx, &cites)?;
 
     let jj_client = ctx.jj();
 
@@ -210,6 +216,8 @@ fn new_solution(
             t.dedup();
             solution.tags = t;
         }
+
+        solution.cites = cited.clone();
 
         // Create event for decision log
         let extra = EventExtra {
@@ -434,6 +442,16 @@ fn show_solution(ctx: &CommandContext, solution_input: String, json: bool) -> Re
 
     if let Some(ref assignee) = solution.assignee {
         println!("Assignee: {}", assignee);
+    }
+
+    if !solution.cites.is_empty() {
+        println!("\n## Evidence cited ({})", solution.cites.len());
+        for id in &solution.cites {
+            match store.load_finding(id) {
+                Ok(f) => println!("  {} - {}", crate::display::short_id(id), f.title),
+                Err(_) => println!("  {} (missing)", crate::display::short_id(id)),
+            }
+        }
     }
 
     if !solution.tags.is_empty() {

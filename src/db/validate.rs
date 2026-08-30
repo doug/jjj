@@ -1,7 +1,8 @@
 //! Referential integrity validation for jjj SQLite storage.
 //!
 //! Before pushing to remote, we validate that all foreign key relationships
-//! are intact: solutions reference existing problems, critiques reference
+//! are intact: solutions reference existing problems, findings and critiques
+//! reference
 //! existing solutions, etc.
 
 use rusqlite::{params, Result as SqliteResult};
@@ -32,7 +33,8 @@ impl std::error::Error for ValidationError {}
 /// 3. For each solution, problem_id must exist in problems
 /// 4. For each solution with supersedes, that solution must exist
 /// 5. For each critique, solution_id must exist in solutions
-/// 6. No cycles in problem parent chain
+/// 6. For each finding, problem_id must exist in problems
+/// 7. No cycles in problem parent chain
 ///
 /// Returns a list of all validation errors found.
 pub fn validate(db: &Database) -> SqliteResult<Vec<ValidationError>> {
@@ -138,7 +140,24 @@ pub fn validate(db: &Database) -> SqliteResult<Vec<ValidationError>> {
         }
     }
 
-    // 6. Check for cycles in problem parent chain
+    // 6. Check finding problem_id references. A finding whose problem is gone
+    //     is evidence about nothing — it would never surface in any listing.
+    let mut stmt = conn.prepare("SELECT id, problem_id FROM findings")?;
+    let finding_refs = stmt.query_map([], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+    })?;
+
+    for result in finding_refs {
+        let (finding_id, problem_id) = result?;
+        if !problem_ids.contains(&problem_id) {
+            errors.push(ValidationError {
+                entity_id: finding_id,
+                message: format!("references non-existent problem '{}'", problem_id),
+            });
+        }
+    }
+
+    // 7. Check for cycles in problem parent chain
     for problem_id in &problem_ids {
         if has_parent_cycle(conn, problem_id, &problem_ids)? {
             errors.push(ValidationError {
@@ -157,6 +176,7 @@ pub fn validate(db: &Database) -> SqliteResult<Vec<ValidationError>> {
         ("problems", "description"),
         ("solutions", "approach"),
         ("critiques", "argument"),
+        ("findings", "evidence"),
         ("milestones", "description"),
     ] {
         let sql = format!("SELECT id, {} FROM {}", body_col, table);

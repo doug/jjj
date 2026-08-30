@@ -460,6 +460,21 @@ fn show_problem(ctx: &CommandContext, problem_input: String, json: bool) -> Resu
         }
     }
 
+    // Show findings. Above sub-problems and below solutions on purpose: what is
+    // already known about a problem is what you want in view before proposing
+    // anything new about it.
+    let findings = store.list_findings_for_problem(&problem_id)?;
+    if !findings.is_empty() {
+        println!("\n## Findings ({})", findings.len());
+        for finding in &findings {
+            let icon = match finding.status {
+                crate::models::FindingStatus::Current => "=",
+                crate::models::FindingStatus::Superseded => "~",
+            };
+            println!("  {} {} - {}", icon, finding.id, finding.title);
+        }
+    }
+
     // Show subproblems
     let subproblems = store.list_subproblems(&problem_id)?;
     if !subproblems.is_empty() {

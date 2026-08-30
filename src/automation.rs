@@ -241,6 +241,18 @@ fn populate_entity_vars(
                 }
             }
         }
+        EventType::FindingRecorded | EventType::FindingSuperseded => {
+            if let Ok(finding) = store.load_finding(entity_id) {
+                auto_ctx.set("title", &finding.title);
+                auto_ctx.set("type", "finding");
+                if let Ok(problem) = store.load_problem(&finding.problem_id) {
+                    auto_ctx.set("problem.title", &problem.title);
+                    if let Some(n) = problem.github_issue {
+                        auto_ctx.set("issue_number", &n.to_string());
+                    }
+                }
+            }
+        }
         EventType::SolutionCreated
         | EventType::SolutionSubmitted
         | EventType::SolutionApproved

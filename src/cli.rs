@@ -12,6 +12,7 @@ syncs with your normal 'jj git push'.
   Problems   What needs solving (the question)
   Solutions  Conjectures attached to jj change IDs (the approach)
   Critiques  Error-elimination feedback that blocks or endorses a solution
+  Findings   Evidence measured about a problem — cited, never approved
   Milestones Time-based goals grouping related problems")]
 #[command(after_long_help = "TYPICAL WORKFLOW:
   jjj init                    Set up a new repository
@@ -97,8 +98,15 @@ pub enum Commands {
         action: CritiqueAction,
     },
 
-    /// Group problems into time-based milestones and track progress
+    /// Record findings — evidence measured about a problem, cited but never approved
     #[command(display_order = 13)]
+    Finding {
+        #[command(subcommand)]
+        action: FindingAction,
+    },
+
+    /// Group problems into time-based milestones and track progress
+    #[command(display_order = 14)]
     Milestone {
         #[command(subcommand)]
         action: MilestoneAction,
@@ -644,6 +652,10 @@ pub enum SolutionAction {
         #[arg(long, value_delimiter = ',')]
         tags: Vec<String>,
 
+        /// Findings this rests on — the evidence, by ID or title (repeatable)
+        #[arg(long = "cites", value_name = "FINDING")]
+        cites: Vec<String>,
+
         /// Print the created entity as JSON (for scripting and agents)
         #[arg(long)]
         json: bool,
@@ -892,6 +904,10 @@ pub enum CritiqueAction {
         #[arg(long)]
         reviewer: Option<String>,
 
+        /// Findings this rests on — the evidence, by ID or title (repeatable)
+        #[arg(long = "cites", value_name = "FINDING")]
+        cites: Vec<String>,
+
         /// Print the created entity as JSON (for scripting and agents)
         #[arg(long)]
         json: bool,
@@ -1000,6 +1016,134 @@ pub enum CritiqueAction {
 
         /// Reply text
         body: String,
+    },
+}
+
+// =============================================================================
+// Finding Commands
+// =============================================================================
+
+#[derive(Subcommand)]
+pub enum FindingAction {
+    /// Record a finding — something measured or established about a problem
+    #[command(display_order = 0)]
+    New {
+        /// Problem this is evidence about (ID, short prefix, or fuzzy title)
+        problem_id: String,
+
+        /// What was found, stated as a claim
+        title: String,
+
+        /// The evidence itself: numbers, output, what you saw. Use `-` to read stdin.
+        #[arg(long, alias = "evidence")]
+        body: Option<String>,
+
+        /// How it was measured, so someone else can repeat it
+        #[arg(long)]
+        method: Option<String>,
+
+        /// Entities this bears on — solutions, critiques, other findings (repeatable)
+        #[arg(long = "ref", value_name = "ID")]
+        refs: Vec<String>,
+
+        /// Tags for categorization (repeatable)
+        #[arg(long = "tag", value_name = "TAG")]
+        tags: Vec<String>,
+
+        /// Print the created entity as JSON (for scripting and agents)
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// List findings with optional filters
+    #[command(display_order = 1)]
+    List {
+        /// Filter to findings on a specific problem
+        #[arg(long)]
+        problem: Option<String>,
+
+        /// Filter by status: current, superseded
+        #[arg(long)]
+        status: Option<String>,
+
+        /// Filter by author (substring match)
+        #[arg(long)]
+        author: Option<String>,
+
+        /// Show only findings you recorded
+        #[arg(long)]
+        mine: bool,
+
+        /// Filter by title keyword
+        #[arg(long)]
+        search: Option<String>,
+
+        /// Show findings that reference this entity
+        #[arg(long = "about", value_name = "ID")]
+        about: Option<String>,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Show a finding in full, with its evidence and method
+    #[command(display_order = 2)]
+    Show {
+        /// Finding ID, short prefix, or fuzzy title
+        finding_id: String,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Edit a finding's title, method, or body
+    #[command(display_order = 3)]
+    Edit {
+        /// Finding ID, short prefix, or fuzzy title
+        finding_id: String,
+
+        /// New title
+        #[arg(long)]
+        title: Option<String>,
+
+        /// New method description
+        #[arg(long)]
+        method: Option<String>,
+
+        /// Replace the evidence body. Use `-` to read stdin.
+        #[arg(long)]
+        body: Option<String>,
+    },
+
+    /// Mark a finding as superseded by a better measurement
+    ///
+    /// The old finding is kept, not deleted: knowing a number was once believed
+    /// — and what corrected it — is why the same investigation is not run twice.
+    #[command(display_order = 4)]
+    Supersede {
+        /// Finding being replaced
+        finding_id: String,
+
+        /// The finding that replaces it
+        #[arg(long = "by", value_name = "ID")]
+        by: String,
+
+        /// Print the updated entity as JSON (for scripting and agents)
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Delete a finding
+    #[command(display_order = 5)]
+    Delete {
+        /// Finding ID, short prefix, or fuzzy title
+        finding_id: String,
+
+        /// Skip the confirmation prompt
+        #[arg(long)]
+        force: bool,
     },
 }
 

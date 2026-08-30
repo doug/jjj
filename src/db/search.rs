@@ -1,7 +1,8 @@
 //! Full-text search operations for jjj entities.
 //!
 //! This module provides search functions using the FTS5 virtual table.
-//! It supports searching across problems, solutions, critiques, and milestones.
+//! It supports searching across problems, solutions, critiques, milestones, and
+//! findings.
 //!
 //! Search queries are sanitized to prevent FTS5 syntax issues (e.g., hyphens
 //! in UUIDs being interpreted as NOT operators). User input is quoted per-word
@@ -14,7 +15,7 @@ use crate::models::Event;
 /// A search result from the FTS5 index.
 #[derive(Debug, Clone)]
 pub struct SearchResult {
-    /// Entity type: "problem", "solution", "critique", or "milestone"
+    /// Entity type: "problem", "solution", "critique", "milestone", or "finding"
     pub entity_type: String,
     /// Entity ID (UUID7)
     pub entity_id: String,
@@ -144,6 +145,37 @@ pub fn search(
 
             Ok(SearchResult {
                 entity_type: "critique".to_string(),
+                entity_id: id,
+                title,
+                snippet,
+            })
+        })?;
+
+        for result in rows {
+            results.push(result?);
+        }
+    }
+
+    // Search findings
+    if should_search("finding") {
+        let fts_query = format!("entity_type:finding AND ({})", sanitized_query);
+        let mut stmt = conn.prepare(
+            "SELECT f.id, f.title, f.evidence
+             FROM findings f
+             JOIN fts ON fts.entity_id = f.id
+             WHERE fts MATCH ?1
+             ORDER BY rank",
+        )?;
+
+        let rows = stmt.query_map(params![fts_query], |row| {
+            let id: String = row.get(0)?;
+            let title: String = row.get(1)?;
+            let evidence: String = row.get::<_, Option<String>>(2)?.unwrap_or_default();
+
+            let snippet = create_snippet(&evidence, "", &title, query);
+
+            Ok(SearchResult {
+                entity_type: "finding".to_string(),
                 entity_id: id,
                 title,
                 snippet,
@@ -419,6 +451,7 @@ fn get_entity_title(conn: &Connection, entity_type: &str, entity_id: &str) -> Sq
         "solution" => "SELECT title FROM solutions WHERE id = ?1",
         "critique" => "SELECT title FROM critiques WHERE id = ?1",
         "milestone" => "SELECT title FROM milestones WHERE id = ?1",
+        "finding" => "SELECT title FROM findings WHERE id = ?1",
         _ => return Ok(String::new()),
     };
 

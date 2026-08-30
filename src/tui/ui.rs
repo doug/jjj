@@ -676,6 +676,14 @@ fn get_context_actions(app: &App) -> Vec<Line<'static>> {
             lines.push(Line::from("    E       Edit in $EDITOR"));
             lines.push(Line::from("    x       Delete"));
         }
+        // Findings have no tree node yet, so this arm is unreachable in
+        // practice; it exists so adding one later cannot silently ship an
+        // empty help panel.
+        Some(EntityType::Finding) => {
+            lines.push(Line::from("    e       Edit title"));
+            lines.push(Line::from("    t       Edit tags"));
+            lines.push(Line::from("    E       Edit in $EDITOR"));
+        }
         Some(EntityType::Critique) => {
             lines.push(Line::from("    a       Address"));
             lines.push(Line::from("    d       Dismiss"));

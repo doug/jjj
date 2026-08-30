@@ -17,6 +17,7 @@ pub fn execute(ctx: &CommandContext, action: CritiqueAction) -> Result<()> {
             file,
             line,
             reviewer,
+            cites,
             json,
         } => new_critique(
             ctx,
@@ -27,6 +28,7 @@ pub fn execute(ctx: &CommandContext, action: CritiqueAction) -> Result<()> {
             file,
             line,
             reviewer,
+            cites,
             json,
         ),
         CritiqueAction::List {
@@ -71,10 +73,13 @@ fn new_critique(
     file: Option<String>,
     line: Option<usize>,
     reviewer: Option<String>,
+    cites: Vec<String>,
     json: bool,
 ) -> Result<()> {
     let solution_id = ctx.resolve_solution(&solution_input)?;
     let store = &ctx.store;
+    // Resolve citations before any write — see the note in `new_solution`.
+    let cited = crate::commands::finding::resolve_cites(ctx, &cites)?;
 
     // Parse severity
     let severity: CritiqueSeverity = severity_str
@@ -104,6 +109,7 @@ fn new_critique(
                 Critique::new(critique_id.clone(), title.clone(), solution_id.clone());
             critique.set_severity(severity.clone());
             critique.argument = argument.clone();
+            critique.cites = cited.clone();
 
             // Set author to current user
             let author = store.get_current_user()?;
