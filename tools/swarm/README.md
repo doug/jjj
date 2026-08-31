@@ -96,6 +96,24 @@ jjj** rather than approximated. Each one is a candidate change to the model —
 claim contention, for instance, is invisible because a claim is last-writer state
 rather than an event.
 
+## The diversity trial
+
+```sh
+./diversity-trial.sh run --runs 2 --hours 1
+./diversity-trial.sh report
+```
+
+The pre-registered A/B in `docs/design/swarm-diversity-trial.md`: does giving
+each builder a different prior (`SWARM_STRATEGIES=1`) beat six copies of one
+search? The argument for a swarm is parallel *perspective*, not parallel effort —
+and that has never actually been tested here, because every trial to date ran an
+identical builder prompt.
+
+Arms are interleaved rather than blocked, so a machine that slows over the
+afternoon penalises both equally instead of handing the whole cost to whichever
+arm ran second. The refutation condition is executed rather than interpreted:
+if diverse scores no better *and* has no shorter plateau, `report` says REFUTED.
+
 ## Findings so far
 
 The rig earned its keep on its first run.

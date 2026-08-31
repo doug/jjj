@@ -14,6 +14,24 @@ The ordering is by *evidence strength divided by cost*, not by ambition. Two of
 these are small and clearly right; two are experiments that could come back
 negative; one is deliberately refused.
 
+## Status
+
+| | Milestone | State |
+|---|---|---|
+| M1 | Findings as a first-class kind | **shipped** — `jjj finding`, `--cites` on solutions and critiques |
+| M2 | The swarm can ask for a human | **shipped** — `jjj escalate`, leads `status`, stops the fleet after a grace period |
+| M3 | Observe only through jjj | **shipped** — `analyze.py` runs on any jjj repository; harness figures are labelled as such |
+| M4 | Supervision that costs nothing while idle | **shipped** — ref-fingerprint skip, turn-end backstop |
+| M5 | Test the diversity thesis | harness built (`diversity-trial.sh`); **runs pending** |
+| M6 | Routing only where contention is real | **shipped** — `jjj contention` |
+
+Two things surfaced only by using the new paths end to end, and both are the
+same failure this document opens with — a capability existing without a path to
+it. `jjj contention` printed `rank move` commands that all shared a six-character
+UUID7 prefix, so at most one of them could ever have run; and `rank move` refused
+for anyone without a prior ordering, which is precisely the person the advice is
+aimed at. Neither was visible from reading the code.
+
 ## The through-line
 
 Six trials produced one repeated failure, in five distinct forms: **a capability
@@ -69,7 +87,9 @@ a fourth thing bolted on; it is the missing third.
 
 **Done when.** A trial produces findings, later solutions cite them, and no
 solution in that run is withdrawn with a rationale of the form "documented, not
-fixed".
+fixed". `analyze.py`'s Evidence section reports both halves — how many findings
+say *how* they were measured, and how many are cited by later work — so a
+filing cabinet nobody reads is distinguishable from evidence in use.
 
 **Cost.** Bounded and almost entirely additive — the entity plumbing is generic
 over a `(dir, singular)` table, so nothing existing needs restructuring. Roughly
@@ -186,11 +206,19 @@ date measured six copies of one search.
 
 **Deliverables.**
 
-- Two runs per arm on the synthetic target, which now converges in about 40
-  minutes and has a scorer that survived a ground-truth check.
-- Pre-registered metrics (already written down in `swarm-diversity-trial.md`):
-  final score, longest plateau, class coverage, duplicate rate.
-- The result written up whichever way it falls.
+- `tools/swarm/diversity-trial.sh` — `run` executes both arms, `report` applies
+  the pre-registered criteria. Runs are **interleaved** (control-1, diverse-1,
+  control-2, diverse-2) rather than blocked: if the machine slows over the
+  afternoon, blocking would hand the whole penalty to one arm and the difference
+  would read as an effect of the briefs.
+- Pre-registered metrics from `swarm-diversity-trial.md`: final score on shared
+  `main` (scored independently, never from an agent's own report), longest
+  plateau, class coverage against a pre-run baseline, and duplicate withdrawals
+  using the classifier that distinguishes duplication from selection on merit.
+- The refutation condition is *executed*, not interpreted: if diverse scores no
+  better and has no shorter plateau, `report` prints REFUTED.
+- Two runs per arm on the synthetic target, which converges in about 40 minutes
+  and has a scorer that survived a ground-truth check.
 
 **Done when.** Four runs are complete and the write-up states plainly whether the
 briefs are load-bearing or decoration.
