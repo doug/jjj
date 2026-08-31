@@ -277,13 +277,40 @@ cmd_report() {
 import statistics, sys
 from pathlib import Path
 
+results = Path(sys.argv[1])
+root = results.parent
+
+def minutes(arm, run):
+    """Wall-clock the arm actually got, from the sampler's own elapsed column.
+
+    The watchdog stops a fleet once nothing is open and nothing awaits review,
+    so run length is a function of the arm's behaviour rather than a constant:
+    control-1 converged at 21 minutes while diverse-1 still had two solutions in
+    review and ran its full hour. Any per-run figure is therefore partly a
+    measure of how long that run was allowed to last, and a comparison that does
+    not show this reads a difference in duration as a difference in briefs.
+    """
+    traj = root / f"{arm}-{run}" / "trajectory.tsv"
+    if not traj.exists():
+        return 0
+    last = 0
+    for line in traj.read_text(errors="replace").splitlines()[1:]:
+        c = line.split("\t")
+        if len(c) > 1:
+            try:
+                last = max(last, int(c[1]))
+            except ValueError:
+                pass
+    return last
+
 rows = []
-for line in Path(sys.argv[1]).read_text().splitlines()[1:]:
+for line in results.read_text().splitlines()[1:]:
     c = line.split("\t")
     if len(c) < 7:
         continue
     rows.append({"arm": c[0], "run": c[1], "baseline": int(c[2]), "final": int(c[3]),
-                 "plateau": int(c[4]), "coverage": int(c[5]), "duplicates": int(c[6])})
+                 "plateau": int(c[4]), "coverage": int(c[5]), "duplicates": int(c[6]),
+                 "minutes": minutes(c[0], c[1])})
 
 if not rows:
     print("no completed runs")
@@ -293,18 +320,19 @@ arms = {}
 for r in rows:
     arms.setdefault(r["arm"], []).append(r)
 
-print(f"\n{'':10s} {'n':>2s} {'final':>10s} {'plateau':>9s} {'coverage':>9s} {'dupes':>7s}")
-print("-" * 52)
+print(f"\n{'':10s} {'n':>2s} {'final':>10s} {'plateau':>9s} {'coverage':>9s} "
+      f"{'dupes':>7s} {'minutes':>8s}")
+print("-" * 61)
 means = {}
 for arm in ("control", "diverse"):
     rs = arms.get(arm, [])
     if not rs:
         continue
     m = {k: statistics.mean(r[k] for r in rs)
-         for k in ("final", "plateau", "coverage", "duplicates")}
+         for k in ("final", "plateau", "coverage", "duplicates", "minutes")}
     means[arm] = m
     print(f"{arm:10s} {len(rs):2d} {m['final']:10.1f} {m['plateau']:9.1f} "
-          f"{m['coverage']:9.1f} {m['duplicates']:7.1f}")
+          f"{m['coverage']:9.1f} {m['duplicates']:7.1f} {m['minutes']:8.1f}")
 
 if len(means) < 2:
     print("\nOnly one arm has completed. Both are needed for a comparison.")
@@ -352,7 +380,13 @@ if saturated:
     print(f"   plateau   diverse {d['plateau']:.1f} vs control {c['plateau']:.1f}")
     print(f"   coverage  diverse {d['coverage']:.1f} vs control {c['coverage']:.1f}")
     print(f"   dupes     diverse {d['duplicates']:.1f} vs control {c['duplicates']:.1f}")
+    print(f"   minutes   diverse {d['minutes']:.0f} vs control {c['minutes']:.0f}")
     print()
+    if d["minutes"] and c["minutes"] and abs(d["minutes"] - c["minutes"]) > 0.25 * c["minutes"]:
+        print("   ...and the arms did not run equally long, because the watchdog stops")
+        print("   a fleet once its queue empties. Coverage and duplicates accumulate")
+        print("   with time, so the longer arm is flattered on both.")
+        print()
     print(f"n={n} per arm.")
     raise SystemExit
 
@@ -371,6 +405,18 @@ else:
     print("Consistent with the hypothesis.")
 
 print()
+if means["control"]["minutes"] and means["diverse"]["minutes"]:
+    ratio = means["diverse"]["minutes"] / max(means["control"]["minutes"], 1)
+    if ratio > 1.25 or ratio < 0.8:
+        print("CONFOUND: the arms did not run for the same length of time")
+        print(f"  control {means['control']['minutes']:.0f} min vs diverse "
+              f"{means['diverse']['minutes']:.0f} min.")
+        print("  The watchdog stops a fleet once nothing is open and nothing awaits")
+        print("  review, so duration is an outcome of the arm rather than a constant.")
+        print("  Coverage and duplicates both accumulate with time, so the longer arm")
+        print("  is flattered on them. Treat any difference in those two as unproven.")
+        print()
+
 print(f"n={n} per arm. Agent runs are noisy — the same configuration twice does")
 print("not produce the same number — so only a large effect means anything here,")
 print("and even then it is one target's worth of evidence, not a claim about")
