@@ -22,7 +22,7 @@ negative; one is deliberately refused.
 | M2 | The swarm can ask for a human | **shipped** — `jjj escalate`, leads `status`, stops the fleet after a grace period |
 | M3 | Observe only through jjj | **shipped** — `analyze.py` runs on any jjj repository; harness figures are labelled as such |
 | M4 | Supervision that costs nothing while idle | **shipped** — ref-fingerprint skip, turn-end backstop |
-| M5 | Test the diversity thesis | harness built and run; **inconclusive — the target saturates**, see the result section of `swarm-diversity-trial.md` |
+| M5 | Test the diversity thesis | first run **inconclusive** — the target saturated. Instrument rebuilt (`synth2`, five levers, unreachable ceiling, equal durations); **re-run pending** |
 | M6 | Routing only where contention is real | **shipped** — `jjj contention` |
 
 Three things surfaced only by using the new paths end to end, and all are the

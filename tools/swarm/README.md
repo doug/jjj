@@ -99,7 +99,7 @@ rather than an event.
 ## The diversity trial
 
 ```sh
-./diversity-trial.sh run --runs 2 --hours 1
+./diversity-trial.sh run --runs 2 --hours 1     # defaults to the synth2 target
 ./diversity-trial.sh report
 ```
 

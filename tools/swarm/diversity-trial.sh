@@ -16,6 +16,10 @@
 #   control   one shared builder brief   (SWARM_STRATEGIES unset)
 #   diverse   measure / structure / algorithm, one each   (SWARM_STRATEGIES=1)
 #
+# Both arms run to the same deadline. An earlier version passed --stop-when-done,
+# which let the watchdog end a run once its queue emptied — and that made
+# duration an outcome of the arm rather than a constant.
+#
 # Runs are sequential on an otherwise idle machine — both arms measure a fitness
 # that is counted rather than timed, but the agents themselves contend for CPU,
 # and two fleets at once would make each arm's turn count a function of the
@@ -35,6 +39,11 @@ REPO_ROOT="$(cd "$SWARM_DIR/../.." && pwd)"
 TRIAL_ROOT="${TRIAL_ROOT:-$HOME/.jjj-diversity-trial}"
 RESULTS="$TRIAL_ROOT/results.tsv"
 JJJ_BIN="${JJJ_BIN:-$REPO_ROOT/target/release/jjj}"
+# synth2, not synth: synth's ceiling is reachable, six agents reached it in ten
+# minutes, and both arms then finished at 100 — a comparison that could not have
+# come out any other way. See the result section of
+# docs/design/swarm-diversity-trial.md.
+TARGET="${TARGET:-synth2}"
 
 info() { printf '\n=== %s\n' "$*"; }
 die()  { printf 'diversity-trial: %s\n' "$*" >&2; exit 1; }
@@ -186,7 +195,7 @@ one_run() {
     # difference is SWARM_STRATEGIES — anything else varying here would make the
     # comparison meaningless.
     SWARM_ROOT="$root" SWARM_NS="$ns" \
-        "$SWARM_DIR/swarm.sh" init --target synth --pods 2 --agents 3 --critics 1 \
+        "$SWARM_DIR/swarm.sh" init --target "$TARGET" --pods 2 --agents 3 --critics 1 \
         || die "init failed for $arm run $n"
 
     # The baseline op counts, before any agent has touched anything: class
@@ -203,22 +212,34 @@ except Exception:
     before="$(score_main "$root")"
     echo "  baseline score on main: ${before:-0}"
 
+    # No --stop-when-done. The watchdog stops a fleet once its queue empties,
+    # which made duration an *outcome of the arm* rather than a constant:
+    # control-1 converged at 21 minutes while diverse-1 still had two solutions
+    # in review and ran its full hour. Coverage and duplicates both accumulate
+    # with time, so the longer arm was flattered on exactly the metrics meant to
+    # separate them. Both arms now get the same wall clock.
     SWARM_ROOT="$root" SWARM_NS="$ns" SWARM_STRATEGIES="$strategies" \
-        "$SWARM_DIR/swarm.sh" start --hours "$hours" --model "$model" --stop-when-done \
+        "$SWARM_DIR/swarm.sh" start --hours "$hours" --model "$model" \
         || die "start failed for $arm run $n"
 
-    # Wait for the fleet to finish: either the watchdog trips (STOP appears) or
-    # the deadline empties the container list.
+    # Run to the deadline, so both arms get identical wall clock. An escalation
+    # still ends it early — a fleet blocked on a person cannot produce a
+    # comparable data point, and the run is marked so the report can exclude it.
     local waited=0 limit
     limit=$(python3 -c "import sys;print(int(float(sys.argv[1])*3600)+900)" "$hours")
     while [ "$waited" -lt "$limit" ]; do
         sleep 60; waited=$((waited + 60))
         if [ -e "$root/STOP" ]; then
-            echo "  watchdog stopped the fleet at ${waited}s"
+            echo "  fleet stopped at ${waited}s"
             break
         fi
         if [ -z "$(podman ps -q --filter "name=^${ns}-pod-" 2>/dev/null)" ]; then
             echo "  no containers left at ${waited}s"
+            break
+        fi
+        if [ -f "$root/AUTH_DEAD" ]; then
+            echo "  !! the host credential died — this run cannot be compared"
+            touch "$root/INVALID"
             break
         fi
     done
@@ -233,7 +254,17 @@ except Exception:
     plateau="$(printf '%s' "$pd" | cut -f1)"
     duplicates="$(printf '%s' "$pd" | cut -f2)"
 
-    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+    # An invalidated run is recorded and excluded rather than silently dropped:
+    # a missing row reads as "never ran", which is a different fact.
+    if [ -f "$root/INVALID" ]; then
+        echo "  EXCLUDED — infrastructure failure, not a property of the arm"
+        printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\tinvalid\n' \
+            "$arm" "$n" "${before:-0}" "${after:-0}" "${plateau:-0}" \
+            "${coverage:-0}" "${duplicates:-0}" >> "$RESULTS"
+        return
+    fi
+
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\tok\n' \
         "$arm" "$n" "${before:-0}" "${after:-0}" "${plateau:-0}" \
         "${coverage:-0}" "${duplicates:-0}" >> "$RESULTS"
 
@@ -244,9 +275,10 @@ cmd_run() {
     local runs=2 hours=1 model="sonnet"
     while [ $# -gt 0 ]; do
         case "$1" in
-            --runs)  runs="$2";  shift 2 ;;
-            --hours) hours="$2"; shift 2 ;;
-            --model) model="$2"; shift 2 ;;
+            --runs)   runs="$2";   shift 2 ;;
+            --hours)  hours="$2";  shift 2 ;;
+            --model)  model="$2";  shift 2 ;;
+            --target) TARGET="$2"; shift 2 ;;
             *) die "unknown option $1" ;;
         esac
     done
@@ -255,7 +287,7 @@ cmd_run() {
     command -v podman >/dev/null || die "podman not found"
 
     mkdir -p "$TRIAL_ROOT"
-    [ -s "$RESULTS" ] || printf 'arm\trun\tbaseline\tfinal\tplateau\tcoverage\tduplicates\n' > "$RESULTS"
+    [ -s "$RESULTS" ] || printf 'arm\trun\tbaseline\tfinal\tplateau\tcoverage\tduplicates\tstatus\n' > "$RESULTS"
 
     # Interleaved, not blocked: control-1, diverse-1, control-2, diverse-2. If
     # the machine gets slower over the afternoon — a background build, thermal
@@ -304,16 +336,27 @@ def minutes(arm, run):
     return last
 
 rows = []
+excluded = []
 for line in results.read_text().splitlines()[1:]:
     c = line.split("\t")
     if len(c) < 7:
+        continue
+    # A run the harness marked invalid — an expired credential, not a property
+    # of the arm. Excluded from the means and reported, because averaging an
+    # infrastructure failure into an arm reads as evidence about the briefs.
+    if len(c) > 7 and c[7].strip() == "invalid":
+        excluded.append((c[0], c[1]))
         continue
     rows.append({"arm": c[0], "run": c[1], "baseline": int(c[2]), "final": int(c[3]),
                  "plateau": int(c[4]), "coverage": int(c[5]), "duplicates": int(c[6]),
                  "minutes": minutes(c[0], c[1])})
 
+if excluded:
+    print("\nExcluded (infrastructure failure, not the arm): " +
+          ", ".join(f"{a}-{r}" for a, r in excluded))
+
 if not rows:
-    print("no completed runs")
+    print("no valid completed runs")
     raise SystemExit
 
 arms = {}

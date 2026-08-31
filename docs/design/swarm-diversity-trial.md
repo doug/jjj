@@ -147,3 +147,69 @@ That bug had been latent since per-pod bookmarks were introduced. No amount of
 reading found it; a real credential expiry did. Which is the same lesson as the
 plan's through-line — *not "is it implemented" but "did something use it end to
 end"* — arriving from the other direction.
+
+
+---
+
+# What changed, so the re-run can answer the question
+
+All three fixes named above are in.
+
+## A target with five levers (`synth2`)
+
+`tools/swarm/targets/synth2/` is `synth` with the flaw removed. The cost is
+spread across five *independent* inefficiencies, each wanting a different kind
+of change:
+
+| lever | the waste | the insight |
+|---|---|---|
+| 1 | the decoder runs once per stage, not once per record | control flow |
+| 2 | `stage_count` scans a tuple where a set would do | asymptotics |
+| 3 | `stage_sum` rebuilds a constant table inside its loop | hoisting |
+| 4 | `stage_group` accumulates a list it only ever counts | representation |
+| 5 | `stage_filter` normalises four fields to compare one | doing less |
+
+Fixing one leaves the others untouched — verified by applying each in isolation:
+
+```
+baseline                          18
+L1 fuse the four passes           26
+L2 set instead of scan            22
+L3 hoist the constant table       21
+L4 count, do not accumulate       20
+L5 normalise one field, not four  20
+all five, fused                   83
+```
+
+Ten sites carry 20,000+ operations at baseline, the largest 22% of the total, so
+**class coverage finally has something to measure**. `groundtruth.sh` asserts
+both properties — no site over 40%, at least five sites with real cost — because
+the flaw it is guarding against is precisely the one that wasted the first trial.
+
+## A ceiling that is out of reach by construction
+
+`decode.parse` charges 3 operations for each of 20,000 records and no correct
+answer can skip a record, so **60,000 operations is a hard lower bound**. A fully
+optimised reference with all five levers pulled measures 100,004 and scores 83.
+Full marks needs 50,000. It cannot be reached.
+
+The reference lives in `reference/`, which `seed.sh` deliberately does not copy —
+it holds a worked answer. `reference/ceiling.sh` asserts the property from the
+repository side: an optimised tree must score under 100, the range must span at
+least 40 points, and the optimum must sit above the full-marks floor.
+
+`score.sh` also refuses a modified `fixture/ops.py`. The meter is not part of the
+program under optimisation: editing it does not make anything cheaper, it makes
+the measurement lie, and the fitness function is the one artifact a swarm cannot
+critique.
+
+## Equal durations
+
+The trial no longer passes `--stop-when-done`. The watchdog ends a run when its
+queue empties, which made length an outcome of the arm — 21 minutes against 60 —
+and flattered the longer arm on the two metrics that accumulate with time. Both
+arms now run to the same deadline.
+
+A run whose host credential dies is marked `invalid` in `results.tsv` and
+excluded from the means, rather than dropped. A missing row reads as "never ran",
+which is a different fact.

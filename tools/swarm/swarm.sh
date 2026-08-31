@@ -13,7 +13,7 @@
 # experiment; a bookmark per agent would have quietly designed it away.
 #
 #   ./swarm.sh build                                  build the agent image
-#   ./swarm.sh init  [--target toy|sql|sqlperf|gophics|gophicswasm|jjj] [--pods N] [--agents N] [--problems N] [--critics N]
+#   ./swarm.sh init  [--target toy|sql|sqlperf|gophics|gophicswasm|synth2|jjj] [--pods N] [--agents N] [--problems N] [--critics N]
 #   ./swarm.sh start [--hours H] [--max-iters N] [--model M] [--stop-when-done]
 #       SWARM_STRATEGIES=1 gives each builder a different approach (measure,
 #       structure, algorithm, correctness, simplify) instead of one shared
@@ -175,8 +175,23 @@ cmd_init() {
         synth)
             # One seeded problem, on purpose: decomposition is the thing under
             # test, not a preliminary to it.
+            #
+            # NOTE: this target's ceiling is reachable — six agents hit 100 in
+            # ten minutes — so it cannot separate two configurations. Use synth2
+            # for anything comparative.
             info "seeding the synthetic decomposition target"
             "$SWARM_DIR/targets/synth/seed.sh" "$SEED" "$REPO_ROOT" "$JJJ_BIN" \
+                >"$SWARM_ROOT/logs/seed.log" 2>&1 \
+                || { cat "$SWARM_ROOT/logs/seed.log"; die "seeding failed"; }
+            grep -E '^(baseline|problems)' "$SWARM_ROOT/logs/seed.log" | sed 's/^/  /'
+            ;;
+        synth2)
+            # synth with the flaw removed: five independent levers instead of
+            # one, and a full-marks floor set below anything a correct program
+            # can reach. The target to use when the run has to distinguish
+            # something.
+            info "seeding the five-lever synthetic decomposition target"
+            "$SWARM_DIR/targets/synth2/seed.sh" "$SEED" "$REPO_ROOT" "$JJJ_BIN" \
                 >"$SWARM_ROOT/logs/seed.log" 2>&1 \
                 || { cat "$SWARM_ROOT/logs/seed.log"; die "seeding failed"; }
             grep -E '^(baseline|problems)' "$SWARM_ROOT/logs/seed.log" | sed 's/^/  /'
