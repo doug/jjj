@@ -325,6 +325,37 @@ print(f"3. class coverage   diverse {d['coverage']:.1f} vs control {c['coverage'
 print(f"4. duplicates       diverse {d['duplicates']:.1f} vs control {c['duplicates']:.1f}")
 
 print()
+
+# Saturation guard, written before any comparative data existed.
+#
+# Control run 1 took the synth target from its 700,004-op baseline to 60,004 —
+# the scorer's declared full-marks floor — in ten minutes. When both arms finish
+# at the ceiling, "diverse scored no better" is a fact about the instrument, not
+# about the briefs, and printing REFUTED would be the strongest claim in this
+# report resting on a measurement that could not have come out any other way.
+#
+# This is the harness's own fitness-function rule turned on itself: a metric with
+# a reachable ceiling stops discriminating once anyone reaches it.
+CEILING = 100
+saturated = c["final"] >= CEILING and d["final"] >= CEILING
+if saturated:
+    print("INCONCLUSIVE — the instrument saturated. Both arms finished at the")
+    print(f"scoring ceiling ({CEILING}), so the final-score comparison could not have")
+    print("come out any other way and says nothing about the briefs.")
+    print()
+    print("The target is solved, not merely hard: the fitness floor is reachable, and")
+    print("both arms reach it. Re-run on a target whose optimum is out of reach within")
+    print("the run, or the comparison is between two numbers that were fixed in")
+    print("advance. The remaining figures below still describe how each arm got")
+    print("there, and are worth reading as description rather than as a verdict:")
+    print()
+    print(f"   plateau   diverse {d['plateau']:.1f} vs control {c['plateau']:.1f}")
+    print(f"   coverage  diverse {d['coverage']:.1f} vs control {c['coverage']:.1f}")
+    print(f"   dupes     diverse {d['duplicates']:.1f} vs control {c['duplicates']:.1f}")
+    print()
+    print(f"n={n} per arm.")
+    raise SystemExit
+
 # The pre-registered refutation condition, applied rather than reinterpreted.
 if not higher and not shorter:
     print("REFUTED as pre-registered: diverse scores no better AND has no shorter")
