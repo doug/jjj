@@ -52,11 +52,21 @@ while [ $# -gt 0 ]; do
 done
 
 JJJ="${JJJ_BIN:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/target/release/jjj}"
+
+# Which containers belong to this workbench.
+#
+# This used to be the literal substring `swarm-`, which is wrong in both
+# directions: a namespaced run (`divcontrol1-pod-1-agent-01`) matches nothing, so
+# the loop exits on its first test and `--stop-when-done` becomes a silent no-op;
+# and a differently-named run whose containers *do* contain `swarm-` would keep
+# this watchdog alive, or be stopped by it.
+NS="${SWARM_NS:-$(basename "$ROOT" | sed 's/^\.//; s/^jjj-swarm$/swarm/; s/^jjj-//')}"
+CFILTER="^${NS}-pod-"
 # shellcheck disable=SC1091
 . "$(dirname "${BASH_SOURCE[0]}")/lib-remote.sh"
 log() { printf '[%s] watchdog: %s\n' "$(date +%H:%M:%S)" "$*"; }
 
-log "watching $ROOT (every ${INTERVAL}s, patience $PATIENCE)"
+log "watching $ROOT (every ${INTERVAL}s, patience $PATIENCE, containers $CFILTER)"
 
 last_score=""
 stable=0
@@ -70,7 +80,7 @@ escalation_measured_at=0
 open_problems=1
 awaiting_review=1
 
-while [ -n "$(podman ps -q --filter 'name=swarm-' 2>/dev/null)" ]; do
+while [ -n "$(podman ps -q --filter "name=$CFILTER" 2>/dev/null)" ]; do
     sleep "$INTERVAL"
 
     # Nothing has been pushed since the last poll, so a clone would produce a

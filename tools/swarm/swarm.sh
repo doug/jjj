@@ -51,6 +51,13 @@ STRATEGY_NAMES=(measure structure algorithm correctness simplify)
 STRATEGIES="${SWARM_STRATEGIES:-0}"
 
 SWARM_NS="${SWARM_NS:-$(basename "$SWARM_ROOT" | sed 's/^\.//; s/^jjj-swarm$/swarm/; s/^jjj-//')}"
+# Exported, because the sampler and watchdog run as separate processes and both
+# have to watch *this* workbench. Without it they fell back to deriving a
+# namespace from the root's basename, which is not the namespace the containers
+# were actually named with whenever the two were set independently — the sampler
+# then saw no containers and exited within the minute, and the watchdog's
+# hardcoded `swarm-` filter matched either nothing or another run's containers.
+export SWARM_NS
 CPREFIX="${SWARM_NS}-"
 JJJ_BIN="${JJJ_BIN:-$REPO_ROOT/target/release/jjj}"
 IMAGE="${SWARM_IMAGE:-jjj-swarm-agent:0.5.1}"
