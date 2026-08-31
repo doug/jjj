@@ -276,17 +276,20 @@ impl JjClient {
         }
     }
 
-    /// Resolve the head commit ids of every metadata bookmark (`jjj`, `jjj/*`),
-    /// **including remote-tracking refs** (`jjj/*@origin`).
+    /// The DAG *tips* among the metadata bookmarks (`jjj`, `jjj-pod-*`),
+    /// including remote-tracking refs.
     ///
-    /// These are the per-pod single-writer refs (Break #5): fetch reads them
-    /// all and unions their deltas. A freshly fetched pod bookmark arrives as a
-    /// remote-tracking ref before it is tracked locally, so the union must span
-    /// both `bookmarks()` and `remote_bookmarks()` — otherwise a clone that has
-    /// never pushed sees "no jjj bookmark" right after fetching one. `heads(...)`
-    /// drops any ref that is an ancestor of another (e.g. a stale shared `jjj`
-    /// base under newer pod refs), so the result is exactly the set of distinct
-    /// tips to merge.
+    /// For **push**, which builds a merge commit with `jj new <heads...>`: the
+    /// new commit must descend from every pod's pushed state, and naming a
+    /// commit that is already an ancestor of another parent adds nothing.
+    ///
+    /// **Not for fetch.** See [`Self::meta_bookmark_commits`] — collapsing
+    /// ancestors is exactly wrong when the question is about content.
+    ///
+    /// A freshly fetched pod bookmark arrives as a remote-tracking ref before it
+    /// is tracked locally, so the set must span both `bookmarks()` and
+    /// `remote_bookmarks()` — otherwise a clone that has never pushed sees "no
+    /// jjj bookmark" right after fetching one.
     ///
     /// Returns an empty vec when no metadata bookmark exists yet (fresh remote).
     pub fn meta_head_commits(&self) -> Result<Vec<String>> {
@@ -307,6 +310,55 @@ impl JjClient {
             .lines()
             .map(str::trim)
             .filter(|l| !l.is_empty())
+            .map(String::from)
+            .collect())
+    }
+
+    /// Every distinct commit a metadata bookmark points at — ancestors
+    /// included.
+    ///
+    /// For **fetch**, which merges *content*. The distinction from
+    /// [`Self::meta_head_commits`] is load-bearing and was found the hard way.
+    ///
+    /// A metadata commit is a snapshot of one actor's whole `jjj-meta` tree, not
+    /// a content merge of the others'. So a pod's commit routinely *descends*
+    /// from the shared `jjj` bookmark while carrying an older copy of another
+    /// actor's file — it wrote its own working copy over the merged tree. Under
+    /// `heads()` that pod becomes the single tip, the shared bookmark is
+    /// collapsed away as "already an ancestor", and its newer content is never
+    /// diffed.
+    ///
+    /// Observed: a swarm's host credential expired, the refresher escalated, and
+    /// the escalation reached the remote's `jjj` bookmark with three lines in
+    /// `events/swarm-seed.jsonl`. Both pods then pushed commits descending from
+    /// it carrying two lines. `heads()` returned one commit — a pod — so the
+    /// fetch never saw the escalation, the watchdog reported `escalations=0`,
+    /// and the fleet spent the rest of its deadline failing every turn. That is
+    /// the exact outage `jjj escalate` exists to prevent, defeated one layer
+    /// down.
+    ///
+    /// Ancestry is reachability, not subsumption. Content is merged by the
+    /// per-file union in `apply_file_delta`, so fetch has to be handed every
+    /// bookmark and left to do that union.
+    pub fn meta_bookmark_commits(&self) -> Result<Vec<String>> {
+        let glob = format!("{}*", BOOKMARK_PREFIX);
+        let revset = format!("bookmarks(glob:{0:?}) | remote_bookmarks(glob:{0:?})", glob);
+        let out = self.execute(&[
+            "log",
+            "--no-graph",
+            "-r",
+            &revset,
+            "-T",
+            r#"commit_id ++ "\n""#,
+        ])?;
+        // Several bookmarks can point at one commit; diffing it twice is wasted
+        // work, and the union makes it a no-op anyway.
+        let mut seen = std::collections::HashSet::new();
+        Ok(out
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty())
+            .filter(|l| seen.insert(l.to_string()))
             .map(String::from)
             .collect())
     }

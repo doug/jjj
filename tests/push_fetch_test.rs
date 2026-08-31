@@ -1655,3 +1655,99 @@ fn a_cold_push_still_builds_a_working_search_index() {
         "a cold push left the search index empty: {found}"
     );
 }
+
+/// A pod's push must not bury another actor's newer event behind DAG ancestry.
+///
+/// Fetch used to enumerate metadata bookmarks with `heads(...)`, which drops any
+/// ref that is an ancestor of another. The justification was that an ancestor's
+/// content is already contained in its descendants — and for these bookmarks
+/// that is false. A metadata commit is a snapshot of one actor's whole
+/// `jjj-meta` tree, not a content merge of everyone else's, so a pod that
+/// fetches, then writes its own working copy, produces a commit that *descends*
+/// from the shared `jjj` bookmark while carrying an **older** copy of another
+/// actor's event shard.
+///
+/// Found in a live run. The host credential expired, the refresher raised an
+/// escalation, and it reached the remote's `jjj` bookmark. Both pods then pushed
+/// commits descending from it with the pre-escalation shard. `heads()` returned
+/// one commit — a pod — so no fetch ever diffed the bookmark holding the
+/// escalation: the watchdog reported `escalations=0` and the fleet spent the
+/// rest of its deadline failing every turn, which is precisely the outage
+/// `jjj escalate` exists to prevent.
+///
+/// Ancestry is reachability, not subsumption. Content is merged per file by the
+/// append-only union in `apply_file_delta`, so fetch must be handed every
+/// bookmark.
+#[test]
+fn an_ancestor_bookmarks_newer_event_survives_a_descendant_push() {
+    if !jj_available() {
+        return;
+    }
+    let remote = create_bare_remote();
+
+    // The shared actor seeds, so both pods have a common base to descend from.
+    let seed = setup_repo_with_remote(remote.path());
+    run_jjj_success(seed.path(), &["init"]);
+    run_jjj_success(seed.path(), &["problem", "new", "Shared work", "--force"]);
+    run_jjj_success(seed.path(), &["push"]);
+
+    // A pod clones and pushes its own bookmark, so its commit descends from the
+    // seed's.
+    let pod = setup_repo_with_remote(remote.path());
+    run_jjj_env(pod.path(), &[("JJJ_POD", "one")], &["fetch"]);
+    run_jjj_env(
+        pod.path(),
+        &[("JJJ_POD", "one"), ("JJJ_USER", "pod-one")],
+        &["problem", "new", "Pod work", "--force"],
+    );
+    run_jjj_env(pod.path(), &[("JJJ_POD", "one")], &["push"]);
+
+    // Now the shared actor records something the pod has never seen — the real
+    // case is an escalation raised by the credential refresher.
+    run_jjj_success(
+        seed.path(),
+        &[
+            "escalate",
+            "The host credential is dead; a person must log in",
+        ],
+    );
+    run_jjj_success(seed.path(), &["push"]);
+
+    // The pod learns the new REF without merging its CONTENT — exactly what an
+    // agent does when it runs `jj git fetch` for code between jjj syncs.
+    run_jj(pod.path(), &["git", "fetch"]);
+
+    // Now it pushes. `push` builds its commit with `jj new <heads...>`, so the
+    // seed's escalation commit becomes a parent and the pod's commit *descends*
+    // from it — and then push copies the pod's own metadata files over the
+    // merged tree, reverting the shard to its pre-escalation content.
+    //
+    // That is the shape: a descendant carrying strictly less than its ancestor.
+    run_jjj_env(
+        pod.path(),
+        &[("JJJ_POD", "one"), ("JJJ_USER", "pod-one")],
+        &["problem", "new", "More pod work", "--force"],
+    );
+    run_jjj_env(pod.path(), &[("JJJ_POD", "one")], &["push"]);
+
+    // A third party — a watchdog, a supervisor, a new agent — fetches.
+    let observer = setup_repo_with_remote(remote.path());
+    run_jjj_env(observer.path(), &[("JJJ_POD", "obs")], &["fetch"]);
+
+    let open = run_jjj_success(observer.path(), &["escalate"]);
+    assert!(
+        open.contains("credential is dead"),
+        "the escalation was buried behind a descendant push carrying a stale \
+         shard — a fleet blocked on a person would have no way to say so:\n{open}"
+    );
+
+    // And the ordinary metadata still arrives, so the fix did not trade one
+    // loss for another.
+    let problems = run_jjj_success(observer.path(), &["problem", "list"]);
+    for expected in ["Shared work", "Pod work", "More pod work"] {
+        assert!(
+            problems.contains(expected),
+            "'{expected}' went missing from the union: {problems}"
+        );
+    }
+}

@@ -5,7 +5,7 @@
 //! (~10 min @25K). This path is O(delta):
 //!
 //! 1. `jj git fetch` brings the remote per-pod bookmarks (`jjj`, `jjj/*`) local.
-//! 2. Resolve their head commits ([`JjClient::meta_head_commits`]) — the
+//! 2. Resolve every metadata bookmark ([`JjClient::meta_bookmark_commits`]) — the
 //!    fetch-union set (Break #5: each pod is a single-writer ref).
 //! 3. For each head `H`, three-way merge against the **true** common ancestor:
 //!    `base = GCA(last_synced_rev, H)` ([`JjClient::merge_base`]) — NOT
@@ -310,6 +310,7 @@ fn upsert_entity(db: &Database, store: &MetadataStore, singular: &str, id: &str)
         "solution" => db::sync_solution_to_cache(db, &store.load_solution(id)?),
         "critique" => db::sync_critique_to_cache(db, &store.load_critique(id)?),
         "milestone" => db::sync_milestone_to_cache(db, &store.load_milestone(id)?),
+        "finding" => db::sync_finding_to_cache(db, &store.load_finding(id)?),
         other => Err(crate::error::JjjError::Validation(format!(
             "unknown entity type for upsert: {}",
             other
@@ -350,7 +351,11 @@ pub fn execute(ctx: &CommandContext, remote: &str) -> Result<()> {
     }
 
     // 2. Resolve the per-pod head commits to merge.
-    let heads = jj_client.meta_head_commits()?;
+    // Every metadata bookmark, not just the DAG tips: a pod's commit can
+    // descend from the shared `jjj` bookmark while carrying an older copy of
+    // another actor's event shard, and `heads()` would collapse the newer
+    // content away. See `meta_bookmark_commits`.
+    let heads = jj_client.meta_bookmark_commits()?;
     if heads.is_empty() {
         println!("Fetched from {}.", remote);
         println!("  No jjj bookmark on the remote yet.");
