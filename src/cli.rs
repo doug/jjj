@@ -172,6 +172,19 @@ pub enum Commands {
         json: bool,
     },
 
+    /// Show where the fleet is doubled up and where nobody is
+    ///
+    /// Reports; it does not route. Several actors on one problem is rivalry —
+    /// the method working — and only becomes waste when the rest of the queue
+    /// is untouched at the same time. The fix is a re-ranking, which any agent
+    /// may still disagree with, not an assignment.
+    #[command(display_order = 5)]
+    Contention {
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
     /// Show files touched by multiple in-progress solutions (conflict detection)
     #[command(display_order = 3)]
     Overlaps {

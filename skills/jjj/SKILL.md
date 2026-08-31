@@ -142,6 +142,22 @@ is what stops the same investigation being run a third time.
 | You think someone else's solution is wrong | Critique |
 | You found a better number than an earlier finding | Finding, then `supersede` |
 
+## Seeing where the fleet is piled up
+
+`jjj contention` reports which problems several actors are already on and which
+have nobody, and prints the `rank move` commands to spread the queue.
+
+It reports; it does not route. Several actors on one problem is *rivalry* — the
+method working — and only becomes waste when the rest of the queue is untouched
+at the same time, which is the pairing the command checks. `should_rebalance` in
+the JSON is that judgement made once, rather than re-derived by every caller.
+
+The fix is a re-ranking, never an assignment. A ranking changes what agents see
+first and any of them may still disagree; an assignment would prevent two agents
+independently attacking one problem with rival conjectures, which is the whole
+point. Duplication is the price of decentralisation plus rivalry, not a defect
+to eliminate.
+
 ## When only a person can unblock you
 
 `jjj escalate "<what a human has to do>"` is the one signal the fleet cannot

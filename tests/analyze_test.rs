@@ -85,7 +85,14 @@ fn analyze_reads_a_plain_jjj_repository() {
     run_jjj_success(
         &dir,
         &[
-            "solution", "new", "Memoize it", "--problem", &pid, "--cites", &fid, "--json",
+            "solution",
+            "new",
+            "Memoize it",
+            "--problem",
+            &pid,
+            "--cites",
+            &fid,
+            "--json",
         ],
     );
     let rival = json_id(&run_jjj_success(

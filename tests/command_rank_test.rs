@@ -90,19 +90,58 @@ fn a_repeated_problem_is_refused() {
     );
 }
 
+/// Moving without a prior ordering bootstraps one rather than refusing.
+///
+/// This used to fail with "use `jjj rank set` first", which made `rank move`
+/// unusable in exactly the situation it exists for: `jjj contention` tells an
+/// integrator to nudge an untouched problem to the top, and following that
+/// advice hit the refusal. Restating the whole queue to move one item is what
+/// this command is meant to avoid.
 #[test]
-fn moving_without_an_ordering_says_so() {
+fn moving_without_an_ordering_bootstraps_the_whole_queue() {
     if !jj_available() {
         return;
     }
     let dir = with_three_problems();
     let out = run_jjj(&dir, &["rank", "move", "Alpha", "top"]);
-    assert!(!out.status.success());
     assert!(
-        String::from_utf8_lossy(&out.stderr).contains("rank set"),
-        "the error should name the way forward: {}",
+        out.status.success(),
+        "a first-time ranker must be able to move: {}",
         String::from_utf8_lossy(&out.stderr)
     );
+
+    // "Shift one, keep the rest" — the rest has to actually be kept, or a first
+    // move would silently drop every problem the mover did not name.
+    let shown = run_jjj_success(&dir, &["rank", "show", "--json"]);
+    let rows: serde_json::Value = serde_json::from_str(&shown).expect("valid JSON");
+    let rows = rows.as_array().expect("array");
+    assert_eq!(rows.len(), 3, "the other problems must survive: {shown}");
+    assert_eq!(
+        rows[0]["title"], "Alpha",
+        "the moved problem should lead: {shown}"
+    );
+}
+
+/// Moving a problem that is not yet in your ordering places it, rather than
+/// refusing. It is new, or it arrived after the ordering was written; placing
+/// it is the point of the command.
+#[test]
+fn moving_an_unranked_problem_places_it() {
+    if !jj_available() {
+        return;
+    }
+    let dir = with_three_problems();
+    run_jjj_success(&dir, &["rank", "set", "Alpha", "Beta"]);
+
+    let out = run_jjj(&dir, &["rank", "move", "Gamma", "top"]);
+    assert!(
+        out.status.success(),
+        "an unranked problem should be placeable: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let shown = run_jjj_success(&dir, &["rank", "show", "--json"]);
+    let rows: serde_json::Value = serde_json::from_str(&shown).expect("valid JSON");
+    assert_eq!(rows[0]["title"], "Gamma", "expected Gamma on top: {shown}");
 }
 
 /// A long ordering should be pipeable, not typed out.

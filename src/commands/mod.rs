@@ -1,6 +1,7 @@
 pub mod automation;
 pub mod completion;
 pub mod conflicts;
+pub mod contention;
 pub mod critique;
 pub mod db;
 pub mod doctor;
@@ -113,6 +114,9 @@ fn execute_with_context(ctx: &CommandContext, command: Commands) -> Result<()> {
             clear,
             json,
         } => escalate::execute(ctx, reason, about, list, clear, json),
+
+        // Where the fleet is doubled up, and where nobody is
+        Commands::Contention { json } => contention::execute(ctx, json),
 
         // Overlap detection
         Commands::Overlaps { json } => overlaps::execute(ctx, json),

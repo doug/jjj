@@ -160,20 +160,37 @@ fn move_one(
     let id = ctx.resolve_problem(&problem)?;
 
     let base = ctx.store.meta_path();
-    let existing = crate::ranking::ordering::load_user_ordering(base, &milestone_id, &user)?
-        .ok_or_else(|| {
-            crate::error::JjjError::Validation(
-                "you have no ordering for this milestone yet — use `jjj rank set` first"
-                    .to_string(),
-            )
-        })?;
+    let existing = crate::ranking::ordering::load_user_ordering(base, &milestone_id, &user)?;
+    let gaps = existing
+        .as_ref()
+        .map(|e| e.gaps.clone())
+        .unwrap_or_default();
 
-    let mut order = existing.order.clone();
-    let from = order.iter().position(|x| x == &id).ok_or_else(|| {
-        crate::error::JjjError::Validation(format!(
-            "'{problem}' is not in your ordering — add it with `jjj rank set`"
-        ))
-    })?;
+    // A first-time ranker has no ordering, and refusing here made `rank move`
+    // unusable in exactly the situation it is for: `jjj contention` tells an
+    // integrator to nudge an untouched problem to the top, and following that
+    // advice failed with "use `jjj rank set` first". Restating the whole queue
+    // to move one item is what this command exists to avoid.
+    //
+    // So bootstrap from the fleet's current aggregate order rather than from
+    // nothing: starting at creation order would silently contradict everyone
+    // who has already ranked. `rank move` then means what it says — shift one,
+    // keep the rest — whether or not you have ranked before.
+    let mut order = match &existing {
+        Some(e) => e.order.clone(),
+        None => bootstrap_ordering(ctx, &milestone_id)?,
+    };
+
+    // Likewise for a problem missing from an existing ordering: it is new, or
+    // it arrived after the ordering was written. Placing it is the point of the
+    // command, so append it and let the move below position it.
+    let from = match order.iter().position(|x| x == &id) {
+        Some(i) => i,
+        None => {
+            order.push(id.clone());
+            order.len() - 1
+        }
+    };
     order.remove(from);
 
     let to = match position.as_str() {
@@ -198,7 +215,39 @@ fn move_one(
         },
     };
     order.insert(to, id);
-    write_ordering(ctx, &milestone_id, &user, order, existing.gaps, json)
+    write_ordering(ctx, &milestone_id, &user, order, gaps, json)
+}
+
+/// The order a first-time ranker starts from: the fleet's current aggregate,
+/// with any milestone problems nobody has ranked appended.
+///
+/// Falls back to the milestone's own problem order when nobody has ranked
+/// anything, which is the only case where there is no consensus to inherit.
+fn bootstrap_ordering(ctx: &CommandContext, milestone_id: &str) -> Result<Vec<String>> {
+    let (problem_ids, _titles) = open_problems_in_milestone(ctx, milestone_id)?;
+    let orderings =
+        crate::ranking::ordering::load_all_orderings(ctx.store.meta_path(), milestone_id)?;
+    if orderings.is_empty() {
+        return Ok(problem_ids);
+    }
+
+    let problem_count =
+        crate::ranking::scoring::milestone_problem_count(&ctx.store.list_problems()?, milestone_id);
+    let ranked = crate::ranking::scoring::aggregate_rankings(&orderings, problem_count);
+
+    let mut out: Vec<String> = ranked
+        .into_iter()
+        .map(|(id, _)| id)
+        .filter(|id| problem_ids.contains(id))
+        .collect();
+    // Anything in the milestone that nobody has placed yet goes at the end,
+    // rather than vanishing from the ordering this call is about to write.
+    for id in problem_ids {
+        if !out.contains(&id) {
+            out.push(id);
+        }
+    }
+    Ok(out)
 }
 
 /// Parse `<problem>:<size>` gap arguments against an ordering.

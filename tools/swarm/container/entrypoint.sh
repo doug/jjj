@@ -505,9 +505,20 @@ a submitted solution into an accepted one. Work the queue in this order:
    If it does not merge or does not verify, that is information about the
    solution, not just an obstacle: say so in a critique.
 
-4. IF THE QUEUE IS EMPTY, look at where the fleet is spending itself. If several
-   agents are converging on one problem while others go untouched, re-rank so
-   the untouched ones surface: `jjj rank move <problem> top`.
+4. IF THE QUEUE IS EMPTY, look at where the fleet is spending itself:
+
+       jjj contention
+
+   It names the problems several actors are already on and the ones nobody is,
+   and prints the `jjj rank move` commands to run. When it says there is nowhere
+   else for them to go, there is nothing to fix — several conjectures on the
+   only open problem is the method, not a misallocation.
+
+   Re-rank; do not reassign. You are not routing work. A ranking changes what
+   agents see first and any of them may still disagree, because every actor's
+   ordering is aggregated rather than overwritten. Assigning would prevent two
+   agents attacking one problem with rival ideas, which is the thing the swarm
+   is for.
 
 WHEN ONLY A PERSON CAN UNBLOCK THE FLEET, SAY SO:
 

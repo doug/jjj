@@ -170,6 +170,7 @@ jjj events --problem 01957d          # Events for a problem (by prefix)
 jjj timeline "auth bug"              # Full timeline (by fuzzy title)
 jjj insights                         # Aggregate stats (approval rate, cycle times)
 jjj overlaps                         # Files touched by multiple solutions
+jjj contention                       # Where the fleet is doubled up vs untouched
 jjj next --claim                     # Claim top work item (assign + display)
 jjj escalate "reason" --about <id>   # Say a person is needed (leads `jjj status`)
 jjj escalate --clear <id>            # After a human acted
