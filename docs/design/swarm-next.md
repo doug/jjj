@@ -22,15 +22,17 @@ negative; one is deliberately refused.
 | M2 | The swarm can ask for a human | **shipped** — `jjj escalate`, leads `status`, stops the fleet after a grace period |
 | M3 | Observe only through jjj | **shipped** — `analyze.py` runs on any jjj repository; harness figures are labelled as such |
 | M4 | Supervision that costs nothing while idle | **shipped** — ref-fingerprint skip, turn-end backstop |
-| M5 | Test the diversity thesis | harness built (`diversity-trial.sh`); **runs pending** |
+| M5 | Test the diversity thesis | harness built and run; **inconclusive — the target saturates**, see the result section of `swarm-diversity-trial.md` |
 | M6 | Routing only where contention is real | **shipped** — `jjj contention` |
 
-Two things surfaced only by using the new paths end to end, and both are the
+Three things surfaced only by using the new paths end to end, and all are the
 same failure this document opens with — a capability existing without a path to
 it. `jjj contention` printed `rank move` commands that all shared a six-character
-UUID7 prefix, so at most one of them could ever have run; and `rank move` refused
-for anyone without a prior ordering, which is precisely the person the advice is
-aimed at. Neither was visible from reading the code.
+UUID7 prefix, so at most one of them could ever have run; `rank move` refused for
+anyone without a prior ordering, which is precisely the person the advice is
+aimed at; and `fetch` could bury an escalation behind a descendant push, which
+defeated M2 one layer down and was found only when a credential expired during a
+real run. None was visible from reading the code.
 
 ## The through-line
 

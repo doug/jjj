@@ -56,3 +56,94 @@ One pair of runs on one target. Agent runs are noisy — the same configuration
 twice would not produce the same number — so a small difference means nothing
 here. Only a large effect is worth reporting, and even then it is one target's
 worth of evidence, not a general claim about swarms.
+
+---
+
+# Result (2026-08-30): inconclusive, and why
+
+Four runs were attempted. Three completed; the fourth died to an infrastructure
+failure. The trial **cannot answer its own question**, for a reason that has
+nothing to do with the briefs.
+
+|  | n | final | plateau | coverage | dupes | minutes |
+|---|---|---|---|---|---|---|
+| control | 2 | 100.0 | 1.5 | 1.0 | 0.0 | 20 |
+| diverse | 1 | 100.0 | 4.0 | 1.0 | 0.0 | 40 |
+
+## The instrument saturated
+
+Control run 1 took the synth target from its 700,004-op baseline to **60,004 ops
+— the scorer's declared full-marks floor — in ten minutes**, and every completed
+run finished at 100. `decode.parse` sat at 60,000 and everything else at 4: the
+fleet found the optimal decomposition, quickly, in both arms.
+
+So "diverse scored no better" is a fact about the scale, not about the briefs.
+The comparison could not have come out any other way.
+
+This is the harness's own fitness-function rule turned on itself. *No reachable
+ceiling* is written into `tools/swarm/README.md` as a lesson from earlier
+targets, and the synth scorer violates it: `FLOOR = 60_000` is not merely
+generous, it is **attainable**, and six agents attain it in ten minutes.
+
+Class coverage failed for the same underlying reason. Both arms scored 1 — one
+site moved — because the fixture has essentially **one lever**. A metric designed
+to detect whether different priors spread the search cannot do so on a fixture
+with nothing to spread across.
+
+## What the run did establish
+
+Not about diversity, but worth recording:
+
+- `SWARM_STRATEGIES` works. Verified live: builders received `measure`,
+  `structure` and `algorithm`. Every previous trial ran six copies of one brief,
+  so this is the first time the variable has ever been exercised.
+- The arms behave differently even at the same score. Control converged with one
+  approved solution and no open critiques; diverse ran twice as long with three
+  approved and six critiques open. Something is different — the instrument just
+  cannot say whether it is better.
+
+## Two confounds, both recorded rather than argued away
+
+**Duration is an outcome, not a constant.** The watchdog stops a fleet once
+nothing is open and nothing awaits review, so control got 20 minutes and diverse
+40. Coverage and duplicates both accumulate with time, so the longer arm is
+flattered on them. The pre-registration said "same duration" and the harness
+quietly did not deliver it.
+
+**The fourth run was lost to an expired credential**, not to anything about the
+briefs. It is excluded, which leaves diverse at n=1 — and n=1 was already too
+few.
+
+## What would make this trial answerable
+
+1. **A target whose optimum is out of reach inside a run.** Either a harder
+   fixture with several independent levers — so class coverage has something to
+   measure — or a longer budget against a target that does not top out.
+2. **Equal durations.** Cap both arms at a fixed wall-clock, or the watchdog
+   turns a behavioural difference into a time difference.
+3. **More runs.** Agent runs are noisy; n=2 was optimistic even with a working
+   instrument.
+
+## The most valuable thing the run produced
+
+A data-loss bug in `jjj fetch`, found because the credential expiry made the
+escalation path fire for real.
+
+The refresher raised an escalation and pushed it. It reached the remote. The
+watchdog still reported `escalations=0`, and the fleet spent the rest of its
+deadline failing every turn — the exact outage `jjj escalate` was built to
+prevent, defeated one layer down.
+
+Fetch enumerated metadata bookmarks with `heads(...)`, which drops any ref that
+is an ancestor of another, on the reasoning that a descendant already contains
+its ancestor's content. For these bookmarks that is false: a metadata commit is a
+snapshot of one actor's whole tree, and `push` builds it with `jj new <heads...>`
+and then copies the pusher's own files over the merged result. A pod that had
+fetched the *refs* but not the *content* pushed a commit descending from the
+escalation while carrying the shard from before it. Ancestry is reachability, not
+subsumption.
+
+That bug had been latent since per-pod bookmarks were introduced. No amount of
+reading found it; a real credential expiry did. Which is the same lesson as the
+plan's through-line — *not "is it implemented" but "did something use it end to
+end"* — arriving from the other direction.
