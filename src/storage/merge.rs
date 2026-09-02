@@ -886,6 +886,56 @@ mod convergence_tests {
             "last-writer-wins should pick the newest edit"
         );
     }
+    /// Identical timestamps must still converge.
+    ///
+    /// The recency comparison cannot separate these, so the tiebreak decides —
+    /// and a tiebreak that depends on which side is "local" would leave two
+    /// clones permanently disagreeing about the same pair of edits.
+    ///
+    /// This is not a hypothetical either. Commands that assigned a field
+    /// directly never moved `updated_at`, so an edit and the version it was
+    /// derived from arrived at this function with the *same* timestamp, and the
+    /// whole outcome rested on this tiebreak being symmetric.
+    #[test]
+    fn identical_timestamps_still_converge() {
+        let ts = "2026-08-20T11:56:02.314999Z";
+        let base = doc("<none>", ts);
+        let a = doc("agent-a", ts);
+        let b = doc("agent-b", ts);
+
+        let a_view = merge_entity_md(Some(&base), &a, &b).expect("merge");
+        let b_view = merge_entity_md(Some(&base), &b, &a).expect("merge");
+        assert_eq!(
+            assignee_of(&a_view),
+            assignee_of(&b_view),
+            "the tiebreak is not symmetric, so two clones seeing the same pair \
+             of edits end up disagreeing forever"
+        );
+    }
+
+    /// And with no base at all — the cold-start case.
+    ///
+    /// A fresh clone has no merge base for any bookmark, so `fetch` resolves
+    /// entity files with a two-way merge. If that is asymmetric, two agents
+    /// cloning the same remote read different data from it.
+    #[test]
+    fn baseless_merges_converge() {
+        let a = doc("agent-a", "2026-08-20T11:56:02.314999Z");
+        let b = doc("agent-b", "2026-08-20T11:56:02.350000Z");
+
+        let a_view = merge_entity_md(None, &a, &b).expect("merge");
+        let b_view = merge_entity_md(None, &b, &a).expect("merge");
+        assert_eq!(
+            assignee_of(&a_view),
+            assignee_of(&b_view),
+            "two clones of one remote disagree at cold start"
+        );
+        assert_eq!(
+            assignee_of(&a_view),
+            "assignee: agent-b",
+            "with no base, the newer write should still win"
+        );
+    }
 }
 
 #[cfg(test)]

@@ -174,7 +174,7 @@ jjj contention                       # Where the fleet is doubled up vs untouche
 jjj next --claim                     # Claim top work item (assign + display)
 jjj escalate "reason" --about <id>   # Say a person is needed (leads `jjj status`)
 jjj escalate --clear <id>            # After a human acted
-jjj doctor                           # Environment/repo diagnostics (versions, cache, locks, automation)
+jjj doctor                           # Environment/repo diagnostics (versions, cache, locks, escalations, automation)
 jjj automation list                  # Active rules + any ignored rules in config.toml
 jjj automation migrate --force       # Move pre-0.5.1 rules out of the synced config
 ```

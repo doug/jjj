@@ -159,3 +159,45 @@ fn test_escalation_can_name_what_it_is_about() {
         "Expected the referenced problem: {json}"
     );
 }
+
+/// `doctor` is where someone looks when a repository is misbehaving, so the one
+/// condition nothing in the system can clear by itself has to appear there.
+#[test]
+fn test_doctor_reports_an_open_escalation() {
+    if !jj_available() {
+        return;
+    }
+    let dir = setup_test_repo();
+
+    let clean = run_jjj_success(&dir, &["doctor"]);
+    assert!(
+        clean.contains("none open"),
+        "a healthy repo should say so: {clean}"
+    );
+
+    run_jjj_success(&dir, &["escalate", "The deploy key is missing"]);
+
+    let out = run_jjj(&dir, &["doctor"]);
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        text.contains("The deploy key is missing"),
+        "doctor must surface the escalation: {text}"
+    );
+    assert!(
+        text.contains("jjj escalate --clear"),
+        "and say how to clear it: {text}"
+    );
+
+    // Cleared escalations must stop being reported, or the signal decays into
+    // noise nobody reads.
+    let json = run_jjj_success(&dir, &["escalate", "--json"]);
+    let v: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+    let id = v[0]["id"].as_str().expect("id").to_string();
+    run_jjj_success(&dir, &["escalate", "--clear", &id[..8]]);
+
+    let after = run_jjj_success(&dir, &["doctor"]);
+    assert!(
+        after.contains("none open"),
+        "a cleared escalation must stop being reported: {after}"
+    );
+}

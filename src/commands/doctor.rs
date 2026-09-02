@@ -82,6 +82,7 @@ pub fn execute(ctx: &CommandContext, json: bool) -> Result<()> {
         check_cache(ctx),
     ];
     checks.extend(check_locks(ctx));
+    checks.push(check_escalations(ctx));
     checks.push(check_conflicts(ctx));
     checks.extend(check_automation(ctx));
     checks.push(check_sync_state(ctx));
@@ -277,6 +278,52 @@ fn check_locks(ctx: &CommandContext) -> Vec<Check> {
     }
 
     checks
+}
+
+/// Is anyone blocked on a person?
+///
+/// `doctor` is where someone looks when a repository is behaving oddly, and an
+/// open escalation is the one condition nothing in the system can clear by
+/// itself. Reported as a problem rather than a warning: a fleet that has said
+/// it needs a human is not degraded, it is stopped.
+fn check_escalations(ctx: &CommandContext) -> Check {
+    let events = match ctx.store.list_events_cached() {
+        Ok(e) => e,
+        Err(e) => {
+            return Check::warn(
+                "escalations",
+                format!("could not read the event log: {e}"),
+                "retry after `jjj db rebuild`",
+            )
+        }
+    };
+    let open = crate::escalation::open_escalations(&events);
+    match open.len() {
+        0 => Check::ok("escalations", "none open"),
+        n => {
+            let now = chrono::Utc::now();
+            // The oldest one, because that is the one that has been waiting.
+            let oldest = open
+                .first()
+                .map(|e| {
+                    let age = e.age(now);
+                    if age.num_hours() >= 1 {
+                        format!("{}h", age.num_hours())
+                    } else {
+                        format!("{}m", age.num_minutes().max(0))
+                    }
+                })
+                .unwrap_or_default();
+            Check::problem(
+                "escalations",
+                format!(
+                    "{n} open — oldest {oldest} ago: {}",
+                    crate::utils::truncate(&open[0].reason, 60)
+                ),
+                "see `jjj escalate`; clear with `jjj escalate --clear <id>`",
+            )
+        }
+    }
 }
 
 fn check_conflicts(ctx: &CommandContext) -> Check {
