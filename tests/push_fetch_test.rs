@@ -1751,3 +1751,73 @@ fn an_ancestor_bookmarks_newer_event_survives_a_descendant_push() {
         );
     }
 }
+
+/// Iterating ancestors must not resurrect their stale entity content.
+///
+/// The fix for the buried-escalation bug made fetch diff *every* metadata
+/// bookmark rather than only the DAG tips, which means it now also processes
+/// bookmarks whose content is older. For append-only event shards that is
+/// harmless — the merge is a union. For entity files it is the exact shape of a
+/// regression: the shared `jjj` bookmark holds the original problem, a pod's
+/// descendant bookmark holds the edited one, and processing the ancestor second
+/// must not undo the edit.
+///
+/// It does not, because each head's delta is computed against *its own* true
+/// merge base, so an ancestor's content is only applied where it genuinely
+/// differs from the common ancestor. This test is here because that is a
+/// argument, and an argument is not a check.
+#[test]
+fn iterating_ancestors_does_not_revert_a_descendants_edit() {
+    if !jj_available() {
+        return;
+    }
+    let remote = create_bare_remote();
+
+    let seed = setup_repo_with_remote(remote.path());
+    run_jjj_success(seed.path(), &["init"]);
+    run_jjj_success(
+        seed.path(),
+        &["problem", "new", "Original title", "--force"],
+    );
+    run_jjj_success(seed.path(), &["push"]);
+
+    // A pod edits it, so its bookmark descends from the seed's and carries the
+    // NEWER content.
+    let pod = setup_repo_with_remote(remote.path());
+    run_jjj_env(pod.path(), &[("JJJ_POD", "one")], &["fetch"]);
+    run_jjj_env(
+        pod.path(),
+        &[("JJJ_POD", "one")],
+        &[
+            "problem",
+            "edit",
+            "Original title",
+            "--title",
+            "Edited title",
+        ],
+    );
+    run_jjj_env(pod.path(), &[("JJJ_POD", "one")], &["push"]);
+
+    // A third party fetches, and now sees both bookmarks: the ancestor holding
+    // "Original title" and the descendant holding "Edited title".
+    let observer = setup_repo_with_remote(remote.path());
+    run_jjj_env(observer.path(), &[("JJJ_POD", "obs")], &["fetch"]);
+
+    let problems = run_jjj_success(observer.path(), &["problem", "list"]);
+    assert!(
+        problems.contains("Edited title"),
+        "the descendant's edit was lost: {problems}"
+    );
+    assert!(
+        !problems.contains("Original title"),
+        "the ancestor's stale content came back, or the edit was duplicated: {problems}"
+    );
+
+    // And a second fetch must be a no-op rather than flip-flopping.
+    run_jjj_env(observer.path(), &[("JJJ_POD", "obs")], &["fetch"]);
+    let again = run_jjj_success(observer.path(), &["problem", "list"]);
+    assert!(
+        again.contains("Edited title") && !again.contains("Original title"),
+        "fetch is not idempotent across ancestor bookmarks: {again}"
+    );
+}

@@ -340,6 +340,19 @@ impl JjClient {
     /// Ancestry is reachability, not subsumption. Content is merged by the
     /// per-file union in `apply_file_delta`, so fetch has to be handed every
     /// bookmark and left to do that union.
+    ///
+    /// # Order is deliberately not significant
+    ///
+    /// Visiting more bookmarks means two of them can disagree about one file, so
+    /// it is worth saying why the sequence does not decide the winner. Event
+    /// shards merge by union, which is order-independent. Entity files are
+    /// resolved by `merge::pick_side`, which compares `updated_at` and falls
+    /// back to a symmetric tiebreak — also order-independent, but only as long
+    /// as an edit actually moves `updated_at`. It did not, for every command
+    /// that assigned a field directly, and a pod's genuine edit therefore lost
+    /// to the unedited copy on the bookmark it had branched from. That is fixed
+    /// where it belongs, in `MetadataStore::save`, rather than by choosing a
+    /// traversal order that happens to paper over it.
     pub fn meta_bookmark_commits(&self) -> Result<Vec<String>> {
         let glob = format!("{}*", BOOKMARK_PREFIX);
         let revset = format!("bookmarks(glob:{0:?}) | remote_bookmarks(glob:{0:?})", glob);
@@ -354,13 +367,14 @@ impl JjClient {
         // Several bookmarks can point at one commit; diffing it twice is wasted
         // work, and the union makes it a no-op anyway.
         let mut seen = std::collections::HashSet::new();
-        Ok(out
+        let commits: Vec<String> = out
             .lines()
             .map(str::trim)
             .filter(|l| !l.is_empty())
             .filter(|l| seen.insert(l.to_string()))
             .map(String::from)
-            .collect())
+            .collect();
+        Ok(commits)
     }
 
     /// Greatest common ancestor of two revisions — the **true** three-way merge

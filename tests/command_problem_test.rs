@@ -549,3 +549,83 @@ fn test_problem_tree_and_graph_json() {
         "graph --json should have an edge: {graph}"
     );
 }
+
+/// An edit must move `updated_at`, or concurrent edits merge by accident.
+///
+/// Model methods like `set_status` bump the timestamp, but commands that assign
+/// a field directly — `problem.title = new_title` — did not, and there are
+/// dozens of those. Concurrent edits to one entity are resolved by comparing
+/// `updated_at` (`storage::merge::pick_side`), so an edit that leaves it alone
+/// is invisible to the merge, which then decides by a lexicographic tiebreak on
+/// the serialized document. A pod's genuine edit lost to the *unedited* copy on
+/// the bookmark it had branched from, settled by nothing but string order.
+#[test]
+fn editing_a_problem_moves_its_updated_at() {
+    if !jj_available() {
+        return;
+    }
+    let dir = setup_test_repo();
+    run_jjj_success(&dir, &["problem", "new", "Original title"]);
+
+    let before: serde_json::Value =
+        serde_json::from_str(&run_jjj_success(&dir, &["problem", "list", "--json"]))
+            .expect("valid JSON");
+    let before_ts = before[0]["updated_at"].as_str().unwrap().to_string();
+
+    run_jjj_success(
+        &dir,
+        &[
+            "problem",
+            "edit",
+            "Original title",
+            "--title",
+            "Edited title",
+        ],
+    );
+
+    let after: serde_json::Value =
+        serde_json::from_str(&run_jjj_success(&dir, &["problem", "list", "--json"]))
+            .expect("valid JSON");
+    let after_ts = after[0]["updated_at"].as_str().unwrap().to_string();
+
+    assert_eq!(after[0]["title"], "Edited title", "the edit did not apply");
+    assert!(
+        after_ts > before_ts,
+        "updated_at did not move on edit ({before_ts} -> {after_ts}); a concurrent \
+         merge would decide this edit by string comparison rather than recency"
+    );
+}
+
+/// A save that changes nothing must not move the timestamp either.
+///
+/// Otherwise every no-op write inflates the entity's apparent recency and wins
+/// merges it should lose — and it churns files that push is careful not to
+/// rewrite.
+#[test]
+fn a_no_op_edit_leaves_updated_at_alone() {
+    if !jj_available() {
+        return;
+    }
+    let dir = setup_test_repo();
+    run_jjj_success(&dir, &["problem", "new", "Steady title"]);
+
+    let before: serde_json::Value =
+        serde_json::from_str(&run_jjj_success(&dir, &["problem", "list", "--json"]))
+            .expect("valid JSON");
+    let before_ts = before[0]["updated_at"].as_str().unwrap().to_string();
+
+    // Re-assert the value it already has.
+    run_jjj_success(
+        &dir,
+        &["problem", "edit", "Steady title", "--title", "Steady title"],
+    );
+
+    let after: serde_json::Value =
+        serde_json::from_str(&run_jjj_success(&dir, &["problem", "list", "--json"]))
+            .expect("valid JSON");
+    assert_eq!(
+        after[0]["updated_at"].as_str().unwrap(),
+        before_ts,
+        "a no-op save moved updated_at, which would win merges it should lose"
+    );
+}

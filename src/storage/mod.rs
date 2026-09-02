@@ -343,6 +343,15 @@ fn to_markdown_strip<T: serde::Serialize>(
 /// near-identical CRUD blocks the storage layer used to have. Concrete
 /// `load_problem` / `save_solution` / etc. methods on `MetadataStore` are
 /// thin delegates over the generic methods so callers don't need turbofish.
+/// A copy of the markdown with its `updated_at:` frontmatter line removed, so
+/// two versions can be compared for *substantive* difference.
+fn without_updated_at(md: &str) -> String {
+    md.lines()
+        .filter(|l| !l.trim_start().starts_with("updated_at:"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 pub trait Persist: serde::Serialize + serde::de::DeserializeOwned + Clone + Sized {
     /// Directory under `.jj/jjj-meta/` where instances of this type live.
     const DIR: &'static str;
@@ -363,6 +372,16 @@ pub trait Persist: serde::Serialize + serde::de::DeserializeOwned + Clone + Size
     /// Set the markdown-body field, used by `load` after parsing the YAML
     /// frontmatter and reading the body section.
     fn set_body(&mut self, body: String);
+
+    /// Overwrite the entity's `updated_at`.
+    ///
+    /// Used by [`MetadataStore::save`] to stamp a real mutation. Concurrent
+    /// edits to one entity are resolved by comparing `updated_at`
+    /// (`merge::pick_side`), so an edit that does not move it is invisible to
+    /// the merge and gets decided by a lexicographic tiebreak on the whole
+    /// document instead — which is how a pod's edit lost to the unedited copy
+    /// it had branched from.
+    fn set_updated_at(&mut self, when: chrono::DateTime<chrono::Utc>);
 
     /// Clear derived back-reference fields before the markdown write (Pillar 4).
     ///
@@ -412,6 +431,9 @@ impl Persist for crate::models::Problem {
     fn id(&self) -> &str {
         &self.id
     }
+    fn set_updated_at(&mut self, when: chrono::DateTime<chrono::Utc>) {
+        self.updated_at = when;
+    }
     fn body(&self) -> &str {
         &self.description
     }
@@ -445,6 +467,9 @@ impl Persist for crate::models::Solution {
 
     fn id(&self) -> &str {
         &self.id
+    }
+    fn set_updated_at(&mut self, when: chrono::DateTime<chrono::Utc>) {
+        self.updated_at = when;
     }
     fn body(&self) -> &str {
         &self.approach
@@ -480,6 +505,9 @@ impl Persist for crate::models::Critique {
     fn id(&self) -> &str {
         &self.id
     }
+    fn set_updated_at(&mut self, when: chrono::DateTime<chrono::Utc>) {
+        self.updated_at = when;
+    }
     fn body(&self) -> &str {
         &self.argument
     }
@@ -511,6 +539,9 @@ impl Persist for crate::models::Milestone {
 
     fn id(&self) -> &str {
         &self.id
+    }
+    fn set_updated_at(&mut self, when: chrono::DateTime<chrono::Utc>) {
+        self.updated_at = when;
     }
     fn body(&self) -> &str {
         &self.description
@@ -544,6 +575,9 @@ impl Persist for crate::models::Finding {
 
     fn id(&self) -> &str {
         &self.id
+    }
+    fn set_updated_at(&mut self, when: chrono::DateTime<chrono::Utc>) {
+        self.updated_at = when;
     }
     fn body(&self) -> &str {
         &self.evidence
@@ -670,12 +704,61 @@ impl MetadataStore {
         // Strip derived back-references so they never reach disk (Pillar 4).
         let mut for_disk = entity.clone();
         for_disk.clear_derived_fields();
-        let content = to_markdown_strip(&for_disk, &body, T::BODY_FIELD)?;
+        let mut content = to_markdown_strip(&for_disk, &body, T::BODY_FIELD)?;
         let path = dir.join(format!("{}.md", entity.id()));
-        atomic_write(&path, content.as_bytes())?;
+
+        // Stamp `updated_at` when the substantive content changed.
+        //
+        // Concurrent edits to one entity are resolved by comparing `updated_at`
+        // (`merge::pick_side`). Model methods like `set_status` bump it, but a
+        // command that assigns a field directly — `problem.title = new_title` —
+        // did not, and there are dozens of those. An edit that leaves the
+        // timestamp alone is invisible to the merge, which then falls back to a
+        // lexicographic tiebreak on the serialized document: a pod's genuine
+        // edit lost to the *unedited* copy on the bookmark it had branched
+        // from, decided by nothing more than string order.
+        //
+        // Stamping here rather than at each call site is deliberate. Sixty-odd
+        // save sites is exactly the duplication that let the `claimed_at`
+        // column drift out of sync with its writers, and a new command would
+        // silently join the broken majority.
+        //
+        // Safe to do centrally because the merge path does **not** come through
+        // here: `fetch` writes merged bytes with `fs::write`, so a merge result
+        // is never re-stamped and clones still converge on identical content.
+        let mut stamped: Option<chrono::DateTime<chrono::Utc>> = None;
+        match fs::read_to_string(&path) {
+            // Unchanged apart from the timestamp: write nothing. A no-op save
+            // should not churn the file, both to keep the merge timestamp
+            // meaningful and because push skips rehashing files whose mtime is
+            // untouched.
+            Ok(existing) if without_updated_at(&existing) == without_updated_at(&content) => {}
+            Ok(_) => {
+                let now = chrono::Utc::now();
+                for_disk.set_updated_at(now);
+                content = to_markdown_strip(&for_disk, &body, T::BODY_FIELD)?;
+                atomic_write(&path, content.as_bytes())?;
+                stamped = Some(now);
+            }
+            // First write of this entity: `updated_at` is whatever creation set,
+            // which is already the moment it came into being.
+            Err(_) => atomic_write(&path, content.as_bytes())?,
+        }
 
         if let Some(ref db) = *self.cache() {
-            if let Err(e) = entity.sync_to_cache(db) {
+            // The cache has to carry the timestamp that reached disk. Syncing
+            // the caller's unstamped entity instead left the row a moment
+            // behind the file it indexes — and since reads are DB-primary, an
+            // edit then looked like it had never moved `updated_at` at all.
+            //
+            // Cloned from `entity`, not from `for_disk`: `clear_derived_fields`
+            // empties `Milestone::problem_ids`, which the milestones table does
+            // store and reconstruct from.
+            let mut for_cache = entity.clone();
+            if let Some(now) = stamped {
+                for_cache.set_updated_at(now);
+            }
+            if let Err(e) = for_cache.sync_to_cache(db) {
                 crate::output::warn(&format!(
                     "cache sync failed for {} {}: {}",
                     T::ENTITY_TYPE,
