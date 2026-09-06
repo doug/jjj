@@ -42,8 +42,51 @@ KEYCHAIN_SERVICE="Claude Code-credentials"
 
 log() { printf '[%s] refresher: %s\n' "$(date +%H:%M:%S)" "$*"; }
 
+# Read the credential blob that actually carries tokens.
+#
+# The CLI no longer keeps one entry under a fixed name. Alongside
+# `Claude Code-credentials` there are per-account entries suffixed with a hash —
+# `Claude Code-credentials-aea9b5d3` — and the bare entry can be left behind as a
+# *shell*: valid JSON, right subscription, and `accessToken` an empty string.
+#
+# Exporting that shell is worse than exporting nothing. Every container starts
+# with a credential file that looks well-formed and authenticates nothing, and
+# the failure surfaces as six agents failing every turn rather than as a missing
+# file. So choose by content — the entry holding a non-empty access token, most
+# recently valid first — not by name.
 read_keychain() {
-    security find-generic-password -s "$KEYCHAIN_SERVICE" -w 2>/dev/null
+    local svc blob best=""
+    # Read line-wise: these service names contain spaces, so `for svc in $(...)`
+    # splits "Claude Code-credentials-aea9b5d3" into two words and finds neither.
+    while IFS= read -r svc; do
+        [ -n "$svc" ] || continue
+        blob="$(security find-generic-password -s "$svc" -w 2>/dev/null)" || continue
+        [ -n "$blob" ] || continue
+        if printf '%s' "$blob" | python3 -c '
+import sys, json
+try:
+    d = json.load(sys.stdin)["claudeAiOauth"]
+except Exception:
+    sys.exit(1)
+sys.exit(0 if (d.get("accessToken") or "").strip() else 1)
+' 2>/dev/null; then
+            best="$blob"
+            break
+        fi
+    done <<EOF
+$(keychain_services)
+EOF
+    [ -n "$best" ] || return 1
+    printf '%s' "$best"
+}
+
+# Candidate service names, most specific first. The bare name goes last: when a
+# suffixed entry exists it is the live one, and the bare entry is the leftover.
+keychain_services() {
+    security dump-keychain 2>/dev/null \
+        | sed -n 's/.*"svce"<blob>="\(Claude Code-credentials[^"]*\)".*/\1/p' \
+        | sort -u | grep -v '^Claude Code-credentials$'
+    printf '%s\n' "$KEYCHAIN_SERVICE"
 }
 
 # Seconds of validity remaining; `unknown` when the credential does not carry an
@@ -74,7 +117,9 @@ else:
 }
 
 if ! read_keychain >/dev/null; then
-    log "FATAL: no Keychain entry '$KEYCHAIN_SERVICE'. Log in with \`claude\` first."
+    log "FATAL: no Keychain entry under 'Claude Code-credentials*' holds an access token."
+    log "       (an entry may exist but be empty — a shell left by an earlier install)"
+    log "       Run \`claude\` on this host and log in, or set ANTHROPIC_API_KEY."
     exit 1
 fi
 
@@ -179,17 +224,24 @@ while true; do
                 fi
             fi
         fi
+    fi
 
-        # Write via a temp file and rename, so a container never reads a
-        # half-written credential.
-        tmp="$OUT.tmp.$$"
-        if read_keychain > "$tmp" && [ -s "$tmp" ]; then
-            chmod 600 "$tmp"
-            mv -f "$tmp" "$OUT"
-        else
-            rm -f "$tmp"
-            log "WARNING: export produced nothing; keeping the previous file"
-        fi
+    # Export on every pass, whatever the expiry state.
+    #
+    # This sat inside the branch that handles a credential *with* a known
+    # expiry, so adding the `unknown` case silently skipped the refresher's
+    # actual job and every agent started with no credential at all. Exporting is
+    # unconditional: the expiry only decides whether to trigger a refresh first.
+    #
+    # Write via a temp file and rename, so a container never reads a
+    # half-written credential.
+    tmp="$OUT.tmp.$$"
+    if read_keychain > "$tmp" && [ -s "$tmp" ]; then
+        chmod 600 "$tmp"
+        mv -f "$tmp" "$OUT"
+    else
+        rm -f "$tmp"
+        log "WARNING: export produced nothing; keeping the previous file"
     fi
 
     sleep "$INTERVAL"
