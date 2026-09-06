@@ -520,19 +520,28 @@ except Exception:
         echo "  auth:       !! the host OAuth session has expired — run \`claude\` and log in"; warn=1
     elif [ -f "$SWARM_ROOT/credentials.json" ]; then
         local left
+        # `expiresAt: 0` is a sentinel meaning "not tracked", not a timestamp.
+        # Doing arithmetic on it reports a live credential as decades expired,
+        # which is a false alarm on the one check an operator is meant to trust.
         left="$(python3 -c "
 import json,sys,time
 try:
     d=json.load(open('$SWARM_ROOT/credentials.json'))['claudeAiOauth']
-    print(int((d['expiresAt']/1000 - time.time())/60))
-except Exception: print(-1)" 2>/dev/null)"
-        if [ "${left:--1}" -lt 0 ]; then
-            echo "  auth:       !! credential unreadable or expired"; warn=1
-        elif [ "$left" -lt 60 ]; then
-            echo "  auth:       !! expires in ${left}m"; warn=1
-        else
-            echo "  auth:       valid ${left}m"
-        fi
+    exp=d.get('expiresAt') or 0
+    print('unknown' if exp <= 0 else int((exp/1000 - time.time())/60))
+except Exception: print('unreadable')" 2>/dev/null)"
+        case "$left" in
+            unreadable) echo "  auth:       !! credential unreadable"; warn=1 ;;
+            unknown)    echo "  auth:       present (no expiry recorded)" ;;
+            *)
+                if [ "${left:-0}" -lt 0 ]; then
+                    echo "  auth:       !! expired"; warn=1
+                elif [ "$left" -lt 60 ]; then
+                    echo "  auth:       !! expires in ${left}m"; warn=1
+                else
+                    echo "  auth:       valid ${left}m"
+                fi ;;
+        esac
     fi
 
     [ "$warn" = 1 ] && echo "  -> something is wrong; the run is probably not producing work"

@@ -46,7 +46,15 @@ read_keychain() {
     security find-generic-password -s "$KEYCHAIN_SERVICE" -w 2>/dev/null
 }
 
-# Seconds of validity remaining, or empty if unreadable.
+# Seconds of validity remaining; `unknown` when the credential does not carry an
+# expiry; empty when the Keychain cannot be read at all.
+#
+# The three states are distinct and conflating two of them is dangerous. A live
+# `claude` login can write `expiresAt: 0` — a sentinel meaning "not tracked",
+# not a timestamp — and arithmetic on it says the token expired in 1970. This
+# refresher would then declare the OAuth session dead, touch AUTH_DEAD, raise an
+# escalation, and the watchdog would stop a perfectly healthy fleet. The
+# credential in that state works: verified by calling the CLI with it.
 remaining() {
     read_keychain | python3 -c '
 import sys, json, time
@@ -54,10 +62,14 @@ raw = sys.stdin.read().strip()
 if not raw:
     sys.exit(1)
 try:
-    exp = json.loads(raw)["claudeAiOauth"]["expiresAt"] / 1000
+    exp = json.loads(raw)["claudeAiOauth"]["expiresAt"]
 except Exception:
     sys.exit(1)
-print(int(exp - time.time()))
+# 0 (or missing) is a sentinel, not a date. Never treat it as an expiry.
+if not exp or exp <= 0:
+    print("unknown")
+else:
+    print(int(exp / 1000 - time.time()))
 ' 2>/dev/null
 }
 
@@ -113,6 +125,17 @@ while true; do
 
     if [ -z "$left" ]; then
         log "WARNING: cannot read the Keychain credential; retrying"
+    elif [ "$left" = "unknown" ]; then
+        # No expiry to act on. Export the credential as usual and say nothing
+        # further: the CLI refreshes its own token when it makes a call, and the
+        # honest signal for "is auth working" is whether agent turns succeed —
+        # which the health check already reads. Guessing here is what would kill
+        # a healthy run.
+        if [ ! -f "$(dirname "$OUT")/.expiry_unknown_logged" ]; then
+            log "credential carries no expiry (expiresAt=0); not tracking validity"
+            touch "$(dirname "$OUT")/.expiry_unknown_logged"
+        fi
+        rm -f "$(dirname "$OUT")/AUTH_DEAD"
     else
         if [ "$left" -lt "$MARGIN" ]; then
             log "token has ${left}s left; triggering a refresh via the CLI"
