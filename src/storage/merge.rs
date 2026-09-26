@@ -936,6 +936,106 @@ mod convergence_tests {
         );
     }
 
+    /// Concurrent tag edits must not lose a tag.
+    ///
+    /// Tag changes resolve *per tag*, so adding one tag on one clone and a
+    /// different tag on another must leave both. jjj merges the `tags` sequence
+    /// as a base-aware set union, which should give that —
+    /// worth pinning, because merging the sequence as a single scalar would
+    /// silently drop one side's tag and the module docs claiming otherwise would
+    /// be the only evidence.
+    #[test]
+    fn concurrent_tag_additions_both_survive() {
+        fn doc(tags: &[&str], lamport: u64) -> String {
+            let list = if tags.is_empty() {
+                "[]".to_string()
+            } else {
+                format!("[{}]", tags.join(", "))
+            };
+            format!(
+                "---\nid: p1\ntitle: Tagged\nstatus: open\ntags: {list}\n\
+                 created_at: '2026-01-01T00:00:00Z'\nupdated_at: '2026-01-02T00:00:00Z'\n\
+                 lamport: {lamport}\n---\n\nbody\n"
+            )
+        }
+        /// Read the merged tag set, accepting either YAML style.
+        ///
+        /// The merger emits a block sequence (`tags:` then `- core`), not the
+        /// inline `[core]` the inputs use. A helper that only understood the
+        /// inline form reported every tag as lost — the assertion failed for a
+        /// fault in the test, not the code.
+        fn tags_of(md: &str) -> Vec<String> {
+            let mut out = Vec::new();
+            let mut in_block = false;
+            for line in md.lines() {
+                if let Some(rest) = line.strip_prefix("tags:") {
+                    let rest = rest.trim();
+                    if rest.is_empty() {
+                        in_block = true; // block sequence follows
+                    } else {
+                        // Inline form.
+                        out.extend(
+                            rest.trim_start_matches('[')
+                                .trim_end_matches(']')
+                                .split(',')
+                                .map(|t| t.trim().trim_matches('\'').to_string())
+                                .filter(|t| !t.is_empty()),
+                        );
+                    }
+                    continue;
+                }
+                if in_block {
+                    match line.strip_prefix("- ") {
+                        Some(item) => out.push(item.trim().trim_matches('\'').to_string()),
+                        None => in_block = false,
+                    }
+                }
+            }
+            out
+        }
+
+        let base = doc(&["core"], 1);
+        let local = doc(&["core", "perf"], 2);
+        let remote = doc(&["core", "docs"], 2);
+
+        let merged = merge_entity_md(Some(&base), &local, &remote).expect("merge");
+        let mut tags = tags_of(&merged);
+        tags.sort();
+        assert_eq!(
+            tags,
+            vec!["core", "docs", "perf"],
+            "a concurrently-added tag was lost: {merged}"
+        );
+
+        // Symmetric, or the two clones disagree about the tag set.
+        let other = merge_entity_md(Some(&base), &remote, &local).expect("merge");
+        let mut other_tags = tags_of(&other);
+        other_tags.sort();
+        assert_eq!(tags, other_tags, "tag union is not symmetric");
+    }
+
+    /// A deliberate removal must stick, rather than being re-added by the union.
+    #[test]
+    fn a_removed_tag_stays_removed_when_the_other_side_did_not_touch_it() {
+        fn doc(tags: &str, lamport: u64) -> String {
+            format!(
+                "---\nid: p1\ntitle: Tagged\nstatus: open\ntags: {tags}\n\
+                 created_at: '2026-01-01T00:00:00Z'\nupdated_at: '2026-01-02T00:00:00Z'\n\
+                 lamport: {lamport}\n---\n\nbody\n"
+            )
+        }
+        let base = doc("[core, stale]", 1);
+        // One side drops `stale`; the other only changes something else.
+        let remover = doc("[core]", 2);
+        let untouched = doc("[core, stale]", 1);
+
+        let merged = merge_entity_md(Some(&base), &remover, &untouched).expect("merge");
+        assert!(
+            !merged.contains("stale"),
+            "the union resurrected a deliberately removed tag: {merged}"
+        );
+    }
+
     /// A fast wall clock must not win, and must not win forever.
     ///
     /// This is the failure the Lamport clock exists to prevent, measured before
