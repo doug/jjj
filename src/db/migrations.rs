@@ -223,6 +223,29 @@ pub fn all_migrations() -> Vec<Migration> {
                 Ok(())
             },
         },
+        Migration {
+            version: 15,
+            description: "Add Lamport clocks so merges order by causality, not wall clock",
+            requires_rebuild: false,
+            up: |conn| {
+                // Resolving concurrent edits by comparing updated_at makes the
+                // fastest clock the winner rather than the latest writer: a
+                // machine a year fast wins every merge on every entity it
+                // touches, permanently. Demonstrated with ten honest later edits
+                // all losing to one year-ahead record.
+                //
+                // Existing rows get 0, which falls back to the timestamp
+                // comparison, so a repository keeps working and starts ordering
+                // by causality as soon as anything is written.
+                for table in ["problems", "solutions", "critiques", "milestones", "findings"] {
+                    let _ = conn.execute(
+                        &format!("ALTER TABLE {table} ADD COLUMN lamport INTEGER DEFAULT 0"),
+                        [],
+                    );
+                }
+                Ok(())
+            },
+        },
     ]
 }
 

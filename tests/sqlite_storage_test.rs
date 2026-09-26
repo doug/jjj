@@ -34,6 +34,7 @@ fn test_full_sync_cycle() {
         github_issue: None,
         tags: vec![],
         extra: Default::default(),
+        lamport: 0,
     };
     db::entities::upsert_problem(db.conn(), &problem).unwrap();
 
@@ -57,6 +58,7 @@ fn test_full_sync_cycle() {
         tags: vec![],
         cites: vec![],
         extra: Default::default(),
+        lamport: 0,
     };
     db::entities::upsert_solution(db.conn(), &solution).unwrap();
 
@@ -118,6 +120,7 @@ fn test_validation_catches_invalid_refs() {
         tags: vec![],
         cites: vec![],
         extra: Default::default(),
+        lamport: 0,
     };
     db::entities::upsert_solution(db.conn(), &solution).unwrap();
 
@@ -191,6 +194,7 @@ fn test_problem_roundtrip() {
         github_issue: None,
         tags: vec![],
         extra: Default::default(),
+        lamport: 0,
     };
 
     db::entities::upsert_problem(db.conn(), &problem).unwrap();

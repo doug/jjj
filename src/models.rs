@@ -1,3 +1,9 @@
+/// `skip_serializing_if` helper: omit a zero clock so existing files and
+/// entities that predate Lamport ordering keep byte-identical frontmatter.
+pub(crate) fn is_zero(n: &u64) -> bool {
+    *n == 0
+}
+
 mod config;
 mod critique;
 mod event;

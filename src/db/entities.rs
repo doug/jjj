@@ -114,7 +114,7 @@ impl DbEntity for Problem {
     const TABLE: &'static str = "problems";
     const COLUMNS: &'static str = "id, title, status, priority, confidence, parent_id, \
         milestone_id, assignee, created_at, updated_at, description, dissolved_reason, \
-        github_issue, tags, claimed_at, extra";
+        github_issue, tags, claimed_at, extra, lamport";
     fn from_row(row: &rusqlite::Row) -> SqliteResult<Self> {
         row_to_problem(row)
     }
@@ -124,7 +124,7 @@ impl DbEntity for Solution {
     const TABLE: &'static str = "solutions";
     const COLUMNS: &'static str = "id, title, status, problem_id, change_ids, supersedes, \
         assignee, force_approved, created_at, updated_at, approach, github_pr, github_branch, \
-        tags, claimed_at, cites, extra";
+        tags, claimed_at, cites, extra, lamport";
     fn from_row(row: &rusqlite::Row) -> SqliteResult<Self> {
         row_to_solution(row)
     }
@@ -134,7 +134,7 @@ impl DbEntity for Critique {
     const TABLE: &'static str = "critiques";
     const COLUMNS: &'static str = "id, title, status, solution_id, severity, reviewer, author, \
         file_path, line_number, created_at, updated_at, argument, replies, github_review_id, \
-        line_end, code_context, context_before, context_after, cites, extra";
+        line_end, code_context, context_before, context_after, cites, extra, lamport";
     fn from_row(row: &rusqlite::Row) -> SqliteResult<Self> {
         row_to_critique(row)
     }
@@ -143,7 +143,7 @@ impl DbEntity for Critique {
 impl DbEntity for Finding {
     const TABLE: &'static str = "findings";
     const COLUMNS: &'static str = "id, title, status, problem_id, author, superseded_by, refs, \
-        method, tags, created_at, updated_at, evidence, extra";
+        method, tags, created_at, updated_at, evidence, extra, lamport";
     fn from_row(row: &rusqlite::Row) -> SqliteResult<Self> {
         row_to_finding(row)
     }
@@ -152,7 +152,7 @@ impl DbEntity for Finding {
 impl DbEntity for Milestone {
     const TABLE: &'static str = "milestones";
     const COLUMNS: &'static str =
-        "id, title, status, target_date, assignee, created_at, updated_at, description, problem_ids, extra";
+        "id, title, status, target_date, assignee, created_at, updated_at, description, problem_ids, extra, lamport";
     fn from_row(row: &rusqlite::Row) -> SqliteResult<Self> {
         row_to_milestone(row)
     }
@@ -170,8 +170,8 @@ pub fn upsert_problem(conn: &Connection, problem: &Problem) -> SqliteResult<()> 
         "INSERT OR REPLACE INTO problems (
             id, title, status, priority, confidence, parent_id, milestone_id, assignee,
             created_at, updated_at, description, dissolved_reason, github_issue, tags,
-            claimed_at, extra
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+            claimed_at, extra, lamport
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
         params![
             problem.id,
             problem.title,
@@ -199,6 +199,7 @@ pub fn upsert_problem(conn: &Connection, problem: &Problem) -> SqliteResult<()> 
             tags_json,
             problem.claimed_at.map(|t| t.to_rfc3339()),
             extra_json(&problem.extra),
+            problem.lamport as i64,
         ],
     )?;
     Ok(())
@@ -257,6 +258,7 @@ fn row_to_problem(row: &rusqlite::Row) -> SqliteResult<Problem> {
         // Derived back-reference — left empty; attached by the storage wrapper.
         solution_ids: Vec::new(),
         extra: parse_extra(row.get::<_, Option<String>>(15)?),
+        lamport: row.get::<_, Option<i64>>(16)?.unwrap_or(0).max(0) as u64,
     })
 }
 
@@ -275,8 +277,8 @@ pub fn upsert_solution(conn: &Connection, solution: &Solution) -> SqliteResult<(
         "INSERT OR REPLACE INTO solutions (
             id, title, status, problem_id, change_ids, supersedes, assignee,
             force_approved, created_at, updated_at, approach,
-            github_pr, github_branch, tags, claimed_at, cites, extra
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
+            github_pr, github_branch, tags, claimed_at, cites, extra, lamport
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
         params![
             solution.id,
             solution.title,
@@ -295,6 +297,7 @@ pub fn upsert_solution(conn: &Connection, solution: &Solution) -> SqliteResult<(
             solution.claimed_at.map(|t| t.to_rfc3339()),
             cites_json,
             extra_json(&solution.extra),
+            solution.lamport as i64,
         ],
     )?;
     Ok(())
@@ -377,6 +380,7 @@ fn row_to_solution(row: &rusqlite::Row) -> SqliteResult<Solution> {
         // Derived back-reference — left empty; attached by the storage wrapper.
         critique_ids: Vec::new(),
         extra: parse_extra(row.get::<_, Option<String>>(16)?),
+        lamport: row.get::<_, Option<i64>>(17)?.unwrap_or(0).max(0) as u64,
     })
 }
 
@@ -401,9 +405,9 @@ pub fn upsert_critique(conn: &Connection, critique: &Critique) -> SqliteResult<(
         "INSERT OR REPLACE INTO critiques (
             id, title, status, solution_id, severity, reviewer, author, file_path,
             line_number, created_at, updated_at, argument, replies,
-            github_review_id, line_end, code_context, context_before, context_after, cites, extra
+            github_review_id, line_end, code_context, context_before, context_after, cites, extra, lamport
         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18,
-                  ?19, ?20)",
+                  ?19, ?20, ?21)",
         params![
             critique.id,
             critique.title,
@@ -425,6 +429,7 @@ pub fn upsert_critique(conn: &Connection, critique: &Critique) -> SqliteResult<(
             context_after_json,
             cites_json,
             extra_json(&critique.extra),
+            critique.lamport as i64,
         ],
     )?;
     Ok(())
@@ -516,6 +521,7 @@ fn row_to_critique(row: &rusqlite::Row) -> SqliteResult<Critique> {
             "cites",
         ),
         extra: parse_extra(row.get::<_, Option<String>>(19)?),
+        lamport: row.get::<_, Option<i64>>(20)?.unwrap_or(0).max(0) as u64,
     })
 }
 
@@ -531,8 +537,8 @@ pub fn upsert_milestone(conn: &Connection, milestone: &Milestone) -> SqliteResul
     conn.execute(
         "INSERT OR REPLACE INTO milestones (
             id, title, status, target_date, assignee, created_at, updated_at,
-            description, problem_ids, extra
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            description, problem_ids, extra, lamport
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         params![
             milestone.id,
             milestone.title,
@@ -544,6 +550,7 @@ pub fn upsert_milestone(conn: &Connection, milestone: &Milestone) -> SqliteResul
             milestone.description.clone(),
             problem_ids_json,
             extra_json(&milestone.extra),
+            milestone.lamport as i64,
         ],
     )?;
     Ok(())
@@ -589,6 +596,7 @@ fn row_to_milestone(row: &rusqlite::Row) -> SqliteResult<Milestone> {
         description,
         problem_ids: parse_json_vec(&problem_ids_json, "problem_ids"),
         extra: parse_extra(row.get::<_, Option<String>>(9)?),
+        lamport: row.get::<_, Option<i64>>(10)?.unwrap_or(0).max(0) as u64,
     })
 }
 
@@ -613,8 +621,8 @@ pub fn upsert_finding(conn: &Connection, finding: &Finding) -> SqliteResult<()> 
     conn.execute(
         "INSERT OR REPLACE INTO findings (
             id, title, status, problem_id, author, superseded_by, refs, method,
-            tags, created_at, updated_at, evidence, extra
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+            tags, created_at, updated_at, evidence, extra, lamport
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
         params![
             finding.id,
             finding.title,
@@ -629,6 +637,7 @@ pub fn upsert_finding(conn: &Connection, finding: &Finding) -> SqliteResult<()> 
             finding.updated_at.to_rfc3339(),
             finding.evidence,
             extra_json(&finding.extra),
+            finding.lamport as i64,
         ],
     )?;
     Ok(())
@@ -677,11 +686,90 @@ fn row_to_finding(row: &rusqlite::Row) -> SqliteResult<Finding> {
         updated_at: parse_datetime(&updated_at_str, "updated_at", "finding"),
         evidence: row.get::<_, Option<String>>(11)?.unwrap_or_default(),
         extra: parse_extra(row.get::<_, Option<String>>(12)?),
+        lamport: row.get::<_, Option<i64>>(13)?.unwrap_or(0).max(0) as u64,
     })
 }
 
 #[cfg(test)]
 mod tests {
+    /// Findings had no CRUD test at all, so a column/placeholder mismatch in
+    /// `upsert_finding` would have shipped silently — the same fault that
+    /// produced "20 values for 21 columns" in critiques, caught there only
+    /// because critiques *had* a test.
+    ///
+    /// Also pins the two fields most likely to be dropped by a decoder reading
+    /// the wrong column index: `extra` (preserved unknown frontmatter) and
+    /// `lamport` (the causal clock merges order by).
+    #[test]
+    fn test_finding_crud() {
+        use crate::models::{Finding, FindingStatus};
+
+        let db = Database::open_in_memory().expect("Failed to open database");
+        let conn = db.conn();
+
+        let mut finding = Finding::new(
+            "f1".to_string(),
+            "Parse floors at 60k".to_string(),
+            "p1".to_string(),
+        );
+        finding.evidence = "Counted over three runs.".to_string();
+        finding.method = Some("ops.py --stage decode".to_string());
+        finding.author = Some("agent-a".to_string());
+        finding.refs = vec!["s1".to_string(), "c1".to_string()];
+        finding.tags = vec!["perf".to_string()];
+        finding.lamport = 42;
+        finding.extra.insert(
+            "field_from_a_newer_jjj".to_string(),
+            serde_norway::Value::String("keep-me".to_string()),
+        );
+
+        upsert_finding(conn, &finding).expect("Failed to upsert finding");
+
+        let loaded = load_finding(conn, "f1")
+            .expect("Failed to load")
+            .expect("Not found");
+        assert_eq!(loaded.title, "Parse floors at 60k");
+        assert_eq!(loaded.problem_id, "p1");
+        assert_eq!(loaded.evidence, "Counted over three runs.");
+        assert_eq!(loaded.method, Some("ops.py --stage decode".to_string()));
+        assert_eq!(loaded.author, Some("agent-a".to_string()));
+        assert_eq!(loaded.refs, vec!["s1".to_string(), "c1".to_string()]);
+        assert_eq!(loaded.tags, vec!["perf".to_string()]);
+        assert_eq!(loaded.status, FindingStatus::Current);
+        assert_eq!(
+            loaded.lamport, 42,
+            "the causal clock did not survive the cache"
+        );
+        assert_eq!(
+            loaded
+                .extra
+                .get("field_from_a_newer_jjj")
+                .and_then(|v| v.as_str()),
+            Some("keep-me"),
+            "an unknown field was dropped, so a DB-primary read cannot reconstruct the markdown"
+        );
+
+        // Update: supersede it.
+        finding.supersede("f2").expect("supersede");
+        upsert_finding(conn, &finding).expect("Failed to update");
+        let loaded = load_finding(conn, "f1")
+            .expect("Failed to load")
+            .expect("Not found");
+        assert_eq!(loaded.status, FindingStatus::Superseded);
+        assert_eq!(loaded.superseded_by, Some("f2".to_string()));
+
+        // List and delete.
+        let other = Finding::new(
+            "f2".to_string(),
+            "A better measurement".to_string(),
+            "p1".to_string(),
+        );
+        upsert_finding(conn, &other).expect("Failed to upsert");
+        assert_eq!(list_findings(conn).expect("list").len(), 2);
+        assert!(delete_finding(conn, "f1").expect("delete"));
+        assert_eq!(list_findings(conn).expect("list").len(), 1);
+    }
+
     use super::*;
     use crate::db::Database;
     use crate::models::{

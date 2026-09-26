@@ -1,4 +1,4 @@
--- jjj SQLite schema v14
+-- jjj SQLite schema v15
 -- Runtime cache for fast queries and full-text search
 
 -- Meta table for schema versioning and sync state
@@ -33,6 +33,9 @@ CREATE TABLE IF NOT EXISTS problems (
     -- index: a DB-primary list must reconstruct what the markdown holds, or a
     -- list-then-save path silently erases a newer version's fields.
     extra TEXT DEFAULT '{}',
+    -- Lamport logical clock: the causal order used to resolve concurrent edits,
+    -- so the winner is the latest writer rather than the fastest wall clock.
+    lamport INTEGER DEFAULT 0,
     FOREIGN KEY (parent_id) REFERENCES problems(id),
     FOREIGN KEY (milestone_id) REFERENCES milestones(id)
 );
@@ -65,6 +68,9 @@ CREATE TABLE IF NOT EXISTS solutions (
     -- index: a DB-primary list must reconstruct what the markdown holds, or a
     -- list-then-save path silently erases a newer version's fields.
     extra TEXT DEFAULT '{}',
+    -- Lamport logical clock: the causal order used to resolve concurrent edits,
+    -- so the winner is the latest writer rather than the fastest wall clock.
+    lamport INTEGER DEFAULT 0,
     FOREIGN KEY (problem_id) REFERENCES problems(id),
     FOREIGN KEY (supersedes) REFERENCES solutions(id)
 );
@@ -99,6 +105,9 @@ CREATE TABLE IF NOT EXISTS critiques (
     -- index: a DB-primary list must reconstruct what the markdown holds, or a
     -- list-then-save path silently erases a newer version's fields.
     extra TEXT DEFAULT '{}',
+    -- Lamport logical clock: the causal order used to resolve concurrent edits,
+    -- so the winner is the latest writer rather than the fastest wall clock.
+    lamport INTEGER DEFAULT 0,
     FOREIGN KEY (solution_id) REFERENCES solutions(id)
 );
 
@@ -117,7 +126,9 @@ CREATE TABLE IF NOT EXISTS milestones (
     -- (JSON object). Stored rather than dropped so the cache stays a faithful
     -- index: a DB-primary list must reconstruct what the markdown holds, or a
     -- list-then-save path silently erases a newer version's fields.
-    extra TEXT DEFAULT '{}'
+    extra TEXT DEFAULT '{}',
+    -- See the note on problems.lamport.
+    lamport INTEGER DEFAULT 0
 );
 
 -- Findings table: evidence about a problem.
@@ -144,6 +155,9 @@ CREATE TABLE IF NOT EXISTS findings (
     -- index: a DB-primary list must reconstruct what the markdown holds, or a
     -- list-then-save path silently erases a newer version's fields.
     extra TEXT DEFAULT '{}',
+    -- Lamport logical clock: the causal order used to resolve concurrent edits,
+    -- so the winner is the latest writer rather than the fastest wall clock.
+    lamport INTEGER DEFAULT 0,
     FOREIGN KEY (problem_id) REFERENCES problems(id)
 );
 

@@ -5,6 +5,7 @@ use std::cell::RefCell;
 use std::fs;
 use std::path::PathBuf;
 
+pub mod clock;
 mod critiques;
 pub mod delta;
 mod event_shards;
@@ -383,6 +384,13 @@ pub trait Persist: serde::Serialize + serde::de::DeserializeOwned + Clone + Size
     /// it had branched from.
     fn set_updated_at(&mut self, when: chrono::DateTime<chrono::Utc>);
 
+    /// The entity's Lamport clock (0 when written before clocks existed).
+    fn lamport(&self) -> u64;
+
+    /// Set the entity's Lamport clock. Called by [`MetadataStore::save`]
+    /// alongside the timestamp stamp, on exactly the saves that change content.
+    fn set_lamport(&mut self, clock: u64);
+
     /// Clear derived back-reference fields before the markdown write (Pillar 4).
     ///
     /// These fields (e.g. `Problem::solution_ids`) are populated at read time
@@ -434,6 +442,12 @@ impl Persist for crate::models::Problem {
     fn set_updated_at(&mut self, when: chrono::DateTime<chrono::Utc>) {
         self.updated_at = when;
     }
+    fn lamport(&self) -> u64 {
+        self.lamport
+    }
+    fn set_lamport(&mut self, clock: u64) {
+        self.lamport = clock;
+    }
     fn body(&self) -> &str {
         &self.description
     }
@@ -470,6 +484,12 @@ impl Persist for crate::models::Solution {
     }
     fn set_updated_at(&mut self, when: chrono::DateTime<chrono::Utc>) {
         self.updated_at = when;
+    }
+    fn lamport(&self) -> u64 {
+        self.lamport
+    }
+    fn set_lamport(&mut self, clock: u64) {
+        self.lamport = clock;
     }
     fn body(&self) -> &str {
         &self.approach
@@ -508,6 +528,12 @@ impl Persist for crate::models::Critique {
     fn set_updated_at(&mut self, when: chrono::DateTime<chrono::Utc>) {
         self.updated_at = when;
     }
+    fn lamport(&self) -> u64 {
+        self.lamport
+    }
+    fn set_lamport(&mut self, clock: u64) {
+        self.lamport = clock;
+    }
     fn body(&self) -> &str {
         &self.argument
     }
@@ -542,6 +568,12 @@ impl Persist for crate::models::Milestone {
     }
     fn set_updated_at(&mut self, when: chrono::DateTime<chrono::Utc>) {
         self.updated_at = when;
+    }
+    fn lamport(&self) -> u64 {
+        self.lamport
+    }
+    fn set_lamport(&mut self, clock: u64) {
+        self.lamport = clock;
     }
     fn body(&self) -> &str {
         &self.description
@@ -578,6 +610,12 @@ impl Persist for crate::models::Finding {
     }
     fn set_updated_at(&mut self, when: chrono::DateTime<chrono::Utc>) {
         self.updated_at = when;
+    }
+    fn lamport(&self) -> u64 {
+        self.lamport
+    }
+    fn set_lamport(&mut self, clock: u64) {
+        self.lamport = clock;
     }
     fn body(&self) -> &str {
         &self.evidence
@@ -683,6 +721,10 @@ impl MetadataStore {
         let (mut entity, body): (T, String) = parse_frontmatter(&content)
             .map_err(|e| add_frontmatter_context(e, T::ENTITY_TYPE, id))?;
         entity.set_body(body);
+        // Witness the clock we just observed, so anything written after this read
+        // is causally ordered after what was read. This is the half of the
+        // algorithm that makes the order mean something.
+        clock::witness(&self.meta_path, entity.lamport());
         Ok(entity)
     }
 
@@ -726,7 +768,7 @@ impl MetadataStore {
         // Safe to do centrally because the merge path does **not** come through
         // here: `fetch` writes merged bytes with `fs::write`, so a merge result
         // is never re-stamped and clones still converge on identical content.
-        let mut stamped: Option<chrono::DateTime<chrono::Utc>> = None;
+        let mut stamped: Option<(chrono::DateTime<chrono::Utc>, u64)> = None;
         match fs::read_to_string(&path) {
             // Unchanged apart from the timestamp: write nothing. A no-op save
             // should not churn the file, both to keep the merge timestamp
@@ -735,10 +777,16 @@ impl MetadataStore {
             Ok(existing) if without_updated_at(&existing) == without_updated_at(&content) => {}
             Ok(_) => {
                 let now = chrono::Utc::now();
+                // Both stamps, on exactly the saves that change something. The
+                // Lamport clock is what merges order by; the timestamp is for
+                // people to read and is only a fallback for entities written
+                // before clocks existed.
+                let clock = clock::tick(&self.meta_path, for_disk.lamport());
                 for_disk.set_updated_at(now);
+                for_disk.set_lamport(clock);
                 content = to_markdown_strip(&for_disk, &body, T::BODY_FIELD)?;
                 atomic_write(&path, content.as_bytes())?;
-                stamped = Some(now);
+                stamped = Some((now, clock));
             }
             // First write of this entity: `updated_at` is whatever creation set,
             // which is already the moment it came into being.
@@ -755,8 +803,9 @@ impl MetadataStore {
             // empties `Milestone::problem_ids`, which the milestones table does
             // store and reconstruct from.
             let mut for_cache = entity.clone();
-            if let Some(now) = stamped {
+            if let Some((now, clock)) = stamped {
                 for_cache.set_updated_at(now);
+                for_cache.set_lamport(clock);
             }
             if let Err(e) = for_cache.sync_to_cache(db) {
                 crate::output::warn(&format!(

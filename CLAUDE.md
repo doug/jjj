@@ -63,7 +63,7 @@ events.jsonl
 
 Machine-local files under `.jj/jjj-meta/` that are deliberately **not** synced:
 `automation.toml` (executable rules), `.sync_state.json`, `.events_offsets.json`,
-and `jjj.db`.
+`.lamport` (this clone's logical clock), and `jjj.db`.
 
 Entity files use YAML frontmatter + markdown body. Each entity has one free-form body field:
 - **Problem**: body = `description`
@@ -73,6 +73,21 @@ Entity files use YAML frontmatter + markdown body. Each entity has one free-form
 - **Milestone**: body = `description`
 
 Previously separate fields (`context`, `tradeoffs`, `evidence`, `goals`, `success_criteria`) have been removed — all free-form content belongs in the body.
+
+### Concurrent Edits: Causal Order, Not Wall Clock
+Every entity carries a `lamport` logical clock, incremented on each substantive
+save and **witnessed** on read (observing a higher value advances this clone's
+counter). Concurrent edits are resolved by comparing clocks, falling back to
+`updated_at` only for entities written before clocks existed.
+
+This replaced ordering by `updated_at`, which made the *fastest* clock the winner
+rather than the latest writer: a machine a year fast won every merge on every
+entity it touched, permanently — ten honest later edits by another clone all lost
+to one year-ahead record, and a single bad NTP sync is enough. Witnessing is
+capped at a 1,000,000 jump so one absurd value cannot pin the counter.
+
+Unrecognised frontmatter keys are preserved verbatim in an `extra` map rather
+than deleted, so an older client cannot destroy a newer one's fields.
 
 ### Ranking & Ordering
 Per-user ordering files in `rankings/{milestone_id}/{user}.json` store a problem priority list plus per-item **sized gaps** (intensity). The TUI provides:

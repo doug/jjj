@@ -79,6 +79,25 @@ pub struct Finding {
     /// Last update timestamp.
     pub updated_at: DateTime<Utc>,
 
+    /// Lamport logical clock for this entity — a causal order that does not
+    /// depend on any machine's wall clock.
+    ///
+    /// Concurrent edits used to be resolved by comparing `updated_at`, which
+    /// makes the fastest clock the winner rather than the latest writer. A
+    /// machine one year fast wins *every* merge on every entity it touches,
+    /// permanently: ten honest later edits by another clone all lose to its
+    /// single year-ahead record. One bad NTP sync is enough; no malice required.
+    ///
+    /// A wall-clock timestamp is therefore informational only: nothing verifies
+    /// it and it may be wrong. Ordering uses this clock instead — incremented on
+    /// every substantive save and *witnessed* on read, so an edit made after
+    /// observing another's edit is causally ordered after it regardless of what
+    /// either machine's clock says.
+    ///
+    /// Zero means "written before this existed", which falls back to the old
+    /// timestamp comparison so existing repositories keep working.
+    #[serde(default, skip_serializing_if = "crate::models::is_zero")]
+    pub lamport: u64,
     /// Frontmatter keys this version of jjj does not recognise, preserved
     /// verbatim so a save cannot destroy them.
     ///
@@ -151,6 +170,7 @@ impl Finding {
             created_at: now,
             updated_at: now,
             evidence: String::new(),
+            lamport: 0,
             extra: Default::default(),
         }
     }

@@ -944,6 +944,7 @@ mod tests {
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
             extra: Default::default(),
+            lamport: 0,
         };
         let problems: Vec<Problem> = (0..6)
             .map(|i| {

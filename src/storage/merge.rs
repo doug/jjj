@@ -253,6 +253,29 @@ enum Side {
 }
 
 fn pick_side(l: &Value, r: &Value) -> Side {
+    // Causality first. A Lamport clock is incremented on write and witnessed on
+    // read, so a higher value means "written after observing the other", which
+    // is what "latest" should mean. Comparing wall clocks instead made the
+    // *fastest* clock the winner: a machine a year fast won every merge on every
+    // entity it touched, permanently — ten honest later edits by another clone
+    // all lost to its single year-ahead record, and one bad NTP sync is enough.
+    //
+    // A timestamp is informational only: nothing verifies it, and a machine
+    // whose clock is wrong is indistinguishable from one that wrote later.
+    let l_clock = l.get("lamport").and_then(|v| v.as_u64()).unwrap_or(0);
+    let r_clock = r.get("lamport").and_then(|v| v.as_u64()).unwrap_or(0);
+    if l_clock != r_clock {
+        return if r_clock > l_clock {
+            Side::Remote
+        } else {
+            Side::Local
+        };
+    }
+
+    // Equal clocks means genuinely concurrent, or both written before clocks
+    // existed. Fall back to the timestamp — imperfect, but it is what older
+    // repositories have, and the tiebreak below keeps clones converging either
+    // way.
     let l_ts = l.get("updated_at").and_then(|v| v.as_str()).unwrap_or("");
     let r_ts = r.get("updated_at").and_then(|v| v.as_str()).unwrap_or("");
     match r_ts.cmp(l_ts) {
@@ -910,6 +933,64 @@ mod convergence_tests {
             assignee_of(&b_view),
             "the tiebreak is not symmetric, so two clones seeing the same pair \
              of edits end up disagreeing forever"
+        );
+    }
+
+    /// A fast wall clock must not win, and must not win forever.
+    ///
+    /// This is the failure the Lamport clock exists to prevent, measured before
+    /// it was added: with ordering decided by `updated_at`, a machine one year
+    /// fast won *every* merge on every entity it touched. Ten honest later edits
+    /// by another clone all lost to its single year-ahead record. One bad NTP
+    /// sync is enough — no malice required.
+    #[test]
+    fn a_skewed_wall_clock_does_not_beat_a_higher_lamport_clock() {
+        fn doc(title: &str, updated: &str, lamport: u64) -> String {
+            format!(
+                "---\nid: p1\ntitle: {title}\nstatus: open\n\
+                 created_at: '2026-01-01T00:00:00Z'\nupdated_at: '{updated}'\n\
+                 lamport: {lamport}\n---\n\nbody\n"
+            )
+        }
+        fn title_of(md: &str) -> String {
+            md.lines()
+                .find(|l| l.starts_with("title:"))
+                .unwrap_or("title: ?")
+                .to_string()
+        }
+
+        let base = doc("Original", "2026-01-01T00:00:00Z", 1);
+        // B's machine is a year fast, but it has only seen one edit.
+        let b_skewed = doc("B, clock a year fast", "2027-01-01T00:00:00Z", 2);
+        // A has observed more of the world, so its clock is higher.
+        let a = doc("A, honest and later", "2026-06-01T00:00:00Z", 3);
+
+        let a_view = merge_entity_md(Some(&base), &a, &b_skewed).expect("merge");
+        let b_view = merge_entity_md(Some(&base), &b_skewed, &a).expect("merge");
+
+        assert_eq!(
+            title_of(&a_view),
+            "title: A, honest and later",
+            "the year-ahead wall clock beat a higher Lamport clock"
+        );
+        assert_eq!(
+            title_of(&a_view),
+            title_of(&b_view),
+            "clock-ordered merges must still be symmetric, or clones diverge"
+        );
+    }
+
+    /// Entities written before Lamport clocks existed still order by timestamp.
+    #[test]
+    fn a_zero_clock_falls_back_to_the_timestamp() {
+        let base = doc("<none>", "2026-08-20T11:00:00Z");
+        let older = doc("agent-a", "2026-08-20T11:56:02.314999Z");
+        let newer = doc("agent-b", "2026-08-20T11:56:02.350000Z");
+        let merged = merge_entity_md(Some(&base), &older, &newer).expect("merge");
+        assert_eq!(
+            assignee_of(&merged),
+            "assignee: agent-b",
+            "without clocks the timestamp must still decide"
         );
     }
 
