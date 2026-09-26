@@ -1821,3 +1821,96 @@ fn iterating_ancestors_does_not_revert_a_descendants_edit() {
         "fetch is not idempotent across ancestor bookmarks: {again}"
     );
 }
+
+/// Push validation must not depend on the SQLite cache existing.
+///
+/// The gate that refuses to push unresolved `<<<<<<<` conflict markers ran only
+/// `if db_path.exists()`, which made the whole check conditional on a
+/// *performance artifact* being present. A clone that had never built a cache
+/// pushed with no validation at all.
+///
+/// Measured consequence, from a real swarm trial three months after the guard
+/// was written: eight blobs carrying conflict markers reached the shared
+/// bookmark, became the base for later merges, nested four deep, inflated one
+/// solution body from 4.4KB to 14.2KB of conflict debris, and cost an agent
+/// another agent's work — with zero `conflict_resolved` events, so nobody ever
+/// saw it to fix it.
+#[test]
+fn push_refuses_conflict_markers_even_with_no_cache() {
+    if !jj_available() {
+        return;
+    }
+    let remote = create_bare_remote();
+    let repo = setup_repo_with_remote(remote.path());
+    run_jjj_success(repo.path(), &["init"]);
+    let out = run_jjj_success(repo.path(), &["problem", "new", "Conflicted", "--json"]);
+    let v: serde_json::Value = serde_json::from_str(&out).expect("valid JSON");
+    let id = v["id"].as_str().expect("id");
+
+    // A body carrying unresolved markers, as `fetch` would leave after a
+    // both-sides body edit.
+    let path = repo
+        .path()
+        .join(".jj/jjj-meta/problems")
+        .join(format!("{id}.md"));
+    let body = std::fs::read_to_string(&path).expect("read entity");
+    std::fs::write(
+        &path,
+        format!("{body}\n<<<<<<< local\nmine\n=======\ntheirs\n>>>>>>> remote\n"),
+    )
+    .expect("write entity");
+
+    // The condition that disabled the gate: no cache on disk.
+    for suffix in ["", "-wal", "-shm"] {
+        let _ = std::fs::remove_file(repo.path().join(format!(".jj/jjj.db{suffix}")));
+    }
+    assert!(
+        !repo.path().join(".jj/jjj.db").exists(),
+        "the test needs to run with no cache present"
+    );
+
+    let out = run_jjj(repo.path(), &["push"]);
+    assert!(
+        !out.status.success(),
+        "push succeeded with unresolved conflict markers and no cache:\n{}\n{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    // And nothing reached the remote.
+    let remote_dir = remote.path().to_string_lossy().to_string();
+    let listing = Command::new("git")
+        .args(["--git-dir", &remote_dir, "for-each-ref"])
+        .output()
+        .expect("for-each-ref");
+    let refs = String::from_utf8_lossy(&listing.stdout);
+    assert!(
+        !refs.contains("refs/heads/jjj"),
+        "a metadata bookmark was published despite the refusal: {refs}"
+    );
+}
+
+/// The unconditional validation must not break the ordinary case.
+#[test]
+fn a_clean_push_still_works_with_no_cache() {
+    if !jj_available() {
+        return;
+    }
+    let remote = create_bare_remote();
+    let repo = setup_repo_with_remote(remote.path());
+    run_jjj_success(repo.path(), &["init"]);
+    run_jjj_success(
+        repo.path(),
+        &["problem", "new", "Perfectly fine", "--force"],
+    );
+    for suffix in ["", "-wal", "-shm"] {
+        let _ = std::fs::remove_file(repo.path().join(format!(".jj/jjj.db{suffix}")));
+    }
+    let out = run_jjj(repo.path(), &["push"]);
+    assert!(
+        out.status.success(),
+        "a clean push was rejected with no cache present:\n{}\n{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+}

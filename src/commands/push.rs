@@ -435,17 +435,41 @@ pub fn execute(
     };
 
     // Validate the canonical markdown before pushing.
+    //
+    // Never conditional on the cache existing. This used to run only
+    // `if db_path.exists()`, which made the whole gate — including the refusal
+    // to push unresolved `<<<<<<<` conflict markers — depend on a *performance
+    // artifact* being present. A clone that had never built one pushed with no
+    // checks at all, and that is not hypothetical: a swarm trial put eight blobs
+    // carrying conflict markers onto the shared bookmark, where they became the
+    // base for later merges, nested four deep, inflated one solution body from
+    // 4.4KB to 14.2KB of conflict debris, and cost an agent another agent's work
+    // outright. The guard had existed for three months by then.
+    //
+    // With no cache on disk, validate through a throwaway in-memory one: the
+    // markdown is the input either way, so the checks are identical and nothing
+    // is persisted.
     let db_path = jj_client.repo_root().join(".jj").join("jjj.db");
-    if db_path.exists() {
-        let db = Database::open(&db_path)?;
-
+    let had_cache = db_path.exists();
+    {
         // Refresh the cache FROM markdown (markdown is canonical — never dump
         // the DB back over it). `Database::open` rebuilds a dirty/interrupted
         // DB to *empty*; dumping that over the markdown files would wipe them
         // and push the wipe. Loading instead makes validation check the real
         // current content, and push copies the untouched markdown files.
         println!("Validating metadata...");
-        db::load_from_markdown_incremental(&db, store)?;
+        let db = if had_cache {
+            Database::open(&db_path)?
+        } else {
+            Database::open_in_memory()?
+        };
+        if had_cache {
+            db::load_from_markdown_incremental(&db, store)?;
+        } else {
+            // Nothing to be incremental against, and no content_cache to seed:
+            // read every entity.
+            db::load_from_markdown(&db, store)?;
+        }
         let errors = db::validate(&db)?;
         if !errors.is_empty() {
             println!("Validation errors:");
