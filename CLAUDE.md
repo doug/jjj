@@ -181,6 +181,9 @@ jjj finding new <problem> "title"    # Record evidence (--method, --body -, --re
 jjj finding list --problem <id>      # Evidence on a problem
 jjj finding supersede <old> --by <new>  # A better measurement replaced it
 jjj query "status:open tag:perf sort:edit"   # One grammar across all five kinds
+jjj events --event-type conflict_detected    # Refusals are events too:
+jjj events --event-type approval_blocked     #   conflict_detected, push_rejected,
+jjj events --event-type claim_contested      #   approval_blocked, claim_contested
 jjj events                           # Recent events
 jjj events --problem 01957d          # Events for a problem (by prefix)
 jjj timeline "auth bug"              # Full timeline (by fuzzy title)

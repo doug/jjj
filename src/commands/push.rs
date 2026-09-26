@@ -476,6 +476,32 @@ pub fn execute(
             for error in &errors {
                 println!("  \u{2717} {}", error);
             }
+
+            // Record the refusal before returning. A rejected push is the one
+            // moment jjj knows the local metadata is unfit to share, and it used
+            // to leave nothing behind but an exit code the caller saw — which is
+            // how eight blobs carrying conflict markers reached a shared
+            // bookmark unnoticed for months. Written locally, so it travels on
+            // the next push that does succeed.
+            let user = store.get_current_user().unwrap_or_default();
+            let summary = errors
+                .iter()
+                .take(3)
+                .map(|e| e.to_string())
+                .collect::<Vec<_>>()
+                .join("; ");
+            let event = crate::models::Event::new(
+                crate::models::EventType::PushRejected,
+                // No single entity is at fault, so the event names the bookmark
+                // the push was for.
+                push_target_for_event(store),
+                user,
+            )
+            .with_rationale(format!("{} validation error(s): {summary}", errors.len()))
+            .with_refs(errors.iter().map(|e| e.entity_id.clone()).collect());
+            store.set_pending_event(event);
+            let _ = store.commit_changes();
+
             return Err(crate::error::JjjError::Validation(
                 "Push aborted. Fix errors and retry.".to_string(),
             ));
@@ -576,4 +602,13 @@ fn check_and_prompt_approve_solve(ctx: &CommandContext) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// The bookmark a push was aimed at, used as the entity id of a
+/// [`EventType::PushRejected`] event.
+///
+/// A rejected push has no single offending entity — the errors name several, and
+/// they go in `refs`. The bookmark is the thing the refusal is *about*.
+fn push_target_for_event(store: &MetadataStore) -> String {
+    SyncState::load(store.meta_path()).push_bookmark()
 }

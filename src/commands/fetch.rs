@@ -172,6 +172,9 @@ fn resolve_entity_delta(delta: &FileDelta, local: Option<&str>) -> Result<Entity
 struct FetchOutcome {
     /// Entity files whose merged result still carries conflict markers.
     merge_conflicts: Vec<String>,
+    /// `(singular, id)` of entities where both sides had named a different
+    /// assignee — two actors claimed the same work and the merge kept one.
+    contested_claims: Vec<(String, String)>,
     /// Entity files the remote deleted but we kept because they were edited.
     delete_conflicts: Vec<String>,
     /// `(singular, id)` of entities to incrementally upsert into the DB.
@@ -207,7 +210,18 @@ fn apply_file_delta(meta_path: &Path, delta: &FileDelta, outcome: &mut FetchOutc
                         // alone until the user resolves it (markdown canonical).
                         outcome.merge_conflicts.push(delta.path.clone());
                     } else {
-                        outcome.changed.insert((singular.to_string(), id));
+                        outcome.changed.insert((singular.to_string(), id.clone()));
+                    }
+                    // A claim the merge had to choose between. Convergence keeps
+                    // one assignee and drops the other, leaving no trace that
+                    // two actors ever wanted the same work — so the loser's
+                    // effort is invisible unless it is recorded here.
+                    if let (Some(base), Some(local)) = (delta.base.as_deref(), local.as_deref()) {
+                        if claims_contested(base, local, delta.remote.as_deref().unwrap_or("")) {
+                            outcome
+                                .contested_claims
+                                .push((singular.to_string(), id.clone()));
+                        }
                     }
                 }
                 EntityAction::Delete => {
@@ -491,6 +505,44 @@ pub fn execute(ctx: &CommandContext, remote: &str) -> Result<()> {
         println!("  No new jjj changes.");
     }
 
+    // Record what the merge had to decide, before reporting it.
+    //
+    // Both of these were previously invisible after the fact: a conflict is a
+    // file state and a claim is last-writer state, so the only evidence either
+    // happened was whatever a human read off the terminal at the time. Finding a
+    // single conflict episode afterwards took walking 904 merge commits across
+    // five runs.
+    if !outcome.merge_conflicts.is_empty() || !outcome.contested_claims.is_empty() {
+        let user = store_after.get_current_user().unwrap_or_default();
+        for path in &outcome.merge_conflicts {
+            let id = std::path::Path::new(path)
+                .file_stem()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_else(|| path.clone());
+            store_after.set_pending_event(
+                crate::models::Event::new(
+                    crate::models::EventType::ConflictDetected,
+                    id,
+                    user.clone(),
+                )
+                .with_rationale(format!("both sides edited the body of {path}")),
+            );
+        }
+        for (singular, id) in &outcome.contested_claims {
+            store_after.set_pending_event(
+                crate::models::Event::new(
+                    crate::models::EventType::ClaimContested,
+                    id.clone(),
+                    user.clone(),
+                )
+                .with_rationale(format!(
+                    "two actors claimed the same {singular}; the merge kept one"
+                )),
+            );
+        }
+        let _ = store_after.commit_changes();
+    }
+
     if !outcome.merge_conflicts.is_empty() {
         eprintln!(
             "\nMerge conflicts in {} file(s) — both sides edited the same body:",
@@ -500,6 +552,17 @@ pub fn execute(ctx: &CommandContext, remote: &str) -> Result<()> {
             eprintln!("  {}", path);
         }
         eprintln!("Open each file, resolve the <<<<<<< / >>>>>>> markers, then save.");
+    }
+
+    if !outcome.contested_claims.is_empty() {
+        eprintln!(
+            "\n{} claim(s) were contested — two actors held the same work, one was kept:",
+            outcome.contested_claims.len()
+        );
+        for (singular, id) in &outcome.contested_claims {
+            eprintln!("  {} {}", singular, crate::display::short_id(id));
+        }
+        eprintln!("Check `jjj next` before continuing; the work may no longer be yours.");
     }
 
     if !outcome.delete_conflicts.is_empty() {
@@ -732,5 +795,119 @@ mod tests {
         assert!(outcome.events_changed);
         let merged = fs::read_to_string(meta.join("events.jsonl")).unwrap();
         assert_eq!(merged.lines().count(), 2);
+    }
+}
+
+/// Whether both sides assigned an entity to *different* people after the base.
+///
+/// The three-way merge resolves this by keeping one assignee, which is the right
+/// outcome and a lossy one: afterwards nothing shows that two actors had claimed
+/// the same work. Claim contention is jjj's most-cited coordination question and
+/// was unanswerable for exactly this reason — a claim is last-writer state, not
+/// an event.
+///
+/// Compares the frontmatter line rather than parsing, because this runs inside
+/// the fetch loop for every changed entity and a conflicted document may not
+/// parse at all.
+fn claims_contested(base: &str, local: &str, remote: &str) -> bool {
+    fn assignee(md: &str) -> Option<&str> {
+        let mut lines = md.lines();
+        // The first line is the opening fence. An earlier version used
+        // `take_while` over all lines, which stopped on that very fence and so
+        // scanned nothing at all — the detector silently never fired.
+        if lines.next().map(str::trim) != Some("---") {
+            return None;
+        }
+        for line in lines {
+            if line.trim() == "---" {
+                break; // end of frontmatter
+            }
+            if let Some(value) = line.strip_prefix("assignee:") {
+                let value = value.trim().trim_matches('\'').trim_matches('"');
+                return (!value.is_empty() && value != "null" && value != "~").then_some(value);
+            }
+        }
+        None
+    }
+    let (b, l, r) = (assignee(base), assignee(local), assignee(remote));
+    // Both moved away from the base, and they disagree.
+    l != b && r != b && l != r && l.is_some() && r.is_some()
+}
+
+#[cfg(test)]
+mod claim_contention_tests {
+    use super::claims_contested;
+
+    fn doc(assignee: Option<&str>) -> String {
+        let line = match assignee {
+            Some(a) => format!("assignee: {a}\n"),
+            None => String::new(),
+        };
+        format!("---\nid: p1\ntitle: Work\nstatus: open\n{line}---\n\nbody\n")
+    }
+
+    #[test]
+    fn two_actors_claiming_the_same_unclaimed_work_is_contention() {
+        let base = doc(None);
+        assert!(claims_contested(&base, &doc(Some("ana")), &doc(Some("bo"))));
+    }
+
+    #[test]
+    fn one_side_claiming_is_not_contention() {
+        // Only one actor moved; the merge has nothing to choose between.
+        let base = doc(None);
+        assert!(!claims_contested(&base, &doc(Some("ana")), &doc(None)));
+        assert!(!claims_contested(&base, &doc(None), &doc(Some("bo"))));
+    }
+
+    #[test]
+    fn both_naming_the_same_person_is_not_contention() {
+        let base = doc(None);
+        assert!(!claims_contested(
+            &base,
+            &doc(Some("ana")),
+            &doc(Some("ana"))
+        ));
+    }
+
+    #[test]
+    fn a_claim_already_in_the_base_is_not_re_reported() {
+        // Both inherited the same assignee and neither changed it.
+        let base = doc(Some("ana"));
+        assert!(!claims_contested(
+            &base,
+            &doc(Some("ana")),
+            &doc(Some("ana"))
+        ));
+    }
+
+    #[test]
+    fn reassignment_away_from_the_base_by_both_is_contention() {
+        let base = doc(Some("ana"));
+        assert!(claims_contested(&base, &doc(Some("bo")), &doc(Some("cy"))));
+    }
+
+    #[test]
+    fn a_release_is_not_a_claim() {
+        // One side cleared the assignee. That is not two actors wanting the
+        // work, so it must not be reported as contention.
+        let base = doc(Some("ana"));
+        assert!(!claims_contested(&base, &doc(None), &doc(Some("bo"))));
+    }
+
+    #[test]
+    fn quoted_and_empty_values_are_handled() {
+        let base = doc(None);
+        assert!(claims_contested(
+            &base,
+            &doc(Some("'ana'")),
+            &doc(Some("\"bo\""))
+        ));
+        // An explicitly null assignee is absent, not a claim.
+        assert!(!claims_contested(
+            &base,
+            &doc(Some("null")),
+            &doc(Some("bo"))
+        ));
     }
 }

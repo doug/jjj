@@ -60,6 +60,25 @@ pub fn approve_solution(
         .collect();
 
     if !open_critiques.is_empty() && !force {
+        // Record the refusal. Without this the critique gate's *effectiveness*
+        // is unmeasurable: an approval that is blocked changes nothing, so it
+        // leaves no entity and no event, and only the caller ever sees the exit
+        // code. "The gate held" and "nobody ever tested it" look identical.
+        let blocked = Event::new(
+            EventType::ApprovalBlocked,
+            solution_id.to_string(),
+            current_user(store),
+        )
+        .with_rationale(format!(
+            "{} open critique(s) must be addressed first",
+            open_critiques.len()
+        ))
+        .with_refs(open_critiques.iter().map(|c| c.id.clone()).collect());
+        store.set_pending_event(blocked);
+        // Flush now: the error return below means `with_metadata` never runs, so
+        // nothing else would write it.
+        let _ = store.commit_changes();
+
         return Err(JjjError::CannotApproveSolution(format!(
             "{} open critique(s) must be addressed first",
             open_critiques.len()

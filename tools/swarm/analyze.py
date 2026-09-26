@@ -25,9 +25,10 @@ is the same thing any participant sees. Two consequences, both wanted:
   1. It runs against a plain jjj repository. If a figure needs the shim, it is
      not a fact about the work — it is a fact about the harness, and it is
      printed in a section that says so.
-  2. Where a question cannot be answered from jjj, that is a gap in jjj's model
-     rather than a reason to reach for the shim. Those are listed at the end
-     instead of being quietly approximated.
+  2. Where a question could not be answered from jjj, the fix was to make jjj
+     record it. Claim contention, refused approvals, detected conflicts and
+     rejected pushes are now events, so each has a denominator instead of being
+     reconstructed from the DAG afterwards.
 
 Every ratio states its numerator and its denominator basis. A ratio over 100% is
 a measurement bug announcing itself; most are quieter than that.
@@ -112,19 +113,6 @@ def section(title):
     print(f"\n{title}\n{'-' * len(title)}")
 
 
-GAPS = []
-
-
-def gap(question, why):
-    """Record something jjj cannot currently answer.
-
-    Printed at the end rather than approximated from the shim. Each of these is
-    a candidate change to the model, which is more useful than a number derived
-    from a channel only the harness can see.
-    """
-    GAPS.append((question, why))
-
-
 # --------------------------------------------------------------------------
 # Coordination — derived from jjj, works on any jjj repository
 # --------------------------------------------------------------------------
@@ -146,9 +134,14 @@ def analyze_participation(repo):
     kinds = by_type(events)
     print("  by kind: " + ", ".join(f"{k}={n}" for k, n in kinds.most_common(8)))
 
-    gap("Which agents contended for the same claim",
-        "a claim is last-writer state, not an event; two agents claiming the "
-        "same problem leaves one assignee and no record of the other")
+    contested = [e for e in events if e.get("type") == "claim_contested"]
+    if contested:
+        who = collections.Counter(e.get("by", "?") for e in contested)
+        print(f"  {len(contested)} claims contested — two actors held the same work and "
+              f"the merge kept one")
+        print("    noticed by: " + ", ".join(f"{a}={n}" for a, n in who.most_common(5)))
+    else:
+        print("  no contested claims recorded")
 
 
 def analyze_problem_design(repo):
@@ -328,9 +321,13 @@ def analyze_critique_gate(repo):
         print(f"  {len(self_critiques)} of {len(critiques)} critiques were on the "
               f"author's own solution ({pct(len(self_critiques), len(critiques))}%)")
 
-    gap("Whether an approval was ever attempted and refused",
-        "a blocked approval changes nothing, so it leaves no entity and no "
-        "event — only the command's exit code, which only the caller sees")
+    blocked = [e for e in events if e.get("type") == "approval_blocked"]
+    # The gate's *effectiveness*, which used to be unmeasurable: "it held" and
+    # "nobody ever tested it" produced identical output.
+    print(f"  {len(blocked)} approvals refused by the gate "
+          f"({'the gate was exercised' if blocked else 'never exercised — it may simply not have been tried'})")
+    for e in blocked[:5]:
+        print(f"    {e.get('by', '?'):16s} {(e.get('rationale') or '')[:60]}")
 
 
 def analyze_evidence(repo):
@@ -407,11 +404,22 @@ def analyze_escalations(repo):
 def analyze_conflicts(repo):
     section("Conflicts")
     events = repo.events()
+    detected = [e for e in events if e.get("type") == "conflict_detected"]
     resolved = [e for e in events if e.get("type") == "conflict_resolved"]
-    print(f"  {len(resolved)} conflicts resolved and recorded")
-    gap("How many conflicts occurred but were abandoned",
-        "an unresolved conflict is a file state, not an event; only resolution "
-        "is recorded, so the denominator is invisible")
+    rejected = [e for e in events if e.get("type") == "push_rejected"]
+
+    # Both halves, so the ratio means something. Recording only resolutions made
+    # the denominator invisible: a run with zero resolutions could have had no
+    # conflicts or could have abandoned every one of them.
+    print(f"  {len(detected)} conflicts detected, {len(resolved)} resolved "
+          f"({pct(len(resolved), len(detected))}% of those detected)")
+    abandoned = len(detected) - len(resolved)
+    if abandoned > 0:
+        print(f"  !! {abandoned} left unresolved — conflict markers become the base for the")
+        print(f"     next merge, so they nest and the body grows rather than converging")
+    print(f"  {len(rejected)} pushes refused by validation")
+    for e in rejected[:5]:
+        print(f"    {e.get('by', '?'):16s} {(e.get('rationale') or '')[:60]}")
 
 
 # --------------------------------------------------------------------------
@@ -582,14 +590,6 @@ def main():
         analyze_harness_adherence(records)
         analyze_harness_fitness(root)
         analyze_harness_health(root)
-
-    if GAPS:
-        section("Not answerable from jjj")
-        print("  Each of these is a candidate change to the model, not a reason to")
-        print("  reach for the invocation log.\n")
-        for question, why in GAPS:
-            print(f"  * {question}")
-            print(f"    {why}")
 
     print()
 

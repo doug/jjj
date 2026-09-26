@@ -168,11 +168,20 @@ fn analyze_reads_a_plain_jjj_repository() {
         "ratios must state their basis: {text}"
     );
 
-    // Questions jjj cannot answer are listed, not approximated from a channel
-    // only the harness can see.
+    // Questions that used to be unanswerable are now events with a denominator,
+    // not a list of caveats. The gate's effectiveness is the sharpest of these:
+    // "it held" and "nobody ever tested it" used to print the same thing.
     assert!(
-        text.contains("Not answerable from jjj"),
-        "gaps must be reported rather than filled in from the shim: {text}"
+        text.contains("approvals refused by the gate"),
+        "the critique gate's effectiveness must be reported: {text}"
+    );
+    assert!(
+        text.contains("conflicts detected"),
+        "conflicts need both halves of the ratio: {text}"
+    );
+    assert!(
+        text.contains("contested"),
+        "claim contention must be reported: {text}"
     );
 
     // Harness sections are for swarm roots only — a plain repository has no

@@ -35,6 +35,20 @@ pub enum EventType {
     // Coordination events
     ConflictResolved,
 
+    // Refusals and contention.
+    //
+    // Every other variant here records something that *happened*. These record
+    // something that was prevented, and they exist because their absence made
+    // whole classes of failure unmeasurable: a body conflict left no trace, so
+    // finding one episode took walking 904 merge commits across five trials; a
+    // blocked push left only an exit code its caller saw, which is why eight
+    // blobs carrying conflict markers sat unnoticed on a shared bookmark for
+    // months. A log of successes cannot tell you what the system refused.
+    ConflictDetected,
+    PushRejected,
+    ApprovalBlocked,
+    ClaimContested,
+
     // Escalation: the swarm asking for a person
     EscalationRaised,
     EscalationCleared,
@@ -70,6 +84,10 @@ impl EventType {
             Self::MilestoneCreated => "milestone_created",
             Self::MilestoneCompleted => "milestone_completed",
             Self::ConflictResolved => "conflict_resolved",
+            Self::ConflictDetected => "conflict_detected",
+            Self::PushRejected => "push_rejected",
+            Self::ApprovalBlocked => "approval_blocked",
+            Self::ClaimContested => "claim_contested",
             Self::EscalationRaised => "escalation_raised",
             Self::EscalationCleared => "escalation_cleared",
             Self::GithubIssueCreated => "github_issue_created",
