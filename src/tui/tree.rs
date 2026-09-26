@@ -943,6 +943,7 @@ mod tests {
             description: String::new(),
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
+            extra: Default::default(),
         };
         let problems: Vec<Problem> = (0..6)
             .map(|i| {

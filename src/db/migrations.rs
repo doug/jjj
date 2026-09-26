@@ -197,6 +197,32 @@ pub fn all_migrations() -> Vec<Migration> {
                 Ok(())
             },
         },
+        Migration {
+            version: 14,
+            description: "Preserve unrecognised frontmatter fields across versions",
+            requires_rebuild: false,
+            up: |conn| {
+                // Until now, any save by a client that did not know a field
+                // silently deleted it. jjj is distributed, so mixed versions
+                // across clones is the normal case; in a swarm the agents run a
+                // baked binary while the host gets rebuilt mid-run.
+                //
+                // Stored in the cache as well as on disk so CACHE_FAITHFUL stays
+                // true — a DB-primary list has to reconstruct what the markdown
+                // holds, or a list-then-save path erases the very fields this
+                // migration exists to keep.
+                //
+                // Tolerated failure, as in v12/v13: a cache built from the
+                // current schema.sql already has these columns.
+                for table in ["problems", "solutions", "critiques", "milestones", "findings"] {
+                    let _ = conn.execute(
+                        &format!("ALTER TABLE {table} ADD COLUMN extra TEXT DEFAULT '{{}}'"),
+                        [],
+                    );
+                }
+                Ok(())
+            },
+        },
     ]
 }
 

@@ -40,6 +40,21 @@ fn parse_json_vec<T: serde::de::DeserializeOwned>(json: &str, field: &str) -> Ve
     })
 }
 
+/// Decode the preserved-unknown-fields map from its JSON column.
+///
+/// Defaults to empty on anything unparseable: a corrupt extras blob must not
+/// make an entity unreadable, since the fields in it are by definition ones this
+/// version does not use.
+fn parse_extra(json: Option<String>) -> std::collections::BTreeMap<String, serde_norway::Value> {
+    let raw = json.unwrap_or_else(|| "{}".to_string());
+    serde_json::from_str(&raw).unwrap_or_default()
+}
+
+/// Encode the preserved-unknown-fields map for storage.
+fn extra_json(extra: &std::collections::BTreeMap<String, serde_norway::Value>) -> String {
+    serde_json::to_string(extra).unwrap_or_else(|_| "{}".to_string())
+}
+
 fn parse_enum<T: std::str::FromStr + Default>(s: &str, kind: &str, default_name: &str) -> T {
     s.parse().unwrap_or_else(|_| {
         eprintln!(
@@ -99,7 +114,7 @@ impl DbEntity for Problem {
     const TABLE: &'static str = "problems";
     const COLUMNS: &'static str = "id, title, status, priority, confidence, parent_id, \
         milestone_id, assignee, created_at, updated_at, description, dissolved_reason, \
-        github_issue, tags, claimed_at";
+        github_issue, tags, claimed_at, extra";
     fn from_row(row: &rusqlite::Row) -> SqliteResult<Self> {
         row_to_problem(row)
     }
@@ -109,7 +124,7 @@ impl DbEntity for Solution {
     const TABLE: &'static str = "solutions";
     const COLUMNS: &'static str = "id, title, status, problem_id, change_ids, supersedes, \
         assignee, force_approved, created_at, updated_at, approach, github_pr, github_branch, \
-        tags, claimed_at, cites";
+        tags, claimed_at, cites, extra";
     fn from_row(row: &rusqlite::Row) -> SqliteResult<Self> {
         row_to_solution(row)
     }
@@ -119,7 +134,7 @@ impl DbEntity for Critique {
     const TABLE: &'static str = "critiques";
     const COLUMNS: &'static str = "id, title, status, solution_id, severity, reviewer, author, \
         file_path, line_number, created_at, updated_at, argument, replies, github_review_id, \
-        line_end, code_context, context_before, context_after, cites";
+        line_end, code_context, context_before, context_after, cites, extra";
     fn from_row(row: &rusqlite::Row) -> SqliteResult<Self> {
         row_to_critique(row)
     }
@@ -128,7 +143,7 @@ impl DbEntity for Critique {
 impl DbEntity for Finding {
     const TABLE: &'static str = "findings";
     const COLUMNS: &'static str = "id, title, status, problem_id, author, superseded_by, refs, \
-        method, tags, created_at, updated_at, evidence";
+        method, tags, created_at, updated_at, evidence, extra";
     fn from_row(row: &rusqlite::Row) -> SqliteResult<Self> {
         row_to_finding(row)
     }
@@ -137,7 +152,7 @@ impl DbEntity for Finding {
 impl DbEntity for Milestone {
     const TABLE: &'static str = "milestones";
     const COLUMNS: &'static str =
-        "id, title, status, target_date, assignee, created_at, updated_at, description, problem_ids";
+        "id, title, status, target_date, assignee, created_at, updated_at, description, problem_ids, extra";
     fn from_row(row: &rusqlite::Row) -> SqliteResult<Self> {
         row_to_milestone(row)
     }
@@ -155,8 +170,8 @@ pub fn upsert_problem(conn: &Connection, problem: &Problem) -> SqliteResult<()> 
         "INSERT OR REPLACE INTO problems (
             id, title, status, priority, confidence, parent_id, milestone_id, assignee,
             created_at, updated_at, description, dissolved_reason, github_issue, tags,
-            claimed_at
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+            claimed_at, extra
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
         params![
             problem.id,
             problem.title,
@@ -183,6 +198,7 @@ pub fn upsert_problem(conn: &Connection, problem: &Problem) -> SqliteResult<()> 
             problem.github_issue.map(|n| n as i64),
             tags_json,
             problem.claimed_at.map(|t| t.to_rfc3339()),
+            extra_json(&problem.extra),
         ],
     )?;
     Ok(())
@@ -240,6 +256,7 @@ fn row_to_problem(row: &rusqlite::Row) -> SqliteResult<Problem> {
         tags: parse_json_vec(&tags_json, "tags"),
         // Derived back-reference — left empty; attached by the storage wrapper.
         solution_ids: Vec::new(),
+        extra: parse_extra(row.get::<_, Option<String>>(15)?),
     })
 }
 
@@ -258,8 +275,8 @@ pub fn upsert_solution(conn: &Connection, solution: &Solution) -> SqliteResult<(
         "INSERT OR REPLACE INTO solutions (
             id, title, status, problem_id, change_ids, supersedes, assignee,
             force_approved, created_at, updated_at, approach,
-            github_pr, github_branch, tags, claimed_at, cites
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+            github_pr, github_branch, tags, claimed_at, cites, extra
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
         params![
             solution.id,
             solution.title,
@@ -277,6 +294,7 @@ pub fn upsert_solution(conn: &Connection, solution: &Solution) -> SqliteResult<(
             tags_json,
             solution.claimed_at.map(|t| t.to_rfc3339()),
             cites_json,
+            extra_json(&solution.extra),
         ],
     )?;
     Ok(())
@@ -358,6 +376,7 @@ fn row_to_solution(row: &rusqlite::Row) -> SqliteResult<Solution> {
         ),
         // Derived back-reference — left empty; attached by the storage wrapper.
         critique_ids: Vec::new(),
+        extra: parse_extra(row.get::<_, Option<String>>(16)?),
     })
 }
 
@@ -382,9 +401,9 @@ pub fn upsert_critique(conn: &Connection, critique: &Critique) -> SqliteResult<(
         "INSERT OR REPLACE INTO critiques (
             id, title, status, solution_id, severity, reviewer, author, file_path,
             line_number, created_at, updated_at, argument, replies,
-            github_review_id, line_end, code_context, context_before, context_after, cites
+            github_review_id, line_end, code_context, context_before, context_after, cites, extra
         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18,
-                  ?19)",
+                  ?19, ?20)",
         params![
             critique.id,
             critique.title,
@@ -405,6 +424,7 @@ pub fn upsert_critique(conn: &Connection, critique: &Critique) -> SqliteResult<(
             context_before_json,
             context_after_json,
             cites_json,
+            extra_json(&critique.extra),
         ],
     )?;
     Ok(())
@@ -495,6 +515,7 @@ fn row_to_critique(row: &rusqlite::Row) -> SqliteResult<Critique> {
                 .unwrap_or_else(|| "[]".to_string()),
             "cites",
         ),
+        extra: parse_extra(row.get::<_, Option<String>>(19)?),
     })
 }
 
@@ -510,8 +531,8 @@ pub fn upsert_milestone(conn: &Connection, milestone: &Milestone) -> SqliteResul
     conn.execute(
         "INSERT OR REPLACE INTO milestones (
             id, title, status, target_date, assignee, created_at, updated_at,
-            description, problem_ids
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            description, problem_ids, extra
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         params![
             milestone.id,
             milestone.title,
@@ -522,6 +543,7 @@ pub fn upsert_milestone(conn: &Connection, milestone: &Milestone) -> SqliteResul
             milestone.updated_at.to_rfc3339(),
             milestone.description.clone(),
             problem_ids_json,
+            extra_json(&milestone.extra),
         ],
     )?;
     Ok(())
@@ -566,6 +588,7 @@ fn row_to_milestone(row: &rusqlite::Row) -> SqliteResult<Milestone> {
         updated_at: parse_datetime(&updated_at_str, "updated_at", "milestone"),
         description,
         problem_ids: parse_json_vec(&problem_ids_json, "problem_ids"),
+        extra: parse_extra(row.get::<_, Option<String>>(9)?),
     })
 }
 
@@ -590,8 +613,8 @@ pub fn upsert_finding(conn: &Connection, finding: &Finding) -> SqliteResult<()> 
     conn.execute(
         "INSERT OR REPLACE INTO findings (
             id, title, status, problem_id, author, superseded_by, refs, method,
-            tags, created_at, updated_at, evidence
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            tags, created_at, updated_at, evidence, extra
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
         params![
             finding.id,
             finding.title,
@@ -605,6 +628,7 @@ pub fn upsert_finding(conn: &Connection, finding: &Finding) -> SqliteResult<()> 
             finding.created_at.to_rfc3339(),
             finding.updated_at.to_rfc3339(),
             finding.evidence,
+            extra_json(&finding.extra),
         ],
     )?;
     Ok(())
@@ -652,6 +676,7 @@ fn row_to_finding(row: &rusqlite::Row) -> SqliteResult<Finding> {
         created_at: parse_datetime(&created_at_str, "created_at", "finding"),
         updated_at: parse_datetime(&updated_at_str, "updated_at", "finding"),
         evidence: row.get::<_, Option<String>>(11)?.unwrap_or_default(),
+        extra: parse_extra(row.get::<_, Option<String>>(12)?),
     })
 }
 

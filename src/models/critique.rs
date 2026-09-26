@@ -84,6 +84,20 @@ pub struct Critique {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub cites: Vec<String>,
 
+    /// Frontmatter keys this version of jjj does not recognise, preserved
+    /// verbatim so a save cannot destroy them.
+    ///
+    /// jjj is distributed, so mixed versions across clones is the normal case
+    /// rather than the exception — and until this existed, an older client that
+    /// merely *touched* an entity silently deleted every field a newer one had
+    /// written. In a swarm the agents run a baked binary while the host may be
+    /// rebuilt mid-run, so the skew is routine.
+    ///
+    /// The rule this follows: data a reader does not understand must be retained
+    /// verbatim if the entity is written back. It applies to any format that
+    /// round-trips through a struct — what the struct does not name, it erases.
+    #[serde(flatten)]
+    pub extra: std::collections::BTreeMap<String, serde_norway::Value>,
     /// Markdown body. Not stored in the YAML frontmatter; stripped by
     /// `to_markdown_strip` on save and assigned from the body on load.
     #[serde(default)]
@@ -199,6 +213,7 @@ impl Critique {
             created_at: now,
             updated_at: now,
             argument: String::new(),
+            extra: Default::default(),
             file_path: None,
             line_start: None,
             line_end: None,

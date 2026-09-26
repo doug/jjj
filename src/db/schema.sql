@@ -1,4 +1,4 @@
--- jjj SQLite schema v13
+-- jjj SQLite schema v14
 -- Runtime cache for fast queries and full-text search
 
 -- Meta table for schema versioning and sync state
@@ -28,6 +28,11 @@ CREATE TABLE IF NOT EXISTS problems (
     -- ago, and `problem list` was silently returning None for it while the
     -- markdown on disk had the timestamp all along.
     claimed_at TEXT,
+    -- Frontmatter keys this version does not recognise, preserved verbatim
+    -- (JSON object). Stored rather than dropped so the cache stays a faithful
+    -- index: a DB-primary list must reconstruct what the markdown holds, or a
+    -- list-then-save path silently erases a newer version's fields.
+    extra TEXT DEFAULT '{}',
     FOREIGN KEY (parent_id) REFERENCES problems(id),
     FOREIGN KEY (milestone_id) REFERENCES milestones(id)
 );
@@ -55,6 +60,11 @@ CREATE TABLE IF NOT EXISTS solutions (
     -- machine-readable citation, "the evidence for this" lives only in prose and
     -- nothing can tell whether a measurement was ever used.
     cites TEXT DEFAULT '[]',
+    -- Frontmatter keys this version does not recognise, preserved verbatim
+    -- (JSON object). Stored rather than dropped so the cache stays a faithful
+    -- index: a DB-primary list must reconstruct what the markdown holds, or a
+    -- list-then-save path silently erases a newer version's fields.
+    extra TEXT DEFAULT '{}',
     FOREIGN KEY (problem_id) REFERENCES problems(id),
     FOREIGN KEY (supersedes) REFERENCES solutions(id)
 );
@@ -84,6 +94,11 @@ CREATE TABLE IF NOT EXISTS critiques (
     context_after TEXT DEFAULT '[]',   -- JSON array
     -- Findings this refutation rests on. See solutions.cites.
     cites TEXT DEFAULT '[]',
+    -- Frontmatter keys this version does not recognise, preserved verbatim
+    -- (JSON object). Stored rather than dropped so the cache stays a faithful
+    -- index: a DB-primary list must reconstruct what the markdown holds, or a
+    -- list-then-save path silently erases a newer version's fields.
+    extra TEXT DEFAULT '{}',
     FOREIGN KEY (solution_id) REFERENCES solutions(id)
 );
 
@@ -97,7 +112,12 @@ CREATE TABLE IF NOT EXISTS milestones (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     description TEXT DEFAULT '',
-    problem_ids TEXT DEFAULT '[]'  -- JSON array
+    problem_ids TEXT DEFAULT '[]',  -- JSON array
+    -- Frontmatter keys this version does not recognise, preserved verbatim
+    -- (JSON object). Stored rather than dropped so the cache stays a faithful
+    -- index: a DB-primary list must reconstruct what the markdown holds, or a
+    -- list-then-save path silently erases a newer version's fields.
+    extra TEXT DEFAULT '{}'
 );
 
 -- Findings table: evidence about a problem.
@@ -119,6 +139,11 @@ CREATE TABLE IF NOT EXISTS findings (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     evidence TEXT DEFAULT '',
+    -- Frontmatter keys this version does not recognise, preserved verbatim
+    -- (JSON object). Stored rather than dropped so the cache stays a faithful
+    -- index: a DB-primary list must reconstruct what the markdown holds, or a
+    -- list-then-save path silently erases a newer version's fields.
+    extra TEXT DEFAULT '{}',
     FOREIGN KEY (problem_id) REFERENCES problems(id)
 );
 
