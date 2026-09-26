@@ -180,6 +180,7 @@ TUI (src/tui/)               # Ratatui-based interactive UI
 jjj finding new <problem> "title"    # Record evidence (--method, --body -, --ref)
 jjj finding list --problem <id>      # Evidence on a problem
 jjj finding supersede <old> --by <new>  # A better measurement replaced it
+jjj query "status:open tag:perf sort:edit"   # One grammar across all five kinds
 jjj events                           # Recent events
 jjj events --problem 01957d          # Events for a problem (by prefix)
 jjj timeline "auth bug"              # Full timeline (by fuzzy title)

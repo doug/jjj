@@ -28,6 +28,7 @@ pub mod local_config;
 pub mod models;
 pub mod output;
 pub mod picker;
+pub mod query;
 pub mod ranking;
 pub mod resolve;
 pub mod storage;

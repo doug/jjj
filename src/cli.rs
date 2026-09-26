@@ -113,6 +113,29 @@ pub enum Commands {
     },
 
     // ── Discover ───────────────────────────────────────────────────────────
+    /// Filter every entity kind with one query grammar
+    ///
+    /// Whitespace-separated terms: `status:open tag:perf sort:edit limit:10`.
+    /// Repeating a key ORs its values; different keys AND. A bare word matches
+    /// the title; the bare word `mine` means the current actor.
+    ///
+    /// Keys: type, status, tag, author, assignee, problem, sort, limit.
+    /// Sort keys: edit (causal clock), created, updated, title — prefix with
+    /// `-` to reverse.
+    ///
+    /// This is a filter, not a search: use `jjj search` for full-text and
+    /// semantic similarity.
+    #[command(display_order = 29)]
+    Query {
+        /// The query, e.g. "type:problem status:open sort:edit"
+        #[arg(default_value = "")]
+        expr: String,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
     /// Search problems, solutions, and critiques by text or semantic similarity
     #[command(display_order = 30)]
     Search {

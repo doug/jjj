@@ -142,6 +142,35 @@ is what stops the same investigation being run a third time.
 | You think someone else's solution is wrong | Critique |
 | You found a better number than an earlier finding | Finding, then `supersede` |
 
+## One query for everything
+
+`jjj query` filters every entity kind with one grammar, which is usually a single
+call where the per-type `list` commands needed several:
+
+```sh
+jjj query "type:problem status:open sort:edit limit:5" --json
+jjj query "tag:perf"                    # across problems AND solutions
+jjj query "problem:$pid"                # everything beneath one problem
+jjj query "author:ana mine sort:-title"
+jjj query "decode slow"                 # bare words match the title
+```
+
+Keys: `type`, `status`, `tag`, `author`, `assignee`, `problem`, `sort`, `limit`,
+plus the bare word `mine`. Repeating a key ORs its values
+(`status:open status:in_progress`), different keys AND. Comma-separated is the
+same as repeating.
+
+`sort:edit` orders by the Lamport clock, so "most recently edited" is a causal
+order rather than a wall-clock one — it does not depend on whose machine had the
+fastest clock. `sort:-edit` reverses.
+
+Use this in preference to the per-type `list` flags, which drifted: `--tag` and
+`--sort` only exist on problems and solutions, `--author` only on critiques and
+findings, and `milestone list` takes no filters at all. A misspelled key is an
+error rather than a silently-empty title search.
+
+`jjj query` is a **filter**; `jjj search` is full-text and semantic similarity.
+
 ## Seeing where the fleet is piled up
 
 `jjj contention` reports which problems several actors are already on and which

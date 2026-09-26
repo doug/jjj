@@ -16,6 +16,7 @@ pub mod next;
 pub mod overlaps;
 pub mod problem;
 pub mod push;
+pub mod query;
 pub mod rank;
 pub mod search;
 pub mod solution;
@@ -222,6 +223,9 @@ fn execute_with_context(ctx: &CommandContext, command: Commands) -> Result<()> {
 
         // Rank
         Commands::Rank { action } => rank::execute(ctx, action),
+
+        // One query grammar across every kind
+        Commands::Query { expr, json } => query::execute(ctx, expr, json),
 
         // Search
         Commands::Search {
