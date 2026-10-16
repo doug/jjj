@@ -167,12 +167,40 @@ rather than LLM-automatic: `--analyze` exports candidates, the agent writes the
 summary, `--apply` accepts it. No API key, and the judgement stays with something
 that can be reviewed.
 
-jjj has no compaction and a corpus that grows forever, with a benchmark at 25,000
-entities, so this is a real gap. But jjj would have a strictly better version of
-it: because markdown lives in git, a compaction could replace an entity's body
-with a summary **without discarding anything** — the original stays in the
-bookmark's history. Worth doing when corpus size becomes a measured problem
-rather than a predicted one.
+jjj has no compaction and a corpus that grows forever. That looked like a real
+gap, so it was measured rather than assumed, and on both of the things compaction
+buys it turns out not to be one yet.
+
+**Latency.** From the recorded benchmarks, going from 2,000 to 25,000 entities —
+12.5× the data — the paths an agent touches every turn grow *sublinearly* and
+stay fast:
+
+| | 2K | 25K | growth |
+|---|---|---|---|
+| warm list (DB) | 0.031s | 0.096s | 3.1× |
+| full-text search | 0.030s | 0.075s | 2.5× |
+| status | 0.069s | 0.220s | 3.2× |
+| next | 0.049s | 0.195s | 4.0× |
+
+Only cold and bulk operations scale linearly — `db_rebuild` 11.6×, `cold_fetch`
+10.1× — and those run once, not per turn.
+
+**Context.** This is what beads' compaction is actually for: tokens, not
+milliseconds. `jjj prime`'s default output is **constant in corpus size** —
+7 lines and ~300 bytes at 50 entities, at 2,000, and at 25,000. Five hundred
+times the data, byte-identical briefing length, because it caps each section and
+lets the counts carry the rest. (`--full` is unbounded by design; that is the
+caller asking for it.)
+
+So the gap compaction would close is already closed from the agent's side by
+bounded output, and is not open on the latency side. Revisit if an interactive
+path goes superlinear or a real corpus outgrows these numbers.
+
+Worth recording for when that happens: jjj would get a strictly better version
+than beads'. Because markdown lives in git, a compaction could replace an
+entity's body with a summary **without discarding anything** — the original stays
+in the bookmark's history, where beads' is explicitly "permanent graceful
+decay".
 
 **Hash-based ids.** beads uses short content hashes (`bd-a1b2`) specifically to
 "avoid merge collisions across branches and agents". jjj's UUID7 serves the same
