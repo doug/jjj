@@ -142,6 +142,44 @@ is what stops the same investigation being run a third time.
 | You think someone else's solution is wrong | Critique |
 | You found a better number than an earlier finding | Finding, then `supersede` |
 
+## Start every turn with `jjj prime`
+
+```sh
+jjj prime            # markdown briefing
+jjj prime --json     # same thing, parseable
+jjj prime --full     # every item rather than the first few per section
+```
+
+One call tells you what to work on, what is **already proposed** so you do not
+build the same idea twice, what has **already been measured** so you do not
+re-measure it, which claims are live, and whether anything is blocked on a
+person. It replaces the half-dozen orientation queries a turn would otherwise
+open with — in one measured run the fleet made 2,322 orientation calls against
+138 that produced anything.
+
+It prints *state*, not instructions. The workflow is this file; `prime` is the
+world right now.
+
+## Work that is not ready yet
+
+A problem waiting on unfinished sub-problems is **not offered by `jjj next`**.
+The parent is the sum of its children, so it is not actionable until they close —
+and offering it anyway let an agent claim "Ship the release" with every
+sub-problem still open, at the very top of the queue because of its own
+priority.
+
+Nothing is hidden: `jjj problem show` says what a parent is waiting on, and
+
+```sh
+jjj query waiting
+```
+
+lists exactly the parents being held back. When the last child closes the parent
+returns to the queue on its own.
+
+This is why decomposing a problem is safe — splitting it does not create work
+that looks claimable before its parts are done.
+
 ## One query for everything
 
 `jjj query` filters every entity kind with one grammar, which is usually a single

@@ -140,7 +140,9 @@ TUI (src/tui/)               # Ratatui-based interactive UI
 - Change IDs: jj-native opaque strings (e.g., "kpqxywon")
 
 ### State Machines
-- **Problems**: Open → InProgress → Solved/Dissolved
+- **Problems**: Open → InProgress → Solved/Dissolved. A problem with unfinished
+  sub-problems is *not ready* and `jjj next` will not offer it — the parent is the
+  sum of its children. `jjj query waiting` lists those held back.
 - **Solutions**: Proposed → Submitted → Approved/Withdrawn
 - **Critiques**: Open → Addressed/Valid/Dismissed
 - **Findings**: Current → Superseded (no approval path — evidence is not accepted)
@@ -180,7 +182,9 @@ TUI (src/tui/)               # Ratatui-based interactive UI
 jjj finding new <problem> "title"    # Record evidence (--method, --body -, --ref)
 jjj finding list --problem <id>      # Evidence on a problem
 jjj finding supersede <old> --by <new>  # A better measurement replaced it
+jjj prime                            # Orient in one call: next work, proposals, evidence
 jjj query "status:open tag:perf sort:edit"   # One grammar across all five kinds
+jjj query waiting                    # Parents held back by unfinished sub-problems
 jjj events --event-type conflict_detected    # Refusals are events too:
 jjj events --event-type approval_blocked     #   conflict_detected, push_rejected,
 jjj events --event-type claim_contested      #   approval_blocked, claim_contested

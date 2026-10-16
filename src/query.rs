@@ -23,6 +23,7 @@
 //! | `author:ana` | authored by (substring, `@` optional) |
 //! | `assignee:ana` | assigned to (substring) |
 //! | `mine` | shorthand for the current actor |
+//! | `waiting` | problems held back by unfinished sub-problems |
 //! | `problem:<ref>` | belongs to this problem |
 //! | `sort:edit` | order by clock, `created`, `title`, or `updated` |
 //! | `limit:20` | cap the result count |
@@ -91,6 +92,9 @@ pub struct Query {
     pub reverse: bool,
     /// Maximum results, if capped.
     pub limit: Option<usize>,
+    /// Whether `waiting` was given — restrict to problems blocked on unfinished
+    /// sub-problems, which `jjj next` deliberately does not offer.
+    pub waiting: bool,
     /// Whether `mine` was given — resolved to the current actor by the caller,
     /// since the query layer has no business reading identity.
     pub mine: bool,
@@ -114,6 +118,10 @@ impl Query {
             // `mine` is the one bare keyword; everything else bare is free text.
             if term.eq_ignore_ascii_case("mine") {
                 q.mine = true;
+                continue;
+            }
+            if term.eq_ignore_ascii_case("waiting") {
+                q.waiting = true;
                 continue;
             }
             let Some((key, value)) = term.split_once(':') else {
@@ -186,7 +194,8 @@ impl Query {
                 other => {
                     return Err(format!(
                         "unknown term '{other}:' — valid keys are type, status, tag, author, \
-                         assignee, problem, sort, limit (plus the bare word `mine`)"
+                         assignee, problem, sort, limit (plus the bare words `mine` and \
+                         `waiting`)"
                     ))
                 }
             }

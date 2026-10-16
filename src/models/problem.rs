@@ -347,6 +347,36 @@ impl Problem {
     }
 
     /// Check if problem is open (can be worked on)
+    /// Whether this problem is waiting on sub-problems that are not finished.
+    ///
+    /// A problem decomposed into sub-problems is not actionable until they are:
+    /// the parent *is* the sum of its children. Before this existed, `jjj next`
+    /// ranked such a parent by its own priority and handed it to an agent with
+    /// every child still open — demonstrably the top of the queue in a
+    /// three-problem repository — and nothing anywhere said it was not ready.
+    /// The agent then either flounders or silently does the children's work
+    /// without recording it against them.
+    ///
+    /// Derived from `parent_id`, which jjj already stores, rather than from a
+    /// separate dependency edge. The hierarchy is the dependency in the one case
+    /// that was actually going wrong.
+    pub fn is_waiting_on_children(&self, all: &[Problem]) -> bool {
+        all.iter().any(|c| {
+            c.parent_id.as_deref() == Some(self.id.as_str())
+                && matches!(c.status, ProblemStatus::Open | ProblemStatus::InProgress)
+        })
+    }
+
+    /// The unfinished sub-problems this one is waiting on.
+    pub fn open_children<'a>(&self, all: &'a [Problem]) -> Vec<&'a Problem> {
+        all.iter()
+            .filter(|c| {
+                c.parent_id.as_deref() == Some(self.id.as_str())
+                    && matches!(c.status, ProblemStatus::Open | ProblemStatus::InProgress)
+            })
+            .collect()
+    }
+
     pub fn is_open(&self) -> bool {
         matches!(self.status, ProblemStatus::Open | ProblemStatus::InProgress)
     }

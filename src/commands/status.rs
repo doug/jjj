@@ -482,7 +482,20 @@ pub(crate) fn build_next_actions_with_ttl(
     }
 
     // 5. Open problems with no active solutions
+    //
+    // A problem waiting on unfinished sub-problems is skipped: it is not
+    // actionable, because the parent *is* the sum of its children. Offering one
+    // anyway is what let an agent claim "Ship the release" while both of its
+    // sub-problems were still open — and by its own critical priority it sorted
+    // to the very top of the queue.
+    //
+    // Skipped rather than ranked last, because `next` answers "what should I do
+    // now" and the honest answer for a waiting parent is "not this". The
+    // children are in the queue on their own account, so nothing is lost.
     for problem in problems.iter().filter(|p| p.is_open()) {
+        if problem.is_waiting_on_children(problems) {
+            continue;
+        }
         let has_active_solution = solutions
             .iter()
             .any(|s| s.problem_id == problem.id && s.is_active());

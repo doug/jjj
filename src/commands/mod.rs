@@ -14,6 +14,7 @@ pub mod insights;
 pub mod milestone;
 pub mod next;
 pub mod overlaps;
+pub mod prime;
 pub mod problem;
 pub mod push;
 pub mod query;
@@ -223,6 +224,9 @@ fn execute_with_context(ctx: &CommandContext, command: Commands) -> Result<()> {
 
         // Rank
         Commands::Rank { action } => rank::execute(ctx, action),
+
+        // One call that orients an agent at the start of a turn
+        Commands::Prime { full, json } => prime::execute(ctx, json, full),
 
         // One query grammar across every kind
         Commands::Query { expr, json } => query::execute(ctx, expr, json),

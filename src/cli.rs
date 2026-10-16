@@ -113,6 +113,28 @@ pub enum Commands {
     },
 
     // ── Discover ───────────────────────────────────────────────────────────
+    /// Orient an agent in one call — what to do, what is in flight, what is known
+    ///
+    /// An agent turn starts with no memory and re-derives the world: one swarm
+    /// run made 2,322 orientation calls against 138 that produced anything.
+    /// This is that orientation as a single command — what to work on, what is
+    /// already proposed so you do not duplicate it, what has already been
+    /// measured so you do not re-measure it, and whether anything is blocked on
+    /// a person.
+    ///
+    /// Workflow instructions are deliberately NOT here; they live in the skill
+    /// file. This prints state, not teaching.
+    #[command(display_order = 1)]
+    Prime {
+        /// Every item rather than the first few per section
+        #[arg(long)]
+        full: bool,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
     /// Filter every entity kind with one query grammar
     ///
     /// Whitespace-separated terms: `status:open tag:perf sort:edit limit:10`.

@@ -475,6 +475,29 @@ fn show_problem(ctx: &CommandContext, problem_input: String, json: bool) -> Resu
         }
     }
 
+    // Say plainly when this is not actionable yet. `jjj next` skips a parent
+    // that is waiting on children, and work silently dropped from the queue is
+    // the kind of thing nobody notices until it has cost a run.
+    let all_problems = store.list_problems()?;
+    let waiting_on = problem.open_children(&all_problems);
+    if !waiting_on.is_empty() {
+        println!(
+            "\nWaiting on {} unfinished sub-problem(s) — not offered by `jjj next` until they close:",
+            waiting_on.len()
+        );
+        for child in &waiting_on {
+            println!(
+                "  {} - {} [{}]",
+                // Full id, matching the adjacent sub-problems section: UUID7
+                // prefixes of siblings created together collide, and a
+                // reference nobody can paste is not a reference.
+                child.id,
+                child.title,
+                child.status
+            );
+        }
+    }
+
     // Show subproblems
     let subproblems = store.list_subproblems(&problem_id)?;
     if !subproblems.is_empty() {

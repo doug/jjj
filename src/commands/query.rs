@@ -58,8 +58,14 @@ pub fn execute(ctx: &CommandContext, expr: String, json: bool) -> Result<()> {
 
     let mut rows: Vec<Row> = Vec::new();
 
+    // `waiting` is a problem-only predicate and needs the whole set to evaluate,
+    // so hold onto it rather than consuming the iterator.
+    let all_problems = store.list_problems()?;
     if q.wants_kind("problem") {
-        for p in store.list_problems()? {
+        for p in all_problems.iter().cloned() {
+            if q.waiting && !p.is_waiting_on_children(&all_problems) {
+                continue;
+            }
             if !wanted_problems.is_empty() && !wanted_problems.contains(&p.id) {
                 continue;
             }
@@ -77,7 +83,7 @@ pub fn execute(ctx: &CommandContext, expr: String, json: bool) -> Result<()> {
             });
         }
     }
-    if q.wants_kind("solution") {
+    if q.wants_kind("solution") && !q.waiting {
         for s in store.list_solutions()? {
             if !wanted_problems.is_empty() && !wanted_problems.contains(&s.problem_id) {
                 continue;
@@ -96,7 +102,7 @@ pub fn execute(ctx: &CommandContext, expr: String, json: bool) -> Result<()> {
             });
         }
     }
-    if q.wants_kind("critique") {
+    if q.wants_kind("critique") && !q.waiting {
         // A critique's problem is its solution's, so map once rather than
         // loading the solution per critique.
         let problem_of: std::collections::HashMap<String, String> = store
@@ -125,7 +131,7 @@ pub fn execute(ctx: &CommandContext, expr: String, json: bool) -> Result<()> {
             });
         }
     }
-    if q.wants_kind("finding") {
+    if q.wants_kind("finding") && !q.waiting {
         for f in store.list_findings()? {
             if !wanted_problems.is_empty() && !wanted_problems.contains(&f.problem_id) {
                 continue;
@@ -144,7 +150,7 @@ pub fn execute(ctx: &CommandContext, expr: String, json: bool) -> Result<()> {
             });
         }
     }
-    if q.wants_kind("milestone") {
+    if q.wants_kind("milestone") && !q.waiting {
         // Milestones had no filters at all before this; they get the same
         // grammar as everything else for free.
         for m in store.list_milestones()? {
