@@ -157,12 +157,21 @@ class Bench:
         print(f"  {name:<28} {'':>7} {seconds:8.3f}s")
 
 
-def compare_to_baseline(out, baseline_path, tolerance, min_duration=0.0):
+def compare_to_baseline(out, baseline_path, tolerance, min_duration=0.0,
+                        allow_unmeasured=False):
     """Report benches slower than `tolerance` x their recorded median.
 
     Returns True if everything is within tolerance. A bench missing from the
     baseline is reported and skipped rather than failing: adding a bench should
     not break the build before anyone has recorded a number for it.
+
+    The reverse is a failure. A bench that *is* in the baseline but produced no
+    number in this run was not measured, and a gate that passes on a measurement
+    it never took is worse than no gate: `--skip-sync --check-against` used to
+    print "no regressions beyond tolerance" while never running cold_push or
+    cold_fetch, which are the two cases known to scale linearly. Pass
+    `--allow-unmeasured` to acknowledge a deliberately partial run; the point is
+    that it has to be said out loud rather than inferred from silence.
 
     `min_duration` skips benches whose baseline is below that many seconds. A
     ratio computed from a 0.1s measurement is mostly scheduler noise — on a
@@ -186,6 +195,8 @@ def compare_to_baseline(out, baseline_path, tolerance, min_duration=0.0):
 
     base_results = baseline.get("results", {})
     regressions, missing, too_short = [], [], []
+    # In the baseline, but this run produced no number for it.
+    unmeasured = [n for n in base_results if n not in out["results"]]
 
     print(f"\n— comparing against {baseline_path} (tolerance {tolerance}x, "
           f"floor {min_duration}s) —")
@@ -195,7 +206,12 @@ def compare_to_baseline(out, baseline_path, tolerance, min_duration=0.0):
             continue
         got = result.get("median_s")
         want = base_results[name].get("median_s")
-        if got is None or not want:
+        if not want:
+            # No baseline number to compare against: nothing to judge.
+            continue
+        if got is None:
+            # Ran, but recorded nothing — same blind spot as not running at all.
+            unmeasured.append(name)
             continue
         ratio = got / want
         if want < min_duration:
@@ -215,6 +231,18 @@ def compare_to_baseline(out, baseline_path, tolerance, min_duration=0.0):
         for name, got, want, ratio in regressions:
             print(f"   {name}: {got:.3f}s vs {want:.3f}s ({ratio:.2f}x)")
         return False
+
+    if unmeasured:
+        label = "not measured in this run" if allow_unmeasured else "NOT MEASURED"
+        for name in sorted(unmeasured):
+            print(f"  {name:44s} ({label})")
+        if not allow_unmeasured:
+            print(
+                f"\n!! {len(unmeasured)} bench(es) in the baseline were not measured. "
+                "A gate cannot pass a measurement it never took — re-run without "
+                "--skip-sync, or pass --allow-unmeasured to accept a partial run."
+            )
+            return False
 
     print("\nno regressions beyond tolerance.")
     return True
@@ -236,6 +264,12 @@ def main():
         default=None,
         help="compare medians against a recorded baseline JSON and exit non-zero "
              "if any bench is slower than --tolerance x its baseline",
+    )
+    ap.add_argument(
+        "--allow-unmeasured",
+        action="store_true",
+        help="accept a run that skipped benches present in the baseline "
+             "(otherwise an unmeasured bench fails the gate)",
     )
     ap.add_argument(
         "--tolerance",
@@ -359,7 +393,8 @@ def main():
 
         if args.check_against:
             if not compare_to_baseline(
-                out, args.check_against, args.tolerance, args.min_duration
+                out, args.check_against, args.tolerance, args.min_duration,
+                args.allow_unmeasured
             ):
                 sys.exit(1)
 

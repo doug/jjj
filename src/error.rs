@@ -104,6 +104,13 @@ pub enum JjjError {
     #[error("{0}")]
     AmbiguousMatch(String),
 
+    /// A command that diagnosed a fault, already printed its own report, and
+    /// must now fail the process. The `Display` is bare because the string is
+    /// the whole summary — a prefix like "Validation failed" would mis-describe
+    /// a diagnostic that ran correctly and found something wrong.
+    #[error("{0}")]
+    Unhealthy(String),
+
     #[error("Entity not found: {0}")]
     EntityNotFound(String),
 

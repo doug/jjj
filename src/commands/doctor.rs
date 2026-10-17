@@ -16,7 +16,11 @@ use crate::context::CommandContext;
 use crate::error::Result;
 use crate::storage::AUTOMATION_FILE;
 
-/// Severity of a single check, which also decides the process exit code.
+/// Severity of a single check.
+///
+/// `Problem` is the only level that fails the process. A `Warn` must not, or
+/// `doctor` becomes unusable in CI for the opposite reason: a fresh clone has no
+/// SQLite cache, which is a warning and entirely normal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum Level {
     Ok,
@@ -42,6 +46,20 @@ struct Check {
     /// diagnostic that reports a fault without a next step just relocates the
     /// confusion.
     fix: Option<String>,
+    /// Why running `fix` is a decision rather than a repair, when it is one.
+    ///
+    /// Most fixes here are safe to run unattended: `jjj db rebuild` derives the
+    /// cache again from markdown that owns the truth, and losing it costs
+    /// nothing. Four are not, and the difference is invisible in the text — they
+    /// read like the others, one imperative sentence after an arrow. An
+    /// unattended agent clearing `doctor` to green will run `jjj resolve
+    /// --theirs` and throw away a colleague's edit, because nothing in the
+    /// output said that command picks a loser.
+    ///
+    /// So the hazard is named per check rather than inferred. `None` means the
+    /// fix is mechanical; `Some(why)` means a person decides, and `why` says
+    /// what is at stake.
+    judgement: Option<String>,
 }
 
 impl Check {
@@ -51,6 +69,7 @@ impl Check {
             name: name.into(),
             detail: detail.into(),
             fix: None,
+            judgement: None,
         }
     }
 
@@ -60,6 +79,7 @@ impl Check {
             name: name.into(),
             detail: detail.into(),
             fix: Some(fix.into()),
+            judgement: None,
         }
     }
 
@@ -69,7 +89,18 @@ impl Check {
             name: name.into(),
             detail: detail.into(),
             fix: Some(fix.into()),
+            judgement: None,
         }
+    }
+
+    /// Mark this check's fix as one a person decides, saying what is at stake.
+    fn needs_judgement(mut self, why: impl Into<String>) -> Self {
+        debug_assert!(
+            self.fix.is_some(),
+            "a check with no fix has no decision to gate"
+        );
+        self.judgement = Some(why.into());
+        self
     }
 }
 
@@ -81,11 +112,16 @@ pub fn execute(ctx: &CommandContext, json: bool) -> Result<()> {
         check_meta_path(ctx),
         check_cache(ctx),
     ];
+    checks.push(check_cache_drift(ctx));
+    checks.extend(check_installed_skill());
+    checks.push(check_format_skew(ctx));
     checks.extend(check_locks(ctx));
     checks.push(check_escalations(ctx));
     checks.push(check_conflicts(ctx));
     checks.extend(check_automation(ctx));
     checks.push(check_sync_state(ctx));
+
+    let problems = checks.iter().filter(|c| c.level == Level::Problem).count();
 
     if json {
         let payload: Vec<_> = checks
@@ -100,6 +136,10 @@ pub fn execute(ctx: &CommandContext, json: bool) -> Result<()> {
                     },
                     "detail": c.detail,
                     "fix": c.fix,
+                    // Null when the fix is mechanical, a reason when it is not,
+                    // so the caller's test is the obvious one:
+                    // `if fix and not fix_needs_judgement: run it`.
+                    "fix_needs_judgement": c.judgement,
                 })
             })
             .collect();
@@ -116,6 +156,9 @@ pub fn execute(ctx: &CommandContext, json: bool) -> Result<()> {
             );
             if let Some(fix) = &check.fix {
                 println!("    → {}", fix);
+                if let Some(why) = &check.judgement {
+                    println!("      (your call: {})", why);
+                }
             }
         }
         println!();
@@ -124,10 +167,27 @@ pub fn execute(ctx: &CommandContext, json: bool) -> Result<()> {
         match worst {
             Level::Ok => println!("Everything looks healthy."),
             Level::Warn => println!("Usable, with warnings above."),
-            Level::Problem => println!("Problems found — see the suggested fixes above."),
+            // No summary line here: the error returned below carries it, and
+            // printing both said the same thing twice.
+            Level::Problem => {}
         }
     }
 
+    // Fail the process when a check found a real fault.
+    //
+    // This used to return `Ok(())` whatever it found, so `jjj doctor` would
+    // print `✗ conflicts  1 entit(ies) carry unresolved merge markers` and exit
+    // 0. A diagnostic that reports a fault and then reports success cannot gate
+    // anything — CI reads the exit code, not the glyphs — so the one place a
+    // repository's health could have been enforced automatically was silently
+    // inert. The `Level` doc comment had claimed this behaviour for some time
+    // without it being implemented.
+    if problems > 0 {
+        return Err(crate::error::JjjError::Unhealthy(format!(
+            "{problems} problem{} found — see the suggested fixes above",
+            if problems == 1 { "" } else { "s" }
+        )));
+    }
     Ok(())
 }
 
@@ -238,6 +298,177 @@ fn check_cache(ctx: &CommandContext) -> Check {
     }
 }
 
+/// The skill an agent actually loads, versus the one this binary ships.
+///
+/// `skills/jjj/SKILL.md` is installed by *copying* it into `.claude/skills/` or
+/// `~/.claude/skills/`. Nothing then keeps the copy in step, so upgrading the
+/// binary silently leaves agents reading an older workflow — and a stale skill
+/// is worse than none, because it produces confident, wrong commands. The repo's
+/// own drift test only guards the file in this repository; it cannot see the
+/// copy that is actually being loaded.
+///
+/// This was not hypothetical. On the machine this check was written, the global
+/// copy was 5,249 bytes against a shipped 37,480 — missing `jjj prime`, findings
+/// and most of the workflow.
+///
+/// The shipped text is embedded rather than hashed at build time so that an
+/// installed binary with no source tree can still answer the question, and
+/// compared by content rather than a version marker because the file declares
+/// no version. A warning, not a problem: a stale copy on one developer's
+/// machine is a local setup fault, and failing CI over it would be wrong.
+///
+/// beads solves the same problem by writing a marker block with a content hash
+/// into AGENTS.md and offering `--check`. jjj does not write into anyone's
+/// instruction files, so it only needs the detection half.
+fn check_installed_skill() -> Vec<Check> {
+    const SHIPPED: &str = include_str!("../../skills/jjj/SKILL.md");
+
+    let mut candidates: Vec<std::path::PathBuf> = vec![
+        std::path::PathBuf::from(".claude/skills/jjj/SKILL.md"),
+        std::path::PathBuf::from(".codex/skills/jjj/SKILL.md"),
+    ];
+    if let Some(home) = std::env::var_os("HOME") {
+        candidates.push(std::path::Path::new(&home).join(".claude/skills/jjj/SKILL.md"));
+    }
+
+    let mut checks = Vec::new();
+    for path in candidates {
+        let Ok(installed) = fs::read_to_string(&path) else {
+            continue;
+        };
+        let name = "skill copy";
+        if installed == SHIPPED {
+            checks.push(Check::ok(name, format!("{} is current", path.display())));
+        } else {
+            checks.push(
+                Check::warn(
+                    name,
+                    format!(
+                        "{} differs from the skill this binary ships ({} bytes vs {})",
+                        path.display(),
+                        installed.len(),
+                        SHIPPED.len()
+                    ),
+                    "re-copy skills/jjj/ over it — agents are reading the stale one",
+                )
+                .needs_judgement("overwrites that file, including edits made on purpose"),
+            );
+        }
+    }
+    checks
+}
+
+/// Does the derived cache still agree with the markdown that owns the truth?
+///
+/// `check_cache` only proves the database opens. That says nothing about whether
+/// it still describes this repository: markdown edited behind jjj's back — by a
+/// merge tool, a script, a hand-resolved conflict — leaves the cache openable
+/// and wrong, and every fast listing and search then answers from it. The
+/// failure is silent in the worst way, because entities simply do not appear.
+///
+/// Counts, not contents. A per-entity comparison would mean reading every file,
+/// which is the cost `doctor` exists to avoid; counts catch the cases that
+/// actually happen (entities added or removed outside jjj) for one cheap query
+/// each. beads' equivalent check is narrower still — one flag, one count — and
+/// is the thing in `bd doctor` worth copying.
+///
+/// Reported as a problem rather than a warning: a cache that disagrees with the
+/// markdown gives *wrong* answers, which is worse than the missing-cache case
+/// that only makes reads slow.
+fn check_cache_drift(ctx: &CommandContext) -> Check {
+    const KINDS: [&str; 5] = [
+        "problems",
+        "solutions",
+        "critiques",
+        "milestones",
+        "findings",
+    ];
+
+    let db_path = ctx.jj().repo_root().join(".jj").join("jjj.db");
+    if !db_path.exists() {
+        // Absence is `check_cache`'s business, and it is not drift.
+        return Check::ok("cache drift", "no cache to compare");
+    }
+    let db = match crate::db::Database::open(&db_path) {
+        Ok(db) => db,
+        Err(_) => return Check::ok("cache drift", "cache unreadable — see the cache check"),
+    };
+
+    let meta = ctx.store.meta_path();
+    let mut drifted: Vec<String> = Vec::new();
+    for kind in KINDS {
+        let on_disk = count_md(&meta.join(kind));
+        let cached: i64 =
+            match db
+                .conn()
+                .query_row(&format!("SELECT COUNT(*) FROM {kind}"), [], |r| r.get(0))
+            {
+                Ok(n) => n,
+                Err(e) => {
+                    return Check::warn(
+                        "cache drift",
+                        format!("could not count {kind}: {e}"),
+                        "run `jjj db rebuild`",
+                    )
+                }
+            };
+        if cached != on_disk as i64 {
+            drifted.push(format!("{kind}: {cached} cached vs {on_disk} on disk"));
+        }
+    }
+
+    if drifted.is_empty() {
+        Check::ok("cache drift", "cache agrees with the markdown")
+    } else {
+        Check::problem(
+            "cache drift",
+            drifted.join("; "),
+            "run `jjj db rebuild` — the markdown is authoritative, so nothing is lost",
+        )
+    }
+}
+
+/// Report frontmatter keys this binary does not recognise.
+///
+/// beads detects "migration content skew" — the case where this clone and its
+/// remote applied different content for the same schema version — and treats it
+/// as a read-only diagnostic that "never gates push/pull". jjj cannot have that
+/// specific fault, since there is no schema to migrate and the markdown is the
+/// authority. The underlying question still applies, though, and nothing was
+/// answering it: *am I an old binary looking at records a newer one wrote?*
+///
+/// Unknown keys are the signal, and jjj already keeps them — `extra` preserves
+/// anything the structs do not name so an older client cannot delete a newer
+/// one's fields. That makes this purely informational, which is why it warns
+/// rather than failing: nothing is broken, and the honest advice is "upgrade if
+/// you want to see these fields", not "repair something".
+///
+/// It names the keys rather than counting them, because "4 unknown keys" tells
+/// you nothing and `claim_epoch` tells you what shipped since your build.
+fn check_format_skew(ctx: &CommandContext) -> Check {
+    // Straight off the markdown, not the cache: see
+    // `MetadataStore::unknown_frontmatter_keys` for why that distinction is the
+    // whole check.
+    let keys = ctx.store.unknown_frontmatter_keys();
+
+    if keys.is_empty() {
+        return Check::ok("format skew", "no unrecognised fields");
+    }
+
+    let shown: Vec<&str> = keys.iter().take(6).map(String::as_str).collect();
+    let more = keys.len().saturating_sub(shown.len());
+    let list = if more > 0 {
+        format!("{} (+{more} more)", shown.join(", "))
+    } else {
+        shown.join(", ")
+    };
+    Check::warn(
+        "format skew",
+        format!("records carry fields this build does not know: {list}"),
+        "a newer jjj wrote them; they are preserved on save, so upgrade only if you need to read them",
+    )
+}
+
 fn check_locks(ctx: &CommandContext) -> Vec<Check> {
     let meta = ctx.store.meta_path();
     let mut checks = Vec::new();
@@ -248,21 +479,26 @@ fn check_locks(ctx: &CommandContext) -> Vec<Check> {
     if push_lock.exists() {
         let holder = fs::read_to_string(&push_lock).unwrap_or_default();
         let holder = holder.trim().to_string();
-        checks.push(Check::warn(
-            "push lock",
-            format!(
-                "held by pid {}",
-                if holder.is_empty() {
-                    "unknown"
-                } else {
-                    &holder
-                }
+        checks.push(
+            Check::warn(
+                "push lock",
+                format!(
+                    "held by pid {}",
+                    if holder.is_empty() {
+                        "unknown"
+                    } else {
+                        &holder
+                    }
+                ),
+                format!(
+                    "if no jjj push is running, remove it: rm {}",
+                    push_lock.display()
+                ),
+            )
+            .needs_judgement(
+                "removing a live lock lets two pushes race; check for a running push first",
             ),
-            format!(
-                "if no jjj push is running, remove it: rm {}",
-                push_lock.display()
-            ),
-        ));
+        );
     } else {
         checks.push(Check::ok("push lock", "free"));
     }
@@ -314,13 +550,20 @@ fn check_escalations(ctx: &CommandContext) -> Check {
                     }
                 })
                 .unwrap_or_default();
-            Check::problem(
+            // A warning, not a problem, even though a person really is
+            // waiting. An escalation is the system working: someone correctly
+            // said a human is needed. Grading it a failure makes `doctor` red
+            // for a healthy repo, and the remedy line right here tells an agent
+            // exactly how to turn it green again — by clearing the request. The
+            // worst outcome of this check is an agent discarding a human's
+            // pending ask to pass a diagnostic, so it reports without pressing.
+            Check::warn(
                 "escalations",
                 format!(
                     "{n} open — oldest {oldest} ago: {}",
                     crate::utils::truncate(&open[0].reason, 60)
                 ),
-                "see `jjj escalate`; clear with `jjj escalate --clear <id>`",
+                "see `jjj escalate`; a person clears it with `jjj escalate --clear <id>`",
             )
         }
     }
@@ -333,7 +576,8 @@ fn check_conflicts(ctx: &CommandContext) -> Check {
             "conflicts",
             format!("{} entit(ies) carry unresolved merge markers", found.len()),
             "run `jjj conflicts` to list them, then `jjj resolve <id> --ours|--theirs`",
-        ),
+        )
+        .needs_judgement("--ours and --theirs each discard the other side's edit"),
         Err(e) => Check::warn(
             "conflicts",
             format!("could not check: {e}"),
@@ -383,6 +627,9 @@ fn check_automation(ctx: &CommandContext) -> Vec<Check> {
                     legacy.len()
                 ),
                 "inspect with `jjj automation list`; adopt with `jjj automation migrate --force`",
+            )
+            .needs_judgement(
+                "these rules arrived over sync and may run shell commands you did not write",
             ));
         }
     }

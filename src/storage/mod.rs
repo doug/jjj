@@ -353,6 +353,11 @@ fn without_updated_at(md: &str) -> String {
         .join("\n")
 }
 
+/// Flatten one kind's unrecognised frontmatter keys into a single list.
+fn fold_unknown<T: Persist>(entities: Vec<T>) -> Vec<String> {
+    entities.iter().flat_map(Persist::unknown_keys).collect()
+}
+
 pub trait Persist: serde::Serialize + serde::de::DeserializeOwned + Clone + Sized {
     /// Directory under `.jj/jjj-meta/` where instances of this type live.
     const DIR: &'static str;
@@ -421,6 +426,15 @@ pub trait Persist: serde::Serialize + serde::de::DeserializeOwned + Clone + Size
     /// `context_after`) as of schema v10, so a critique row reconstructs
     /// losslessly — the last type that was forced onto the filesystem walk is
     /// now cache-faithful too.
+    /// Frontmatter keys this build does not recognise, kept verbatim in `extra`.
+    ///
+    /// On the trait rather than read off each struct at the call site so that a
+    /// sixth entity kind cannot be added without answering the question — the
+    /// compiler asks for it. The same reason `save` is one central function: a
+    /// per-kind site that is merely *usually* written is the shape that let the
+    /// `claimed_at` column drift away from its writers.
+    fn unknown_keys(&self) -> Vec<String>;
+
     const CACHE_FAITHFUL: bool;
 
     /// List every instance of this type from the SQLite cache, repopulating any
@@ -466,6 +480,9 @@ impl Persist for crate::models::Problem {
     fn sync_to_cache(&self, db: &crate::db::Database) -> Result<()> {
         crate::db::sync::sync_problem_to_cache(db, self)
     }
+    fn unknown_keys(&self) -> Vec<String> {
+        self.extra.keys().cloned().collect()
+    }
     const CACHE_FAITHFUL: bool = true;
     fn list_from_cache(db: &crate::db::Database) -> Result<Vec<Self>> {
         // Bare rows only. The derived back-reference `solution_ids` is attached
@@ -508,6 +525,9 @@ impl Persist for crate::models::Solution {
     }
     fn sync_to_cache(&self, db: &crate::db::Database) -> Result<()> {
         crate::db::sync::sync_solution_to_cache(db, self)
+    }
+    fn unknown_keys(&self) -> Vec<String> {
+        self.extra.keys().cloned().collect()
     }
     const CACHE_FAITHFUL: bool = true;
     fn list_from_cache(db: &crate::db::Database) -> Result<Vec<Self>> {
@@ -552,6 +572,9 @@ impl Persist for crate::models::Critique {
     // Faithful as of schema v10: the critiques table stores line_end and the
     // code_context/context_before/context_after JSON arrays, so a row
     // reconstructs byte-identically to a markdown load.
+    fn unknown_keys(&self) -> Vec<String> {
+        self.extra.keys().cloned().collect()
+    }
     const CACHE_FAITHFUL: bool = true;
     fn list_from_cache(db: &crate::db::Database) -> Result<Vec<Self>> {
         Ok(crate::db::entities::list_critiques(db.conn())?)
@@ -594,6 +617,9 @@ impl Persist for crate::models::Milestone {
         crate::db::sync::sync_milestone_to_cache(db, self)
     }
     // problem_ids is stored as a JSON column, so the DB row is faithful as-is.
+    fn unknown_keys(&self) -> Vec<String> {
+        self.extra.keys().cloned().collect()
+    }
     const CACHE_FAITHFUL: bool = true;
     fn list_from_cache(db: &crate::db::Database) -> Result<Vec<Self>> {
         Ok(crate::db::entities::list_milestones(db.conn())?)
@@ -634,6 +660,9 @@ impl Persist for crate::models::Finding {
     }
     // No derived back-references: `refs` is authored, not computed, so the row
     // round-trips as written.
+    fn unknown_keys(&self) -> Vec<String> {
+        self.extra.keys().cloned().collect()
+    }
     const CACHE_FAITHFUL: bool = true;
     fn list_from_cache(db: &crate::db::Database) -> Result<Vec<Self>> {
         Ok(crate::db::entities::list_findings(db.conn())?)
@@ -868,6 +897,32 @@ impl MetadataStore {
     /// (`db::load_from_markdown`) MUST use it directly — reading markdown → DB
     /// via the DB-primary [`Self::list`] would read from the very DB being
     /// rebuilt (empty), losing every entity.
+    /// Every frontmatter key no struct in this build names, across all kinds.
+    ///
+    /// Reads the markdown directly, and must: the SQLite cache has a column per
+    /// known field and nowhere to put an unknown one, so a DB-primary read
+    /// reports none. The first version of this walked `list_problems()` and
+    /// friends and therefore found nothing in any repository that had a cache —
+    /// which is every repository that has run a command.
+    ///
+    /// A kind that fails to load is skipped rather than reported: an unparseable
+    /// corpus is some other check's business, and "unknown fields" is not a
+    /// conclusion that can be drawn from a file that would not parse.
+    pub fn unknown_frontmatter_keys(&self) -> std::collections::BTreeSet<String> {
+        let mut keys = std::collections::BTreeSet::new();
+        let mut collect = |found: Result<Vec<String>>| {
+            if let Ok(k) = found {
+                keys.extend(k);
+            }
+        };
+        collect(self.list_fs::<crate::models::Problem>().map(fold_unknown));
+        collect(self.list_fs::<crate::models::Solution>().map(fold_unknown));
+        collect(self.list_fs::<crate::models::Critique>().map(fold_unknown));
+        collect(self.list_fs::<crate::models::Finding>().map(fold_unknown));
+        collect(self.list_fs::<crate::models::Milestone>().map(fold_unknown));
+        keys
+    }
+
     pub(crate) fn list_fs<T: Persist>(&self) -> Result<Vec<T>> {
         self.ensure_meta_checkout()?;
 
