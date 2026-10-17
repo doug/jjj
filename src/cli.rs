@@ -74,6 +74,11 @@ pub enum Commands {
         /// Claim the top item: assign it to yourself and display it
         #[arg(long)]
         claim: bool,
+
+        /// Only work in this lane — a tag on the item or on the problem it
+        /// belongs to. Lets several agents share a queue without colliding.
+        #[arg(long)]
+        tag: Option<String>,
     },
 
     /// Create a whole graph of work from one JSON plan

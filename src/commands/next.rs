@@ -29,12 +29,65 @@ fn note_reclaim(
     }
 }
 
+/// The ids and tags that a lane filter or an escalation could name for an item.
+///
+/// An action points at one entity, but the thing a human escalates or a lane
+/// labels is usually the *problem* — so a critique on a solution of problem P is
+/// in P's lane and is suppressed when P is escalated. Walking up to the problem
+/// is what makes both filters behave the way someone would expect after reading
+/// their own tag or escalation.
+fn item_scope(
+    item: &serde_json::Value,
+    problems: &[crate::models::Problem],
+    solutions: &[crate::models::Solution],
+    critiques: &[crate::models::Critique],
+) -> (Vec<String>, Vec<String>) {
+    let entity_type = item["entity_type"].as_str().unwrap_or("");
+    let entity_id = item["entity_id"].as_str().unwrap_or("");
+
+    let mut ids = vec![entity_id.to_string()];
+    let mut tags: Vec<String> = Vec::new();
+
+    // Resolve upwards to the owning problem, collecting tags on the way.
+    let problem_id = match entity_type {
+        "problem" => Some(entity_id.to_string()),
+        "solution" => solutions.iter().find(|s| s.id == entity_id).map(|s| {
+            tags.extend(s.tags.iter().cloned());
+            s.problem_id.clone()
+        }),
+        "critique" => critiques
+            .iter()
+            .find(|c| c.id == entity_id)
+            .and_then(|c| {
+                ids.push(c.solution_id.clone());
+                solutions.iter().find(|s| s.id == c.solution_id)
+            })
+            .map(|s| {
+                tags.extend(s.tags.iter().cloned());
+                s.problem_id.clone()
+            }),
+        _ => None,
+    };
+
+    if let Some(pid) = problem_id {
+        if let Some(p) = problems.iter().find(|p| p.id == pid) {
+            tags.extend(p.tags.iter().cloned());
+        }
+        if !ids.contains(&pid) {
+            ids.push(pid);
+        }
+    }
+
+    (ids, tags)
+}
+
 pub fn execute(
     ctx: &CommandContext,
     top: Option<usize>,
     mine: bool,
     json: bool,
     claim: bool,
+    tag: Option<String>,
 ) -> Result<()> {
     let store = &ctx.store;
 
@@ -45,9 +98,50 @@ pub fn execute(
     let user = store.get_current_user().unwrap_or_default();
     let ttl = crate::claim::claim_ttl(&store.load_config().unwrap_or_default().settings);
 
-    let items = crate::commands::status::build_next_actions_with_ttl(
+    let mut items = crate::commands::status::build_next_actions_with_ttl(
         &problems, &solutions, &critiques, &user, mine, ttl,
     );
+
+    // Work a person has been asked to look at is not work to hand an agent.
+    //
+    // An escalation naming an entity means a human is needed *there*, so
+    // offering it again just produces another agent discovering the same wall —
+    // beads makes the same move with gates, which "leave the ready frontier
+    // until the gate closes, so agents never need to poll or spin".
+    //
+    // Only targeted escalations suppress. A bare `jjj escalate "reason"` names
+    // nothing, and treating it as "stop all work" would halt the fleet on a
+    // report about one credential; stopping the fleet is the supervisor's
+    // decision, made with its own grace period, not a side effect of `next`.
+    let escalated: Vec<String> = crate::escalation::open_escalations(&store.list_events_cached()?)
+        .into_iter()
+        .flat_map(|e| e.about)
+        .collect();
+
+    let mut suppressed = 0usize;
+    if !escalated.is_empty() {
+        items.retain(|item| {
+            let (ids, _) = item_scope(item, &problems, &solutions, &critiques);
+            let blocked = ids.iter().any(|id| escalated.iter().any(|a| a == id));
+            if blocked {
+                suppressed += 1;
+            }
+            !blocked
+        });
+    }
+
+    if let Some(ref lane) = tag {
+        items.retain(|item| {
+            let (_, tags) = item_scope(item, &problems, &solutions, &critiques);
+            tags.iter().any(|t| t.eq_ignore_ascii_case(lane))
+        });
+    }
+
+    if suppressed > 0 && !json {
+        crate::output::warn(&format!(
+            "{suppressed} item(s) hidden — escalated, waiting on a person (`jjj escalate --list`)"
+        ));
+    }
 
     if items.is_empty() {
         if json {

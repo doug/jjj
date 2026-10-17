@@ -231,7 +231,8 @@ fn execute_with_context(ctx: &CommandContext, command: Commands) -> Result<()> {
             mine,
             json,
             claim,
-        } => next::execute(ctx, top, mine, json, claim),
+            tag,
+        } => next::execute(ctx, top, mine, json, claim, tag),
 
         Commands::Plan { action } => match action {
             crate::cli::PlanAction::Apply {

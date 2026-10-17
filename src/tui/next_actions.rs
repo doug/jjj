@@ -150,14 +150,32 @@ pub fn build_next_actions(
             .any(|s| s.problem_id == problem.id && s.is_active());
 
         if !has_active {
+            // Mirrors the CLI: a withdrawn attempt is reported, not erased.
+            // See the comment in commands/status.rs for why.
+            let refuted: Vec<&Solution> = solutions
+                .iter()
+                .filter(|s| s.problem_id == problem.id && !s.is_active())
+                .collect();
+
             items.push(NextAction {
                 category: Category::Todo,
                 entity_type: EntityType::Problem,
                 entity_id: problem.id.clone(),
                 title: problem.title.clone(),
-                summary: "No solutions proposed".to_string(),
+                summary: match refuted.len() {
+                    0 => "No solutions proposed".to_string(),
+                    1 => "1 refuted attempt — read it before proposing".to_string(),
+                    n => format!("{n} refuted attempts — read them before proposing"),
+                },
                 priority: problem.priority.clone(),
-                details: vec![],
+                details: refuted
+                    .iter()
+                    .map(|s| ActionDetail {
+                        id: s.id.clone(),
+                        text: s.title.clone(),
+                        severity: None,
+                    })
+                    .collect(),
             });
         }
     }
