@@ -142,8 +142,13 @@ impl DbEntity for Critique {
 
 impl DbEntity for Finding {
     const TABLE: &'static str = "findings";
+    // Order matters: `row_to_finding` decodes by position, so this list and the
+    // decoder's indexes are one fact written twice. `measured_at` sits before
+    // the timestamps to match the table, and getting it wrong shifts every
+    // later column by one — which showed up as the evidence body being parsed
+    // as `updated_at`.
     const COLUMNS: &'static str = "id, title, status, problem_id, author, superseded_by, refs, \
-        method, tags, created_at, updated_at, evidence, extra, lamport";
+        method, tags, measured_at, created_at, updated_at, evidence, extra, lamport";
     fn from_row(row: &rusqlite::Row) -> SqliteResult<Self> {
         row_to_finding(row)
     }
@@ -621,8 +626,8 @@ pub fn upsert_finding(conn: &Connection, finding: &Finding) -> SqliteResult<()> 
     conn.execute(
         "INSERT OR REPLACE INTO findings (
             id, title, status, problem_id, author, superseded_by, refs, method,
-            tags, created_at, updated_at, evidence, extra, lamport
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+            tags, measured_at, created_at, updated_at, evidence, extra, lamport
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
         params![
             finding.id,
             finding.title,
@@ -633,6 +638,7 @@ pub fn upsert_finding(conn: &Connection, finding: &Finding) -> SqliteResult<()> 
             refs_json,
             finding.method,
             tags_json,
+            finding.measured_at.map(|t| t.to_rfc3339()),
             finding.created_at.to_rfc3339(),
             finding.updated_at.to_rfc3339(),
             finding.evidence,
@@ -660,8 +666,8 @@ pub fn delete_finding(conn: &Connection, id: &str) -> SqliteResult<bool> {
 
 fn row_to_finding(row: &rusqlite::Row) -> SqliteResult<Finding> {
     // Column order: id(0), title(1), status(2), problem_id(3), author(4),
-    //   superseded_by(5), refs(6), method(7), tags(8), created_at(9),
-    //   updated_at(10), evidence(11)
+    //   superseded_by(5), refs(6), method(7), tags(8), measured_at(9),
+    //   created_at(10), updated_at(11), evidence(12), extra(13), lamport(14)
     let status_str: String = row.get(2)?;
     let refs_json: String = row
         .get::<_, Option<String>>(6)?
@@ -669,8 +675,9 @@ fn row_to_finding(row: &rusqlite::Row) -> SqliteResult<Finding> {
     let tags_json: String = row
         .get::<_, Option<String>>(8)?
         .unwrap_or_else(|| "[]".to_string());
-    let created_at_str: String = row.get(9)?;
-    let updated_at_str: String = row.get(10)?;
+    let measured_at_str: Option<String> = row.get(9)?;
+    let created_at_str: String = row.get(10)?;
+    let updated_at_str: String = row.get(11)?;
 
     Ok(Finding {
         id: row.get(0)?,
@@ -682,11 +689,16 @@ fn row_to_finding(row: &rusqlite::Row) -> SqliteResult<Finding> {
         refs: parse_json_vec(&refs_json, "refs"),
         method: row.get(7)?,
         tags: parse_json_vec(&tags_json, "tags"),
+        measured_at: measured_at_str.as_deref().and_then(|s| {
+            chrono::DateTime::parse_from_rfc3339(s)
+                .ok()
+                .map(|t| t.with_timezone(&chrono::Utc))
+        }),
         created_at: parse_datetime(&created_at_str, "created_at", "finding"),
         updated_at: parse_datetime(&updated_at_str, "updated_at", "finding"),
-        evidence: row.get::<_, Option<String>>(11)?.unwrap_or_default(),
-        extra: parse_extra(row.get::<_, Option<String>>(12)?),
-        lamport: row.get::<_, Option<i64>>(13)?.unwrap_or(0).max(0) as u64,
+        evidence: row.get::<_, Option<String>>(12)?.unwrap_or_default(),
+        extra: parse_extra(row.get::<_, Option<String>>(13)?),
+        lamport: row.get::<_, Option<i64>>(14)?.unwrap_or(0).max(0) as u64,
     })
 }
 

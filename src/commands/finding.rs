@@ -21,6 +21,7 @@ pub fn execute(ctx: &CommandContext, action: FindingAction) -> Result<()> {
             method,
             refs,
             tags,
+            measured_at,
             json,
         } => new_finding(
             ctx,
@@ -30,6 +31,7 @@ pub fn execute(ctx: &CommandContext, action: FindingAction) -> Result<()> {
             method,
             refs,
             tags,
+            measured_at,
             json,
         ),
         FindingAction::List {
@@ -130,6 +132,7 @@ fn new_finding(
     method: Option<String>,
     refs: Vec<String>,
     tags: Vec<String>,
+    measured_at: Option<String>,
     json: bool,
 ) -> Result<()> {
     let problem_id = ctx.resolve_problem(&problem_input)?;
@@ -139,6 +142,22 @@ fn new_finding(
     let problem = store.load_problem(&problem_id)?;
     let resolved_refs = resolve_refs(ctx, &refs)?;
     let user = store.get_current_user()?;
+
+    // Parsed before the write, so a malformed timestamp fails the command
+    // instead of silently recording the finding without the time it belongs to.
+    let measured = match measured_at.as_deref() {
+        None => None,
+        Some(raw) => Some(
+            chrono::DateTime::parse_from_rfc3339(raw)
+                .map_err(|e| {
+                    crate::error::JjjError::Validation(format!(
+                        "--measured-at {raw:?} is not an RFC3339 timestamp ({e}). \
+                         Write it like 2026-10-16T14:00:00Z."
+                    ))
+                })?
+                .with_timezone(&chrono::Utc),
+        ),
+    };
 
     let finding_id_cell = std::cell::RefCell::new(String::new());
     store.with_metadata(
@@ -150,6 +169,7 @@ fn new_finding(
             finding.method = method.clone();
             finding.refs = resolved_refs.clone();
             finding.tags = tags.clone();
+            finding.measured_at = measured;
             finding.author = Some(user.clone());
 
             let extra = EventExtra {

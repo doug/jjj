@@ -1251,6 +1251,12 @@ pub enum FindingAction {
         #[arg(long = "tag", value_name = "TAG")]
         tags: Vec<String>,
 
+        /// When the measurement was taken, if not now (RFC3339, e.g.
+        /// 2026-10-16T14:00:00Z). `created_at` records when you wrote it
+        /// down; this records when it happened.
+        #[arg(long, value_name = "WHEN")]
+        measured_at: Option<String>,
+
         /// Print the created entity as JSON (for scripting and agents)
         #[arg(long)]
         json: bool,

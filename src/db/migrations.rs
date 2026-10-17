@@ -246,6 +246,17 @@ pub fn all_migrations() -> Vec<Migration> {
                 Ok(())
             },
         },
+        Migration {
+            version: 16,
+            description: "Record when a finding was measured, not only when written",
+            // A rebuild, not an ALTER. The column sits mid-table and
+            // `row_to_finding` decodes by position, so an appended column would
+            // be read as `created_at`. Rebuilding is nearly free here — the
+            // cache is derived from markdown and nothing lives only in it —
+            // and it is the option that cannot be subtly wrong.
+            requires_rebuild: true,
+            up: |_conn| Ok(()),
+        },
     ]
 }
 

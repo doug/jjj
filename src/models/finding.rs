@@ -73,6 +73,21 @@ pub struct Finding {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
 
+    /// When the measurement was taken, if that is not when it was recorded.
+    ///
+    /// `created_at` answers "when did this row appear", which is not the same
+    /// question. A benchmark run last Tuesday and written up today is dated
+    /// today by `created_at`, and "which of these two measurements is newer"
+    /// then has the wrong answer — the one that matters when deciding whether a
+    /// finding supersedes another, or reading a timeline to see when a
+    /// regression actually appeared.
+    ///
+    /// Optional, and absent for the common case where recording is immediate;
+    /// callers that care should read `measured_at().unwrap_or(created_at)`
+    /// rather than this field directly.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub measured_at: Option<DateTime<Utc>>,
+
     /// Creation timestamp.
     pub created_at: DateTime<Utc>,
 
@@ -167,12 +182,21 @@ impl Finding {
             refs: Vec::new(),
             method: None,
             tags: Vec::new(),
+            measured_at: None,
             created_at: now,
             updated_at: now,
             evidence: String::new(),
             lamport: 0,
             extra: Default::default(),
         }
+    }
+
+    /// When the evidence was measured, falling back to when it was recorded.
+    ///
+    /// The field is optional, so every reader would otherwise have to repeat
+    /// this choice and some would get it wrong.
+    pub fn measured(&self) -> DateTime<Utc> {
+        self.measured_at.unwrap_or(self.created_at)
     }
 
     /// Whether this finding still stands.

@@ -147,6 +147,11 @@ CREATE TABLE IF NOT EXISTS findings (
     refs TEXT DEFAULT '[]',   -- JSON array of related entity ids
     method TEXT,
     tags TEXT DEFAULT '[]',   -- JSON array
+    -- When the evidence was measured, if that differs from when it was
+    -- recorded. Carried here because reads are DB-primary: a column missing
+    -- from this table is invisible to every caller even when the markdown has
+    -- it, which would make this kind's CACHE_FAITHFUL claim false.
+    measured_at TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     evidence TEXT DEFAULT '',
