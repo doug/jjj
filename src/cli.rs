@@ -582,7 +582,7 @@ pub enum ProblemAction {
         json: bool,
     },
 
-    /// Edit a problem's title, status, or priority
+    /// Edit a problem's title, description, status, or priority
     #[command(display_order = 3)]
     Edit {
         /// Problem ID, short prefix, or fuzzy title
@@ -591,6 +591,28 @@ pub enum ProblemAction {
         /// New title
         #[arg(long)]
         title: Option<String>,
+
+        /// Refuse the write unless the entity's Lamport clock is still this
+        /// value (read it from `show --json`). Guards against overwriting an
+        /// edit made since you looked.
+        #[arg(long)]
+        if_lamport: Option<u64>,
+
+        /// Replace the description. Use `-` to read stdin. Refused if empty —
+        /// see --clear-description.
+        #[arg(long)]
+        body: Option<String>,
+
+        /// Erase the description deliberately. `--body ""` cannot be distinguished
+        /// from a command substitution that produced nothing, so clearing has
+        /// its own flag rather than a value that doubles as an accident.
+        #[arg(long, conflicts_with = "body")]
+        clear_body: bool,
+
+        /// Add text to the end of the existing body instead of replacing it.
+        /// Use `-` to read stdin. Separated by a blank line.
+        #[arg(long, conflicts_with_all = ["body", "clear_body"])]
+        append_body: Option<String>,
 
         /// New status: open, in_progress, solved, dissolved
         #[arg(long)]
@@ -637,6 +659,11 @@ pub enum ProblemAction {
         /// Close the linked GitHub issue after solving
         #[arg(long)]
         github_close: bool,
+
+        /// Refuse unless the entity's Lamport clock is still this value (read it
+        /// from `show --json`). Guards a decision made on a stale read.
+        #[arg(long)]
+        if_lamport: Option<u64>,
     },
 
     /// Dissolve a problem — mark it as based on false premises, not truly a problem
@@ -666,6 +693,15 @@ pub enum ProblemAction {
         /// Assignee (defaults to your jj identity)
         #[arg(long)]
         to: Option<String>,
+
+        /// Take the problem even though someone else's claim is still live
+        #[arg(long)]
+        force: bool,
+
+        /// Refuse unless the entity's Lamport clock is still this value (read it
+        /// from `show --json`). Guards a decision made on a stale read.
+        #[arg(long)]
+        if_lamport: Option<u64>,
     },
 
     /// Reopen a solved or dissolved problem (transition back to open)
@@ -795,7 +831,7 @@ pub enum SolutionAction {
         json: bool,
     },
 
-    /// Edit a solution's title or status
+    /// Edit a solution's title, approach, or status
     #[command(display_order = 3)]
     Edit {
         /// Solution ID, short prefix, or fuzzy title
@@ -804,6 +840,28 @@ pub enum SolutionAction {
         /// New title
         #[arg(long)]
         title: Option<String>,
+
+        /// Refuse the write unless the entity's Lamport clock is still this
+        /// value (read it from `show --json`). Guards against overwriting an
+        /// edit made since you looked.
+        #[arg(long)]
+        if_lamport: Option<u64>,
+
+        /// Replace the approach. Use `-` to read stdin. Refused if empty —
+        /// see --clear-approach.
+        #[arg(long)]
+        body: Option<String>,
+
+        /// Erase the approach deliberately. `--body ""` cannot be distinguished
+        /// from a command substitution that produced nothing, so clearing has
+        /// its own flag rather than a value that doubles as an accident.
+        #[arg(long, conflicts_with = "body")]
+        clear_body: bool,
+
+        /// Add text to the end of the existing body instead of replacing it.
+        /// Use `-` to read stdin. Separated by a blank line.
+        #[arg(long, conflicts_with_all = ["body", "clear_body"])]
+        append_body: Option<String>,
 
         /// New status: proposed, submitted, approved, withdrawn
         #[arg(long)]
@@ -870,6 +928,11 @@ pub enum SolutionAction {
         /// Record why this solution was approved
         #[arg(long)]
         rationale: Option<String>,
+
+        /// Refuse unless the entity's Lamport clock is still this value (read it
+        /// from `show --json`). Guards a decision made on a stale read.
+        #[arg(long)]
+        if_lamport: Option<u64>,
 
         /// Skip the rationale prompt
         #[arg(long)]
@@ -1043,7 +1106,7 @@ pub enum CritiqueAction {
         json: bool,
     },
 
-    /// Edit a critique's title, severity, or status
+    /// Edit a critique's title, argument, severity, or status
     #[command(display_order = 3)]
     Edit {
         /// Critique ID, short prefix, or fuzzy title
@@ -1052,6 +1115,28 @@ pub enum CritiqueAction {
         /// New title
         #[arg(long)]
         title: Option<String>,
+
+        /// Refuse the write unless the entity's Lamport clock is still this
+        /// value (read it from `show --json`). Guards against overwriting an
+        /// edit made since you looked.
+        #[arg(long)]
+        if_lamport: Option<u64>,
+
+        /// Replace the argument. Use `-` to read stdin. Refused if empty —
+        /// see --clear-argument.
+        #[arg(long)]
+        body: Option<String>,
+
+        /// Erase the argument deliberately. `--body ""` cannot be distinguished
+        /// from a command substitution that produced nothing, so clearing has
+        /// its own flag rather than a value that doubles as an accident.
+        #[arg(long, conflicts_with = "body")]
+        clear_body: bool,
+
+        /// Add text to the end of the existing body instead of replacing it.
+        /// Use `-` to read stdin. Separated by a blank line.
+        #[arg(long, conflicts_with_all = ["body", "clear_body"])]
+        append_body: Option<String>,
 
         /// New severity: low, medium, high, critical
         #[arg(long)]
@@ -1199,9 +1284,27 @@ pub enum FindingAction {
         #[arg(long)]
         method: Option<String>,
 
-        /// Replace the evidence body. Use `-` to read stdin.
+        /// Replace the evidence body. Use `-` to read stdin. Refused if empty —
+        /// see --clear-evidence.
         #[arg(long)]
         body: Option<String>,
+
+        /// Erase the evidence deliberately. `--body ""` cannot be distinguished
+        /// from a command substitution that produced nothing, so clearing has
+        /// its own flag rather than a value that doubles as an accident.
+        #[arg(long, conflicts_with = "body")]
+        clear_body: bool,
+
+        /// Add text to the end of the existing body instead of replacing it.
+        /// Use `-` to read stdin. Separated by a blank line.
+        #[arg(long, conflicts_with_all = ["body", "clear_body"])]
+        append_body: Option<String>,
+
+        /// Refuse the write unless the entity's Lamport clock is still this
+        /// value (read it from `show --json`). Guards against overwriting an
+        /// edit made since you looked.
+        #[arg(long)]
+        if_lamport: Option<u64>,
     },
 
     /// Mark a finding as superseded by a better measurement
@@ -1274,7 +1377,7 @@ pub enum MilestoneAction {
         json: bool,
     },
 
-    /// Edit a milestone's title, date, or status
+    /// Edit a milestone's title, description, date, or status
     #[command(display_order = 3)]
     Edit {
         /// Milestone ID, short prefix, or fuzzy title
@@ -1283,6 +1386,28 @@ pub enum MilestoneAction {
         /// New title
         #[arg(long)]
         title: Option<String>,
+
+        /// Refuse the write unless the entity's Lamport clock is still this
+        /// value (read it from `show --json`). Guards against overwriting an
+        /// edit made since you looked.
+        #[arg(long)]
+        if_lamport: Option<u64>,
+
+        /// Replace the description. Use `-` to read stdin. Refused if empty —
+        /// see --clear-description.
+        #[arg(long)]
+        body: Option<String>,
+
+        /// Erase the description deliberately. `--body ""` cannot be distinguished
+        /// from a command substitution that produced nothing, so clearing has
+        /// its own flag rather than a value that doubles as an accident.
+        #[arg(long, conflicts_with = "body")]
+        clear_body: bool,
+
+        /// Add text to the end of the existing body instead of replacing it.
+        /// Use `-` to read stdin. Separated by a blank line.
+        #[arg(long, conflicts_with_all = ["body", "clear_body"])]
+        append_body: Option<String>,
 
         /// New target date (YYYY-MM-DD)
         #[arg(long)]

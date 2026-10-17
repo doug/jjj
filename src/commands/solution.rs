@@ -59,6 +59,10 @@ pub fn execute(ctx: &CommandContext, action: SolutionAction) -> Result<()> {
         SolutionAction::Edit {
             solution_id,
             title,
+            body,
+            clear_body,
+            append_body,
+            if_lamport,
             status,
             add_tag,
             remove_tag,
@@ -67,6 +71,10 @@ pub fn execute(ctx: &CommandContext, action: SolutionAction) -> Result<()> {
             ctx,
             solution_id,
             title,
+            body,
+            clear_body,
+            append_body,
+            if_lamport,
             status,
             add_tag,
             remove_tag,
@@ -89,7 +97,8 @@ pub fn execute(ctx: &CommandContext, action: SolutionAction) -> Result<()> {
             force,
             rationale,
             no_rationale,
-        } => approve_solution(ctx, solution_id, force, rationale, no_rationale),
+            if_lamport,
+        } => approve_solution(ctx, solution_id, force, rationale, no_rationale, if_lamport),
         SolutionAction::Assign { solution_id, to } => assign_solution(ctx, solution_id, to),
         SolutionAction::Resume { solution_id } => resume_solution(ctx, solution_id),
         SolutionAction::Lgtm {
@@ -500,10 +509,15 @@ fn show_solution(ctx: &CommandContext, solution_input: String, json: bool) -> Re
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn edit_solution(
     ctx: &CommandContext,
     solution_input: String,
     title: Option<String>,
+    body: Option<String>,
+    clear_body: bool,
+    append_body: Option<String>,
+    if_lamport: Option<u64>,
     status: Option<String>,
     add_tag: Option<String>,
     remove_tag: Option<String>,
@@ -511,12 +525,24 @@ fn edit_solution(
 ) -> Result<()> {
     let store = &ctx.store;
     let solution_id = ctx.resolve_solution(&solution_input)?;
+    let approach = super::edit_body(body, clear_body, "approach")?;
+    let appended = super::append_body(append_body, "approach")?;
 
     store.with_metadata(&format!("Edit solution {}", solution_id), || {
         let mut solution = store.load_solution(&solution_id)?;
+        super::guard_lamport(if_lamport, solution.lamport, "solution", &solution_id)?;
 
         if let Some(new_title) = title {
             solution.title = new_title;
+        }
+
+        if let Some(ref new_body) = approach {
+            solution.approach = new_body.clone();
+        }
+        // Read at write time, inside the same transaction as the save, so there
+        // is no window between reading the body and writing it back.
+        if let Some(ref addition) = appended {
+            solution.approach = super::appended_body(&solution.approach, addition);
         }
 
         if let Some(status_str) = status {
@@ -720,12 +746,14 @@ fn publish_attached_changes(ctx: &CommandContext, solution_id: &str) {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn approve_solution(
     ctx: &CommandContext,
     solution_input: Option<String>,
     force: bool,
     rationale: Option<String>,
     no_rationale: bool,
+    if_lamport: Option<u64>,
 ) -> Result<()> {
     use crate::sync::SyncProvider as _;
 
@@ -750,6 +778,11 @@ fn approve_solution(
             }
         }
     };
+
+    // Before any of the decisions below: approving is the most consequential
+    // thing an agent does, so a caller that wants to be sure it is acting on
+    // what it read can say which version that was.
+    super::guard_lamport(if_lamport, solution.lamport, "solution", &solution.id)?;
 
     if solution.status == SolutionStatus::Approved {
         return Err(crate::error::JjjError::Validation(format!(

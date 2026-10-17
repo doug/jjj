@@ -56,7 +56,19 @@ pub fn execute(ctx: &CommandContext, action: FindingAction) -> Result<()> {
             title,
             method,
             body,
-        } => edit_finding(ctx, finding_id, title, method, body),
+            clear_body,
+            append_body,
+            if_lamport,
+        } => edit_finding(
+            ctx,
+            finding_id,
+            title,
+            method,
+            body,
+            clear_body,
+            append_body,
+            if_lamport,
+        ),
         FindingAction::Supersede {
             finding_id,
             by,
@@ -351,18 +363,23 @@ fn show_finding(ctx: &CommandContext, finding_input: String, json: bool) -> Resu
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn edit_finding(
     ctx: &CommandContext,
     finding_input: String,
     title: Option<String>,
     method: Option<String>,
     body: Option<String>,
+    clear_body: bool,
+    append_body: Option<String>,
+    if_lamport: Option<u64>,
 ) -> Result<()> {
     let finding_id = ctx.resolve_finding(&finding_input)?;
     let store = &ctx.store;
-    let evidence = body.map(|b| super::read_body(Some(b))).transpose()?;
+    let evidence = super::edit_body(body, clear_body, "evidence")?;
+    let appended = super::append_body(append_body, "evidence")?;
 
-    if title.is_none() && method.is_none() && evidence.is_none() {
+    if title.is_none() && method.is_none() && evidence.is_none() && appended.is_none() {
         return Err(JjjError::Validation(
             "nothing to change — pass --title, --method or --body".to_string(),
         ));
@@ -370,6 +387,7 @@ fn edit_finding(
 
     store.with_metadata(&format!("Edit finding {}", finding_id), || {
         let mut finding = store.load_finding(&finding_id)?;
+        super::guard_lamport(if_lamport, finding.lamport, "finding", &finding_id)?;
         if let Some(ref t) = title {
             finding.title = t.clone();
         }
@@ -378,6 +396,11 @@ fn edit_finding(
         }
         if let Some(ref e) = evidence {
             finding.evidence = e.clone();
+        }
+        // Read at write time, inside the same transaction as the save, so there
+        // is no window between reading the body and writing it back.
+        if let Some(ref addition) = appended {
+            finding.evidence = super::appended_body(&finding.evidence, addition);
         }
         finding.updated_at = chrono::Utc::now();
         store.save_finding(&finding)?;

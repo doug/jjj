@@ -42,6 +42,130 @@ use crate::cli::{Cli, Commands};
 ///
 /// `-` reads stdin, so a long argument can be piped in without shell quoting
 /// mangling it.
+/// Refuse a write when the entity moved between the caller reading it and
+/// writing it back.
+///
+/// `edit --body` replaces a body wholesale, so an agent that writes one without
+/// having seen the current text destroys whatever another agent put there — and
+/// in a fleet, "I read this entity three minutes ago" is not the same as "this
+/// is what it says now". The Lamport clock an entity already carries is exactly
+/// the token needed to say so: read it from `show --json`, pass it back, and the
+/// write is refused if anything intervened.
+///
+/// This is a fence within one clone, not a distributed lock. Two clones can
+/// still both pass the check and merge afterwards — which is what jjj's merge is
+/// for. beads reaches for the same primitive (`--if-revision`) on top of a real
+/// database, and even there its own docs call the compare-and-set "a correctness
+/// fence against concurrent claims, not an authorization boundary".
+///
+/// The refusal deliberately does **not** offer "drop --if-lamport" as the fix.
+/// The guard fired precisely because the entity moved, so an agent told it can
+/// drop the flag will drop the flag — defeating the fence at the one moment it
+/// had something to say. beads reached the same conclusion about its migration
+/// refusal and wrote down why: migrating is one-way, so handing an agent the
+/// override as "the fix" lets it do the irreversible thing, and the override
+/// "stays out of this payload entirely". The remedy named here is the one that
+/// is always correct — re-read, reapply — and the overwrite is described as a
+/// decision about someone else's work rather than a retry flag.
+pub(crate) fn guard_lamport(
+    expected: Option<u64>,
+    actual: u64,
+    kind: &str,
+    id: &str,
+) -> Result<()> {
+    match expected {
+        Some(want) if want != actual => Err(crate::error::JjjError::Precondition(format!(
+            "{short} has changed since you read it — its clock is {actual}, you expected \
+             {want}. Re-read it with `jjj {kind} show {short}` and reapply your change to \
+             the text that is there now. Writing it unguarded would discard whatever \
+             changed in between, which is a decision about someone else's work.",
+            short = crate::display::short_id(id)
+        ))),
+        _ => Ok(()),
+    }
+}
+
+/// Resolve `--body` / `--clear-body` for an `edit`, refusing a silent erase.
+///
+/// `--body ""` replaces a body with nothing, and an empty string is exactly what
+/// a dead command substitution collapses to: `--body "$(cat notes.md)"` with the
+/// file missing erases the entity's entire content and reports success. Measured
+/// before this guard existed, that is precisely what happened — a problem's
+/// description went from "Three weeks of measurements." to `''`, exit 0,
+/// `Updated problem`. An empty `--body -` from a closed or empty stdin is the
+/// same accident by another route.
+///
+/// At the flag layer the accident and a deliberate clear are the same bytes, so
+/// the value is refused and the deliberate clear gets its own flag. This is
+/// beads' `--notes ""` guard, which reaches the same conclusion from the same
+/// reasoning; the difference is only in which field is irreplaceable.
+///
+/// `new` is deliberately **not** guarded: creating an entity with no body is
+/// ordinary — most critiques have no separate argument at first — and there is
+/// nothing there to lose.
+pub(crate) fn edit_body(
+    body: Option<String>,
+    clear_body: bool,
+    field: &str,
+) -> Result<Option<String>> {
+    if clear_body {
+        return Ok(Some(String::new()));
+    }
+    let Some(arg) = body else {
+        return Ok(None);
+    };
+    let text = read_body(Some(arg))?;
+    if text.trim().is_empty() {
+        return Err(crate::error::JjjError::Validation(format!(
+            "--body carried no content, which would erase the {field}. An empty command \
+             substitution or an empty file is the usual cause — check what you passed. \
+             To erase it deliberately, use --clear-body."
+        )));
+    }
+    Ok(Some(text))
+}
+
+/// Text to add to the end of a body, read the same way `--body` is.
+///
+/// Refuses empty for the same reason `edit_body` does: an empty command
+/// substitution is the usual cause, and appending nothing is never what the
+/// caller meant — but unlike `--body` it cannot be a request to clear, so there
+/// is no `--clear` counterpart to point at.
+pub(crate) fn append_body(append: Option<String>, field: &str) -> Result<Option<String>> {
+    let Some(arg) = append else {
+        return Ok(None);
+    };
+    let text = read_body(Some(arg))?;
+    if text.trim().is_empty() {
+        return Err(crate::error::JjjError::Validation(format!(
+            "--append-body carried no content, so there is nothing to add to the \
+             {field}. An empty command substitution or an empty file is the usual cause."
+        )));
+    }
+    Ok(Some(text))
+}
+
+/// Join an existing body and an addition with one blank line between them.
+///
+/// The point of doing this here rather than in the caller's shell is *when* it
+/// happens. An agent appending to a body had to read it, build the new text, and
+/// write the whole thing back; anything written between its read and its write
+/// was silently discarded, and `--if-lamport` could only turn that into a
+/// refusal after the fact. Appending inside the write transaction reads the body
+/// at write time, so there is no window to lose an edit in.
+///
+/// Two clones appending concurrently still contend — the body is one key in the
+/// per-field merge, so one side's addition wins. That is a smaller problem than
+/// the one this removes, and pretending otherwise would be the real hazard.
+pub(crate) fn appended_body(current: &str, addition: &str) -> String {
+    let current = current.trim_end();
+    let addition = addition.trim();
+    if current.is_empty() {
+        return addition.to_string();
+    }
+    format!("{current}\n\n{addition}")
+}
+
 pub fn read_body(body: Option<String>) -> Result<String> {
     match body {
         None => Ok(String::new()),

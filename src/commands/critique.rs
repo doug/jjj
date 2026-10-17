@@ -53,9 +53,23 @@ pub fn execute(ctx: &CommandContext, action: CritiqueAction) -> Result<()> {
         CritiqueAction::Edit {
             critique_id,
             title,
+            body,
+            clear_body,
+            append_body,
+            if_lamport,
             severity,
             status,
-        } => edit_critique(ctx, critique_id, title, severity, status),
+        } => edit_critique(
+            ctx,
+            critique_id,
+            title,
+            body,
+            clear_body,
+            append_body,
+            if_lamport,
+            severity,
+            status,
+        ),
         CritiqueAction::Address { critique_id, json } => address_critique(ctx, critique_id, json),
         CritiqueAction::Validate { critique_id, json } => validate_critique(ctx, critique_id, json),
         CritiqueAction::Dismiss { critique_id, json } => dismiss_critique(ctx, critique_id, json),
@@ -389,21 +403,38 @@ fn show_critique(ctx: &CommandContext, critique_input: String, json: bool) -> Re
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn edit_critique(
     ctx: &CommandContext,
     critique_input: String,
     title: Option<String>,
+    body: Option<String>,
+    clear_body: bool,
+    append_body: Option<String>,
+    if_lamport: Option<u64>,
     severity: Option<String>,
     status: Option<String>,
 ) -> Result<()> {
     let critique_id = ctx.resolve_critique(&critique_input)?;
     let store = &ctx.store;
+    let argument = super::edit_body(body, clear_body, "argument")?;
+    let appended = super::append_body(append_body, "argument")?;
 
     store.with_metadata(&format!("Edit critique {}", critique_id), || {
         let mut critique = store.load_critique(&critique_id)?;
+        super::guard_lamport(if_lamport, critique.lamport, "critique", &critique_id)?;
 
         if let Some(new_title) = title {
             critique.title = new_title;
+        }
+
+        if let Some(ref new_body) = argument {
+            critique.argument = new_body.clone();
+        }
+        // Read at write time, inside the same transaction as the save, so there
+        // is no window between reading the body and writing it back.
+        if let Some(ref addition) = appended {
+            critique.argument = super::appended_body(&critique.argument, addition);
         }
 
         if let Some(severity_str) = severity {

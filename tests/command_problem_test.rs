@@ -1,6 +1,6 @@
 mod test_helpers;
 
-use test_helpers::{jj_available, run_jjj, run_jjj_success, setup_test_repo};
+use test_helpers::{jj_available, run_jjj, run_jjj_env, run_jjj_success, setup_test_repo};
 
 #[test]
 fn test_problem_new_creates_problem() {
@@ -628,4 +628,161 @@ fn a_no_op_edit_leaves_updated_at_alone() {
         before_ts,
         "a no-op save moved updated_at, which would win merges it should lose"
     );
+}
+
+// ---------------------------------------------------------------------------
+// Assign must not quietly take work someone is holding
+// ---------------------------------------------------------------------------
+
+/// `jjj next` never offers held work, so the only way to collide was to name the
+/// item explicitly — and `assign` used to overwrite a live claim without a word.
+/// Claims are advisory in jjj because there is no server to arbitrate one, but
+/// advisory is not the same as invisible.
+#[test]
+fn assign_refuses_to_take_a_live_claim_without_force() {
+    if !jj_available() {
+        return;
+    }
+    let dir = setup_test_repo();
+    run_jjj_success(&dir, &["problem", "new", "Contended work"]);
+
+    // Another agent claims it, with a fresh timestamp, so the lease is live.
+    let out = run_jjj_env(&dir, &[("JJJ_USER", "agent-02")], &["next", "--claim"]);
+    assert!(
+        out.status.success(),
+        "agent-02 could not claim: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    let refused = run_jjj_env(
+        &dir,
+        &[("JJJ_USER", "agent-07")],
+        &["problem", "assign", "Contended work", "--to", "agent-07"],
+    );
+    let stderr = String::from_utf8_lossy(&refused.stderr);
+    assert!(
+        !refused.status.success(),
+        "a live claim was taken silently:\n{}",
+        String::from_utf8_lossy(&refused.stdout)
+    );
+    assert!(
+        stderr.contains("still live"),
+        "the refusal must say why: {stderr}"
+    );
+    assert!(
+        stderr.contains("agent-02"),
+        "and name who holds it: {stderr}"
+    );
+
+    // The holder is unchanged.
+    let json = run_jjj_success(&dir, &["problem", "show", "Contended work", "--json"]);
+    let v: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+    assert_eq!(v["assignee"].as_str(), Some("agent-02"));
+}
+
+/// Refusing has to be overridable, or a crashed agent's claim would strand the
+/// work until its lease expired.
+#[test]
+fn assign_force_takes_a_live_claim_and_says_so() {
+    if !jj_available() {
+        return;
+    }
+    let dir = setup_test_repo();
+    run_jjj_success(&dir, &["problem", "new", "Contended work"]);
+    run_jjj_env(&dir, &[("JJJ_USER", "agent-02")], &["next", "--claim"]);
+
+    let out = run_jjj_env(
+        &dir,
+        &[("JJJ_USER", "agent-07")],
+        &[
+            "problem",
+            "assign",
+            "Contended work",
+            "--to",
+            "agent-07",
+            "--force",
+        ],
+    );
+    assert!(
+        out.status.success(),
+        "--force did not work: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("taking"),
+        "taking a live claim must be announced, not silent"
+    );
+
+    let json = run_jjj_success(&dir, &["problem", "show", "Contended work", "--json"]);
+    let v: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+    assert_eq!(v["assignee"].as_str(), Some("agent-07"));
+}
+
+/// An assignment is a hand-off, not a lease: `claim::classify` reads a missing
+/// timestamp as "someone's job until they say otherwise" and never expires it.
+/// Leaving the previous holder's timestamp turned the hand-off back into a lease
+/// that had already been running — so a fresh assignment could expire at once.
+#[test]
+fn assign_clears_the_previous_holders_claim_timestamp() {
+    if !jj_available() {
+        return;
+    }
+    let dir = setup_test_repo();
+    run_jjj_success(&dir, &["problem", "new", "Handed over"]);
+    run_jjj_env(&dir, &[("JJJ_USER", "agent-02")], &["next", "--claim"]);
+
+    let before = run_jjj_success(&dir, &["problem", "show", "Handed over", "--json"]);
+    let before: serde_json::Value = serde_json::from_str(&before).expect("valid JSON");
+    assert!(
+        before["claimed_at"].as_str().is_some(),
+        "the claim should have stamped a time: {before}"
+    );
+
+    run_jjj_env(
+        &dir,
+        &[("JJJ_USER", "agent-02")],
+        &["problem", "assign", "Handed over", "--to", "agent-09"],
+    );
+
+    let after = run_jjj_success(&dir, &["problem", "show", "Handed over", "--json"]);
+    let after: serde_json::Value = serde_json::from_str(&after).expect("valid JSON");
+    assert_eq!(after["assignee"].as_str(), Some("agent-09"));
+    assert!(
+        after["claimed_at"].as_str().is_none(),
+        "the new assignee inherited the old holder's claim clock: {after}"
+    );
+}
+
+/// Handing work *on* must stay free. A bare assignment reads as held-by-other
+/// too, because a hand-off deliberately never expires — but passing it along is
+/// a decision rather than a race. Guarding it would make `assign` a one-way
+/// door, since assigning clears `claimed_at` and every assignment after the
+/// first would then need `--force`. `journeys/15-assignee-workflow.md` states
+/// the rule; this is the regression test for it.
+#[test]
+fn assign_can_hand_on_work_that_was_assigned_rather_than_claimed() {
+    if !jj_available() {
+        return;
+    }
+    let dir = setup_test_repo();
+    run_jjj_success(&dir, &["problem", "new", "Passed along"]);
+
+    run_jjj_success(
+        &dir,
+        &["problem", "assign", "Passed along", "--to", "alice"],
+    );
+    // No --force: alice holds it by assignment, not by a live lease.
+    let out = run_jjj(
+        &dir,
+        &["problem", "assign", "Passed along", "--to", "charlie"],
+    );
+    assert!(
+        out.status.success(),
+        "reassigning a hand-off was refused:\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    let json = run_jjj_success(&dir, &["problem", "show", "Passed along", "--json"]);
+    let v: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+    assert_eq!(v["assignee"].as_str(), Some("charlie"));
 }

@@ -13,9 +13,23 @@ pub fn execute(ctx: &CommandContext, action: MilestoneAction) -> Result<()> {
         MilestoneAction::Edit {
             milestone_id,
             title,
+            body,
+            clear_body,
+            append_body,
+            if_lamport,
             date,
             status,
-        } => edit_milestone(ctx, milestone_id, title, date, status),
+        } => edit_milestone(
+            ctx,
+            milestone_id,
+            title,
+            body,
+            clear_body,
+            append_body,
+            if_lamport,
+            date,
+            status,
+        ),
         MilestoneAction::List { json } => list_milestones(ctx, json),
         MilestoneAction::Show { milestone_id, json } => show_milestone(ctx, milestone_id, json),
         MilestoneAction::AddProblem {
@@ -87,21 +101,38 @@ fn create_milestone(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn edit_milestone(
     ctx: &CommandContext,
     milestone_input: String,
     title: Option<String>,
+    body: Option<String>,
+    clear_body: bool,
+    append_body: Option<String>,
+    if_lamport: Option<u64>,
     date: Option<String>,
     status: Option<String>,
 ) -> Result<()> {
     let milestone_id = ctx.resolve_milestone(&milestone_input)?;
     let store = &ctx.store;
+    let description = super::edit_body(body, clear_body, "description")?;
+    let appended = super::append_body(append_body, "description")?;
 
     store.with_metadata(&format!("Edit milestone {}", milestone_id), || {
         let mut milestone = store.load_milestone(&milestone_id)?;
+        super::guard_lamport(if_lamport, milestone.lamport, "milestone", &milestone_id)?;
 
         if let Some(t) = title {
             milestone.title = t;
+        }
+
+        if let Some(ref new_body) = description {
+            milestone.description = new_body.clone();
+        }
+        // Read at write time, inside the same transaction as the save, so there
+        // is no window between reading the body and writing it back.
+        if let Some(ref addition) = appended {
+            milestone.description = super::appended_body(&milestone.description, addition);
         }
 
         if let Some(d) = date {

@@ -73,6 +73,10 @@ pub fn execute(ctx: &CommandContext, action: ProblemAction) -> Result<()> {
         ProblemAction::Edit {
             problem_id,
             title,
+            body,
+            clear_body,
+            append_body,
+            if_lamport,
             status,
             priority,
             parent,
@@ -80,19 +84,37 @@ pub fn execute(ctx: &CommandContext, action: ProblemAction) -> Result<()> {
             remove_tag,
             set_tags,
         } => edit_problem(
-            ctx, problem_id, title, status, priority, parent, add_tag, remove_tag, set_tags,
+            ctx,
+            problem_id,
+            title,
+            body,
+            clear_body,
+            append_body,
+            if_lamport,
+            status,
+            priority,
+            parent,
+            add_tag,
+            remove_tag,
+            set_tags,
         ),
         ProblemAction::Tree { problem_id, json } => show_tree(ctx, problem_id, json),
         ProblemAction::Solve {
             problem_id,
             github_close,
-        } => solve_problem(ctx, problem_id, github_close),
+            if_lamport,
+        } => solve_problem(ctx, problem_id, github_close, if_lamport),
         ProblemAction::Dissolve {
             problem_id,
             reason,
             github_close,
         } => dissolve_problem(ctx, problem_id, reason, github_close),
-        ProblemAction::Assign { problem_id, to } => assign_problem(ctx, problem_id, to),
+        ProblemAction::Assign {
+            problem_id,
+            to,
+            force,
+            if_lamport,
+        } => assign_problem(ctx, problem_id, to, force, if_lamport),
         ProblemAction::Reopen { problem_id } => reopen_problem(ctx, problem_id),
         ProblemAction::Duplicate { problem_id, of } => duplicate_problem(ctx, problem_id, of),
         ProblemAction::Graph {
@@ -520,6 +542,10 @@ fn edit_problem(
     ctx: &CommandContext,
     problem_input: String,
     title: Option<String>,
+    body: Option<String>,
+    clear_body: bool,
+    append_body: Option<String>,
+    if_lamport: Option<u64>,
     status: Option<String>,
     priority: Option<String>,
     parent: Option<String>,
@@ -530,6 +556,8 @@ fn edit_problem(
     let store = &ctx.store;
 
     let problem_id = ctx.resolve_problem(&problem_input)?;
+    let description = super::edit_body(body, clear_body, "description")?;
+    let appended = super::append_body(append_body, "description")?;
 
     // Resolve parent if provided and not empty
     let resolved_parent = if let Some(ref parent_input) = parent {
@@ -544,9 +572,19 @@ fn edit_problem(
 
     store.with_metadata(&format!("Edit problem {}", problem_id), || {
         let mut problem = store.load_problem(&problem_id)?;
+        super::guard_lamport(if_lamport, problem.lamport, "problem", &problem_id)?;
 
         if let Some(new_title) = title {
             problem.title = new_title;
+        }
+
+        if let Some(ref new_body) = description {
+            problem.description = new_body.clone();
+        }
+        // Read at write time, inside the same transaction as the save, so there
+        // is no window between reading the body and writing it back.
+        if let Some(ref addition) = appended {
+            problem.description = super::appended_body(&problem.description, addition);
         }
 
         if let Some(status_str) = status {
@@ -663,9 +701,20 @@ fn problem_tree_json(store: &MetadataStore, problem: &Problem) -> Result<serde_j
     }))
 }
 
-fn solve_problem(ctx: &CommandContext, problem_input: String, github_close: bool) -> Result<()> {
+fn solve_problem(
+    ctx: &CommandContext,
+    problem_input: String,
+    github_close: bool,
+    if_lamport: Option<u64>,
+) -> Result<()> {
     let store = &ctx.store;
     let problem_id = ctx.resolve_problem(&problem_input)?;
+    super::guard_lamport(
+        if_lamport,
+        store.load_problem(&problem_id)?.lamport,
+        "problem",
+        &problem_id,
+    )?;
 
     // Warn about active solutions still in progress (CLI-specific UX)
     let solutions = store.list_solutions()?;
@@ -730,10 +779,36 @@ fn dissolve_problem(
     Ok(())
 }
 
+/// Hand a problem to someone.
+///
+/// Two things this deliberately does beyond setting a name.
+///
+/// **It refuses to take work another actor is actively holding.** Claims are
+/// advisory in jjj — there is no server to arbitrate one — but advisory is not
+/// the same as invisible, and `assign` used to overwrite a live claim without a
+/// word. `jjj next` never offers held work, so the only way to collide was to
+/// name the item explicitly, which is exactly the case where the actor deserves
+/// to be told. A lapsed claim is taken with a warning instead of a refusal,
+/// matching what `next --claim` already does when it reclaims one.
+///
+/// Only an **active lease** blocks it. A bare assignment also reads as
+/// `HeldByOther` — a hand-off never expires — but passing work along is a
+/// decision rather than a race, and refusing it would make `assign` a one-way
+/// door, since this command clears `claimed_at` and every assignment after the
+/// first would then need `--force`.
+///
+/// **It clears `claimed_at`.** An assignment is a hand-off rather than a lease:
+/// `claim::classify` reads a missing timestamp as "someone's job until they say
+/// otherwise" and never expires it. Leaving the previous holder's timestamp in
+/// place turned the hand-off back into a lease that had already been running for
+/// however long the last agent held it — so a fresh assignment could expire
+/// immediately, or look fresher than it was.
 fn assign_problem(
     ctx: &CommandContext,
     problem_input: String,
     assignee: Option<String>,
+    force: bool,
+    if_lamport: Option<u64>,
 ) -> Result<()> {
     let store = &ctx.store;
 
@@ -744,11 +819,62 @@ fn assign_problem(
         None => store.get_current_user()?,
     };
 
+    let actor = store.get_current_user().unwrap_or_default();
+    let ttl = crate::claim::claim_ttl(&store.load_config().unwrap_or_default().settings);
+
     store.with_metadata(
         &format!("Assign problem {} to {}", problem_id, assignee_name),
         || {
             let mut problem = store.load_problem(&problem_id)?;
+            super::guard_lamport(if_lamport, problem.lamport, "problem", &problem_id)?;
+
+            let state = crate::claim::classify(
+                problem.assignee.as_deref(),
+                problem.claimed_at,
+                &actor,
+                ttl,
+                chrono::Utc::now(),
+            );
+            let holder = problem.assignee.clone().unwrap_or_default();
+            // Only an *active lease* blocks a reassignment. `classify` reports
+            // `HeldByOther` for a bare assignment too — a hand-off deliberately
+            // never expires — but handing work on is a decision, not a race, and
+            // refusing it would make `assign` a one-way door: this command
+            // clears `claimed_at`, so every assignment after the first would
+            // need `--force`.
+            let leased = problem.claimed_at.is_some();
+            match state {
+                crate::claim::ClaimState::HeldByOther if leased && !force => {
+                    // A precondition, not a validation error: the command was
+                    // well formed and nothing was written, and the same call
+                    // succeeds once the lease lapses. An agent can back off and
+                    // retry on exit 13; on exit 1 it should not.
+                    return Err(crate::error::JjjError::Precondition(format!(
+                        "{} is held by {holder} and their claim is still live. \
+                         Leave it, pick up something else with `jjj next`, or pass \
+                         --force if you know they have stopped.",
+                        crate::display::short_id(&problem_id)
+                    )));
+                }
+                crate::claim::ClaimState::HeldByOther if leased => {
+                    crate::output::warn(&format!(
+                        "taking {} from {holder} — their claim was still live",
+                        crate::display::short_id(&problem_id)
+                    ));
+                }
+                // An assignment with no lease: a hand-off being handed on.
+                crate::claim::ClaimState::HeldByOther => {}
+                crate::claim::ClaimState::Expired => {
+                    crate::output::warn(&format!(
+                        "taking {} from {holder} — their claim had lapsed",
+                        crate::display::short_id(&problem_id)
+                    ));
+                }
+                crate::claim::ClaimState::Free | crate::claim::ClaimState::Held => {}
+            }
+
             problem.assignee = Some(assignee_name.clone());
+            problem.claimed_at = None;
             store.save_problem(&problem)?;
             println!("Problem {} assigned to {}", problem_id, assignee_name);
             Ok(())

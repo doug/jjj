@@ -6,6 +6,6 @@ fn main() {
     let cli = cli::Cli::parse();
     if let Err(e) = commands::execute(cli) {
         eprintln!("Error: {e}");
-        std::process::exit(1);
+        std::process::exit(e.exit_code());
     }
 }

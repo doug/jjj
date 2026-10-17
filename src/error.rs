@@ -143,6 +143,39 @@ pub enum JjjError {
     #[error("Validation failed: {0}")]
     Validation(String),
 
+    /// A guard refused the write because the world moved under the caller.
+    ///
+    /// Distinct from `Validation` by one property an agent can act on: nothing
+    /// was written, and the same command may well succeed after a re-read.
+    /// `Validation` means the command itself was wrong, and retrying it changes
+    /// nothing. That difference is the whole reason this variant exists —
+    /// `--if-lamport` is useless in a loop if a stale read and a malformed
+    /// argument are the same exit code and the caller has to tell them apart by
+    /// matching on prose. (This session rewrote that prose, which would have
+    /// silently broken anyone doing exactly that.)
+    #[error("{0}")]
+    Precondition(String),
+
     #[error("Configuration error: {0}")]
     Config(String),
+}
+
+impl JjjError {
+    /// The process exit code for this error.
+    ///
+    /// Two values, because two is what a caller can act on: `13` for a
+    /// precondition that may pass on a retry, `1` for everything else. beads
+    /// reserves 13 for the same meaning (`if_revision.go:19`), and there is no
+    /// reason for two agent-facing tools to disagree on the number.
+    ///
+    /// Deliberately not a code per variant: every code is a promise to keep,
+    /// and a caller that switches on fifteen of them is coupled to jjj's
+    /// internal error taxonomy. One retryable class is what conditional writes
+    /// actually need.
+    pub fn exit_code(&self) -> i32 {
+        match self {
+            JjjError::Precondition(_) => 13,
+            _ => 1,
+        }
+    }
 }
