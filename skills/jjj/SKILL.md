@@ -325,12 +325,22 @@ Replacing a body you have not just read is how another agent's work disappears.
 When it matters, pass the clock you read back with the write:
 
 ```sh
-lam=$(jjj problem show "$pid" --json | jq -r .lamport)
+lam=$(jjj problem show "$pid" --json | jq -r '.lamport // 0')
 jjj problem edit "$pid" --body "..." --if-lamport "$lam"   # refused if it moved
 ```
 
+Default the clock to 0. A fresh entity's clock *is* 0, and 0 is omitted from the
+JSON rather than printed, so a bare `jq -r .lamport` yields the string `null` and
+the next command fails on its own argument.
+
 The flag is optional and omitting it changes nothing — it is there for when you
-would rather fail than clobber.
+would rather fail than clobber. Know what it does and does not cover: it refuses
+a write when this clone's copy moved under you, which is the case when another
+agent shares your clone or you fetched since reading. It cannot see an edit on a
+clone that has not synced yet — both writes succeed and the collision surfaces at
+merge, where the clock decides and the losing body is recoverable from `jj`
+history rather than from jjj. For the common case of adding to a body,
+`--append-body` closes the gap completely and needs no clock at all.
 
 **`--body` will refuse a value that carries no content.** This is on purpose:
 `--body "$(cat notes.md)"` with the file missing collapses to `--body ""`, which

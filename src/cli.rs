@@ -639,8 +639,12 @@ pub enum ProblemAction {
         title: Option<String>,
 
         /// Refuse the write unless the entity's Lamport clock is still this
-        /// value (read it from `show --json`). Guards against overwriting an
-        /// edit made since you looked.
+        /// value. Read it from `show --json`, where a clock of 0 is omitted
+        /// rather than printed — use a default (`jq '.lamport // 0'`).
+        ///
+        /// Guards against overwriting an edit this clone has already seen. It
+        /// cannot guard against one on a clone that has not synced yet: that
+        /// collision surfaces at merge, where the clocks decide.
         #[arg(long)]
         if_lamport: Option<u64>,
 
@@ -706,8 +710,9 @@ pub enum ProblemAction {
         #[arg(long)]
         github_close: bool,
 
-        /// Refuse unless the entity's Lamport clock is still this value (read it
-        /// from `show --json`). Guards a decision made on a stale read.
+        /// Refuse unless the entity's Lamport clock is still this value (read
+        /// it from `show --json`; a clock of 0 is omitted, so default it).
+        /// Guards a decision made on a stale read of this clone.
         #[arg(long)]
         if_lamport: Option<u64>,
     },
@@ -744,8 +749,9 @@ pub enum ProblemAction {
         #[arg(long)]
         force: bool,
 
-        /// Refuse unless the entity's Lamport clock is still this value (read it
-        /// from `show --json`). Guards a decision made on a stale read.
+        /// Refuse unless the entity's Lamport clock is still this value (read
+        /// it from `show --json`; a clock of 0 is omitted, so default it).
+        /// Guards a decision made on a stale read of this clone.
         #[arg(long)]
         if_lamport: Option<u64>,
     },
@@ -888,8 +894,12 @@ pub enum SolutionAction {
         title: Option<String>,
 
         /// Refuse the write unless the entity's Lamport clock is still this
-        /// value (read it from `show --json`). Guards against overwriting an
-        /// edit made since you looked.
+        /// value. Read it from `show --json`, where a clock of 0 is omitted
+        /// rather than printed — use a default (`jq '.lamport // 0'`).
+        ///
+        /// Guards against overwriting an edit this clone has already seen. It
+        /// cannot guard against one on a clone that has not synced yet: that
+        /// collision surfaces at merge, where the clocks decide.
         #[arg(long)]
         if_lamport: Option<u64>,
 
@@ -975,8 +985,9 @@ pub enum SolutionAction {
         #[arg(long)]
         rationale: Option<String>,
 
-        /// Refuse unless the entity's Lamport clock is still this value (read it
-        /// from `show --json`). Guards a decision made on a stale read.
+        /// Refuse unless the entity's Lamport clock is still this value (read
+        /// it from `show --json`; a clock of 0 is omitted, so default it).
+        /// Guards a decision made on a stale read of this clone.
         #[arg(long)]
         if_lamport: Option<u64>,
 
@@ -1163,8 +1174,12 @@ pub enum CritiqueAction {
         title: Option<String>,
 
         /// Refuse the write unless the entity's Lamport clock is still this
-        /// value (read it from `show --json`). Guards against overwriting an
-        /// edit made since you looked.
+        /// value. Read it from `show --json`, where a clock of 0 is omitted
+        /// rather than printed — use a default (`jq '.lamport // 0'`).
+        ///
+        /// Guards against overwriting an edit this clone has already seen. It
+        /// cannot guard against one on a clone that has not synced yet: that
+        /// collision surfaces at merge, where the clocks decide.
         #[arg(long)]
         if_lamport: Option<u64>,
 
@@ -1353,8 +1368,12 @@ pub enum FindingAction {
         append_body: Option<String>,
 
         /// Refuse the write unless the entity's Lamport clock is still this
-        /// value (read it from `show --json`). Guards against overwriting an
-        /// edit made since you looked.
+        /// value. Read it from `show --json`, where a clock of 0 is omitted
+        /// rather than printed — use a default (`jq '.lamport // 0'`).
+        ///
+        /// Guards against overwriting an edit this clone has already seen. It
+        /// cannot guard against one on a clone that has not synced yet: that
+        /// collision surfaces at merge, where the clocks decide.
         #[arg(long)]
         if_lamport: Option<u64>,
     },
@@ -1440,8 +1459,12 @@ pub enum MilestoneAction {
         title: Option<String>,
 
         /// Refuse the write unless the entity's Lamport clock is still this
-        /// value (read it from `show --json`). Guards against overwriting an
-        /// edit made since you looked.
+        /// value. Read it from `show --json`, where a clock of 0 is omitted
+        /// rather than printed — use a default (`jq '.lamport // 0'`).
+        ///
+        /// Guards against overwriting an edit this clone has already seen. It
+        /// cannot guard against one on a clone that has not synced yet: that
+        /// collision surfaces at merge, where the clocks decide.
         #[arg(long)]
         if_lamport: Option<u64>,
 
