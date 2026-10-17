@@ -69,6 +69,7 @@ pub fn merge_entity_md(base: Option<&str>, local: &str, remote: &str) -> Result<
     let merged = merge_value(b_yaml.as_ref(), &l_yaml, &r_yaml, prefer, None);
     let merged = normalize_timestamps(merged, &l_yaml, &r_yaml);
     let merged = normalize_claim(merged, &l_yaml, &r_yaml);
+    let merged = normalize_status_dependents(merged);
     let merged = sort_mapping_keys(merged);
 
     let yaml_str = serde_norway::to_string(&merged).map_err(JjjError::YamlParse)?;
@@ -278,6 +279,27 @@ fn pick_side(l: &Value, r: &Value) -> Side {
     // way.
     let l_ts = l.get("updated_at").and_then(|v| v.as_str()).unwrap_or("");
     let r_ts = r.get("updated_at").and_then(|v| v.as_str()).unwrap_or("");
+
+    // Compare instants, not strings. RFC3339 is not fixed-width here: chrono
+    // drops trailing subsecond zeros, so a write on an exact millisecond is
+    // `.191Z` and one 220µs later is `.191220Z`. Lexicographically 'Z' (0x5A)
+    // beats '2' (0x32), so the shorter string sorts higher and the *earlier*
+    // write won the tiebreak — and stamped its own timestamp on the result.
+    // Clones agreed with each other while doing it, so no convergence test
+    // could see it.
+    //
+    // Unparseable values fall back to the string comparison below: it is
+    // deterministic, which is the property that actually matters for clones
+    // that must agree, and a malformed timestamp has no instant to compare.
+    let as_instant = |s: &str| chrono::DateTime::parse_from_rfc3339(s).ok();
+    if let (Some(lt), Some(rt)) = (as_instant(l_ts), as_instant(r_ts)) {
+        match rt.cmp(&lt) {
+            std::cmp::Ordering::Greater => return Side::Remote,
+            std::cmp::Ordering::Less => return Side::Local,
+            std::cmp::Ordering::Equal => {}
+        }
+    }
+
     match r_ts.cmp(l_ts) {
         std::cmp::Ordering::Greater => Side::Remote,
         std::cmp::Ordering::Less => Side::Local,
@@ -495,25 +517,104 @@ fn normalize_timestamps(mut merged: Value, local: &Value, remote: &Value) -> Val
 /// changing — where latest-wins would let every fresh claim churn it.
 ///
 /// The claimant's name breaks an exact timestamp tie, so the result is total.
+///
+/// Earliest-wins applies **only between two leases**, because a bare
+/// `assignee` with no `claimed_at` is not a lease at all: `problem assign`
+/// writes one deliberately, since handing work to a person is a decision and not
+/// something that should expire. Treating "one side has no `claimed_at`" as
+/// "only one side claimed it, so adopt that side" got this backwards — it let a
+/// lease that merely still existed on another clone revert a later hand-off,
+/// and then stamped the reverted owner with the hand-off's clock, so the record
+/// claimed a causal position its content never had. Which owner survived
+/// depended on nothing the user could see.
+///
+/// For that mixed case the generic merge has already ordered `assignee` by
+/// clock, and that ordering *is* the answer: a hand-off that witnessed a lease
+/// overrides it, and a lease taken after a hand-off overrides that. What remains
+/// is keeping `claimed_at` attached to the owner it belongs to — like
+/// `dissolved_reason` under [`normalize_status_dependents`], it annotates a
+/// decision rather than standing on its own, so it follows that decision or goes.
 fn normalize_claim(mut merged: Value, local: &Value, remote: &Value) -> Value {
-    let claim_of = |v: &Value| -> Option<(String, String)> {
+    // The `(claimed_at, assignee)` pair, present only for a timed lease.
+    let lease_of = |v: &Value| -> Option<(String, String)> {
         let at = v.get("claimed_at")?.as_str()?.to_string();
         let who = v.get("assignee")?.as_str()?.to_string();
         Some((at, who))
     };
 
-    let (l, r) = (claim_of(local), claim_of(remote));
-    let winner = match (l, r) {
-        (Some(a), Some(b)) => Some(if a <= b { a } else { b }),
-        // Only one side claimed it: nothing to resolve, and the generic merge
-        // already adopts that side.
-        (only, None) => only,
-        (None, only) => only,
-    };
+    // Two live leases: earliest wins, identically on every clone.
+    if let (Some(a), Some(b)) = (lease_of(local), lease_of(remote)) {
+        let (at, who) = if a <= b { a } else { b };
+        if let Value::Mapping(ref mut m) = merged {
+            m.insert(Value::String("assignee".to_string()), Value::String(who));
+            m.insert(Value::String("claimed_at".to_string()), Value::String(at));
+        }
+        return merged;
+    }
 
-    if let (Value::Mapping(ref mut m), Some((at, who))) = (&mut merged, winner) {
-        m.insert(Value::String("assignee".to_string()), Value::String(who));
-        m.insert(Value::String("claimed_at".to_string()), Value::String(at));
+    // At most one lease. Let the clock-ordered `assignee` stand, and keep the
+    // lease only if it is that owner's.
+    let owner = merged
+        .get("assignee")
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
+    let lease = lease_of(local).or_else(|| lease_of(remote));
+
+    if let Value::Mapping(ref mut m) = merged {
+        match (owner, lease) {
+            (Some(owner), Some((at, who))) if owner == who => {
+                m.insert(Value::String("claimed_at".to_string()), Value::String(at));
+            }
+            _ => {
+                m.remove(Value::String("claimed_at".to_string()));
+            }
+        }
+    }
+    merged
+}
+
+/// Drop a field that only has meaning in a status the merge did not choose.
+///
+/// [`merge_mapping`] merges every key independently, which is the property that
+/// lets two clones edit different fields of one entity without conflicting. A
+/// few fields are not independent of `status`, though: `dissolved_reason` says
+/// why a problem was dissolved, and `superseded_by` which finding replaced this
+/// one. Each is meaningless — worse, actively contradictory — under any other
+/// status.
+///
+/// The failure is reachable with two legal transitions. One clone dissolves a
+/// problem, writing `status: dissolved` *and* a reason; another solves it,
+/// writing `status: solved`. Causal order resolves `status` to one side, but the
+/// reason is new on the losing side and absent from the base, so the generic
+/// merge keeps it unconditionally — yielding a problem that is `solved` while
+/// carrying a dissolution reason. Solved means an approved solution fixed it;
+/// dissolved means it was never a real problem to begin with. Both at once is
+/// not a state the model has.
+///
+/// Dropping the dependent field is the right repair rather than picking a winner
+/// for the pair: the status *is* the decision and the reason is an annotation on
+/// it, so the annotation follows the decision. Nothing is lost either way,
+/// because `ProblemDissolved` and `FindingSuperseded` both record the detail in
+/// the event log, which merges by line union.
+fn normalize_status_dependents(mut merged: Value) -> Value {
+    /// `(field, the only status under which it means anything)`
+    const DEPENDENTS: &[(&str, &str)] = &[
+        ("dissolved_reason", "dissolved"),
+        ("superseded_by", "superseded"),
+    ];
+
+    let status = merged
+        .get("status")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+
+    if let Value::Mapping(ref mut m) = merged {
+        for (field, required) in DEPENDENTS {
+            if status != *required {
+                m.remove(Value::String((*field).to_string()));
+            }
+        }
     }
     merged
 }
@@ -546,6 +647,33 @@ fn merge_body(base: Option<&str>, local: &str, remote: &str) -> String {
             return ensure_trailing_newline(local);
         }
     }
+    // An already-conflicted body must never be wrapped a second time.
+    //
+    // Re-merging used to add another marker set every single time: merging a
+    // conflicted body against either of its own parents produced 1 → 2 → 3
+    // nested markers, and a measured swarm run went from 4,371 single-depth
+    // markers to 14,215 nested ones purely through repeated fetches. The
+    // conflicted side already contains both versions, so nesting adds no
+    // information and destroys what readability was left — and `push` already
+    // refuses a body carrying markers, so a conflicted entity is a
+    // stop-and-resolve state rather than something to keep merging.
+    //
+    // beads records the same invariant for its own merge: an operation whose
+    // output changes when re-applied "makes the same merge produce different
+    // bytes on each replica so the next sync re-conflicts".
+    let l_conflicted = has_conflict_markers(local);
+    let r_conflicted = has_conflict_markers(remote);
+    if l_conflicted || r_conflicted {
+        let keep = match (l_conflicted, r_conflicted) {
+            (true, false) => local,
+            (false, true) => remote,
+            // Both carry markers: choose by content, so the answer cannot
+            // depend on which clone happens to be called "local".
+            _ => std::cmp::max(local, remote),
+        };
+        return ensure_trailing_newline(keep);
+    }
+
     // Both sides diverged from base — wrap the entire body in conflict markers
     // and let the user resolve. Hunk-level merging is a follow-up.
     format!(
@@ -585,6 +713,285 @@ Original body.\n";
             s = s.replace(from, to);
         }
         s
+    }
+
+    /// One clone dissolves a problem while another solves it. Both transitions
+    /// are legal from `open`, so this is reachable without anyone doing anything
+    /// wrong — and before the status-dependent normalization it produced a
+    /// problem that was `solved` *and* carried a dissolution reason.
+    #[test]
+    fn solved_problem_does_not_keep_a_dissolution_reason() {
+        let local = rewrite(
+            BASE,
+            &[(
+                "status: open\n",
+                "status: dissolved\ndissolved_reason: based on a false premise\n",
+            )],
+        )
+        .replace("updated_at: 2026-05-01", "updated_at: 2026-05-02");
+        let remote = rewrite(BASE, &[("status: open\n", "status: solved\n")])
+            .replace("updated_at: 2026-05-01", "updated_at: 2026-05-03");
+
+        let merged = merge_entity_md(Some(BASE), &local, &remote).unwrap();
+        assert!(merged.contains("status: solved"), "{merged}");
+        assert!(
+            !merged.contains("dissolved_reason"),
+            "a solved problem is carrying a dissolution reason: {merged}"
+        );
+    }
+
+    /// The mirror image: when the dissolution is the side that wins, the reason
+    /// is exactly the field that should survive. A fix that drops it whenever
+    /// the two sides disagree would pass the test above and still be wrong.
+    #[test]
+    fn dissolved_problem_keeps_its_reason() {
+        let local = rewrite(
+            BASE,
+            &[(
+                "status: open\n",
+                "status: dissolved\ndissolved_reason: based on a false premise\n",
+            )],
+        )
+        .replace("updated_at: 2026-05-01", "updated_at: 2026-05-03");
+        let remote = rewrite(BASE, &[("status: open\n", "status: solved\n")])
+            .replace("updated_at: 2026-05-01", "updated_at: 2026-05-02");
+
+        let merged = merge_entity_md(Some(BASE), &local, &remote).unwrap();
+        assert!(merged.contains("status: dissolved"), "{merged}");
+        assert!(
+            merged.contains("based on a false premise"),
+            "the dissolution reason was dropped from a dissolved problem: {merged}"
+        );
+    }
+
+    /// An uncontested dissolution must not be disturbed: only one side moved, so
+    /// the whole-document shortcut should return it untouched, reason included.
+    #[test]
+    fn an_uncontested_dissolution_is_untouched() {
+        let local = rewrite(
+            BASE,
+            &[(
+                "status: open\n",
+                "status: dissolved\ndissolved_reason: no longer relevant\n",
+            )],
+        );
+        let merged = merge_entity_md(Some(BASE), &local, BASE).unwrap();
+        assert!(merged.contains("status: dissolved"), "{merged}");
+        assert!(merged.contains("no longer relevant"), "{merged}");
+    }
+
+    /// The same shape on a finding: `superseded_by` points at the measurement
+    /// that replaced this one, and means nothing while the finding is current.
+    #[test]
+    fn current_finding_does_not_keep_a_superseded_by_pointer() {
+        const F: &str = "---\n\
+id: f1\n\
+title: The parse floors at a fixed cost\n\
+status: current\n\
+created_at: 2026-05-01T00:00:00Z\n\
+updated_at: 2026-05-01T00:00:00Z\n\
+---\n\n\
+Counted over three runs.\n";
+
+        // One clone supersedes it; another edits it and stays current, winning
+        // on causal order.
+        let local = F
+            .replace(
+                "status: current\n",
+                "status: superseded\nsuperseded_by: f2\n",
+            )
+            .replace("updated_at: 2026-05-01", "updated_at: 2026-05-02");
+        let remote = F
+            .replace("Counted over three runs.", "Counted over ten runs.")
+            .replace("updated_at: 2026-05-01", "updated_at: 2026-05-03");
+
+        let merged = merge_entity_md(Some(F), &local, &remote).unwrap();
+        if merged.contains("status: current") {
+            assert!(
+                !merged.contains("superseded_by"),
+                "a current finding points at a superseding one: {merged}"
+            );
+        } else {
+            // The supersession won instead, in which case the pointer is
+            // required — the invariant is that the two agree, not which wins.
+            assert!(merged.contains("superseded_by"), "{merged}");
+        }
+    }
+
+    /// Divergent scalars must survive a re-merge byte-for-byte. If they did
+    /// not, every fetch would re-conflict the same entity forever.
+    #[test]
+    fn remerging_a_scalar_merge_changes_nothing() {
+        let local = rewrite(BASE, &[("title: Original", "title: Alice")])
+            .replace("updated_at: 2026-05-01", "updated_at: 2026-05-02");
+        let remote = rewrite(BASE, &[("priority: medium", "priority: high")])
+            .replace("updated_at: 2026-05-01", "updated_at: 2026-05-03");
+
+        let merged = merge_entity_md(Some(BASE), &local, &remote).unwrap();
+        for parent in [&local, &remote] {
+            let again = merge_entity_md(Some(BASE), &merged, parent).unwrap();
+            assert_eq!(
+                again, merged,
+                "re-merging the result against a parent changed it, so the next \
+                 sync would conflict again"
+            );
+        }
+    }
+
+    /// Repeated fetches must not deepen a conflict. This used to add one marker
+    /// set per merge — 1, then 2, then 3 — which is how a swarm run turned
+    /// 4,371 single-depth markers into 14,215 nested ones.
+    #[test]
+    fn a_conflicted_body_is_never_wrapped_twice() {
+        let local = rewrite(BASE, &[("Original body.", "Alice body.")])
+            .replace("updated_at: 2026-05-01", "updated_at: 2026-05-02");
+        let remote = rewrite(BASE, &[("Original body.", "Bob body.")])
+            .replace("updated_at: 2026-05-01", "updated_at: 2026-05-03");
+
+        let first = merge_entity_md(Some(BASE), &local, &remote).unwrap();
+        assert_eq!(
+            first.matches("<<<<<<<").count(),
+            1,
+            "the first merge should conflict exactly once: {first}"
+        );
+        assert!(first.contains("Alice body.") && first.contains("Bob body."));
+
+        // Fetch again, and again.
+        let second = merge_entity_md(Some(BASE), &first, &local).unwrap();
+        let third = merge_entity_md(Some(BASE), &second, &remote).unwrap();
+        for (n, text) in [(2, &second), (3, &third)] {
+            assert_eq!(
+                text.matches("<<<<<<<").count(),
+                1,
+                "merge #{n} nested the markers instead of leaving them alone: {text}"
+            );
+        }
+        assert_eq!(second, first, "merge #2 changed an already-conflicted body");
+        assert_eq!(third, first, "merge #3 changed an already-conflicted body");
+    }
+
+    /// Keeping the conflicted side must not depend on which clone is "local",
+    /// or two clones would store different bytes and never converge.
+    #[test]
+    fn keeping_a_conflicted_body_is_order_independent() {
+        let local = rewrite(BASE, &[("Original body.", "Alice body.")])
+            .replace("updated_at: 2026-05-01", "updated_at: 2026-05-02");
+        let remote = rewrite(BASE, &[("Original body.", "Bob body.")])
+            .replace("updated_at: 2026-05-01", "updated_at: 2026-05-03");
+        let conflicted = merge_entity_md(Some(BASE), &local, &remote).unwrap();
+
+        let a = merge_entity_md(Some(BASE), &conflicted, &local).unwrap();
+        let b = merge_entity_md(Some(BASE), &local, &conflicted).unwrap();
+        assert_eq!(a, b, "the conflicted body depended on argument order");
+    }
+
+    /// One clone solves a problem while another claims it. Reviewing beads'
+    /// `row_lock` turned up the claim that this merges into "Solved, and held by
+    /// someone" — which it does, and which is **fine**, pinned here so the next
+    /// person to read beads' rationale does not re-litigate it.
+    ///
+    /// It is harmless because nothing in jjj ever clears a claim: an assignee
+    /// outlives the work by design, so "solved with an assignee" is the ordinary
+    /// state after any agent finishes what it claimed. The hazard beads guards
+    /// against needs a writer that moves `status` *backward* — their reclaim
+    /// reverting a close — and jjj has none: claim expiry is a read-time
+    /// function (`claim::classify`) that writes nothing at all.
+    ///
+    /// What this test is really for is the day that stops being true. A future
+    /// command that writes `status` as part of releasing a claim would make the
+    /// mix dangerous, and this is where that shows up.
+    #[test]
+    fn solving_while_another_clone_claims_is_benign_but_pinned() {
+        let solved = rewrite(BASE, &[("status: open", "status: solved")])
+            .replace("updated_at: 2026-05-01", "updated_at: 2026-05-02");
+        let claimed = rewrite(
+            BASE,
+            &[(
+                "status: open\n",
+                "status: open\nassignee: agent-02\nclaimed_at: 2026-05-03T00:00:00Z\n",
+            )],
+        )
+        .replace("updated_at: 2026-05-01", "updated_at: 2026-05-03");
+
+        let merged = merge_entity_md(Some(BASE), &solved, &claimed).unwrap();
+        assert!(merged.contains("status: solved"), "{merged}");
+        assert!(
+            merged.contains("agent-02"),
+            "the claim should survive — it is not in conflict with the status: {merged}"
+        );
+
+        // And the result must not depend on which clone is called local.
+        let other = merge_entity_md(Some(BASE), &claimed, &solved).unwrap();
+        assert_eq!(merged, other, "the status/claim merge depended on order");
+    }
+
+    /// A deliberate hand-off must not be reverted by a lease that merely still
+    /// exists on another clone.
+    ///
+    /// `problem assign` records ownership with no `claimed_at`, because handing
+    /// work to someone is a decision and not a lease that expires. A timed claim
+    /// records both. `normalize_claim` arbitrates *between claims* by taking the
+    /// earliest `claimed_at`, and it treated "one side has no `claimed_at`" as
+    /// "only one side claimed it, so adopt that one" — which, for a hand-off, is
+    /// backwards. The hand-off is the newer decision; the lease is the thing it
+    /// overrides.
+    #[test]
+    fn a_handoff_is_not_reverted_by_a_surviving_lease() {
+        // Both sides diverge from an unowned base: one clone took a lease, the
+        // other handed the work to a person. The hand-off is causally later.
+        let leased = rewrite(
+            BASE,
+            &[(
+                "status: open\n",
+                "status: open\nassignee: agent-01\nclaimed_at: 2026-05-02T00:00:00Z\nlamport: 3\n",
+            )],
+        );
+        let handed_off = rewrite(
+            BASE,
+            &[(
+                "status: open\n",
+                "status: open\nassignee: carol\nlamport: 7\n",
+            )],
+        );
+
+        let merged = merge_entity_md(Some(BASE), &handed_off, &leased).unwrap();
+        assert!(
+            merged.contains("assignee: carol"),
+            "the hand-off lost to the lease it was meant to override: {merged}"
+        );
+        assert!(
+            !merged.contains("claimed_at"),
+            "a hand-off has no lease, so the merge must not resurrect one: {merged}"
+        );
+
+        let other = merge_entity_md(Some(BASE), &leased, &handed_off).unwrap();
+        assert_eq!(merged, other, "the hand-off merge depended on order");
+    }
+
+    /// The converse, so the fix cannot be "always prefer the side without a
+    /// lease": a *stale* hand-off must lose to a lease taken after it.
+    #[test]
+    fn a_lease_taken_after_a_handoff_wins() {
+        let handed_off = rewrite(
+            BASE,
+            &[(
+                "status: open\n",
+                "status: open\nassignee: carol\nlamport: 3\n",
+            )],
+        );
+        let leased = rewrite(
+            BASE,
+            &[(
+                "status: open\n",
+                "status: open\nassignee: agent-01\nclaimed_at: 2026-05-02T00:00:00Z\nlamport: 7\n",
+            )],
+        );
+
+        let merged = merge_entity_md(Some(BASE), &handed_off, &leased).unwrap();
+        assert!(
+            merged.contains("assignee: agent-01") && merged.contains("claimed_at"),
+            "a lease taken after the hand-off should hold: {merged}"
+        );
     }
 
     #[test]
@@ -655,6 +1062,78 @@ Original body.\n";
             merged
         );
         assert!(!merged.contains("2026-05-02T00:00:00Z"));
+    }
+
+    /// chrono drops trailing subsecond zeros, so RFC3339 is not fixed-width —
+    /// and `pick_side` compares the timestamp as a *string*.
+    ///
+    /// A write landing on an exact millisecond serializes as `.191Z`, one
+    /// 220 microseconds later as `.191220Z`. Lexicographically `'Z'` (0x5A)
+    /// beats `'2'` (0x32), so the shorter string sorts *higher* and the earlier
+    /// write wins the tiebreak. Same for an exact second against anything in
+    /// it. Clones still converge — the comparison is deterministic — so this is
+    /// not divergence, it is agreeing on the wrong side, which is why no
+    /// convergence test would ever have caught it.
+    ///
+    /// Raised by an agent re-reading beads' schema history, where the same
+    /// class of bug appears as `DATETIME(0)` rounding half-up
+    /// (`0069_widen_issue_versions_datetime_precision`).
+    #[test]
+    fn a_timestamp_tiebreak_compares_instants_not_strings() {
+        use chrono::{TimeZone, Utc};
+
+        // The exact pairs chrono's AutoSi formatting produces.
+        let cases = [
+            (1_792_200_000i64, 191_000_000u32, 191_220_000u32),
+            (1_792_200_000, 0, 1_000),
+            (1_792_200_000, 0, 500_000_000),
+        ];
+
+        for (secs, earlier_nanos, later_nanos) in cases {
+            let earlier = Utc.timestamp_opt(secs, earlier_nanos).unwrap();
+            let later = Utc.timestamp_opt(secs, later_nanos).unwrap();
+            assert!(earlier < later, "fixture is backwards");
+
+            let e_str = earlier.to_rfc3339_opts(chrono::SecondsFormat::AutoSi, true);
+            let l_str = later.to_rfc3339_opts(chrono::SecondsFormat::AutoSi, true);
+
+            // The later write must win the tiebreak, whichever side it is on.
+            let local = rewrite(
+                BASE,
+                &[
+                    ("title: Original", "title: Earlier"),
+                    (
+                        "updated_at: 2026-05-01T00:00:00Z",
+                        &format!("updated_at: {e_str}"),
+                    ),
+                ],
+            );
+            let remote = rewrite(
+                BASE,
+                &[
+                    ("title: Original", "title: Later"),
+                    (
+                        "updated_at: 2026-05-01T00:00:00Z",
+                        &format!("updated_at: {l_str}"),
+                    ),
+                ],
+            );
+
+            let merged = merge_entity_md(Some(BASE), &local, &remote).unwrap();
+            assert!(
+                merged.contains("title: Later"),
+                "the later write ({l_str}) must beat the earlier ({e_str}), \
+                 but the merge kept:\n{merged}"
+            );
+
+            // And the other way round, so the result does not depend on which
+            // clone is called "local".
+            let swapped = merge_entity_md(Some(BASE), &remote, &local).unwrap();
+            assert!(
+                swapped.contains("title: Later"),
+                "order-swapped merge of {l_str} vs {e_str} kept:\n{swapped}"
+            );
+        }
     }
 
     #[test]
