@@ -87,12 +87,14 @@ Other things worth knowing before scripting:
 | Behaviour | Consequence |
 |---|---|
 | `problem new`, `solution new`, `critique new`, `finding new` accept `--json` | Capture the new id directly instead of parsing "Created ..." |
-| Every creator accepts `--body TEXT` or `--body -` (stdin) | Write the argument in the body, not the title — see below |
+| Every creator *and editor* accepts `--body TEXT` or `--body -` (stdin) | Write the argument in the body, not the title — see below |
 | Non-zero exit on failure, message on stderr | Check the status; do not parse stdout for errors |
 | `jjj next --json` emits `null`, one object, or an array | Normalize before iterating |
 | `--force` skips duplicate detection (`problem new`) or the critique gate (`solution approve`) | Never default to it in a loop; it disables the thing that makes review real |
 | An empty reference is rejected, not fuzzy-matched | `jjj solution approve "$SID"` with `SID` unset fails loudly instead of approving something arbitrary |
-| Only `solution approve`, `solution withdraw` and `problem dissolve` prompt for a rationale | Pass `--rationale "..."` or `--no-rationale` to *those*; other commands reject the flag |
+| `solution withdraw` is the only command that *stops to ask* for a rationale | In a non-interactive run it blocks on stdin — always pass `--rationale "..."` or `--no-rationale` to it |
+| `--no-rationale` exists only on `solution approve` and `solution withdraw` | `problem dissolve`, `solution lgtm` and `resolve` take `--rationale` but reject `--no-rationale`; `problem solve` and `critique dismiss`/`validate` take neither |
+| Exit **13** means a guard refused: nothing was written, re-read and retry | Exit 1 means your command was wrong — retrying it unchanged will fail again. Branch on the code, never on the message |
 | `--mine` works on `next`, `status`, `events`, and `problem`/`solution`/`critique list` | It is shorthand for "assigned to me"; it does not exist elsewhere |
 | Reads are served from a SQLite cache | `jjj db rebuild` after editing metadata files behind jjj's back |
 
@@ -174,7 +176,9 @@ Nothing is hidden: `jjj problem show` says what a parent is waiting on, and
 jjj query waiting
 ```
 
-lists exactly the parents being held back. When the last child closes the parent
+lists exactly the parents being held back, and each row names the open children
+holding it — `blocked_by` in `--json`, indented beneath the parent in the text
+output. Those are the ids to go work. When the last child closes the parent
 returns to the queue on its own.
 
 This is why decomposing a problem is safe — splitting it does not create work
@@ -191,6 +195,17 @@ jjj query "tag:perf"                    # across problems AND solutions
 jjj query "problem:$pid"                # everything beneath one problem
 jjj query "author:ana mine sort:-title"
 jjj query "decode slow"                 # bare words match the title
+```
+
+A `limit` that hid matches says so on stderr (`note: showing 3 of 8 matches`),
+so treat a full page as possibly capped rather than as the whole set — stdout
+stays a bare JSON array either way.
+
+To count instead of list, add `--count-by status|type|who|tag`. It groups the
+whole match set, so a `limit` in the expression does not shrink the numbers:
+
+```sh
+jjj query "type:problem status:open" --count-by who --json
 ```
 
 Keys: `type`, `status`, `tag`, `author`, `assignee`, `problem`, `sort`, `limit`,
@@ -235,8 +250,16 @@ every log green, the score frozen.
 ```sh
 jjj escalate "Production credentials are missing; I cannot deploy" --about "$pid"
 jjj escalate                      # what is currently blocked
+jjj escalate "Key rotates at 09:00; do not retry before then" --respond <id>
 jjj escalate --clear <id>         # after a person has acted
 ```
+
+**An escalated item is no longer offered by `jjj next`**, so you will not be
+handed work that is waiting on a person — and a person's reply, recorded with
+`--respond`, appears in the escalation listing and at the top of `jjj prime`.
+Read it before retrying: answering is deliberately separate from clearing,
+because "I have asked ops, the key rotates at 09:00" is useful long before the
+problem is gone.
 
 Escalate for: a dead or missing credential, a destructive or security-sensitive
 step wanting a decision, a blocker you have genuinely exhausted, or the target
@@ -272,10 +295,115 @@ passed" and publishes the dangling reference to every clone.
 EOF
 ```
 
+A body is not write-once. `edit` takes `--body` on all five kinds, so a measurement
+that turns out wrong gets corrected in place rather than restated in a comment
+nobody reads:
+
+```sh
+jjj problem edit "$pid" --body "Corrected: the floor is 60,004 ops, not 700,004."
+jjj critique edit "$cid" --body -   # sharpen an objection from stdin
+```
+
+An edit that does not mention `--body` leaves the body untouched, so changing a
+priority or a status never costs you the payload.
+
+**To add to a body rather than replace it, use `--append-body`** — on all five
+kinds, with `-` for stdin. It is the right verb for a second measurement, a
+follow-up note, or anything where what is already there should survive:
+
+```sh
+jjj finding edit "$fid" --append-body "Re-ran on the bench rig: 38ms, n=200."
+```
+
+Prefer it over reading a body and writing it back with your addition. jjj reads
+the body inside the same write, so nothing that landed while you were composing
+is lost; a read-then-replace in your shell silently discards it. Two *clones*
+appending at once still contend — the body is one field, so one addition wins —
+but your own read-write gap disappears.
+
+Replacing a body you have not just read is how another agent's work disappears.
+When it matters, pass the clock you read back with the write:
+
+```sh
+lam=$(jjj problem show "$pid" --json | jq -r .lamport)
+jjj problem edit "$pid" --body "..." --if-lamport "$lam"   # refused if it moved
+```
+
+The flag is optional and omitting it changes nothing — it is there for when you
+would rather fail than clobber.
+
+**`--body` will refuse a value that carries no content.** This is on purpose:
+`--body "$(cat notes.md)"` with the file missing collapses to `--body ""`, which
+would replace the whole body with nothing. Build the text first and check it is
+non-empty, or pass `--body -` and feed it on stdin. To erase a body deliberately,
+use `--clear-body` — the two cannot be combined.
+
 Agents that do not know about `--body` put paragraphs in the title instead —
 observed in practice, producing critique titles hundreds of characters long
 while the structured field stayed empty. Titles are for scanning a list; bodies
 are for the argument that another agent has to be able to evaluate.
+
+## Create a whole graph in one call
+
+When you have thought a problem through you usually have several entities in
+mind at once. Creating them one command at a time costs a process each, and
+gives up half-built if the fourth call fails.
+
+```sh
+jjj plan apply plan.json          # or `-` to read the plan from stdin
+jjj plan apply plan.json --dry-run   # validate and report, write nothing
+jjj plan apply plan.json --json      # print the key → id map
+```
+
+Nodes refer to each other by a **`key` local to the plan**, because the ids do
+not exist yet. A reference that is not a plan key is resolved against the
+repository, so new work can hang off problems that are already there.
+
+```json
+{
+  "problems": [
+    {"key": "root", "title": "Decode is slow", "body": "700,004 ops.",
+     "priority": "critical", "tags": ["perf"]},
+    {"key": "hdr", "title": "Header parse dominates", "parent": "root"}
+  ],
+  "findings": [
+    {"key": "f1", "problem": "hdr", "title": "The parse floors at a fixed cost",
+     "method": "counted, three runs", "body": "60,004 ops minimum."}
+  ],
+  "solutions": [
+    {"key": "s1", "title": "Memoize the parse", "problem": "hdr", "cites": ["f1"]}
+  ]
+}
+```
+
+A plan can also change work that already exists, which is how you triage ten
+problems without running ten processes:
+
+```json
+{
+  "updates": [
+    {"kind": "problem", "on": "01a145", "priority": "critical", "tags": ["triaged"]},
+    {"kind": "problem", "on": "Stale item", "body": "Re-measured: still relevant."}
+  ],
+  "actions": [
+    {"action": "dissolve", "on": "Wrong premise", "reason": "the premise was false"},
+    {"action": "withdraw", "on": "01a146", "rationale": "superseded by the memoized version"}
+  ]
+}
+```
+
+`updates` changes annotations — title, body, priority, tags, assignee — and each
+may carry its own `if_lamport`. It **cannot set a status**: every transition has
+a guard and emits an event, so lifecycle goes through `actions`
+(`solve`, `dissolve`, `reopen`, `submit`, `withdraw`, `address`, `validate`,
+`dismiss`), which runs the same code the single-entity commands run. A guard that
+refuses `jjj problem solve` refuses it here too, with the same message.
+
+The plan is **validated before anything is written** — every reference resolved,
+every value parsed, duplicate keys and parent cycles refused — and an unknown
+field is an error rather than a shrug, so a misspelled `prioirty` fails loudly
+instead of creating the work at the wrong priority. The output maps each key to
+the id it became; without it you have created work you cannot name.
 
 ## The single-agent loop
 
@@ -446,8 +574,13 @@ Work another agent is actively holding is not offered to you at all, so the queu
 you see is already filtered to what you may take. Two further ways to avoid
 contending:
 
-- **Partition up front.** Give each agent a disjoint slice — `jjj problem list
-  --tag backend`, or one milestone per agent — so they never contend.
+- **Lanes.** Tag the work and give each agent a lane:
+  `jjj next --claim --tag lane-a`. The lane follows the *problem*, so a review of
+  a solution under a `lane-a` problem is in `lane-a` even though the solution
+  carries no tag of its own. This is the cheapest partition that needs no
+  coordinator.
+- **Partition up front.** Or give each agent a disjoint slice another way —
+  `jjj problem list --tag backend`, or one milestone per agent.
 - **Offset the queue.** Agent *i* takes item *i* from `jjj next --top N --json`
   rather than all taking the head.
 
@@ -612,6 +745,15 @@ push a rule that executes on another agent's machine. Rules go in
 `jjj doctor --json` is the right first call in any failure branch, and the right
 thing to attach to a bug report.
 
+**Do not run every `fix` it prints.** A check whose `fix_needs_judgement` is
+null is mechanical — `jjj db rebuild` derives the cache again from markdown that
+owns the truth. A non-null value is the reason a person decides: `jjj resolve
+--ours|--theirs` discards the other side's edit, removing a push lock can let
+two pushes race, re-copying the skill overwrites deliberate edits, and adopting
+synced automation rules runs shell commands nobody here wrote. The text report
+marks those with `(your call: …)`. Escalate them with `jjj escalate` rather than
+clearing the diagnostic.
+
 ## Setting this up in an agent harness
 
 jjj's integration surface is a CLI with JSON output and two environment
@@ -624,6 +766,39 @@ demand from the `description` above. For a fleet, give each subagent its own
 `JJJ_USER` and have the supervisor read `jjj next --json` to decide dispatch. A
 `SessionStart` hook that exports `JJJ_USER` is a reliable way to make identity
 automatic rather than remembered.
+
+### Surviving context compaction
+
+A long turn gets its context compacted, and what goes first is exactly this
+file's instruction to run `jjj prime` — so the agent carries on without the
+briefing and starts re-deriving the world, or worse, duplicates a proposal it can
+no longer see. The failure is silent: nothing errors, the agent just works from a
+summary of state instead of state.
+
+Re-prime on the way back in, which is cheap because `jjj prime`'s default output
+is bounded — about 300 bytes whether the repository holds fifty entities or
+twenty-five thousand:
+
+```json
+{
+  "hooks": {
+    "SessionStart":  [{ "hooks": [{ "type": "command", "command": "jjj prime" }] }],
+    "PreCompact":    [{ "hooks": [{ "type": "command", "command": "jjj prime" }] }]
+  }
+}
+```
+
+`SessionStart` covers a fresh turn; `PreCompact` puts the current state into the
+material being summarized, so the briefing survives in the summary rather than
+being dropped from it. If a harness can inject context *after* compaction
+instead, prefer that — it is a smaller window. Either way the rule this file
+opens with still holds: the first command of real work is `jjj prime`.
+
+(The idea is beads'. Its marker file is not for idempotence, as it is often
+described: `PostCompact` has no injection channel, so beads can only mark at
+that event and inject once at the next prompt. jjj needs no marker because it
+primes at `PreCompact`, which can inject — and a double prime would cost nothing
+anyway, since `prime` is read-only and constant-size.)
 
 **Codex and OpenCode.** Both read an `AGENTS.md` at the repository root. Add a
 short section pointing at this file — the patterns are the same, only the
@@ -653,15 +828,25 @@ Verified against jjj 0.5.1. `jjj <command> --help` is authoritative.
 jjj status [--mine] [--json]        jjj next [--top N] [--mine] [--claim] [--json]
 jjj whoami [--json]                 jjj doctor [--json]
 jjj insights [--json]               jjj overlaps [--json]         jjj tags [--json]
+jjj doctor [--json]                 # non-zero exit when a check finds a problem
+
+# Bulk creation — one call, one graph (see above)
+jjj plan apply FILE|- [--dry-run] [--json]   # creates, updates and actions
 
 # Problems
 jjj problem new "Title" [--body TEXT | --body -]
                         [--priority critical|high|medium|low] [--tags a,b]
                         [--parent ID] [--milestone REF] [--force]
 jjj problem list [--status S] [--assignee WHO] [--tag T] [--milestone M] [--json]
-jjj problem show ID [--json]        jjj problem assign ID [--to WHO]
+jjj problem show ID [--json]        jjj problem assign ID [--to WHO] [--force]
 jjj problem solve ID                jjj problem dissolve ID --reason "..."
 jjj problem reopen ID               jjj problem duplicate ID --of OTHER
+jjj problem edit ID [--title T] [--body TEXT | --body -] [--status S]
+                    [--priority P] [--parent ID] [--add-tag T] [--set-tags a,b]
+                    [--if-lamport N]   # refuse if it changed since you read it
+                    [--clear-body]     # erase the body; --body "" is refused
+jjj problem solve ID [--if-lamport N]        jjj problem assign ID [--if-lamport N]
+jjj solution approve ID [--if-lamport N]     # guard a decision made on a stale read
 jjj problem tree [--json]           jjj problem graph [--json]
 
 # Solutions
@@ -670,6 +855,8 @@ jjj solution attach ID              # links the CURRENT jj change
 jjj solution submit ID              # open for critique
 jjj solution approve ID [--rationale "..." | --no-rationale] [--force]
 jjj solution withdraw ID [--rationale "..."]
+jjj solution edit ID [--title T] [--body TEXT | --body -] [--status S]
+                     [--add-tag T] [--remove-tag T] [--set-tags a,b]
 jjj solution list [--json]          jjj solution show ID [--json]
 jjj solution diff ID [--json]       jjj solution lgtm ID [--approve] [--json]
 
@@ -679,10 +866,13 @@ jjj critique new SOLUTION_ID "Title" [--body TEXT | --body -]
                                      [--file F --line N] [--reviewer WHO]
 jjj critique address ID [--json]    jjj critique validate ID [--json]
 jjj critique dismiss ID [--json]    jjj critique reply ID "..."
+jjj critique edit ID [--title T] [--body TEXT | --body -] [--severity S]
+                     [--status S]
 jjj critique list [--json]          jjj critique show ID [--json]
 
 # Milestones and ranking
 jjj milestone new "Title" [--body TEXT] [--date YYYY-MM-DD]
+jjj milestone edit ID [--title T] [--body TEXT | --body -] [--date D] [--status S]
 
 # Ranking — which problems matter most, and by how much
 jjj rank set PROBLEM... [--gap PROBLEM:S|M|L|XL] [--milestone M] [--json]
