@@ -2,6 +2,145 @@
 
 ## Unreleased
 
+### Writes refuse to destroy work the caller never saw
+
+- **`--if-lamport <N>` on every edit** refuses the write unless the entity's
+  logical clock is still `N` (read it from `show --json`). It guards the
+  decisions too — `solve`, `dissolve`, `assign`, `submit`, `approve` are as
+  destructive as an edit and were previously unconditional.
+
+- **A refused write exits 13**, not 1. The difference is the point: 13 means
+  nothing was written and the same command may succeed after a re-read, while 1
+  means the command was wrong and retrying changes nothing. Without it
+  `--if-lamport` is useless in a loop, because a caller has to tell a stale read
+  from a malformed argument by matching on prose.
+
+- **An empty value is no longer an instruction to erase.** `--body ""` from an
+  unset shell variable used to wipe a body and report success. It is refused;
+  erasing is spelled `--clear-body`.
+
+- **`--append-body`** adds to a body without rewriting it, read inside the write
+  transaction so there is no window to lose an edit in. Two clones appending
+  concurrently still contend, and the tests say so.
+
+- **`assign` refuses a live claim** unless `--force`, and records
+  `claim_contested` when it takes one. Handing on work that was assigned rather
+  than claimed is still allowed — that is not a contest.
+
+### Merges that produced impossible entities are refused
+
+- **A field can no longer outlive the status that gave it meaning.** One clone
+  dissolving a problem while another solved it merged to `status: solved` with
+  `dissolved_reason` set — simultaneously Solved and Dissolved, with the reason
+  printed to the user. The same shape covered a finding's `superseded_by`.
+  Nothing is lost: the event log records the detail and merges by line union.
+
+- **A conflicted body is never wrapped twice.** Re-merging added another marker
+  set every single time. That is the mechanism behind a swarm run whose conflict
+  markers went from 4,371 at single depth to 14,215 nested — each fetch
+  re-wrapping a body that already held both hunks.
+
+- **`updated_at` is compared as an instant, not a string.** chrono drops
+  trailing subsecond zeros, so RFC3339 is not fixed-width here and a write
+  landing on an exact millisecond sorted as though it were earlier than one 4µs
+  before it.
+
+- **A hand-off is not reverted by a surviving lease.** Earliest-wins applies
+  only between two leases; a bare `assignee` with no `claimed_at` is not one.
+
+### A diagnostic that finds a fault fails
+
+- **`jjj doctor` exits non-zero** when a check fails. It used to print
+  everything that was wrong and exit 0, so anything branching on the code — CI,
+  a wrapper, an agent deciding whether the repo is usable — was told the
+  repository was healthy. `tools/bench/bench.py` had the same shape: a skipped
+  measurement counted as a pass, so a release gate could go green over a
+  benchmark that never ran.
+
+- **Fixes say when running them is a decision, not a repair.** Four of them
+  destroy work, and the difference was invisible in the output. An unattended
+  agent clearing `doctor` to green would run `jjj resolve --theirs` and discard a
+  colleague's edit, because nothing said that command picks a loser. The hazard
+  is named per check, and carried on `--json` as `fix_needs_judgement`.
+
+- **Two new checks**: frontmatter keys no client recognises (the `extra` map that
+  preserves them is invisible by design, and an unread key is usually a typo or a
+  removed client), and the cache checked against the markdown that owns the
+  truth rather than assumed to agree with it.
+
+### Finding work
+
+- **`jjj next --tag <lane>`** restricts the queue to one lane so several agents
+  can share it without colliding. The lane resolves upwards: a critique of a
+  solution to problem P is in P's lane.
+
+- **Work a person is already needed on is not offered.** An escalation naming an
+  entity suppresses it, resolved up the same chain. A *global* escalation does
+  not halt the queue — "somebody look at the release" is not a reason to stop all
+  work — and clearing one returns the work.
+
+- **A refuted attempt is reported, not erased.** A problem whose only solution
+  was withdrawn looked identical to one nobody had tried, so the next agent
+  rediscovered the dead end.
+
+- **`query waiting` names the blockers.** Each row carries `blocked_by`, so the
+  one call that answers "what is stuck" no longer needs one more call per row to
+  find out why.
+
+- **A listing capped by `limit:` says so**, on both paths. On `--json` an agent
+  could not tell a truncated answer from a complete one; the notice goes to
+  stderr so stdout stays parseable.
+
+- **`query --count-by <field>`** answers "how much of what" without listing
+  anything. Whether the groups overlap is computed from the numbers, not guessed
+  from the field name.
+
+### One call, one graph
+
+**`jjj plan apply FILE|-`** creates a whole graph of work from one JSON
+document. Nodes name each other by symbolic `key`, because the ids do not exist
+yet, and the result maps each key to the id it became — without which the caller
+has created work it cannot name. Unknown fields are refused rather than ignored:
+a plan is written by something that cannot see a warning, and a misspelled
+`prioirty` would otherwise create the work at the wrong priority and report
+success. The plan is validated before anything is written. `--dry-run` reports
+the outcome without writing.
+
+### Escalations have a reply half
+
+**`jjj escalate --respond <id> "what I found"`** answers without closing, and
+records `escalation_answered`. The answer used to live in whatever channel the
+human happened to use, so the next agent rediscovered the same wall. `jjj prime`
+prints the reply — for the next agent that is the most useful line in the whole
+briefing. Clearing stays separate, because "here is the answer" and "this no
+longer needs a person" are different claims that often arrive at different times.
+
+### Added
+
+- **`finding --measured-at <RFC3339>`** records when the measurement was taken,
+  as distinct from when it was written down. Two findings a week apart in the
+  thing they measured used to look simultaneous.
+
+- **`problem show --json` returns what the text path returns** — solutions,
+  evidence, what it is waiting on, children. It stopped at the frontmatter, so
+  an agent had to make three more calls to rebuild what `show` already had in
+  hand.
+
+- **`jjj prime`** orients an agent in one call, and its default output is
+  constant in corpus size: 7 lines at 50 entities, at 2,000 and at 25,000.
+
+### Testing
+
+- **A format corpus per release, not just the oldest.** A corpus guards only the
+  keys it contains, so the newest fields were the least protected. Nothing
+  carried a `lamport` key before `corpus-0.5`, so a release that stopped reading
+  the field deciding which concurrent edit wins would have passed the whole
+  compatibility suite with every listing still looking correct.
+
+- **`scripts/check-invariants.sh`** runs as its own CI job. Each rule names the
+  incident it came from, and because it is a text check over `src/` it reports a
+  broken fence in seconds rather than after a compile.
+
 ## 0.5.2 — 2026-08-22
 
 ### Sync is delta-proportional
