@@ -173,6 +173,12 @@ pub enum Commands {
         /// Output as JSON
         #[arg(long)]
         json: bool,
+
+        /// Count matches grouped by a field instead of listing them:
+        /// status, type, who, tag, or priority. Answers "how much of
+        /// what" in one call instead of one listing per value.
+        #[arg(long, value_name = "FIELD")]
+        count_by: Option<String>,
     },
 
     /// Search problems, solutions, and critiques by text or semantic similarity

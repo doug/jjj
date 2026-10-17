@@ -35,9 +35,31 @@ pub struct Row {
     /// The problem this hangs off, where the kind has one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub problem_id: Option<String>,
+    /// The unfinished sub-problems holding this one back, for `waiting`.
+    ///
+    /// `waiting` answered half its question: it named every parent held back
+    /// and nothing about what was holding it. The next step is always to go
+    /// work the child, so leaving it out cost a `problem show` per row to
+    /// recover a set the predicate had already computed to decide the row
+    /// belonged in the listing at all.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub blocked_by: Vec<Blocker>,
 }
 
-pub fn execute(ctx: &CommandContext, expr: String, json: bool) -> Result<()> {
+/// A sub-problem keeping its parent off the ready front.
+#[derive(Debug, serde::Serialize)]
+pub struct Blocker {
+    pub id: String,
+    pub title: String,
+    pub status: String,
+}
+
+pub fn execute(
+    ctx: &CommandContext,
+    expr: String,
+    json: bool,
+    count_by: Option<String>,
+) -> Result<()> {
     let q = Query::parse(&expr).map_err(JjjError::Validation)?;
     let store = &ctx.store;
 
@@ -69,6 +91,20 @@ pub fn execute(ctx: &CommandContext, expr: String, json: bool) -> Result<()> {
             if !wanted_problems.is_empty() && !wanted_problems.contains(&p.id) {
                 continue;
             }
+            // Only for `waiting`: every other listing would pay a scan per row
+            // to attach a field nobody asked about.
+            let blocked_by = if q.waiting {
+                p.open_children(&all_problems)
+                    .into_iter()
+                    .map(|c| Blocker {
+                        id: c.id.clone(),
+                        title: c.title.clone(),
+                        status: c.status.to_string(),
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            };
             rows.push(Row {
                 kind: "problem".into(),
                 id: p.id,
@@ -80,6 +116,7 @@ pub fn execute(ctx: &CommandContext, expr: String, json: bool) -> Result<()> {
                 updated_at: p.updated_at,
                 lamport: p.lamport,
                 problem_id: p.parent_id,
+                blocked_by,
             });
         }
     }
@@ -99,6 +136,7 @@ pub fn execute(ctx: &CommandContext, expr: String, json: bool) -> Result<()> {
                 updated_at: s.updated_at,
                 lamport: s.lamport,
                 problem_id: Some(s.problem_id),
+                blocked_by: Vec::new(),
             });
         }
     }
@@ -128,6 +166,7 @@ pub fn execute(ctx: &CommandContext, expr: String, json: bool) -> Result<()> {
                 updated_at: c.updated_at,
                 lamport: c.lamport,
                 problem_id: pid,
+                blocked_by: Vec::new(),
             });
         }
     }
@@ -147,6 +186,7 @@ pub fn execute(ctx: &CommandContext, expr: String, json: bool) -> Result<()> {
                 updated_at: f.updated_at,
                 lamport: f.lamport,
                 problem_id: Some(f.problem_id),
+                blocked_by: Vec::new(),
             });
         }
     }
@@ -168,6 +208,7 @@ pub fn execute(ctx: &CommandContext, expr: String, json: bool) -> Result<()> {
                 updated_at: m.updated_at,
                 lamport: m.lamport,
                 problem_id: None,
+                blocked_by: Vec::new(),
             });
         }
     }
@@ -190,6 +231,14 @@ pub fn execute(ctx: &CommandContext, expr: String, json: bool) -> Result<()> {
             && Query::wants_person(&q.assignees, r.who.as_deref())
     });
 
+    // A grouped count reports the whole match set, so it runs before `limit`
+    // and ignores it. A capped count would be a different number wearing the
+    // same name — and idea 32 exists because exactly that kind of silent
+    // shortfall is unreadable from the output.
+    if let Some(field) = count_by {
+        return print_counts(&rows, &field, json);
+    }
+
     match q.sort {
         SortKey::Edit => rows.sort_by(|a, b| {
             // Clock first, then creation, so entities that predate clocks (all
@@ -211,8 +260,29 @@ pub fn execute(ctx: &CommandContext, expr: String, json: bool) -> Result<()> {
         rows.truncate(limit);
     }
 
+    // Say so when a limit hid matches — on both paths.
+    //
+    // The text path has always printed "Showing 10 of 47 matches"; the JSON
+    // path returned here, before it. So a person could see the set was capped
+    // and an agent could not: `limit:10` returning ten rows is
+    // indistinguishable from a repository that holds exactly ten matches, and
+    // "no other problem is open" is the kind of wrong conclusion that ends a
+    // search early.
+    //
+    // It goes to stderr rather than into the payload because stdout is a bare
+    // array of rows, pinned by tests and taught by SKILL.md. Wrapping it in an
+    // envelope to carry one boolean would break every caller parsing it today
+    // — and beads, which added exactly that envelope late, had to hide it
+    // behind an opt-in env var for the same reason.
+    let elided = total.saturating_sub(rows.len());
     if json {
         println!("{}", serde_json::to_string_pretty(&rows)?);
+        if elided > 0 {
+            eprintln!(
+                "note: showing {} of {total} matches — {elided} hidden by the limit",
+                rows.len()
+            );
+        }
         return Ok(());
     }
 
@@ -221,7 +291,17 @@ pub fn execute(ctx: &CommandContext, expr: String, json: bool) -> Result<()> {
         return Ok(());
     }
 
-    let ids: Vec<&str> = rows.iter().map(|r| r.id.as_str()).collect();
+    // Blocker ids go into the same prefix computation as the rows. A prefix is
+    // only a usable reference if it is unique across everything printed, and
+    // these are printed.
+    let ids: Vec<&str> = rows
+        .iter()
+        .map(|r| r.id.as_str())
+        .chain(
+            rows.iter()
+                .flat_map(|r| r.blocked_by.iter().map(|b| b.id.as_str())),
+        )
+        .collect();
     let prefixes: std::collections::HashMap<String, String> =
         truncated_prefixes(&ids).into_iter().collect();
 
@@ -247,9 +327,107 @@ pub fn execute(ctx: &CommandContext, expr: String, json: bool) -> Result<()> {
             crate::utils::truncate(r.who.as_deref().unwrap_or("-"), 10),
             crate::utils::truncate(&r.title, 40)
         );
+        // Indented under the parent, because the blocker is the thing to go
+        // work next and reading the listing should not require a second call
+        // to learn its id.
+        for b in &r.blocked_by {
+            let short = prefixes.get(&b.id).cloned().unwrap_or_else(|| b.id.clone());
+            println!(
+                "{:<ref_w$}   ← {} {} [{}]",
+                "",
+                format_with_type_prefix("problem", &short),
+                crate::utils::truncate(&b.title, 36),
+                b.status
+            );
+        }
     }
-    if total > rows.len() {
+    if elided > 0 {
         println!("\nShowing {} of {} matches (limit).", rows.len(), total);
+    }
+    Ok(())
+}
+
+/// Count rows grouped by one field.
+///
+/// `insights` reports fixed aggregates and the per-kind listings report rows, so
+/// "how many open problems per assignee" meant one call per assignee and
+/// counting the output — N calls to learn a shape that is one pass over the
+/// same data.
+///
+/// Ordering is by count descending, then by key, so the answer is stable across
+/// runs and across clones: a caller diffing two counts should see a real change
+/// rather than a reshuffle.
+///
+/// `tag` is the one key whose totals can exceed the number of matches, because
+/// an entity carries several tags and is counted under each. That is reported
+/// when it is actually true — by comparing the sum to the match count, not by
+/// assuming it of every tag query — so the caption never contradicts the
+/// numbers printed above it.
+fn print_counts(rows: &[Row], field: &str, json: bool) -> Result<()> {
+    let mut counts: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+    for r in rows {
+        match field {
+            "status" => *counts.entry(r.status.clone()).or_default() += 1,
+            "type" | "kind" => *counts.entry(r.kind.clone()).or_default() += 1,
+            "who" | "assignee" | "author" => {
+                let who = r.who.clone().unwrap_or_else(|| "(unassigned)".to_string());
+                *counts.entry(who).or_default() += 1;
+            }
+            "tag" | "tags" => {
+                if r.tags.is_empty() {
+                    *counts.entry("(untagged)".to_string()).or_default() += 1;
+                }
+                for t in &r.tags {
+                    *counts.entry(t.clone()).or_default() += 1;
+                }
+            }
+            other => {
+                return Err(JjjError::Validation(format!(
+                    "cannot count by {other:?}. Try status, type, who, or tag."
+                )));
+            }
+        }
+    }
+
+    // Whether the groups overlap is arithmetic, not a property of the field
+    // name. Setting it for `tag` unconditionally announced that counts "sum
+    // higher" over a set where every entity was untagged and they summed
+    // exactly — a caption contradicting the numbers beside it.
+    let multi = counts.values().sum::<usize>() > rows.len();
+
+    let mut pairs: Vec<(&String, &usize)> = counts.iter().collect();
+    pairs.sort_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
+
+    if json {
+        let payload = serde_json::json!({
+            "field": field,
+            "matches": rows.len(),
+            // True when one entity can land in several groups, so a caller
+            // knows the group totals are not expected to sum to `matches`.
+            "overlapping": multi,
+            "counts": pairs
+                .iter()
+                .map(|(k, v)| serde_json::json!({ "key": k, "count": v }))
+                .collect::<Vec<_>>(),
+        });
+        println!("{}", serde_json::to_string_pretty(&payload)?);
+        return Ok(());
+    }
+
+    if pairs.is_empty() {
+        println!("No matches.");
+        return Ok(());
+    }
+    let key_w = pairs.iter().map(|(k, _)| k.len()).max().unwrap_or(5).max(5);
+    for (k, v) in &pairs {
+        println!("{:<key_w$}  {}", k, v);
+    }
+    let n = rows.len();
+    let noun = if n == 1 { "match" } else { "matches" };
+    if multi {
+        println!("\n{n} {noun}; an entity is counted under each of its tags, so these sum higher.");
+    } else {
+        println!("\n{n} {noun}.");
     }
     Ok(())
 }

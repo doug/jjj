@@ -318,3 +318,198 @@ fn mine_resolves_to_the_current_actor() {
         "bo's critique matched `mine`: {titles:?}"
     );
 }
+
+/// `waiting` names the child holding the parent, not just the parent.
+///
+/// The predicate walks the open sub-problems to decide the parent belongs in
+/// the listing at all, then threw that set away — so the answer to "what do I
+/// work instead?", which is the only reason to run `waiting`, cost a
+/// `problem show` per row to recover something already computed.
+#[test]
+fn waiting_names_what_is_holding_each_parent() {
+    if !jj_available() {
+        return;
+    }
+    let dir = setup_test_repo();
+    let parent = id_of(&run_jjj_success(
+        &dir,
+        &["problem", "new", "Ship the release", "--json"],
+    ));
+    run_jjj_success(
+        &dir,
+        &["problem", "new", "Fix the flaky test", "--parent", &parent],
+    );
+
+    let json = run_jjj_success(&dir, &["query", "waiting", "--json"]);
+    let rows: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+    let rows = rows.as_array().expect("an array");
+    assert_eq!(rows.len(), 1, "one parent is held back: {json}");
+    let blockers = rows[0]["blocked_by"]
+        .as_array()
+        .unwrap_or_else(|| panic!("waiting must say what blocks the parent: {json}"));
+    let titles: Vec<&str> = blockers
+        .iter()
+        .filter_map(|b| b["title"].as_str())
+        .collect();
+    assert_eq!(titles, vec!["Fix the flaky test"], "{json}");
+    assert!(
+        blockers[0]["id"].as_str().is_some_and(|i| i.len() > 6),
+        "the blocker must be addressable by id, not only nameable: {json}"
+    );
+
+    // The text path too — that is what a person reads.
+    let text = run_jjj_success(&dir, &["query", "waiting"]);
+    assert!(
+        text.contains("Fix the flaky test"),
+        "the listing must name the blocker: {text}"
+    );
+
+    // And it stays off every other listing: a field computed per row by
+    // scanning all problems should not be paid for by queries that never asked.
+    let all = run_jjj_success(&dir, &["query", "type:problem", "--json"]);
+    assert!(
+        !all.contains("blocked_by"),
+        "blocked_by belongs to `waiting` alone: {all}"
+    );
+}
+
+/// A limit that hid matches says so on the JSON path, not only the text one.
+///
+/// `limit:3` returning three rows is indistinguishable from a repository that
+/// holds exactly three matches. The text path has always printed "Showing 3 of
+/// 8 matches"; the JSON path returned before reaching it, so the human was told
+/// and the agent was not — and "nothing else is open" is the sort of wrong
+/// conclusion that ends a search early.
+///
+/// The notice goes to stderr because stdout is a bare array of rows, pinned by
+/// the tests above and taught by SKILL.md. That is asserted here as well: an
+/// envelope would be the more obvious design and would silently break every
+/// caller parsing the array today.
+#[test]
+fn a_limit_that_hid_matches_says_so_on_both_paths() {
+    if !jj_available() {
+        return;
+    }
+    let dir = setup_test_repo();
+    for i in 0..8 {
+        run_jjj_success(&dir, &["problem", "new", &format!("Problem {i}")]);
+    }
+
+    let out = run_jjj(&dir, &["query", "type:problem limit:3", "--json"]);
+    assert!(out.status.success());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let rows: serde_json::Value = serde_json::from_str(&stdout)
+        .unwrap_or_else(|e| panic!("stdout must stay a bare JSON array ({e}): {stdout}"));
+    assert_eq!(rows.as_array().expect("an array").len(), 3, "{stdout}");
+
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("3 of 8"),
+        "the JSON path must report the cap: {stderr}"
+    );
+
+    // Unlimited: no notice, or it would cry wolf on every call.
+    let clean = run_jjj(&dir, &["query", "type:problem", "--json"]);
+    assert!(
+        !String::from_utf8_lossy(&clean.stderr).contains("hidden by the limit"),
+        "an uncapped query must not warn: {}",
+        String::from_utf8_lossy(&clean.stderr)
+    );
+}
+
+/// `--count-by` answers "how much of what" in one call, over the whole set.
+///
+/// `insights` reports fixed aggregates and the listings report rows, so "how
+/// many open problems per assignee" meant one call per assignee. Two properties
+/// are worth pinning beyond the arithmetic.
+///
+/// A `limit` must not shrink a count. A capped count is a different number
+/// wearing the same name, and the caller cannot see the difference — the same
+/// failure idea 32 exists to prevent.
+///
+/// And the overlap caption must be computed, not assumed. It first read
+/// `multi = true` for any tag query, so a set where every entity was untagged
+/// printed "these sum higher" above numbers that summed exactly — a caption
+/// contradicting the data beside it.
+#[test]
+fn counting_by_a_field_covers_the_whole_match_set() {
+    if !jj_available() {
+        return;
+    }
+    let dir = setup_test_repo();
+    run_jjj_success(
+        &dir,
+        &["problem", "new", "Flaky test", "--tags", "ci,flake"],
+    );
+    run_jjj_success(&dir, &["problem", "new", "Slow build", "--tags", "ci"]);
+    run_jjj_success(&dir, &["problem", "new", "Untagged one"]);
+
+    let parse = |s: &str| -> serde_json::Value {
+        serde_json::from_str(s).unwrap_or_else(|e| panic!("not JSON ({e}): {s}"))
+    };
+
+    let by_tag = parse(&run_jjj_success(
+        &dir,
+        &["query", "type:problem", "--count-by", "tag", "--json"],
+    ));
+    assert_eq!(by_tag["matches"], 3, "{by_tag}");
+    let counts: std::collections::HashMap<&str, u64> = by_tag["counts"]
+        .as_array()
+        .expect("counts array")
+        .iter()
+        .map(|c| (c["key"].as_str().unwrap(), c["count"].as_u64().unwrap()))
+        .collect();
+    assert_eq!(counts.get("ci"), Some(&2), "{by_tag}");
+    assert_eq!(counts.get("flake"), Some(&1), "{by_tag}");
+    assert_eq!(counts.get("(untagged)"), Some(&1), "{by_tag}");
+    assert_eq!(
+        by_tag["overlapping"], true,
+        "four tag slots over three entities really do overlap: {by_tag}"
+    );
+
+    // Same data, a field where each entity lands in exactly one group.
+    let by_status = parse(&run_jjj_success(
+        &dir,
+        &["query", "type:problem", "--count-by", "status", "--json"],
+    ));
+    assert_eq!(
+        by_status["overlapping"], false,
+        "one status per entity cannot overlap: {by_status}"
+    );
+
+    // A tag count over an all-untagged set must not claim overlap either.
+    let untagged = parse(&run_jjj_success(
+        &dir,
+        &["query", "Untagged one", "--count-by", "tag", "--json"],
+    ));
+    assert_eq!(untagged["matches"], 1, "{untagged}");
+    assert_eq!(
+        untagged["overlapping"], false,
+        "one untagged entity sums to exactly one: {untagged}"
+    );
+
+    // The limit applies to listings, not to a count of the whole set.
+    let capped = parse(&run_jjj_success(
+        &dir,
+        &[
+            "query",
+            "type:problem limit:1",
+            "--count-by",
+            "status",
+            "--json",
+        ],
+    ));
+    assert_eq!(
+        capped["matches"], 3,
+        "a limit must not silently shrink a count: {capped}"
+    );
+
+    // An unsupported field is refused rather than silently counted as zero.
+    let out = run_jjj(&dir, &["query", "type:problem", "--count-by", "colour"]);
+    assert!(!out.status.success(), "an unknown field must be refused");
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        err.contains("status") && err.contains("tag"),
+        "the refusal must name the fields that do work: {err}"
+    );
+}

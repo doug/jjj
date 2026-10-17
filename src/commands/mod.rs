@@ -363,7 +363,11 @@ fn execute_with_context(ctx: &CommandContext, command: Commands) -> Result<()> {
         Commands::Prime { full, json } => prime::execute(ctx, json, full),
 
         // One query grammar across every kind
-        Commands::Query { expr, json } => query::execute(ctx, expr, json),
+        Commands::Query {
+            expr,
+            json,
+            count_by,
+        } => query::execute(ctx, expr, json, count_by),
 
         // Search
         Commands::Search {
