@@ -134,6 +134,7 @@ fn format_event_description(event: &Event) -> String {
         EventType::ApprovalBlocked => format!("{} approval blocked", event.entity),
         EventType::ClaimContested => format!("{} claim contested", event.entity),
         EventType::EscalationRaised => "escalated to a human".to_string(),
+        EventType::EscalationAnswered => "a person answered".to_string(),
         EventType::EscalationCleared => "escalation cleared".to_string(),
         EventType::MilestoneCreated => format!("{} created", event.entity),
         EventType::MilestoneCompleted => format!("{} completed", event.entity),

@@ -51,6 +51,9 @@ pub enum EventType {
 
     // Escalation: the swarm asking for a person
     EscalationRaised,
+    /// A person answered — recorded so the next agent reads the reply rather
+    /// than rediscovering the wall.
+    EscalationAnswered,
     EscalationCleared,
 
     // GitHub sync events
@@ -89,6 +92,7 @@ impl EventType {
             Self::ApprovalBlocked => "approval_blocked",
             Self::ClaimContested => "claim_contested",
             Self::EscalationRaised => "escalation_raised",
+            Self::EscalationAnswered => "escalation_answered",
             Self::EscalationCleared => "escalation_cleared",
             Self::GithubIssueCreated => "github_issue_created",
             Self::GithubIssueImported => "github_issue_imported",

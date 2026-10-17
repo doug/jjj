@@ -248,8 +248,9 @@ fn execute_with_context(ctx: &CommandContext, command: Commands) -> Result<()> {
             about,
             list,
             clear,
+            respond,
             json,
-        } => escalate::execute(ctx, reason, about, list, clear, json),
+        } => escalate::execute(ctx, reason, about, list, clear, respond, json),
 
         // Where the fleet is doubled up, and where nobody is
         Commands::Contention { json } => contention::execute(ctx, json),

@@ -9,19 +9,79 @@ use crate::error::{JjjError, Result};
 use crate::escalation::{open_escalations, OpenEscalation};
 use crate::models::{Event, EventType};
 
+#[allow(clippy::too_many_arguments)]
 pub fn execute(
     ctx: &CommandContext,
     reason: Option<String>,
     about: Vec<String>,
     list: bool,
     clear: Option<String>,
+    respond: Option<String>,
     json: bool,
 ) -> Result<()> {
-    match (clear, reason) {
-        (Some(id), _) => clear_escalation(ctx, id, json),
-        (None, Some(reason)) if !list => raise(ctx, reason, about, json),
+    match (clear, respond, reason) {
+        (Some(id), _, _) => clear_escalation(ctx, id, json),
+        (None, Some(id), message) => respond_to_escalation(ctx, id, message, json),
+        (None, None, Some(reason)) if !list => raise(ctx, reason, about, json),
         _ => show_open(ctx, json),
     }
+}
+
+/// Record a person's reply, leaving the escalation open.
+///
+/// Answering and clearing are deliberately separate. A person who has looked at
+/// the problem usually knows something useful well before it is fixed — "the key
+/// rotates at 09:00", "this needs the prod account, I have asked" — and an
+/// escalation that can only be closed forces them to choose between saying
+/// nothing and claiming it is solved. Either way the next agent to hit the same
+/// wall used to find nothing to read and rediscovered it.
+fn respond_to_escalation(
+    ctx: &CommandContext,
+    input: String,
+    message: Option<String>,
+    json: bool,
+) -> Result<()> {
+    let store = &ctx.store;
+    let message = message.ok_or_else(|| {
+        JjjError::Validation(
+            "--respond needs a message: jjj escalate \"what you found\" --respond <id>".to_string(),
+        )
+    })?;
+    if message.trim().is_empty() {
+        return Err(JjjError::Validation(
+            "an empty answer says nothing — give the message as the reason argument".to_string(),
+        ));
+    }
+
+    let target = resolve_open(store, &input)?;
+    let user = store.get_current_user()?;
+    let id = target.id.clone();
+
+    store.with_metadata(&format!("Answer escalation {}", id), || {
+        let event = Event::new(EventType::EscalationAnswered, id.clone(), user.clone())
+            .with_rationale(message.clone());
+        store.set_pending_event(event);
+        Ok(())
+    })?;
+
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "id": id,
+                "answered_by": user,
+                "message": message,
+                "still_open": true,
+            }))?
+        );
+    } else {
+        println!("Answered escalation {} — still open.", short_id(&id));
+        println!(
+            "Clear it with `jjj escalate --clear {}` once it is fixed.",
+            short_id(&id)
+        );
+    }
+    Ok(())
 }
 
 /// Print open escalations. Also the no-argument form, so a bare `jjj escalate`
@@ -48,7 +108,8 @@ fn show_open(ctx: &CommandContext, json: bool) -> Result<()> {
     for e in &open {
         print_one(e, now);
     }
-    println!("\nClear with: jjj escalate --clear <id>");
+    println!("\nAnswer with: jjj escalate \"what you found\" --respond <id>");
+    println!("Clear with:  jjj escalate --clear <id>");
     Ok(())
 }
 
@@ -75,6 +136,11 @@ fn print_one(e: &OpenEscalation, now: chrono::DateTime<chrono::Utc>) {
                 .collect::<Vec<_>>()
                 .join(", ")
         );
+    }
+    // The reply is the part an agent needs most: it is the difference between
+    // "blocked, nobody knows why" and "blocked, and here is what was found".
+    for a in &e.answers {
+        println!("      ↳ {}: {}", a.by, a.message);
     }
 }
 
@@ -138,31 +204,31 @@ fn raise(ctx: &CommandContext, reason: String, about: Vec<String>, json: bool) -
     Ok(())
 }
 
-fn clear_escalation(ctx: &CommandContext, input: String, json: bool) -> Result<()> {
-    let store = &ctx.store;
+/// Resolve a prefix against **open** escalations only.
+///
+/// Matching a closed one would hide a typo: the caller would be told their
+/// action succeeded against something nobody is waiting on.
+fn resolve_open(store: &crate::storage::MetadataStore, input: &str) -> Result<OpenEscalation> {
     let open = open_escalations(&store.list_events_cached()?);
-
-    // Resolve by prefix against open escalations only. Clearing something
-    // already cleared is harmless but reads as a mistake, and matching a closed
-    // one by prefix would hide a typo.
     let matches: Vec<&OpenEscalation> = open
         .iter()
-        .filter(|e| e.id == input || e.id.starts_with(&input))
+        .filter(|e| e.id == input || e.id.starts_with(input))
         .collect();
 
-    let target = match matches.len() {
-        0 => {
-            return Err(JjjError::Validation(format!(
-                "no open escalation matches '{input}' — `jjj escalate` lists them"
-            )))
-        }
-        1 => matches[0].clone(),
-        n => {
-            return Err(JjjError::Validation(format!(
-                "'{input}' matches {n} open escalations; use a longer prefix"
-            )))
-        }
-    };
+    match matches.len() {
+        0 => Err(JjjError::Validation(format!(
+            "no open escalation matches '{input}' — `jjj escalate` lists them"
+        ))),
+        1 => Ok(matches[0].clone()),
+        n => Err(JjjError::Validation(format!(
+            "'{input}' matches {n} open escalations; use a longer prefix"
+        ))),
+    }
+}
+
+fn clear_escalation(ctx: &CommandContext, input: String, json: bool) -> Result<()> {
+    let store = &ctx.store;
+    let target = resolve_open(store, &input)?;
 
     let user = store.get_current_user()?;
     let id = target.id.clone();

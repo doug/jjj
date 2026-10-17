@@ -235,6 +235,12 @@ pub enum Commands {
         #[arg(long, value_name = "ID")]
         clear: Option<String>,
 
+        /// Answer an escalation without closing it — the reason argument is the
+        /// message. Use this to tell the fleet what you found or when it will
+        /// be fixed; `--clear` when it actually is.
+        #[arg(long, value_name = "ID")]
+        respond: Option<String>,
+
         /// Output as JSON
         #[arg(long)]
         json: bool,

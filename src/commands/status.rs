@@ -501,6 +501,33 @@ pub(crate) fn build_next_actions_with_ttl(
             .any(|s| s.problem_id == problem.id && s.is_active());
 
         if !has_active_solution {
+            // A refuted conjecture is knowledge, and this is the surface an
+            // agent actually reads. Saying "No solutions proposed" over a
+            // problem whose only attempt was withdrawn is false, and it hides
+            // the one thing the next agent needs: the approach that has already
+            // been tried and disproved. Left unsaid, the obvious first
+            // conjecture is the refuted one, and a fleet re-proposes it in
+            // parallel — each agent paying again for a measurement someone
+            // already made.
+            let refuted: Vec<&crate::models::Solution> = solutions
+                .iter()
+                .filter(|s| s.problem_id == problem.id && !s.is_active())
+                .collect();
+
+            let summary = match refuted.len() {
+                0 => "No solutions proposed".to_string(),
+                1 => "1 refuted attempt — read it before proposing".to_string(),
+                n => format!("{n} refuted attempts — read them before proposing"),
+            };
+
+            // Point at the refutation, not at the next write. The command that
+            // proposes is already obvious; the one that reads is what gets
+            // skipped.
+            let suggested = match refuted.first() {
+                Some(s) => format!("jjj solution show {}", s.id),
+                None => format!("jjj solution new \"title\" --problem {}", problem.id),
+            };
+
             items.push(serde_json::json!({
                 "category": "todo",
                 "owner": problem.assignee,
@@ -508,11 +535,16 @@ pub(crate) fn build_next_actions_with_ttl(
                 "entity_type": "problem",
                 "entity_id": problem.id,
                 "title": problem.title,
-                "summary": "No solutions proposed",
-                "suggested_command": format!("jjj solution new \"title\" --problem {}", problem.id),
+                "summary": summary,
+                "suggested_command": suggested,
                 "priority": format!("{}", problem.priority),
                 "priority_sort": priority_sort_value(&problem.priority),
                 "created_at": problem.created_at.to_rfc3339(),
+                "refuted": refuted.iter().map(|s| serde_json::json!({
+                    "id": s.id,
+                    "title": s.title,
+                    "status": format!("{}", s.status),
+                })).collect::<Vec<_>>(),
                 "details": [],
             }));
         }

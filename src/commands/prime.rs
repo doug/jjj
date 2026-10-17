@@ -160,6 +160,12 @@ pub fn execute(ctx: &CommandContext, json: bool, full: bool) -> Result<()> {
                 format!("{}m", age.num_minutes().max(0))
             };
             println!("- [{waited} ago, {}] {}", e.by, e.reason);
+            // A person's reply is the most useful line in the whole briefing
+            // when it exists: it is the difference between re-discovering a wall
+            // and knowing what was found about it.
+            for a in &e.answers {
+                println!("  ↳ {} answered: {}", a.by, a.message);
+            }
         }
         println!("\nDo not start new work that depends on this being fixed.\n");
     }

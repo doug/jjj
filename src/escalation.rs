@@ -34,6 +34,26 @@ pub struct OpenEscalation {
     pub about: Vec<String>,
     /// When it was raised.
     pub raised_at: chrono::DateTime<chrono::Utc>,
+    /// What a person has said about it so far, oldest first.
+    ///
+    /// An escalation used to be a one-way signal: an agent said it was blocked
+    /// and the only reply available was silence followed by the whole thing
+    /// disappearing when someone cleared it. The next agent to hit the same wall
+    /// then had nothing to read, so it rediscovered the wall. Answers are
+    /// separate from clearing on purpose — "I am looking at it, the key rotates
+    /// at 09:00" is useful long before the problem is actually gone.
+    pub answers: Vec<EscalationAnswer>,
+}
+
+/// A person's reply to an escalation.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct EscalationAnswer {
+    /// Who replied.
+    pub by: String,
+    /// What they said.
+    pub message: String,
+    /// When.
+    pub when: chrono::DateTime<chrono::Utc>,
 }
 
 impl OpenEscalation {
@@ -58,6 +78,30 @@ pub fn open_escalations(events: &[Event]) -> Vec<OpenEscalation> {
         .map(|e| e.entity.as_str())
         .collect();
 
+    // Answers are collected first so an escalation carries its whole exchange
+    // however the shards happened to interleave.
+    let mut answers: std::collections::HashMap<&str, Vec<EscalationAnswer>> =
+        std::collections::HashMap::new();
+    for e in events
+        .iter()
+        .filter(|e| e.event_type == EventType::EscalationAnswered)
+    {
+        answers
+            .entry(e.entity.as_str())
+            .or_default()
+            .push(EscalationAnswer {
+                by: e.by.clone(),
+                message: e
+                    .rationale
+                    .clone()
+                    .unwrap_or_else(|| "(no message)".to_string()),
+                when: e.when,
+            });
+    }
+    for list in answers.values_mut() {
+        list.sort_by_key(|a| a.when);
+    }
+
     let mut open: Vec<OpenEscalation> = Vec::new();
     let mut seen: HashSet<&str> = HashSet::new();
 
@@ -77,6 +121,7 @@ pub fn open_escalations(events: &[Event]) -> Vec<OpenEscalation> {
                 .unwrap_or_else(|| "(no reason given)".to_string()),
             about: e.refs.clone(),
             raised_at: e.when,
+            answers: answers.remove(e.entity.as_str()).unwrap_or_default(),
         });
     }
 
