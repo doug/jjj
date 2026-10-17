@@ -76,6 +76,18 @@ pub enum Commands {
         claim: bool,
     },
 
+    /// Create a whole graph of work from one JSON plan
+    ///
+    /// Nodes refer to each other by symbolic `key`, so a problem, its
+    /// sub-problems, their evidence and conjectures can be described in one
+    /// document. The plan is validated before anything is written, and the
+    /// result maps each key to the id it became.
+    #[command(display_order = 9)]
+    Plan {
+        #[command(subcommand)]
+        action: PlanAction,
+    },
+
     // ── Core entities ──────────────────────────────────────────────────────
     /// Track problems to solve (the questions driving your work)
     #[command(display_order = 10)]
@@ -488,6 +500,23 @@ pub enum EventsAction {
 
     /// Check that event log states match current entity states
     Validate,
+}
+
+#[derive(Subcommand)]
+pub enum PlanAction {
+    /// Apply a plan file (use `-` to read JSON from stdin)
+    Apply {
+        /// Path to the plan, or `-` for stdin
+        file: String,
+
+        /// Validate and report without writing anything
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Print the key-to-id map as JSON
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 // =============================================================================

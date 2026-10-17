@@ -14,6 +14,7 @@ pub mod insights;
 pub mod milestone;
 pub mod next;
 pub mod overlaps;
+pub mod plan;
 pub mod prime;
 pub mod problem;
 pub mod push;
@@ -231,6 +232,14 @@ fn execute_with_context(ctx: &CommandContext, command: Commands) -> Result<()> {
             json,
             claim,
         } => next::execute(ctx, top, mine, json, claim),
+
+        Commands::Plan { action } => match action {
+            crate::cli::PlanAction::Apply {
+                file,
+                dry_run,
+                json,
+            } => plan::execute(ctx, file, dry_run, json),
+        },
 
         // Escalation: the swarm asking for a person
         Commands::Escalate {
