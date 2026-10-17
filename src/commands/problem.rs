@@ -431,7 +431,55 @@ fn show_problem(ctx: &CommandContext, problem_input: String, json: bool) -> Resu
     let problem = store.load_problem(&problem_id)?;
 
     if json {
-        println!("{}", serde_json::to_string_pretty(&problem)?);
+        // The text path below goes on to print solutions, findings, the
+        // sub-problems this is waiting on, and children. `--json` used to stop
+        // here at the frontmatter, so the *machine* path returned strictly less
+        // than the human one and an agent had to make three more calls to
+        // rebuild what `show` already had in hand. For an agent-facing tool
+        // that is backwards.
+        //
+        // Nested under named keys rather than flattened, so the frontmatter
+        // keys stay exactly where callers already expect them.
+        let solutions = store.list_solutions_for_problem(&problem_id)?;
+        let findings = store.list_findings_for_problem(&problem_id)?;
+        let all_problems = store.list_problems()?;
+        let waiting_on = problem.open_children(&all_problems);
+        let subproblems = store.list_subproblems(&problem_id)?;
+
+        let brief = |id: &str, title: &str, status: String| serde_json::json!({ "id": id, "title": title, "status": status });
+
+        let mut out = serde_json::to_value(&problem)?;
+        if let Some(map) = out.as_object_mut() {
+            map.insert(
+                "solutions".to_string(),
+                solutions
+                    .iter()
+                    .map(|x| brief(&x.id, &x.title, x.status.to_string()))
+                    .collect(),
+            );
+            map.insert(
+                "findings".to_string(),
+                findings
+                    .iter()
+                    .map(|x| brief(&x.id, &x.title, x.status.to_string()))
+                    .collect(),
+            );
+            map.insert(
+                "waiting_on".to_string(),
+                waiting_on
+                    .iter()
+                    .map(|x| brief(&x.id, &x.title, x.status.to_string()))
+                    .collect(),
+            );
+            map.insert(
+                "subproblems".to_string(),
+                subproblems
+                    .iter()
+                    .map(|x| brief(&x.id, &x.title, x.status.to_string()))
+                    .collect(),
+            );
+        }
+        println!("{}", serde_json::to_string_pretty(&out)?);
         return Ok(());
     }
 
