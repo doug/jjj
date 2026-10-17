@@ -16,7 +16,7 @@ Two environment variables drive it:
 An unrecognized subcommand exits non-zero and names the argv, so a new call site
 fails loudly here instead of silently returning empty output.
 
-## `corpus-0.3/`, `corpus-0.4/`
+## `corpus-0.3/`, `corpus-0.4/`, `corpus-0.5/`
 
 Metadata trees as **actually written** by those releases, used by
 `tests/format_compat_test.rs` to prove that upgrading the binary does not make an
@@ -58,3 +58,15 @@ git worktree remove /tmp/wt-041
 
 Keep the entity titles identical across corpora — `assert_corpus_loads` in the
 test asserts against them by name.
+
+**Add a corpus for every release, not just the oldest.** A corpus only guards the
+keys it contains, so the newest fields are the least protected. Before
+`corpus-0.5` there was no corpus carrying a `lamport` key, so nothing would have
+caught a release that stopped reading the field that decides which concurrent
+edit wins — every listing would still have looked correct. `corpus-0.5` also
+covers two things no earlier corpus has: a `findings/` directory, and the
+sharded `events/<user>.jsonl` layout that replaced a single `events.jsonl`.
+
+When generating a new one, drive the binary through something that *moves* the
+format rather than only creating entities — an `edit --body` bumps the Lamport
+clock, where a freshly created entity leaves it at zero and therefore omits it.

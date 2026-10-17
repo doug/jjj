@@ -15,6 +15,20 @@ env:
   JJ_VERSION: "0.44.0"
 
 jobs:
+  invariants:
+    name: source invariants
+    # A text check over src/, so one OS is enough — and it needs no Rust build,
+    # which means it reports a broken fence in seconds rather than after a
+    # compile. Each check names the incident it came from.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: ripgrep
+      - name: Check source invariants
+        run: ./scripts/check-invariants.sh
+
   test:
     name: test (${{ matrix.os }})
     # jjj supports macOS (primary) and Linux — exercise both.

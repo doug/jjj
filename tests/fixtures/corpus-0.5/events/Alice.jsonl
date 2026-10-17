@@ -1,0 +1,6 @@
+{"when":"2026-10-16T18:59:58.513599Z","type":"milestone_created","entity":"01a14615-d5a6-7fa3-b1d2-a4c5b3621a93","by":"Alice"}
+{"when":"2026-10-16T18:59:58.567930Z","type":"problem_created","entity":"01a14615-d5e7-7b83-a187-9e92d968d792","by":"Alice"}
+{"when":"2026-10-16T18:59:58.622896Z","type":"problem_created","entity":"01a14615-d61e-7e00-9f69-c79c80ef65d1","by":"Alice"}
+{"when":"2026-10-16T18:59:58.675689Z","type":"solution_created","entity":"01a14615-d653-7332-a7fc-e7e7833498ae","by":"Alice","problem":"01a14615-d5e7-7b83-a187-9e92d968d792"}
+{"when":"2026-10-16T18:59:58.938313Z","type":"critique_raised","entity":"01a14615-d751-7e82-a48a-6b18b30db76d","by":"Alice","target":"01a14615-d653-7332-a7fc-e7e7833498ae","severity":"high","title":"Refresh tokens need rotation"}
+{"when":"2026-10-16T18:59:59.019846Z","type":"finding_recorded","entity":"01a14615-d7ab-72d1-844a-2423dbebfab7","by":"Alice","title":"Oldest live token is 6 years old","problem":"01a14615-d5e7-7b83-a187-9e92d968d792"}
