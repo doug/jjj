@@ -489,7 +489,13 @@ pub fn remove_entity_from_cache(db: &Database, entity_type: &str, entity_id: &st
 /// Returns `None` if `.jj/jjj.db` is absent (the cache hasn't been built yet).
 /// Used by storage modules that want to opportunistically update the cache
 /// from a `save_*` path without taking a hard dependency on it.
+///
+/// Returns `None` unconditionally when [`crate::db::bypassed`] is set, so the
+/// store's reads fall through to the canonical markdown walk.
 pub fn open_cache_if_present(repo_root: &std::path::Path) -> Option<Database> {
+    if crate::db::bypassed() {
+        return None;
+    }
     let path = repo_root.join(".jj").join("jjj.db");
     if !path.exists() {
         return None;

@@ -273,6 +273,16 @@ fn count_md(dir: &Path) -> usize {
 
 fn check_cache(ctx: &CommandContext) -> Check {
     let db = ctx.jj().repo_root().join(".jj").join("jjj.db");
+    // A measurement switch that silently changes where reads come from is a
+    // footgun; say so rather than letting someone debug a stale cache.
+    if crate::db::bypassed() {
+        return Check::warn(
+            "cache",
+            "JJJ_NO_DB is set — reads bypass the cache and walk the filesystem",
+            "unset JJJ_NO_DB unless you are benchmarking (tools/bench/cache_off.py); \
+             writes taken with it set leave an existing cache stale",
+        );
+    }
     if !db.exists() {
         return Check::warn(
             "cache",
