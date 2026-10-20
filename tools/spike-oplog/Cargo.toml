@@ -1,0 +1,23 @@
+# Throwaway spike for plan unit A3 (op-log replay cost).
+#
+# Deliberately its own workspace root and its own lockfile: nothing in `src/`
+# may depend on this, and building the real crate must not build this. `tools/**`
+# is already in the parent package's `exclude`, so this never ships.
+[package]
+name = "spike-oplog"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# Only for the state-based baseline: the same YAML parser `src/storage/` uses,
+# so the comparison is against jjj's real read path and not a faster stand-in.
+serde_norway = "0.9"
+
+[profile.release]
+debug = false
+lto = "thin"
