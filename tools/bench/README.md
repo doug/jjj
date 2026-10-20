@@ -48,6 +48,67 @@ sub-second target — the first run of this harness caught two O(n²)/O(n)
 read regressions (fixed in eeacd0f, e752095); the sync latencies are the
 remaining open finding.
 
+## Cache on vs off (`cache_off.py`) — can `src/db/` be deleted?
+
+Answers one question with numbers: the SQLite cache is documented as a
+disposable index over the canonical markdown, so is it still load-bearing?
+
+```bash
+cargo build --release
+python3 cache_off.py                                  # 50/500/5000/25000, 100 reps
+python3 cache_off.py --counts 5000 --reps 200          # just the gate cell
+python3 cache_off.py --counts 5000 --events-per-entity 0   # isolate the event log
+```
+
+Cache-off is taken with `JJJ_NO_DB=1` (`crate::db::bypassed`) **and** the
+`.jj/jjj.db` file removed, so the arm shows a world where `src/db/` does not
+exist rather than one where it merely sat idle. The corpus is mixed across all
+five kinds with varied body lengths, tag counts and a parent/child forest —
+`bench.py`'s flat corpus of identical stubs flatters the markdown walk.
+
+### Recorded result — 2026-10-19, M2 Mac (load avg ~4-5), rev 401ec92, 100 reps
+
+| command | corpus | cache on p50 / p99 | cache off p50 / p99 | off/on |
+|---|---|---|---|---|
+| `prime` | 50 | 38.8 / 42.7 ms | 40.8 / 43.5 ms | 1.05x |
+| `prime` | 500 | 41.7 / 44.7 ms | 76.8 / 81.3 ms | 1.84x |
+| `prime` | 5,000 | 87.0 / 94.5 ms | **451.4 / 604.3 ms** | 5.19x |
+| `prime` | 25,000 | 856.3 / 931.8 ms | 2884.3 / 3384.7 ms | 3.37x |
+| `query` | 50 | 27.8 / 32.2 ms | 33.8 / 36.9 ms | 1.22x |
+| `query` | 500 | 29.7 / 32.6 ms | 92.2 / 95.9 ms | 3.10x |
+| `query` | 5,000 | 54.3 / 61.5 ms | 668.8 / 726.1 ms | 12.32x |
+| `query` | 25,000 | 182.6 / 190.5 ms | 3423.4 / 4041.4 ms | 18.75x |
+| `next` | 50 | 38.6 / 43.4 ms | 40.9 / 44.3 ms | 1.06x |
+| `next` | 500 | 41.6 / 46.5 ms | 75.2 / 78.5 ms | 1.81x |
+| `next` | 5,000 | 85.5 / 90.9 ms | 431.7 / 459.5 ms | 5.05x |
+| `next` | 25,000 | 838.7 / 888.6 ms | 2709.9 / 3129.8 ms | 3.23x |
+
+`db rebuild` for reference: 0.06s @50, 0.25s @500, 2.19s @5K, 10.09s @25K.
+Full output in `baseline-cache-off.json`.
+
+**The plan's kill criterion (cache-off `prime` over 500ms at 5,000 entities) did
+not fire, by 11%** — 451ms, reproduced at 452ms over 200 reps. It is a pass, not
+a comfortable one: the p99 of that same cell is 604ms, already past the budget.
+
+**What drives it is the YAML parse, not the event log.** Re-running 5,000 and
+25,000 with the event shards emptied (75,004 events → 4) moved `prime` by 2% and
+0% respectively. The cost is one `parse_frontmatter` per entity file at roughly
+90–115µs, linear in entity count, which puts a 500ms `prime` budget at about
+5,000 entities — exactly where the gate was set.
+
+**Two things the ratio column hides.** Below 500 entities the cache is worth
+under 40ms, and the real observed corpus is 52. At 25,000 `prime` misses 500ms
+*with* the cache (856ms), so the cache is not what makes `prime` fast at that
+scale — its whole value window is a corpus between roughly 2,000 and 25,000
+entities that nobody has.
+
+**Not measured here, and not fixed:** `search`, `problem list --search` and the
+other `--search` flags have no filesystem fallback. With `JJJ_NO_DB=1` they
+still create and populate `.jj/jjj.db` (the bypass is read-path only), and
+`jjj search` falls into a full `load_from_markdown` per invocation. `push` also
+opens the DB to run `db validate` before publishing. Those paths are B3's
+problem; this harness only records that they exist.
+
 ## Sync scaling (`sync_scaling.py`) — the open finding
 
 Decision 3 makes sub-second `jjj sync` a **hard** requirement, and it is violated
