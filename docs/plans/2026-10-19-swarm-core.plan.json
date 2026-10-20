@@ -1,0 +1,531 @@
+{
+  "problems": [
+    {
+      "key": "A",
+      "title": "Phase A \u2014 measure before anything is cut or built",
+      "priority": "critical",
+      "tags": [
+        "lane:measure",
+        "swarm-core"
+      ],
+      "body": "Gates every other phase. The cut list is an argument until these four land. Publish each result as a Finding with --measured-at."
+    },
+    {
+      "key": "A1",
+      "title": "Opt-in local command telemetry",
+      "priority": "high",
+      "tags": [
+        "lane:measure",
+        "swarm-core"
+      ],
+      "parent": "A",
+      "body": "Append {ts, command, subcommand, ms} to a machine-local file under .jj/jjj-meta/ (never synced, same class as .lamport). Off unless JJJ_TELEMETRY=1. No entity content, titles or paths.\n\nDone when a week of use produces a histogram over the ~102 leaf operations."
+    },
+    {
+      "key": "A2",
+      "title": "Benchmark prime/query/next with the cache bypassed",
+      "priority": "high",
+      "tags": [
+        "lane:measure",
+        "swarm-core"
+      ],
+      "parent": "A",
+      "body": "Corpora of 50, 500, 5000, 25000 entities; tools/bench already has a 25K baseline. Report p50/p99 per command, cache on vs off.\n\nKILL: if cache-off prime exceeds 500ms at 5000 entities, B1 does not run and the plan keeps a rebuildable index."
+    },
+    {
+      "key": "A3",
+      "title": "Spike the op-log replay cost curve",
+      "priority": "critical",
+      "tags": [
+        "lane:measure",
+        "swarm-core"
+      ],
+      "parent": "A",
+      "body": "LARGEST TECHNICAL RISK. Replay cost grows with OPERATION count, not entity count. A problem edited 500 times has 500 ops to replay and nothing bounds that. Throwaway prototype, not a branch that merges. Measure 10/100/1000/10000 ops per entity.\n\nDone when the curve exists and 'at what op count does an entity need a snapshot?' has a number.\n\nKILL: >50ms at 1000 ops/entity means Phase C must add C9 compaction before C8."
+    },
+    {
+      "key": "A4",
+      "title": "Swarm trial restricted to the seven verbs",
+      "priority": "high",
+      "tags": [
+        "lane:measure",
+        "swarm-core"
+      ],
+      "parent": "A",
+      "body": "Agents told only prime, next, query, create, edit, escalate, doctor exist. See the August 2026 trial notes for harness traps that cost whole runs.\n\nDone when every reach outside the seven is logged with what it wanted. Each distinct reach becomes a Problem, not an automatic feature."
+    },
+    {
+      "key": "B",
+      "title": "Phase B \u2014 cut the SQLite cache first",
+      "priority": "high",
+      "tags": [
+        "lane:substrate",
+        "swarm-core"
+      ],
+      "body": "Counter-intuitive ordering, and load-bearing. CACHE_FAITHFUL means each model field costs six coordinated steps: DDL, SCHEMA_VERSION bump, requires_rebuild migration, upsert, positional decoder, DbEntity::COLUMNS. Phase C rewrites the model wholesale, so building the op-log while the cache mirrors every field doubles the work and invites a silent decode drift."
+    },
+    {
+      "key": "B1",
+      "title": "Remove src/db/ and the CACHE_FAITHFUL protocol",
+      "priority": "high",
+      "tags": [
+        "lane:substrate",
+        "swarm-core"
+      ],
+      "parent": "B",
+      "body": "4,655 LOC. Blocked on Gate A (A2 specifically).\n\nDone when gate.sh reports GATE_EXIT=0, the per-release corpus test from 80ea24c still loads every historical fixture, and doctor no longer mentions a database."
+    },
+    {
+      "key": "B2",
+      "title": "Remove src/embeddings.rs",
+      "priority": "medium",
+      "tags": [
+        "lane:substrate",
+        "swarm-core"
+      ],
+      "parent": "B",
+      "body": "495 LOC. Depends on B1."
+    },
+    {
+      "key": "B3",
+      "title": "Fold search into query",
+      "priority": "medium",
+      "tags": [
+        "lane:substrate",
+        "swarm-core"
+      ],
+      "parent": "B",
+      "body": "222 LOC. problem list --search and solution list --search currently require the DB to exist. Make those work without it or remove them in favour of query."
+    },
+    {
+      "key": "C",
+      "title": "Phase C \u2014 the op-log substrate (keystone)",
+      "priority": "critical",
+      "tags": [
+        "lane:substrate",
+        "swarm-core"
+      ],
+      "body": "Modelled on git-bug's verified data model. Replaces state+pick_side, which resolves lossily: the loser survives only in jj history, documented in 401ec92. C4 -> C7 -> C8 is the project bottleneck."
+    },
+    {
+      "key": "C1",
+      "title": "Operation and OperationPack types with serialization",
+      "priority": "critical",
+      "tags": [
+        "lane:substrate",
+        "swarm-core"
+      ],
+      "parent": "C"
+    },
+    {
+      "key": "C2",
+      "title": "Lamport handling plus the DAG clock invariant",
+      "priority": "critical",
+      "tags": [
+        "lane:substrate",
+        "swarm-core"
+      ],
+      "parent": "C",
+      "body": "git-bug refuses any commit whose clock is not lower than its child's, making clock abuse structurally impossible. jjj currently caps witnessing at a 1,000,000 jump, which is a heuristic. Implement the structural check; keep the cap as a second line.\n\nDone when a pack claiming an out-of-DAG-order clock is REFUSED, not clamped."
+    },
+    {
+      "key": "C3",
+      "title": "Store packs as objects on the jjj bookmark",
+      "priority": "high",
+      "tags": [
+        "lane:substrate",
+        "swarm-core"
+      ],
+      "parent": "C",
+      "body": "Parallel with C2."
+    },
+    {
+      "key": "C4",
+      "title": "Deterministic replay with pack-id tie-break",
+      "priority": "critical",
+      "tags": [
+        "lane:substrate",
+        "swarm-core"
+      ],
+      "parent": "C",
+      "body": "Depends on C2 and C3."
+    },
+    {
+      "key": "C5",
+      "title": "Conflicted value as a first-class state",
+      "priority": "critical",
+      "tags": [
+        "lane:substrate",
+        "swarm-core"
+      ],
+      "parent": "C",
+      "body": "The synthesis of both founding insights. Concurrent edits to one field produce a conflicted VALUE, not a winner: it appears in prime, is queryable, any principal may adjudicate it with an argument, and it escalates if nobody does.\n\nDone when two clones edit one body, both sync, neither body is lost or silently chosen, and the problem appears on the ready front needing adjudication."
+    },
+    {
+      "key": "C6",
+      "title": "Migrate state-based .md files into the log",
+      "priority": "high",
+      "tags": [
+        "lane:substrate",
+        "swarm-core"
+      ],
+      "parent": "C",
+      "body": "Each entity becomes one synthetic import operation carrying current state and the existing lamport value.\n\nDone when every release-corpus fixture migrates and round-trips, and doctor REPORTS any entity that failed rather than skipping it."
+    },
+    {
+      "key": "C7",
+      "title": "Adversarial property tests for the log",
+      "priority": "critical",
+      "tags": [
+        "lane:substrate",
+        "swarm-core"
+      ],
+      "parent": "C",
+      "body": "ASSIGN TO A DIFFERENT AGENT than C1-C5, written against the spec without reading their code. Three properties:\n- convergence: any permutation of merge order over the same op set replays to identical state\n- no loss: every op ever written is recoverable from the log alone, with no reference to jj history (the property pick_side violates today, and the whole reason for this phase)\n- clock abuse: a fabricated clock cannot reorder another principal's operations\n\nThis is the gate for the phase. If it cannot be made to pass, C8 does not run."
+    },
+    {
+      "key": "C8",
+      "title": "Delete merge.rs and pick_side",
+      "priority": "high",
+      "tags": [
+        "lane:substrate",
+        "swarm-core"
+      ],
+      "parent": "C",
+      "body": "1,697 LOC. Depends on C4 and C7."
+    },
+    {
+      "key": "D",
+      "title": "Phase D \u2014 the seven verbs",
+      "priority": "high",
+      "tags": [
+        "lane:verbs",
+        "swarm-core"
+      ],
+      "body": "Seven parallel agents, but D0 blocks all of them. ~102 leaf operations become ~20."
+    },
+    {
+      "key": "D0",
+      "title": "Specify the output contract",
+      "priority": "critical",
+      "tags": [
+        "lane:verbs",
+        "swarm-core"
+      ],
+      "parent": "D",
+      "body": "One markdown shape per verb that reads well to a human and parses deterministically, plus --json on prime, query, next, create ONLY. The other 49 --json flags go.\n\nDone when a parity harness asserts markdown and JSON carry the same facts for any entity. This is what prevents a recurrence of 1405f17, where --json returned less than the text path."
+    },
+    {
+      "key": "D1",
+      "title": "prime: output constant in corpus size",
+      "priority": "critical",
+      "tags": [
+        "lane:verbs",
+        "swarm-core"
+      ],
+      "parent": "D",
+      "body": "The hard one. The binding constraint on an agent is context window.\n\nDone when prime output byte length varies less than 2x between a 50-entity and a 25,000-entity corpus."
+    },
+    {
+      "key": "D2",
+      "title": "next: claim and lanes",
+      "priority": "high",
+      "tags": [
+        "lane:verbs",
+        "swarm-core"
+      ],
+      "parent": "D"
+    },
+    {
+      "key": "D3",
+      "title": "query: one grammar over three kinds",
+      "priority": "high",
+      "tags": [
+        "lane:verbs",
+        "swarm-core"
+      ],
+      "parent": "D",
+      "body": "Absorbs list, search, timeline, events, insights, overlaps, contention and waiting."
+    },
+    {
+      "key": "D4",
+      "title": "create: single entity and --plan",
+      "priority": "high",
+      "tags": [
+        "lane:verbs",
+        "swarm-core"
+      ],
+      "parent": "D"
+    },
+    {
+      "key": "D5",
+      "title": "edit: --if-lamport and exit 13",
+      "priority": "high",
+      "tags": [
+        "lane:verbs",
+        "swarm-core"
+      ],
+      "parent": "D",
+      "body": "Exit 13 stays reserved for JjjError::Precondition only. beads uses 13 for the same meaning; do not broaden it."
+    },
+    {
+      "key": "D6",
+      "title": "escalate with --reply",
+      "priority": "medium",
+      "tags": [
+        "lane:verbs",
+        "swarm-core"
+      ],
+      "parent": "D",
+      "body": "Both halves already exist as of 24f6557."
+    },
+    {
+      "key": "D7",
+      "title": "doctor: read-only, exits nonzero on a fault",
+      "priority": "medium",
+      "tags": [
+        "lane:verbs",
+        "swarm-core"
+      ],
+      "parent": "D",
+      "body": "Judgement-gated fixes must be ABSENT, not gated: a tool schema reads as an offer."
+    },
+    {
+      "key": "D8",
+      "title": "Collapse transitions into edit --status",
+      "priority": "high",
+      "tags": [
+        "lane:verbs",
+        "swarm-core"
+      ],
+      "parent": "D",
+      "body": "solution submit/approve/withdraw, problem reopen, critique dismiss and the rest. Guards and events must come from the shared domain layer exactly as plan.rs actions already do. The comment at src/commands/plan.rs:65 explains why a bulk path setting status directly is a hole, and names beads as having it. Do not reintroduce it."
+    },
+    {
+      "key": "E",
+      "title": "Phase E \u2014 three nouns",
+      "priority": "medium",
+      "tags": [
+        "lane:model",
+        "swarm-core"
+      ],
+      "body": "Data migration. Sequential with C6."
+    },
+    {
+      "key": "E1",
+      "title": "Finding becomes a cited Problem body",
+      "priority": "medium",
+      "tags": [
+        "lane:model",
+        "swarm-core"
+      ],
+      "parent": "E",
+      "body": "Zero findings exist outside tests. The mechanism worth keeping is --cites, which becomes a frontmatter list on all kinds. measured_at from 27e44e2 moves with it.\n\nDone when every corpus finding becomes a cited body with no content lost, and query 'cites:<id>' returns what finding list --problem used to."
+    },
+    {
+      "key": "E2",
+      "title": "Milestone survives iff it gains a decline list",
+      "priority": "high",
+      "tags": [
+        "lane:model",
+        "swarm-core"
+      ],
+      "parent": "E",
+      "body": "NOT a solo-vs-group branch point. The design splits on single-principal vs MULTI-principal, and a swarm is always multi-principal: one human plus twelve agents is thirteen principals. The human count does not reach Phase C.\n\nKeeping a fifth kind is not free - it must migrate into the op-log (C6), render in the panel (F3), appear in query, and be taught in SKILL.md (H1). 'It might be useful' is the reasoning this plan exists to stop. So the test is not headcount:\n\nTHE KIND SURVIVES IFF it becomes a commitment recording what is DECLINED - 'this window, these problems, and explicitly not those' - which a tag cannot carry and which the swarm reads in prime. If it stays 'time-based goals grouping problems', it is a tag with extra steps and it goes.\n\nThe decline list is the Popperian half: a commitment that does not say what it declines is not falsifiable, and it is what stops a swarm drifting into work that was decided against. A solo operator has no colleague to catch that drift, so this is not a team feature.\n\nDone when either the kind ships with a decline list surfaced by prime, or it is migrated to a tag. Not left as it is."
+    },
+    {
+      "key": "E3",
+      "title": "Optional: rename Solution to Attempt, Critique to Objection",
+      "priority": "low",
+      "tags": [
+        "lane:model",
+        "swarm-core"
+      ],
+      "parent": "E",
+      "body": "Better names - Objection makes the veto reading obvious - but it touches every file, every test and SKILL.md. Take it only if A-D came in under budget. If skipped, say so in the changelog rather than leaving the design note and the code disagreeing."
+    },
+    {
+      "key": "E4",
+      "title": "Divergence detection across principals",
+      "priority": "high",
+      "tags": [
+        "lane:model",
+        "swarm-core"
+      ],
+      "parent": "E",
+      "body": "UNCONDITIONAL - not gated on E2. A multi-PRINCIPAL feature, so always live.\n\nrg -i 'variance|divergen|disagree' src/ranking/ src/commands/rank.rs returns NOTHING: the system computes a global aggregate and never surfaces where principals differ. That is backwards. Deciding what to work on is out of band - a meeting, a doc, an argument, someone's judgement - and the aggregate is the part that pretends to decide. What a tool can do that the conversation cannot is arrive with the agenda already computed: which problems are ranked most differently, by whom.\n\nWith several humans it names what they disagree about. With one human and a swarm it names WHERE THE AGENTS DISAGREE WITH YOU, which is exactly where scarce human attention belongs. Same code, different population compared.\n\nPer-principal orderings already exist at rankings/{milestone_id}/{user}.json. Build a rank-variance across principals, sorted descending, exposed as query 'contested:true' and a region in the F3 panel. ~50 lines against the 1,293 that G1 extracts.\n\nDone when, given three orderings, it names what they disagree about most and stays silent about what they agree on."
+    },
+    {
+      "key": "F",
+      "title": "Phase F \u2014 MCP server and the App panel",
+      "priority": "high",
+      "tags": [
+        "lane:host",
+        "swarm-core"
+      ],
+      "body": "SEP-1865 went Final 2026-01-26. Can start once D0 lands; must not merge before Gate D."
+    },
+    {
+      "key": "F1",
+      "title": "jjj mcp serve: seven tools, visibility-scoped",
+      "priority": "critical",
+      "tags": [
+        "lane:host",
+        "swarm-core"
+      ],
+      "parent": "F",
+      "body": "visibility ['model','app'] on the five shared verbs; ['app'] on the human-only acts. The spec says a host MUST REJECT a model-initiated tools/call for a tool lacking 'app', which makes human authority host-enforced rather than an honour system in jjj's own code. Do NOT also implement an is_human policy check - that was the superseded design."
+    },
+    {
+      "key": "F2",
+      "title": "Error envelope with a retryable flag",
+      "priority": "high",
+      "tags": [
+        "lane:host",
+        "swarm-core"
+      ],
+      "parent": "F",
+      "body": "Exit 13 has no carrier in an MCP result. Carry it as retryable:true, which the panel renders as 'someone moved this, reload'. Scope the envelope to retryable vs not, nothing more."
+    },
+    {
+      "key": "F3",
+      "title": "The ui:// panel, four regions",
+      "priority": "high",
+      "tags": [
+        "lane:host",
+        "swarm-core"
+      ],
+      "parent": "F",
+      "body": "mime text/html;profile=mcp-app. Regions: ready front, who is on what, open objections, escalations waiting. Zero external domains, so the default default-src 'none' CSP needs no relaxation. D0's markdown is the required text fallback.\n\nState persistence is UNDEFINED in the MCP Apps MVP - do not rely on filters or scroll surviving teardown."
+    },
+    {
+      "key": "F4",
+      "title": "App-only tools",
+      "priority": "high",
+      "tags": [
+        "lane:host",
+        "swarm-core"
+      ],
+      "parent": "F",
+      "body": "Answer an escalation; file an objection; approve/reject an attempt. Only these. Do not put resourceUri on a tool with no panel: a UI-linked tool returning only text renders an empty, never-resolving loading box."
+    },
+    {
+      "key": "F5",
+      "title": "Stateless-per-call invariant and test",
+      "priority": "critical",
+      "tags": [
+        "lane:host",
+        "swarm-core"
+      ],
+      "parent": "F",
+      "body": "An MCP server is long-lived; jjj is one-shot. The server must re-read from disk every call or it drifts from what other agents and jj git fetch have done. This is also the invariant that keeps Phase B honest.\n\nDone when an external write between two tools/calls is visible to the second, and check-invariants.sh enforces that src/mcp/ caches no entity state."
+    },
+    {
+      "key": "G",
+      "title": "Phase G \u2014 deletions",
+      "priority": "medium",
+      "tags": [
+        "lane:prune",
+        "swarm-core"
+      ],
+      "body": "Each independent and parallel, all gated on Gate D. One commit per unit."
+    },
+    {
+      "key": "G1",
+      "title": "EXTRACT src/ranking/, do not delete",
+      "priority": "high",
+      "tags": [
+        "lane:prune",
+        "swarm-core"
+      ],
+      "parent": "G",
+      "body": "1,293 LOC. An extraction, not a deletion. The budget normalisation (B = max(100, 2*problem_count), so ranking 10 items carries the same influence as ranking 200 - test at scoring.rs:182) is correct work that becomes right again the moment there are several humans. Move it out of the swarm core, keep docs/design/latent-preference-ranking.md, and record in the changelog that it can return as an optional layer.\n\nSee also E2 and the portfolio question: what a group actually needs is DISAGREEMENT DETECTION, which this code does not do - rg for variance/divergence/disagree in src/ranking/ returns nothing. It computes an aggregate only."
+    },
+    {
+      "key": "G2",
+      "title": "Remove src/tui/",
+      "priority": "high",
+      "tags": [
+        "lane:prune",
+        "swarm-core"
+      ],
+      "parent": "G",
+      "body": "6,790 LOC. Justification in one line: rg 'crate::commands::' src/tui/ returns ZERO matches, while MetadataStore/save_* appear 8x in app/actions/edit.rs, 7x in lifecycle.rs, 7x in create.rs and 6x in app/mod.rs, and next_actions.rs:68 computes its own blocking logic. It is a second implementation of the model, not a view. F3 replaces the interface part."
+    },
+    {
+      "key": "G3",
+      "title": "Remove the VS Code extension",
+      "priority": "medium",
+      "tags": [
+        "lane:prune",
+        "swarm-core"
+      ],
+      "parent": "G",
+      "body": "Parity obligation, zero observed use."
+    },
+    {
+      "key": "G4",
+      "title": "Remove src/sync/ (GitHub)",
+      "priority": "medium",
+      "tags": [
+        "lane:prune",
+        "swarm-core"
+      ],
+      "parent": "G",
+      "body": "1,878 LOC. query --json piped to gh covers the real need."
+    },
+    {
+      "key": "G5",
+      "title": "Remove src/automation.rs",
+      "priority": "high",
+      "tags": [
+        "lane:prune",
+        "swarm-core"
+      ],
+      "parent": "G",
+      "body": "585 LOC. A SECURITY deletion: automation rules produced the RCE fixed in 0.5.1. The swarm's automation is agents polling next, strictly more capable with no shell-template surface. Leave 'jjj automation migrate' in place for one release so an existing automation.toml is reported rather than silently ignored."
+    },
+    {
+      "key": "H",
+      "title": "Phase H \u2014 consolidate",
+      "priority": "medium",
+      "tags": [
+        "lane:docs",
+        "swarm-core"
+      ]
+    },
+    {
+      "key": "H1",
+      "title": "Rewrite SKILL.md for the seven verbs",
+      "priority": "high",
+      "tags": [
+        "lane:docs",
+        "swarm-core"
+      ],
+      "parent": "H",
+      "body": "LAST ON PURPOSE. include_str! means every edit rebuilds the crate and 56 test binaries, and there is a drift test. One pass at the end."
+    },
+    {
+      "key": "H2",
+      "title": "Add invariant checks for this plan's lessons",
+      "priority": "high",
+      "tags": [
+        "lane:docs",
+        "swarm-core"
+      ],
+      "parent": "H",
+      "body": "Encode them so the next swarm cannot repeat them:\n- no file outside the op-log layer writes storage directly (the G2 bug class)\n- no gate step is piped through rg (a pipeline's status becomes ripgrep's, so a green run can sit on top of real clippy errors - this happened)\n- exit_code() returns 13 only for Precondition\n- src/mcp/ caches no entity state across calls\n\nAlso commit scripts/verify-commits.sh if it is not yet in scripts/."
+    },
+    {
+      "key": "H3",
+      "title": "Changelog and bump to 0.6.0",
+      "priority": "high",
+      "tags": [
+        "lane:docs",
+        "swarm-core"
+      ],
+      "parent": "H",
+      "body": "A breaking release. Say plainly what was removed, that ranking is extracted rather than gone, and that --if-lamport's documented limitation from 401ec92 is now narrower because a lost race no longer discards the loser. DO NOT TAG. DO NOT PUBLISH."
+    }
+  ]
+}
