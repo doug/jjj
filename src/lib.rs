@@ -33,6 +33,7 @@ pub mod ranking;
 pub mod resolve;
 pub mod storage;
 pub mod sync;
+pub mod telemetry;
 pub mod tui;
 pub mod utils;
 
