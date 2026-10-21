@@ -21,7 +21,11 @@ run() {
     fi
 }
 
-cargo fmt --all
+# `cargo fmt --all` deliberately does NOT run here. It used to, immediately
+# above this line, which meant the fmt stage formatted the tree and then
+# verified its own output — a check that cannot fail is not a check, and it
+# reported OK over work it had silently changed. That is the same defect as the
+# piped-clippy incident above, one family along. Run `cargo fmt --all` yourself.
 run fmt cargo fmt --all --check
 run invariants ./scripts/check-invariants.sh
 run clippy cargo clippy --all-targets --all-features -- -D warnings
