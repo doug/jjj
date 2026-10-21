@@ -107,9 +107,10 @@ pub fn execute(ctx: &CommandContext, json: bool, full: bool) -> Result<()> {
     if json {
         let out = serde_json::json!({
             "actor": actor,
-            "escalations": escalations,
+            "escalations": escalations.iter().take(limit).collect::<Vec<_>>(),
             "next": next.first(),
             "counts": {
+                "escalations": escalations.len(),
                 "problems_open": problems.iter().filter(|p| p.is_open()).count(),
                 "awaiting_review": submitted.len(),
                 "proposed": proposed.len(),
@@ -152,7 +153,7 @@ pub fn execute(ctx: &CommandContext, json: bool, full: bool) -> Result<()> {
             escalations.len(),
             if escalations.len() == 1 { "" } else { "s" }
         );
-        for e in &escalations {
+        for e in escalations.iter().take(limit) {
             let age = e.age(now);
             let waited = if age.num_hours() >= 1 {
                 format!("{}h", age.num_hours())
@@ -166,6 +167,13 @@ pub fn execute(ctx: &CommandContext, json: bool, full: bool) -> Result<()> {
             for a in &e.answers {
                 println!("  ↳ {} answered: {}", a.by, a.message);
             }
+        }
+        // Capped like every other section: a briefing whose length tracks the
+        // corpus is useless to the agent it is written for, and 132 escalations
+        // printed in full is what that looks like. The heading still carries
+        // the true total, and `--full` still shows every one.
+        if escalations.len() > limit {
+            println!("- … and {} more", escalations.len() - limit);
         }
         println!("\nDo not start new work that depends on this being fixed.\n");
     }

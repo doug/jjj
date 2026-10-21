@@ -215,3 +215,68 @@ fn prime_on_an_empty_repo_is_short_and_says_so() {
         "a briefing must stay brief: {out}"
     );
 }
+
+/// The briefing's length must not track the corpus.
+///
+/// Every other section takes the per-section cap; the escalation section did
+/// not, in either the text or the JSON path. A repository with 132 open
+/// escalations printed all 132, which is the exact failure `prime` exists to
+/// prevent — an agent re-reading an unbounded wall at the start of every turn.
+/// The count still has to be exact, because the cap is only acceptable if the
+/// heading admits what it is hiding.
+#[test]
+fn prime_caps_the_escalation_section_like_every_other_one() {
+    if !jj_available() {
+        return;
+    }
+    let (dir, _) = populated();
+    for i in 0..9 {
+        run_jjj_success(&dir, &["escalate", &format!("Blocker number {i}")]);
+    }
+
+    let out =
+        String::from_utf8_lossy(&run_jjj_env(&dir, &[("JJJ_USER", "dev")], &["prime"]).stdout)
+            .to_string();
+    let listed = (0..9)
+        .filter(|i| out.contains(&format!("Blocker number {i}")))
+        .count();
+    assert!(
+        listed <= 5,
+        "the text path listed {listed} of 9 escalations; the cap is 5:\n{out}"
+    );
+    assert!(
+        out.contains("9 open escalations"),
+        "the heading must still carry the true total:\n{out}"
+    );
+    assert!(
+        out.contains("and 4 more"),
+        "a capped section must admit what it is hiding:\n{out}"
+    );
+
+    let v: serde_json::Value = serde_json::from_str(&String::from_utf8_lossy(
+        &run_jjj_env(&dir, &[("JJJ_USER", "dev")], &["prime", "--json"]).stdout,
+    ))
+    .expect("valid JSON");
+    assert_eq!(
+        v["escalations"].as_array().map(|a| a.len()),
+        Some(5),
+        "the JSON path emitted the whole vector: {}",
+        v["escalations"]
+    );
+    assert_eq!(
+        v["counts"]["escalations"], 9,
+        "the count must be exact even though the list is capped"
+    );
+
+    let full = String::from_utf8_lossy(
+        &run_jjj_env(&dir, &[("JJJ_USER", "dev")], &["prime", "--full"]).stdout,
+    )
+    .to_string();
+    let listed_full = (0..9)
+        .filter(|i| full.contains(&format!("Blocker number {i}")))
+        .count();
+    assert_eq!(
+        listed_full, 9,
+        "`--full` must still show every escalation:\n{full}"
+    );
+}
