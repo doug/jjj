@@ -1,0 +1,4 @@
+# The root .gitignore anchors /target/ at the repository root, so this nested
+# crate needs its own. The synthesised packs land under target/ too — at 8 KiB
+# bodies and 10,000 operations one point alone is 53 MiB.
+target/

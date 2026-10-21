@@ -1,0 +1,176 @@
+A3 — op-log replay cost: raw measured output
+
+Recorded 2026-10-19. Apple M1 Ultra (20 cores), 128 GiB, macOS 25.6.0,
+rustc 1.97.1, --release. The machine was shared with another agent's cargo
+test run throughout, which is where the p99 noise on the largest read layer
+comes from (85.5 ms in run 1, 106.9 ms in run 2, same configuration).
+
+This is captured tool output, kept so the numbers are reproducible and
+auditable rather than only quoted. Reproduce with:
+
+  cargo build --release
+  ./target/release/spike-oplog --ops 10,100,1000,10000 --body 1200 --format nested,flat --out target/spike-out
+  ./target/release/spike-oplog --ops 10,100,1000,10000 --body 128,8000 --format nested --out target/spike-out
+  python3 -I compressed_size.py target/spike-out
+  python3 -I inflate_cost.py target/spike-out
+
+=========== RUN 1: main sweep, both wire formats ===========
+
+# A3 — op-log replay cost
+
+Seed `0x537761726d436f72`. Op mix per 100: 60 body, 12 title, 10 status, 5 priority, 4+2 tag churn, 4 assignee, 3 parent.
+Packs hold [1, 1, 2, 2, 3, 3, 4, 5, 6] ops (mean 3.00); 10% of packs are concurrent with their predecessor.
+Times in milliseconds. Output under `target/spike-out`.
+
+## body mean 1200 B, wire format `nested`
+
+| ops | packs | on disk | apply p50 | apply p99 | parse+apply p50 | parse+apply p99 | read+parse+apply p50 | read+parse+apply p99 | iters (a/pa/rpa) |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|:---|
+| 10 | 3 | 9.2 KiB | 0.0004 | 0.0005 | 0.0066 | 0.0073 | 0.0488 | 0.0818 | 40000/40000/37655 |
+| 100 | 35 | 100.6 KiB | 0.0036 | 0.0040 | 0.0737 | 0.0924 | 0.5758 | 0.9854 | 40000/27749/3662 |
+| 1000 | 333 | 1000.6 KiB | 0.0442 | 0.0589 | 0.7860 | 0.9160 | 6.016 | 8.464 | 40000/3041/368 |
+| 10000 | 3342 | 9.65 MiB | 0.6585 | 0.7723 | 8.332 | 8.952 | 69.638 | 85.546 | 3583/287/200 |
+
+| ops | state file | state read p50 | state read p99 | +disk p50 | +disk p99 | oplog/state (parse+apply p50) | bytes ratio |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 10 | 2.0 KiB | 0.0056 | 0.0063 | 0.0201 | 0.0367 | 1x | 5x |
+| 100 | 903 B | 0.0078 | 0.0084 | 0.0223 | 0.0395 | 9x | 114x |
+| 1000 | 940 B | 0.0090 | 0.0096 | 0.0246 | 0.0581 | 88x | 1090x |
+| 10000 | 1.5 KiB | 0.0086 | 0.0092 | 0.0233 | 0.0397 | 966x | 6740x |
+
+- kill criterion (apply p99, 1,000 ops): 0.0589 ms vs 50 ms — **not fired**
+- kill criterion (parse+apply p99, 1,000 ops): 0.9160 ms vs 50 ms — **not fired**
+- kill criterion (read+parse+apply p99, 1,000 ops): 8.464 ms vs 50 ms — **not fired**
+
+## body mean 1200 B, wire format `flat`
+
+| ops | packs | on disk | apply p50 | apply p99 | parse+apply p50 | parse+apply p99 | read+parse+apply p50 | read+parse+apply p99 | iters (a/pa/rpa) |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|:---|
+| 10 | 3 | 9.1 KiB | 0.0004 | 0.0006 | 0.0073 | 0.0078 | 0.0495 | 0.0823 | 40000/40000/29744 |
+| 100 | 35 | 99.8 KiB | 0.0035 | 0.0040 | 0.0826 | 0.1091 | 0.5860 | 0.9533 | 40000/27075/3640 |
+| 1000 | 333 | 991.8 KiB | 0.0437 | 0.0700 | 0.8804 | 1.045 | 6.776 | 9.143 | 40000/2708/360 |
+| 10000 | 3342 | 9.57 MiB | 0.6373 | 0.7814 | 9.230 | 9.809 | 69.654 | 86.308 | 3847/265/200 |
+
+| ops | state file | state read p50 | state read p99 | +disk p50 | +disk p99 | oplog/state (parse+apply p50) | bytes ratio |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 10 | 2.0 KiB | 0.0054 | 0.0060 | 0.0200 | 0.0362 | 1x | 4x |
+| 100 | 903 B | 0.0078 | 0.0088 | 0.0237 | 0.0442 | 11x | 113x |
+| 1000 | 940 B | 0.0090 | 0.0097 | 0.0236 | 0.0382 | 98x | 1080x |
+| 10000 | 2.4 KiB | 0.0087 | 0.0093 | 0.0232 | 0.0374 | 1065x | 4057x |
+
+- kill criterion (apply p99, 1,000 ops): 0.0700 ms vs 50 ms — **not fired**
+- kill criterion (parse+apply p99, 1,000 ops): 1.045 ms vs 50 ms — **not fired**
+- kill criterion (read+parse+apply p99, 1,000 ops): 9.143 ms vs 50 ms — **not fired**
+
+
+=========== RUN 2: repeat of the nested leg, for reproducibility ===========
+
+# A3 — op-log replay cost
+
+Seed `0x537761726d436f72`. Op mix per 100: 60 body, 12 title, 10 status, 5 priority, 4+2 tag churn, 4 assignee, 3 parent.
+Packs hold [1, 1, 2, 2, 3, 3, 4, 5, 6] ops (mean 3.00); 10% of packs are concurrent with their predecessor.
+Times in milliseconds. Output under `target/spike-out`.
+
+## body mean 1200 B, wire format `nested`
+
+| ops | packs | on disk | apply p50 | apply p99 | parse+apply p50 | parse+apply p99 | read+parse+apply p50 | read+parse+apply p99 | iters (a/pa/rpa) |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|:---|
+| 10 | 3 | 9.2 KiB | 0.0005 | 0.0006 | 0.0067 | 0.0074 | 0.0511 | 0.1003 | 40000/40000/26917 |
+| 100 | 35 | 100.6 KiB | 0.0035 | 0.0040 | 0.0737 | 0.0910 | 0.5736 | 0.8711 | 40000/29676/3819 |
+| 1000 | 333 | 1000.6 KiB | 0.0438 | 0.0607 | 0.7871 | 0.9208 | 5.960 | 8.137 | 40000/3113/328 |
+| 10000 | 3342 | 9.65 MiB | 0.6460 | 0.7792 | 8.375 | 9.116 | 69.185 | 106.863 | 3655/291/200 |
+
+| ops | state file | state read p50 | state read p99 | +disk p50 | +disk p99 | oplog/state (parse+apply p50) | bytes ratio |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 10 | 2.0 KiB | 0.0055 | 0.0062 | 0.0227 | 0.0440 | 1x | 5x |
+| 100 | 903 B | 0.0079 | 0.0091 | 0.0227 | 0.0400 | 9x | 114x |
+| 1000 | 940 B | 0.0090 | 0.0098 | 0.0238 | 0.0396 | 87x | 1090x |
+| 10000 | 1.5 KiB | 0.0087 | 0.0096 | 0.0232 | 0.0397 | 962x | 6740x |
+
+- kill criterion (apply p99, 1,000 ops): 0.0607 ms vs 50 ms — **not fired**
+- kill criterion (parse+apply p99, 1,000 ops): 0.9208 ms vs 50 ms — **not fired**
+- kill criterion (read+parse+apply p99, 1,000 ops): 8.137 ms vs 50 ms — **not fired**
+
+
+=========== RUN 3: body-size sensitivity (128 B and 8000 B means) ===========
+
+# A3 — op-log replay cost
+
+Seed `0x537761726d436f72`. Op mix per 100: 60 body, 12 title, 10 status, 5 priority, 4+2 tag churn, 4 assignee, 3 parent.
+Packs hold [1, 1, 2, 2, 3, 3, 4, 5, 6] ops (mean 3.00); 10% of packs are concurrent with their predecessor.
+Times in milliseconds. Output under `target/spike-out`.
+
+## body mean 128 B, wire format `nested`
+
+| ops | packs | on disk | apply p50 | apply p99 | parse+apply p50 | parse+apply p99 | read+parse+apply p50 | read+parse+apply p99 | iters (a/pa/rpa) |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|:---|
+| 10 | 3 | 2.8 KiB | 0.0003 | 0.0003 | 0.0044 | 0.0049 | 0.0480 | 0.0842 | 40000/40000/36053 |
+| 100 | 34 | 29.5 KiB | 0.0021 | 0.0024 | 0.0455 | 0.0530 | 0.5314 | 0.8748 | 40000/40000/4026 |
+| 1000 | 329 | 287.5 KiB | 0.0242 | 0.0323 | 0.4917 | 0.5737 | 5.504 | 7.790 | 40000/4832/378 |
+| 10000 | 3330 | 2.85 MiB | 0.4743 | 0.5629 | 5.186 | 5.452 | 62.709 | 76.113 | 5357/485/200 |
+
+| ops | state file | state read p50 | state read p99 | +disk p50 | +disk p99 | oplog/state (parse+apply p50) | bytes ratio |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 10 | 272 B | 0.0054 | 0.0059 | 0.0187 | 0.0278 | 1x | 11x |
+| 100 | 370 B | 0.0072 | 0.0078 | 0.0208 | 0.0302 | 6x | 82x |
+| 1000 | 506 B | 0.0095 | 0.0101 | 0.0241 | 0.0400 | 52x | 582x |
+| 10000 | 424 B | 0.0084 | 0.0090 | 0.0232 | 0.0414 | 616x | 7047x |
+
+- kill criterion (apply p99, 1,000 ops): 0.0323 ms vs 50 ms — **not fired**
+- kill criterion (parse+apply p99, 1,000 ops): 0.5737 ms vs 50 ms — **not fired**
+- kill criterion (read+parse+apply p99, 1,000 ops): 7.790 ms vs 50 ms — **not fired**
+
+## body mean 8000 B, wire format `nested`
+
+| ops | packs | on disk | apply p50 | apply p99 | parse+apply p50 | parse+apply p99 | read+parse+apply p50 | read+parse+apply p99 | iters (a/pa/rpa) |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|:---|
+| 10 | 4 | 22.5 KiB | 0.0008 | 0.0009 | 0.0110 | 0.0119 | 0.0697 | 0.1098 | 40000/40000/26513 |
+| 100 | 35 | 602.8 KiB | 0.0150 | 0.0192 | 0.2277 | 0.2730 | 0.7737 | 1.158 | 40000/9368/3006 |
+| 1000 | 345 | 5.15 MiB | 0.1593 | 0.2011 | 2.190 | 2.452 | 8.096 | 10.746 | 7228/1038/277 |
+| 10000 | 3314 | 53.04 MiB | 1.982 | 2.616 | 23.906 | 24.937 | 94.065 | 108.605 | 1209/200/200 |
+
+| ops | state file | state read p50 | state read p99 | +disk p50 | +disk p99 | oplog/state (parse+apply p50) | bytes ratio |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 10 | 7.3 KiB | 0.0059 | 0.0066 | 0.0200 | 0.0302 | 2x | 3x |
+| 100 | 9.7 KiB | 0.0081 | 0.0088 | 0.0232 | 0.0423 | 28x | 62x |
+| 1000 | 8.5 KiB | 0.0092 | 0.0100 | 0.0234 | 0.0344 | 239x | 620x |
+| 10000 | 12.2 KiB | 0.0091 | 0.0098 | 0.0245 | 0.0410 | 2620x | 4458x |
+
+- kill criterion (apply p99, 1,000 ops): 0.2011 ms vs 50 ms — **not fired**
+- kill criterion (parse+apply p99, 1,000 ops): 2.452 ms vs 50 ms — **not fired**
+- kill criterion (read+parse+apply p99, 1,000 ops): 10.746 ms vs 50 ms — **not fired**
+
+
+=========== compressed_size.py: raw JSON vs per-blob zlib ===========
+
+10-ops-1200b-flat          packs=    3 raw=      9293 zlib-per-blob=      3229 ratio=2.88
+10-ops-1200b-nested        packs=    3 raw=      9383 zlib-per-blob=      3254 ratio=2.88
+10-ops-128b-nested         packs=    3 raw=      2909 zlib-per-blob=      1209 ratio=2.41
+10-ops-8000b-nested        packs=    4 raw=     23067 zlib-per-blob=      7005 ratio=3.29
+100-ops-1200b-flat         packs=   35 raw=    102164 zlib-per-blob=     36523 ratio=2.80
+100-ops-1200b-nested       packs=   35 raw=    103064 zlib-per-blob=     36837 ratio=2.80
+100-ops-128b-nested        packs=   34 raw=     30189 zlib-per-blob=     13373 ratio=2.26
+100-ops-8000b-nested       packs=   35 raw=    617250 zlib-per-blob=    169280 ratio=3.65
+1000-ops-1200b-flat        packs=  333 raw=   1015619 zlib-per-blob=    359371 ratio=2.83
+1000-ops-1200b-nested      packs=  333 raw=   1024619 zlib-per-blob=    362312 ratio=2.83
+1000-ops-128b-nested       packs=  329 raw=    294436 zlib-per-blob=    129048 ratio=2.28
+1000-ops-8000b-nested      packs=  345 raw=   5404851 zlib-per-blob=   1497949 ratio=3.61
+10000-ops-1200b-flat       packs= 3342 raw=  10033333 zlib-per-blob=   3558198 ratio=2.82
+10000-ops-1200b-nested     packs= 3342 raw=  10123333 zlib-per-blob=   3587687 ratio=2.82
+10000-ops-128b-nested      packs= 3330 raw=   2987990 zlib-per-blob=   1312842 ratio=2.28
+10000-ops-8000b-nested     packs= 3314 raw=  55614797 zlib-per-blob=  15290165 ratio=3.64
+
+=========== inflate_cost.py: zlib inflate the spike omits (1200 B bodies) ===========
+
+10-ops-1200b-nested        packs=    3 inflate_p50=   0.014ms inflate_p99=   0.030ms
+10-ops-128b-nested         packs=    3 inflate_p50=   0.008ms inflate_p99=   0.012ms
+10-ops-8000b-nested        packs=    4 inflate_p50=   0.025ms inflate_p99=   0.035ms
+100-ops-1200b-nested       packs=   35 inflate_p50=   0.189ms inflate_p99=   0.216ms
+100-ops-128b-nested        packs=   34 inflate_p50=   0.102ms inflate_p99=   0.135ms
+100-ops-8000b-nested       packs=   35 inflate_p50=   0.633ms inflate_p99=   0.747ms
+1000-ops-1200b-nested      packs=  333 inflate_p50=   2.011ms inflate_p99=   2.129ms
+1000-ops-128b-nested       packs=  329 inflate_p50=   1.144ms inflate_p99=   1.267ms
+1000-ops-8000b-nested      packs=  345 inflate_p50=   5.856ms inflate_p99=   6.127ms
+10000-ops-1200b-nested     packs= 3342 inflate_p50=  20.072ms inflate_p99=  20.760ms
+10000-ops-128b-nested      packs= 3330 inflate_p50=  11.901ms inflate_p99=  12.551ms
+10000-ops-8000b-nested     packs= 3314 inflate_p50=  59.155ms inflate_p99=  60.745ms
