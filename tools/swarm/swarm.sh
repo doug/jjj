@@ -15,6 +15,7 @@
 #   ./swarm.sh build                                  build the agent image
 #   ./swarm.sh init  [--target toy|sql|sqlperf|gophics|gophicswasm|synth2|jjj] [--pods N] [--agents N] [--problems N] [--critics N]
 #   ./swarm.sh start [--hours H] [--max-iters N] [--model M] [--stop-when-done]
+#                    [--verbs "a b c"]
 #       SWARM_STRATEGIES=1 gives each builder a different approach (measure,
 #       structure, algorithm, correctness, simplify) instead of one shared
 #       prompt — the variable behind "diverse perspectives beat parallel
@@ -240,13 +241,17 @@ EOF
 # --- start ------------------------------------------------------------------
 
 cmd_start() {
-    local hours=0 max_iters=0 model="sonnet" stop_when_done=0
+    local hours=0 max_iters=0 model="sonnet" stop_when_done=0 verbs="${SWARM_VERBS:-}"
     while [ $# -gt 0 ]; do
         case "$1" in
             --hours) hours="$2"; shift 2 ;;
             --max-iters) max_iters="$2"; shift 2 ;;
             --model) model="$2"; shift 2 ;;
             --stop-when-done) stop_when_done=1; shift ;;
+            # Restrict the jjj surface to these first-level subcommands. The
+            # shim refuses anything else and logs what was reached for, which
+            # is how the verb trial collects its result; see jjj-shim.
+            --verbs) verbs="$2"; shift 2 ;;
             *) die "unknown option $1" ;;
         esac
     done
@@ -289,6 +294,10 @@ cmd_start() {
     fi
 
     echo "Starting $((pods * agents)) agent containers (model=$model)"
+    if [ -n "$verbs" ]; then
+        echo "  surface restricted to: $verbs"
+        echo "  (reaches outside it are refused with exit 64 and logged)"
+    fi
     [ "$deadline" != "0" ] && echo "  deadline: $(date -r "$deadline" '+%H:%M:%S')"
     [ "$max_iters" != "0" ] && echo "  cap: $max_iters iterations per agent"
 
@@ -344,6 +353,7 @@ cmd_start() {
                 -e "SWARM_STRATEGY=$strategy" \
                 -e "SWARM_MERGE_GATE=${SWARM_MERGE_GATE:-0}" \
                 -e "SWARM_TURN_TIMEOUT=${SWARM_TURN_TIMEOUT:-1500}" \
+                -e "SWARM_VERBS=$verbs" \
                 ${use_key:+$([ "$use_key" = 1 ] && echo "-e ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY")} \
                 -v "$SWARM_ROOT:/swarm:rw" \
                 "$IMAGE" >/dev/null || die "failed to start $name"

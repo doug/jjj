@@ -266,6 +266,49 @@ which serialises as absent, and each substantive save adds one. Verified against
 seeded data: 17 writes over 5 entities, mean 3.40, p50 1, max 13, which is the
 mean-hides-the-tail case the sizing decision turns on.
 
+### A4 cannot test the seven-verb surface yet, and the useful version does not need to
+
+A4 says to run agents "told that only `prime`, `next`, `query`, `create`,
+`edit`, `escalate`, `doctor` exist". **`create` and `edit` are not commands.**
+The real surface is `problem new`, `problem edit`, `solution new`, and so on;
+the seven verbs are what **Phase D** builds. So A4 as written depends on D, not
+on A1 as the dependency table claims, and restricting today's binary to those
+seven strings would refuse every invocation an agent made.
+
+The version that runs against today's binary answers a question the plan needs
+anyway. `jjj --help` lists **33 top-level commands.** Restrict the surface to
+the ones the seven verbs would subsume, plus the infrastructure an agent cannot
+work without:
+
+    prime next query search problem solution critique finding milestone plan
+    escalate doctor init push fetch whoami help completion
+
+and what is left outside is exactly the set the cut proposes to delete:
+
+    ui status overlaps insights contention timeline events tags rank sync
+    github conflicts resolve automation db
+
+**That is the Phase G question, measured rather than argued:** of the fifteen
+commands this plan removes, which do agents actually reach for, how often, and
+how many distinct agents want each. A reach is a refusal logged with its argv;
+no prompt change is needed, so the trial measures *unprimed* demand rather than
+compliance with an instruction — which is the more useful of the two, because a
+told agent's non-reach proves only that it was told.
+
+**Blocked on one thing, and it is not the harness.** `swarm.sh` needs a
+credential: `ANTHROPIC_API_KEY`, or the host's `Claude Code-credentials`
+Keychain entry, which `token-refresher.sh` then keeps fresh for all containers
+from a single host-side process. Checked 2026-10-21: the variable is unset and
+the Keychain entry is absent, so `start` dies on its own precondition. The
+OAuth file at `~/.claude/.credentials.json` is **not** a substitute — the README
+records that N containers racing to rotate one short-lived token can revoke the
+host login, so that path must not be used as a workaround.
+
+Everything else is ready: podman machine up, `localhost/jjj-swarm-agent:0.5.1`
+present (6 weeks old — `./swarm.sh build` should re-run so the trial exercises
+the current binary and the new shim), `--verbs` plumbed from `swarm.sh start`
+through to each container.
+
 ### A3 result (2026-10-19) — ran; kill criterion did not fire; plan changed anyway
 
 Apple M1 Ultra, release build, `tools/spike-oplog/`. Op mix 60% body edits, 3 ops/pack,
