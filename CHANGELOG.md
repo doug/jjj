@@ -106,6 +106,16 @@ a plan is written by something that cannot see a warning, and a misspelled
 success. The plan is validated before anything is written. `--dry-run` reports
 the outcome without writing.
 
+A finding in a plan takes **`measured_at`**, and findings and critiques a plan
+creates now carry an **author**. A plan is the one case where measurement time
+and recording time differ by a lot — it is written when the numbers are taken
+and applied whenever someone gets to it — so the entity kind whose whole purpose
+is *when was this measured* was the one that could not say. A malformed
+timestamp is refused during validation, before anything is written, by the same
+parser `finding new --measured-at` uses. Without the author, a fifty-problem
+plan produced findings and critiques that no author filter and no `--mine` could
+see.
+
 ### Escalations have a reply half
 
 **`jjj escalate --respond <id> "what I found"`** answers without closing, and

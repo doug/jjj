@@ -243,6 +243,10 @@ struct FindingNode {
     method: Option<String>,
     #[serde(default)]
     refs: Vec<String>,
+    /// When the evidence was measured, RFC3339. Distinct from when the plan is
+    /// applied, which is the only time the entity would otherwise carry.
+    #[serde(default)]
+    measured_at: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -516,6 +520,10 @@ pub fn execute(ctx: &CommandContext, file: String, dry_run: bool, json: bool) ->
     }
     for f in &plan.findings {
         resolve_external(&f.problem, "problem")?;
+        if let Some(raw) = &f.measured_at {
+            crate::commands::finding::parse_measured_at(raw, "measured_at")
+                .map_err(|m| invalid(format!("finding '{}': {m}", f.key)))?;
+        }
     }
     for s in &plan.solutions {
         resolve_external(&s.problem, "problem")?;
@@ -569,6 +577,10 @@ pub fn execute(ctx: &CommandContext, file: String, dry_run: bool, json: bool) ->
     // ── Write pass. One metadata commit for the whole plan. ──
 
     let store = &ctx.store;
+    // Read once, outside the commit: a critique or finding from a plan is
+    // authored by whoever applied it, and without this every entity a plan
+    // creates is anonymous — invisible to `--mine` and to author filters.
+    let user = store.get_current_user()?;
     let look_up = |r: &str, ids: &HashMap<String, String>| -> String {
         ids.get(r)
             .or_else(|| external.get(r))
@@ -651,6 +663,14 @@ pub fn execute(ctx: &CommandContext, file: String, dry_run: bool, json: bool) ->
             }
             finding.method = f.method.clone();
             finding.refs = f.refs.clone();
+            // Validated above, so this cannot fail here.
+            finding.measured_at = f
+                .measured_at
+                .as_deref()
+                .map(|raw| crate::commands::finding::parse_measured_at(raw, "measured_at"))
+                .transpose()
+                .map_err(crate::error::JjjError::Validation)?;
+            finding.author = Some(user.clone());
             store.save_finding(&finding)?;
             ids.insert(f.key.clone(), finding.id);
         }
@@ -686,6 +706,7 @@ pub fn execute(ctx: &CommandContext, file: String, dry_run: bool, json: bool) ->
                     critique.severity = parsed;
                 }
             }
+            critique.author = Some(user.clone());
             store.save_critique(&critique)?;
             ids.insert(c.key.clone(), critique.id);
         }

@@ -378,7 +378,8 @@ repository, so new work can hang off problems that are already there.
   ],
   "findings": [
     {"key": "f1", "problem": "hdr", "title": "The parse floors at a fixed cost",
-     "method": "counted, three runs", "body": "60,004 ops minimum."}
+     "method": "counted, three runs", "body": "60,004 ops minimum.",
+     "measured_at": "2026-10-16T14:00:00Z"}
   ],
   "solutions": [
     {"key": "s1", "title": "Memoize the parse", "problem": "hdr", "cites": ["f1"]}

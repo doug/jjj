@@ -46,7 +46,8 @@ const FULL_PLAN: &str = r#"{
   ],
   "findings": [
     {"key": "f1", "problem": "hdr", "title": "The parse floors at a fixed cost",
-     "method": "counted, three runs", "body": "60,004 ops minimum."}
+     "method": "counted, three runs", "body": "60,004 ops minimum.",
+     "measured_at": "2026-10-16T14:00:00Z"}
   ],
   "solutions": [
     {"key": "s1", "title": "Memoize the parse", "problem": "hdr",
@@ -143,7 +144,7 @@ fn a_bad_plan_writes_nothing() {
     let dir = setup_test_repo();
     let p = dir.path();
 
-    let cases: [(&str, &str, &str); 7] = [
+    let cases: [(&str, &str, &str); 8] = [
         (
             "a misspelled field",
             r#"{"problems":[{"key":"a","title":"T","prioirty":"high"}]}"#,
@@ -173,6 +174,11 @@ fn a_bad_plan_writes_nothing() {
             "a bad date",
             r#"{"milestones":[{"key":"m","title":"M","date":"Dec 2026"}]}"#,
             "YYYY-MM-DD",
+        ),
+        (
+            "a measured_at that is not a timestamp",
+            r#"{"problems":[{"key":"a","title":"T"}],"findings":[{"key":"f","problem":"a","title":"F","measured_at":"last Tuesday"}]}"#,
+            "RFC3339",
         ),
         ("an empty plan", r#"{}"#, "does nothing"),
     ];
@@ -433,4 +439,45 @@ fn an_update_can_guard_itself_with_a_clock() {
     let shown = run_jjj_success(p, &["problem", "show", "Guarded", "--json"]);
     let shown: serde_json::Value = serde_json::from_str(&shown).expect("valid JSON");
     assert_eq!(shown["title"].as_str(), Some("Guarded"));
+}
+
+/// A finding from a plan is the case where measurement time and recording time
+/// differ most: the plan is written after the numbers are taken and applied
+/// later still. Without `measured_at` the only time the entity carries is when
+/// it happened to be created, which is the wrong answer by however long the
+/// plan sat unapplied.
+///
+/// The author matters for the same kind of reason. Every entity a plan creates
+/// used to be anonymous, so a fifty-problem plan produced fifty findings and
+/// critiques that no author filter and no `--mine` could see.
+#[test]
+fn a_plan_records_when_evidence_was_measured_and_who_filed_it() {
+    if !jj_available() {
+        return;
+    }
+    let dir = setup_test_repo();
+    let p = dir.path();
+    let plan = write_plan(p, FULL_PLAN);
+    run_jjj_success(p, &["plan", "apply", plan.to_str().unwrap()]);
+
+    let findings = run_jjj_success(p, &["finding", "list", "--json"]);
+    let findings: serde_json::Value = serde_json::from_str(&findings).expect("valid JSON");
+    let f = &findings.as_array().expect("a list")[0];
+    assert_eq!(
+        f["measured_at"].as_str(),
+        Some("2026-10-16T14:00:00Z"),
+        "the plan's measured_at did not survive: {f}"
+    );
+    assert!(
+        f["author"].as_str().is_some_and(|a| !a.is_empty()),
+        "a finding from a plan has no author, so no author filter can find it: {f}"
+    );
+
+    let critiques = run_jjj_success(p, &["critique", "list", "--json"]);
+    let critiques: serde_json::Value = serde_json::from_str(&critiques).expect("valid JSON");
+    let c = &critiques.as_array().expect("a list")[0];
+    assert!(
+        c["author"].as_str().is_some_and(|a| !a.is_empty()),
+        "a critique from a plan has no author: {c}"
+    );
 }

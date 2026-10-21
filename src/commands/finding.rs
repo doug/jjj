@@ -123,6 +123,32 @@ pub(crate) fn resolve_cites(ctx: &CommandContext, cites: &[String]) -> Result<Ve
     Ok(out)
 }
 
+/// Parse a `--measured-at` timestamp, or a plan document's `measured_at`.
+///
+/// Shared with `jjj plan apply`, which creates findings too — and a finding born
+/// from a plan is the case where measurement time and recording time differ most,
+/// since a plan is usually applied days after the numbers were taken. One parser
+/// means one error message rather than two that drift apart.
+///
+/// `label` is how the caller spelled the field, because the two callers spell it
+/// differently — a flag is `--measured-at` and a plan key is `measured_at` — and
+/// an error that names something the author did not write sends them looking for
+/// the wrong thing. Returns the sentence rather than a `JjjError` so each caller
+/// adds its own context without a second "Validation failed:" in the middle.
+pub(crate) fn parse_measured_at(
+    raw: &str,
+    label: &str,
+) -> std::result::Result<chrono::DateTime<chrono::Utc>, String> {
+    chrono::DateTime::parse_from_rfc3339(raw)
+        .map(|t| t.with_timezone(&chrono::Utc))
+        .map_err(|e| {
+            format!(
+                "{label} {raw:?} is not an RFC3339 timestamp ({e}). \
+                 Write it like 2026-10-16T14:00:00Z."
+            )
+        })
+}
+
 #[allow(clippy::too_many_arguments)]
 fn new_finding(
     ctx: &CommandContext,
@@ -145,19 +171,11 @@ fn new_finding(
 
     // Parsed before the write, so a malformed timestamp fails the command
     // instead of silently recording the finding without the time it belongs to.
-    let measured = match measured_at.as_deref() {
-        None => None,
-        Some(raw) => Some(
-            chrono::DateTime::parse_from_rfc3339(raw)
-                .map_err(|e| {
-                    crate::error::JjjError::Validation(format!(
-                        "--measured-at {raw:?} is not an RFC3339 timestamp ({e}). \
-                         Write it like 2026-10-16T14:00:00Z."
-                    ))
-                })?
-                .with_timezone(&chrono::Utc),
-        ),
-    };
+    let measured = measured_at
+        .as_deref()
+        .map(|raw| parse_measured_at(raw, "--measured-at"))
+        .transpose()
+        .map_err(crate::error::JjjError::Validation)?;
 
     let finding_id_cell = std::cell::RefCell::new(String::new());
     store.with_metadata(
