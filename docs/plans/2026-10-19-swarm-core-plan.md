@@ -209,6 +209,33 @@ Two additions from A1 and A3, both mandatory:
   field at all. This single number decides whether C9's threshold is ever approached and
   whether B1's derived index is sized right. It is the largest remaining unknown in the plan.
 
+**Correction, 2026-10-21 — A4's blockers were overstated, including by me.** I recorded
+A4 as "needs a container fleet and a real trial harness, the same blocker as the
+never-run M5 diversity trial." Checked:
+
+- **The harness exists and is substantial.** `tools/swarm/` is a working podman rig:
+  `swarm.sh` (build/init/start/status/logs/stop/analyze), one container per agent, pods
+  sharing a `JJJ_POD` so ref contention stays in the experiment, a stateless `claude -p`
+  session per iteration, a seeded toy target (`opkit`, 29 ops, 115 conformance cases
+  verified achievable at 115/115 before any run), `score.py` fitness counted not timed,
+  plus `watchdog.sh`, `preflight.sh` and `token-refresher.sh`. The never-run thing was
+  `diversity-trial.sh`, a different experiment.
+- **Clap-rejected invocations are already captured.** `tools/swarm/jjj-shim` logs one
+  JSON line per invocation with `argv`, `exit`, `stdout` and `stderr`, and
+  `analyze.py::analyze_harness_adherence` already counts failing commands by name. The
+  requirement above is satisfied by code written in August.
+
+So A4's genuine remaining work is only two pieces:
+
+1. **The verb restriction itself** — an allowlist in `jjj-shim`, which is also the
+   cleanest way to *produce* the reach signal: a blocked verb is a logged non-zero exit
+   with its argv intact, which is exactly the acceptance criterion.
+2. **An ops-per-entity metric** — a new `analyze.py` pass grouping `events()` (already
+   fetched with `--limit 100000`) by entity id. The data is already collected; nothing
+   counts it.
+
+Neither needs a fleet to *build*. The fleet is needed only to run the trial.
+
 ### A3 result (2026-10-19) — ran; kill criterion did not fire; plan changed anyway
 
 Apple M1 Ultra, release build, `tools/spike-oplog/`. Op mix 60% body edits, 3 ops/pack,
@@ -249,7 +276,7 @@ Four findings that matter more than the verdict:
 | A1 telemetry | disabled cost must be unmeasurable | 83 ns, one `getenv` | no |
 | A2 cache-off | `prime` p50 < 500 ms @ 5,000 | 451 ms (p99 **604 ms**) | no |
 | A3 op-log replay | parse+fold p99 < 50 ms @ 1,000 ops | 0.92 ms | no |
-| A4 verb trial | — | **blocked**: needs a container fleet | — |
+| A4 verb trial | — | **open**: harness exists (see correction, §2), needs a shim allowlist and an ops/entity metric | — |
 
 **No criterion fired, and the verdicts were the least useful thing the phase produced.**
 Read only the three "no"s and B–H proceed as written; read the findings and four things
@@ -303,6 +330,62 @@ note 4) and capture clap-*rejected* invocations, which A1's telemetry cannot see
 ---
 
 ## 3. Phase B — Cut the cache first
+
+### B1 call-site inventory (2026-10-21) — measured, not estimated
+
+`rg 'Database::open|open_cache_if_present'` over `src/`, every non-test site
+classified. The plan previously named six dependencies; there are **fifteen**,
+and the split that matters is not which commands use the cache but **which ones
+already survive its absence**.
+
+**Already graceful — the pattern the rest should copy:**
+
+| site | how it degrades |
+|---|---|
+| `commands/mod.rs:404` | `if !db_path.exists() { return Ok(()) }` |
+| `commands/mod.rs:469` | exists-check *and* `Err(_) => return Ok(())` |
+| `commands/conflicts.rs:207` | `open_cache_if_present`, `Option` |
+| `commands/push.rs:559` | dirty-flag clear, exists-guarded |
+| `db/sync.rs:503` | `.ok()` |
+
+**Hard dependency — opens unconditionally, creates the DB on demand, breaks if
+`src/db/` goes away:**
+
+| site | command | note |
+|---|---|---|
+| `commands/search.rs:32` | `jjj search` | `load_from_markdown` — the **full** load, not incremental |
+| `commands/problem.rs:333` | `problem list --search` | incremental |
+| `commands/solution.rs:370` | `solution list --search` | incremental |
+| `commands/critique.rs:290` | `critique list --search` | incremental |
+| `commands/finding.rs:292` | `finding list --search` | incremental |
+| `commands/problem.rs:1006` | `problem new` duplicate check | needs the `embeddings` table **B2 deletes** |
+| `commands/init.rs:16` | `jjj init` | builds *and populates* the DB in every new repo, unconditionally |
+| `commands/push.rs:462` | `jjj push` | runs `db validate` — a **correctness gate**, not a cache read |
+| `tui/app/related.rs:87` | related pane | removal is gated behind Gate D, many phases after B1 |
+| `commands/db.rs:26,106` | `jjj db` | the command *is* the cache; it goes with it |
+
+**Three things this changes about B1:**
+
+1. **Five sites already prove the shape of the fix.** B1 is not "design a
+   fallback", it is "make ten sites behave like the five that already do", and
+   the two in `mod.rs` are the reference implementation. That is a much smaller
+   change than the phase estimate assumed.
+2. **`jjj init` is why every repo has a cache.** It is not created lazily on
+   first search — it is built and fully populated at init. Any measurement of
+   "cache-off" behaviour that starts from `jjj init` is measuring a repo that
+   just paid for a cache it was told not to use.
+3. **The five `--search` paths are one decision, not five.** All five do
+   `open` → `load_from_markdown*` → `search::search(..., Some(kind))`. Either a
+   minimal derived index keeps all five or the feature is cut from all five;
+   there is no coherent middle. `problem new`'s duplicate check is a *separate*
+   decision because it needs embeddings rather than FTS, and B2 removes those.
+
+**Still open and now explicit:** `push`'s `db validate` is the only site where
+the cache enforces a correctness property rather than serving a read. B1 cannot
+simply make it graceful — a silently-skipped validation is worse than a slow
+one. It either moves to a markdown-native check or `push` loses the gate
+knowingly.
+
 
 **Counter-intuitive but load-bearing ordering.** `CACHE_FAITHFUL` on `Persist` means
 every model field change costs six coordinated steps: DDL, `SCHEMA_VERSION` bump,
