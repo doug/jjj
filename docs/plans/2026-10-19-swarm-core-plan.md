@@ -236,6 +236,36 @@ So A4's genuine remaining work is only two pieces:
 
 Neither needs a fleet to *build*. The fleet is needed only to run the trial.
 
+**Both are now built (2026-10-21), and building the metric invalidated a number
+in this plan.**
+
+- `tools/swarm/jjj-shim` takes `SWARM_VERBS`. A verb outside it is refused
+  before the real binary is touched, with exit 64 — distinguishable in the log
+  from clap's 2 and from a command that existed and failed — and logged with
+  `refused: true` and `reached_for: <verb>`. Verified: refused verb exits 64 and
+  logs the reach, an allowed verb passes through, and a leading flag is not
+  mistaken for a verb.
+- `analyze.py` gains `analyze_ops_per_entity` and `analyze_harness_reaches`.
+
+**The correction: ops/entity cannot be counted from the event log.** `problem
+edit` emits no event — only lifecycle transitions do. Measured on a seeded
+repository: one problem edited twelve times after creation carries `lamport: 12`
+and produces exactly **one** `problem_created` event, so an events-based count
+reports **1.00 operations for an entity written 13 times**.
+
+This plan records "observed usage is ~1 op/entity" and cites event counts
+(`minerva_old` has 46 events across 45 problems). **That number is what this bug
+produces regardless of the truth.** It happens to survive, because the same
+corpora have no `lamport` field at all and an absent clock means a genuine
+single write — but it was right by luck, and a swarm corpus is precisely where
+the two sources diverge. Any A4 result derived from events would have confirmed
+the prior it was commissioned to test.
+
+The metric now counts `lamport + 1` per entity — a create leaves the clock at 0,
+which serialises as absent, and each substantive save adds one. Verified against
+seeded data: 17 writes over 5 entities, mean 3.40, p50 1, max 13, which is the
+mean-hides-the-tail case the sizing decision turns on.
+
 ### A3 result (2026-10-19) — ran; kill criterion did not fire; plan changed anyway
 
 Apple M1 Ultra, release build, `tools/spike-oplog/`. Op mix 60% body edits, 3 ops/pack,
@@ -268,6 +298,9 @@ Four findings that matter more than the verdict:
    op/entity — `minerva_old` has 46 events across 45 problems and neither live corpus has
    a `lamport` field at all. A3 gives the curve; nothing yet says where on it a swarm sits.
    **A4 must record ops/entity**; it is the number that converts this curve into a decision.
+   *(Corrected 2026-10-21: the event-count half of this is not evidence — `problem edit`
+   emits no event, so events undercount writes to 1 per entity by construction. The
+   `lamport`-absent half is evidence, and happens to agree. See §2's A4 correction.)*
 
 ### Gate A — closed 2026-10-19. Three of four units ran; A4 still open.
 

@@ -422,6 +422,113 @@ def analyze_conflicts(repo):
         print(f"    {e.get('by', '?'):16s} {(e.get('rationale') or '')[:60]}")
 
 
+def analyze_ops_per_entity(repo):
+    """Operations per entity — the number the op-log decision rests on.
+
+    Counted from the **Lamport clock**, not from the event log. The clock is
+    incremented on every substantive save, which is the definition of the
+    quantity wanted. The event log is not: `problem edit` emits no event at all,
+    only lifecycle transitions do, so an events-based count reports one
+    operation for an entity that was written thirteen times. Measured: an entity
+    edited twelve times after creation carries `lamport: 12` and produces a
+    single `problem_created` event.
+
+    That matters beyond the choice of field. "Observed usage is ~1 op/entity"
+    was recorded in the plan from event counts, and would have been produced by
+    this bug regardless of the truth. It happens to survive — an absent clock
+    means a genuine single write, since 0 is omitted from JSON — but it was
+    right by luck, and a swarm corpus is exactly where the two sources diverge.
+
+    The distribution matters more than the mean: a mean of three with a tail at
+    four hundred is a different engineering problem from a flat three, and
+    per-entity snapshots help the first while being pointless for the second.
+    """
+    section("Operations per entity (op-log sizing)")
+
+    # A create leaves the clock at 0, which serialises as absent; each
+    # substantive save adds one. So writes = lamport + 1.
+    entities = []
+    for kind, items in (
+        ("problem", repo.problems()),
+        ("solution", repo.solutions()),
+        ("critique", repo.critiques()),
+        ("finding", repo.findings()),
+    ):
+        for it in items:
+            entities.append((kind, it.get("id", "?"), (it.get("lamport") or 0) + 1))
+
+    if not entities:
+        print("  no entities — nothing to count")
+        return
+
+    counts = sorted(e[2] for e in entities)
+    n = len(counts)
+    total = sum(counts)
+
+    def q(p):
+        # Nearest-rank: honest at these sample sizes, where interpolation would
+        # invent a value between two integers.
+        return counts[min(n - 1, int(p * n))]
+
+    print(f"  {total} writes over {n} entities")
+    print(f"  mean {total / n:.2f}   p50 {q(0.5)}   p90 {q(0.9)}   p99 {q(0.99)}   max {counts[-1]}")
+
+    once = sum(1 for c in counts if c == 1)
+    print(f"  {once} of {n} entities ({pct(once, n)}%) were written exactly once "
+          f"and never touched again")
+
+    # Read against the decision it feeds rather than admired on its own.
+    worst = counts[-1]
+    print("  A3 crossings: 50ms at ~17,000 ops/entity packed, ~4,700 unpacked")
+    if worst < 100:
+        print(f"  → busiest entity is {worst} writes: two orders of magnitude inside")
+        print("     both crossings, so replay cost is not what decides the layout")
+    elif worst < 4700:
+        print(f"  → busiest entity is {worst} writes: inside both crossings, but within")
+        print("     two orders of magnitude of the unpacked one — C3 matters")
+    else:
+        print(f"  !! busiest entity is {worst} writes: past the unpacked crossing, so")
+        print("     one-object-per-pack is ruled out rather than merely costly")
+
+    # A3 found size degrades before latency does, so report it alongside.
+    print(f"  A3 amplification at the observed mean: ~{total / n * 1.09:.0f}x "
+          "of a 1,200B body per entity")
+
+    hot = sorted(entities, key=lambda e: -e[2])[:5]
+    print("  busiest entities:")
+    for kind, eid, c in hot:
+        # 8 characters is not enough: UUID7 ids are time-ordered, so entities
+        # created in the same second share their leading characters and an
+        # 8-char prefix printed the same string for four different problems.
+        print(f"    {kind:9s} {eid[:13]}  {c} writes")
+
+
+def analyze_harness_reaches(records):
+    """What agents reached for that the trial did not give them.
+
+    This is the seven-verb trial's actual result. Each distinct reach is meant
+    to become a Problem rather than an automatic addition to the surface, so
+    what matters is the set of distinct verbs and how many agents wanted each —
+    one agent hammering one missing verb is a different signal from nine agents
+    each asking once.
+    """
+    section("Harness: reaches outside the permitted surface")
+    refused = [r for r in records if r.get("refused")]
+    if not refused:
+        print("  none — either SWARM_VERBS was unset or nothing was refused")
+        print("  (an unset allowlist means this run was not the seven-verb trial)")
+        return
+
+    print(f"  {len(refused)} refused invocations of {len(records)} total "
+          f"({pct(len(refused), len(records))}%)")
+    by_verb = collections.Counter(r.get("reached_for", "?") for r in refused)
+    print("  distinct verbs reached for:")
+    for verb, n in by_verb.most_common():
+        actors = {r.get("actor", "?") for r in refused if r.get("reached_for") == verb}
+        print(f"    {verb:14s} {n:4d} times by {len(actors)} agent(s)")
+    print("  each distinct verb above is a Problem to file, not a feature to add")
+
+
 # --------------------------------------------------------------------------
 # Harness — NOT derived from jjj. Facts about the rig, not about the work.
 # --------------------------------------------------------------------------
@@ -583,11 +690,13 @@ def main():
             analyze_evidence(repo)
             analyze_escalations(repo)
             analyze_conflicts(repo)
+            analyze_ops_per_entity(repo)
 
     if is_swarm:
         records = load_shim(root / "jjj-invocations.jsonl")
         analyze_harness_latency(records)
         analyze_harness_adherence(records)
+        analyze_harness_reaches(records)
         analyze_harness_fitness(root)
         analyze_harness_health(root)
 

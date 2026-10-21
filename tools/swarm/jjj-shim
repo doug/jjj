@@ -12,6 +12,17 @@
 #   SWARM_LOG      JSONL file to append to (required, else this is a pass-through)
 #   SWARM_JJJ_BIN  the real jjj binary (required)
 #   JJJ_USER       recorded as the actor, so every line is attributable
+#   SWARM_VERBS    space-separated allowlist of first-level subcommands. When
+#                  set, anything outside it is refused here with exit 64 and
+#                  logged with `refused: true` and its argv intact.
+#
+# The allowlist is the experimental condition for the seven-verb trial, and it
+# is also how the trial collects its result. A reach outside the surface has to
+# be *recorded*, not merely prevented: "which verb did an agent want that does
+# not exist" is the whole question, and a shim that silently passed the call
+# through would answer it only by accident, while one that refused without
+# logging would destroy the answer. Refusing in the shim rather than by editing
+# the agent prompt also means the restriction cannot be forgotten or argued with.
 #
 # The log is append-only with one write() per line. Concurrent appends of short
 # lines under O_APPEND do not interleave on macOS/Linux, which is why each record
@@ -30,6 +41,54 @@ if [ -z "${SWARM_LOG:-}" ]; then
 fi
 
 start_ns=$(python3 -c 'import time; print(time.time_ns())')
+
+# Refusal path. Deliberately before the real binary is touched: a refused verb
+# must not have side effects, and `jjj <unknown>` would exit 2 from clap anyway
+# — but with the trial's own exit code it is distinguishable in the log from a
+# command that existed and failed.
+if [ -n "${SWARM_VERBS:-}" ]; then
+    verb="${1:-}"
+    allowed=0
+    # Flags before the subcommand are not a verb; neither is an empty argv.
+    case "$verb" in
+        ""|-*) allowed=1 ;;
+        *)
+            for v in $SWARM_VERBS; do
+                [ "$verb" = "$v" ] && allowed=1 && break
+            done
+            ;;
+    esac
+    if [ "$allowed" -eq 0 ]; then
+        SWARM_START="$start_ns" SWARM_VERB="$verb" python3 - "$@" <<'REFUSED'
+import json, os, sys
+
+record = {
+    "ts": int(os.environ["SWARM_START"]) / 1e9,
+    "actor": os.environ.get("JJJ_USER", ""),
+    "pod": os.environ.get("JJJ_POD", ""),
+    "agent": os.environ.get("SWARM_AGENT", ""),
+    "argv": sys.argv[1:],
+    "cmd": " ".join(sys.argv[1:3]),
+    "exit": 64,
+    "ms": 0.0,
+    "stdout": "",
+    "stderr": "",
+    # The two fields the trial is actually for.
+    "refused": True,
+    "reached_for": os.environ["SWARM_VERB"],
+}
+line = json.dumps(record, ensure_ascii=False) + "\n"
+fd = os.open(os.environ["SWARM_LOG"], os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
+try:
+    os.write(fd, line.encode())
+finally:
+    os.close(fd)
+REFUSED
+        printf 'jjj: no such command: %s\n' "$verb" >&2
+        printf 'This trial restricts jjj to: %s\n' "$SWARM_VERBS" >&2
+        exit 64
+    fi
+fi
 
 # Capture output so it can be inspected, while still passing it through. Agents
 # read stdout, so it must survive verbatim.
