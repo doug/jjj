@@ -2,7 +2,7 @@
   "problems": [
     {
       "key": "A",
-      "title": "Phase A \u2014 measure before anything is cut or built",
+      "title": "Phase A — measure before anything is cut or built",
       "priority": "critical",
       "tags": [
         "lane:measure",
@@ -12,36 +12,36 @@
     },
     {
       "key": "A1",
-      "title": "Opt-in local command telemetry",
+      "title": "DONE: opt-in local command telemetry",
       "priority": "high",
       "tags": [
         "lane:measure",
         "swarm-core"
       ],
       "parent": "A",
-      "body": "Append {ts, command, subcommand, ms} to a machine-local file under .jj/jjj-meta/ (never synced, same class as .lamport). Off unless JJJ_TELEMETRY=1. No entity content, titles or paths.\n\nDone when a week of use produces a histogram over the ~102 leaf operations."
+      "body": "LANDED 2026-10-19 on branch worktree-agent-ad7b3e587b72a31da, gate green (GATE_EXIT=0, 57 test binaries). Not merged.\n\n.jj/jjj-meta/.telemetry.jsonl, one JSON object per line: {ts, command, subcommand, ms}. Enabled only by JJJ_TELEMETRY=1. Disabled costs ONE GETENV, 83ns - no stat, no file creation. Enabled ~120us, about 1% of a 26ms invocation. 16 concurrent processes each append one intact line via a single write_all to an O_APPEND file; no lock, so concurrent agents never serialise.\n\nVerified independently, not taken on report: push.rs copies a hard allowlist into a separate .jj/jjj-sync workspace (same mechanism that keeps automation.toml local); fetch.rs::classify is an allowlist ending _ => Target::Skip; telemetry.rs uses only ArgMatches::subcommand with no get_one/value_of/values_of anywhere, so a title, body, id or path cannot reach the file even in principle.\n\nLIMITATION THAT LANDS ON A4: an invocation clap REJECTS is never recorded (clap prints and exits before main). Harmless for A1's purpose; the opposite for A4, where a rejected command is exactly the 'what did the agent reach for' signal. A4 must capture those from its own harness."
     },
     {
       "key": "A2",
-      "title": "Benchmark prime/query/next with the cache bypassed",
+      "title": "DONE: cache-off benchmark; criterion did not fire by 11%",
       "priority": "high",
       "tags": [
         "lane:measure",
         "swarm-core"
       ],
       "parent": "A",
-      "body": "Corpora of 50, 500, 5000, 25000 entities; tools/bench already has a 25K baseline. Report p50/p99 per command, cache on vs off.\n\nKILL: if cache-off prime exceeds 500ms at 5000 entities, B1 does not run and the plan keeps a rebuildable index."
+      "body": "RAN 2026-10-19 on branch worktree-agent-ae5ed5897bca03ebf. Cache-off prime p50 at 5,000 entities is 451ms against the 500ms line (452ms on a 200-rep re-run). CRITERION DID NOT FIRE.\n\nBut: margin is 11%, the p99 of that cell is 604ms (already over), and the knee is exactly at the gate - ~82us/entity at 5K, ~114us at 25K, so 500ms lands at 4,500-5,500 entities. The threshold sat on the inflection by coincidence.\n\nNOT comfortably fast at 25,000: 2.88s cache-off. What actually strengthens the deletion is that prime misses 500ms WITH the cache at 25K too (856ms). The cache's whole value window is ~2,000-25,000 entities and the observed corpus is 52.\n\nDECOMPOSITION MATTERS MORE THAN THE VERDICT: emptying the event shards (75,004 -> 4) moved prime 2% at 5K and 0% at 25K. The event log is NOT the cost; per-entity parse_frontmatter is. The future lever is lazy/partial frontmatter decode or a per-file hash skip, NOT an index over events.\n\nComposed with A3: both found the cost is turning bytes into structs. Predicted cache-off prime at 5,000 entities after Phase C: ~455ms at 1 op/entity (passes), ~870ms at 100 (fails), ~4.2s at 1,000 (fails badly). A2's green light does not survive Phase C."
     },
     {
       "key": "A3",
-      "title": "Spike the op-log replay cost curve",
+      "title": "DONE: op-log replay cost curve measured",
       "priority": "critical",
       "tags": [
         "lane:measure",
         "swarm-core"
       ],
       "parent": "A",
-      "body": "LARGEST TECHNICAL RISK. Replay cost grows with OPERATION count, not entity count. A problem edited 500 times has 500 ops to replay and nothing bounds that. Throwaway prototype, not a branch that merges. Measure 10/100/1000/10000 ops per entity.\n\nDone when the curve exists and 'at what op count does an entity need a snapshot?' has a number.\n\nKILL: >50ms at 1000 ops/entity means Phase C must add C9 compaction before C8."
+      "body": "RAN 2026-10-19. Kill criterion DID NOT FIRE: 0.92ms parse+fold p99 at 1000 ops/entity, 9.1ms with one object read per pack, against the 50ms line. Margin held at 128B and 8000B bodies.\n\nFour findings that outrank the verdict:\n1. Replay is free (77ns/op); DESERIALISATION is the cost (0.84us/op, 11x more). A snapshot must store materialised state, not a memoised fold.\n2. Growth is exactly linear, no knee. What degrades first is SIZE: 1,090x amplification at 1000 ops (354KiB log vs 0.9KiB state), 1.7GB at 5000 entities.\n3. The dominant cost is C3's layout decision, not C9's compaction. One object per pack adds ~21us open/read/close = 8x the parse cost, and moves the 50ms crossing from ~17,000 ops to ~4,700. Free if decided before C3 is written.\n4. The operating point is UNMEASURED and is the real gap: observed usage is ~1 op/entity, and neither live corpus even has a lamport field. A4 must record ops/entity.\n\nSpike in tools/spike-oplog/ on branch worktree-agent-a9227d7fafdb5564a, not merged."
     },
     {
       "key": "A4",
@@ -52,11 +52,11 @@
         "swarm-core"
       ],
       "parent": "A",
-      "body": "Agents told only prime, next, query, create, edit, escalate, doctor exist. See the August 2026 trial notes for harness traps that cost whole runs.\n\nDone when every reach outside the seven is logged with what it wanted. Each distinct reach becomes a Problem, not an automatic feature."
+      "body": "Agents told only prime, next, query, create, edit, escalate, doctor exist. See the August 2026 trial notes for harness traps that cost whole runs.\n\nDone when every reach outside the seven is logged with what it wanted. Each distinct reach becomes a Problem, not an automatic feature.\n\nTWO MANDATORY ADDITIONS from A1 and A3:\n1. Capture clap-REJECTED invocations from the harness, not from .telemetry.jsonl - telemetry structurally cannot see them, and they are the most interesting rows.\n2. RECORD OPERATIONS PER ENTITY. A3 produced the replay curve but nothing says where on it a swarm sits; observed usage is ~1 op/entity and neither live corpus has a lamport field. This number decides whether C9's threshold is ever approached and whether B1's derived index is sized right. LARGEST REMAINING UNKNOWN IN THE PLAN.\n\nBlocked here: needs a container fleet and a real trial harness."
     },
     {
       "key": "B",
-      "title": "Phase B \u2014 cut the SQLite cache first",
+      "title": "Phase B — cut the SQLite cache first",
       "priority": "high",
       "tags": [
         "lane:substrate",
@@ -66,14 +66,14 @@
     },
     {
       "key": "B1",
-      "title": "Remove src/db/ and the CACHE_FAITHFUL protocol",
+      "title": "Reduce src/db/ to a minimal derived index (not delete)",
       "priority": "high",
       "tags": [
         "lane:substrate",
         "swarm-core"
       ],
       "parent": "B",
-      "body": "4,655 LOC. Blocked on Gate A (A2 specifically).\n\nDone when gate.sh reports GATE_EXIT=0, the per-release corpus test from 80ea24c still loads every historical fixture, and doctor no longer mentions a database."
+      "body": "CORRECTED after A3. B1 and Phase C are NOT independent and the first draft treated them as if they were.\n\nAn op-log makes a single entity read 88x more expensive at 1000 ops than today's state-based read, crossing over at ~10 ops/entity. A2 measures cache-off prime against TODAY's markdown storage, so A2's green light does not survive Phase C.\n\nWorse: prime must read EVERY entity to compute the ready front even though its output is constant in corpus size. A2's own kill line (500ms / 5000 entities = 100us/entity) allows only ~34 ops/entity. No swarm sits below 34 edits per problem. Per-entity snapshots (C9) do not fix this; prime needs a CORPUS-LEVEL materialised read path.\n\nThat is a cache. Confirmed independently: a Rust reimplementation of git-bug WITHOUT a cache lists 48,889 issues in ~5s vs ~400ms for git-bug WITH its cache, and its author attributes the gap to the missing cache layer. git-bug needs a cache BECAUSE it has an op-log. The design note recommended adopting the op-log and deleting the cache; those undercut each other.\n\nSO: strip src/db/ to a minimal derived index - id, status, parent, lamport, assignee, materialised body - and delete the rest (FTS, semantic search, the 16-column mirror, the migration ladder). Most of the LOC saving survives, and most of the CACHE_FAITHFUL relief, since far fewer fields are mirrored. The index must be declared DERIVED and REBUILDABLE, never a source of truth. Phase C owns keeping it in step.\n\nThe effort argument for B-before-C still holds: a smaller mirror makes the C rewrite cheaper. What changed is that the cache cannot be deleted, so the 8-10K headline needs revisiting once this is scoped."
     },
     {
       "key": "B2",
@@ -95,11 +95,11 @@
         "swarm-core"
       ],
       "parent": "B",
-      "body": "222 LOC. problem list --search and solution list --search currently require the DB to exist. Make those work without it or remove them in favour of query."
+      "body": "222 LOC. The real content of this unit, found by A2: jjj search has NO fallback and silently becomes O(corpus) per invocation - with no usable cache it calls load_from_markdown, a full rebuild, on EVERY query. Measured 521ms at 2,000 entities; search.rs's own comment puts it near 10s at 25,000. It does not fail, it goes quietly quadratic in a swarm.\n\nAlso unnamed anywhere in the original plan: critique list --search and finding list --search have the same hard dependency, and semantic similarity (jjj search p/<id>) needs the embeddings table that B2 removes."
     },
     {
       "key": "C",
-      "title": "Phase C \u2014 the op-log substrate (keystone)",
+      "title": "Phase C — the op-log substrate (keystone)",
       "priority": "critical",
       "tags": [
         "lane:substrate",
@@ -130,14 +130,14 @@
     },
     {
       "key": "C3",
-      "title": "Store packs as objects on the jjj bookmark",
+      "title": "Decide pack layout, then store packs on the jjj bookmark",
       "priority": "high",
       "tags": [
         "lane:substrate",
         "swarm-core"
       ],
       "parent": "C",
-      "body": "Parallel with C2."
+      "body": "A3 found this is the largest FREE lever in the phase - free before the code is written, expensive after.\n\nOne git object per pack puts ~21us of open/read/close in front of every pack: 8x the parse cost, and it moves the 50ms crossing from ~17,000 ops down to ~4,700.\n\nThe write side has the same variable and is UNMEASURED: 1000 ops/entity at 3 ops/pack is 333 new git objects per entity - 17,000 across the real 52-entity corpus, 1.7M at 5000 entities. Plausibly the same thing as the open sync-delta latency item in the bench memory.\n\nDone when a written decision exists among one-object-per-pack, one-object-per-entity and packfile, with read AND write cost stated for each, made BEFORE any storage code lands."
     },
     {
       "key": "C4",
@@ -195,8 +195,19 @@
       "body": "1,697 LOC. Depends on C4 and C7."
     },
     {
+      "key": "C9",
+      "title": "Materialised snapshots and compaction",
+      "priority": "high",
+      "tags": [
+        "lane:substrate",
+        "swarm-core"
+      ],
+      "parent": "C",
+      "body": "NO LONGER CONDITIONAL. A3's kill criterion did not fire, so C9 is not needed to unblock C8 - but it is needed for two other reasons A3 surfaced:\n\n1. On-disk growth is 1,090x at 1000 ops/entity (354KiB log vs 0.9KiB state), which is 1.7GB at 5000 entities. Size degrades before latency does.\n2. prime reads every entity, which no per-entity threshold fixes.\n\nA SNAPSHOT MUST STORE MATERIALISED STATE, NOT A MEMOISED FOLD. The fold is 77ns/op and free; deserialisation is 0.84us/op and is the entire cost. A memoised fold saves nothing.\n\nRecommended per-entity threshold: 1000 ops. Keeps every layer >=4.7x under the 50ms line on an M1 Ultra, so it survives a 2-3x slower CI runner or cloud vCPU.\n\nC9 and B1's derived index are the same problem from two ends. Whoever takes either should read both."
+    },
+    {
       "key": "D",
-      "title": "Phase D \u2014 the seven verbs",
+      "title": "Phase D — the seven verbs",
       "priority": "high",
       "tags": [
         "lane:verbs",
@@ -303,7 +314,7 @@
     },
     {
       "key": "E",
-      "title": "Phase E \u2014 three nouns",
+      "title": "Phase E — three nouns",
       "priority": "medium",
       "tags": [
         "lane:model",
@@ -357,7 +368,7 @@
     },
     {
       "key": "F",
-      "title": "Phase F \u2014 MCP server and the App panel",
+      "title": "Phase F — MCP server and the App panel",
       "priority": "high",
       "tags": [
         "lane:host",
@@ -422,7 +433,7 @@
     },
     {
       "key": "G",
-      "title": "Phase G \u2014 deletions",
+      "title": "Phase G — deletions",
       "priority": "medium",
       "tags": [
         "lane:prune",
@@ -487,7 +498,7 @@
     },
     {
       "key": "H",
-      "title": "Phase H \u2014 consolidate",
+      "title": "Phase H — consolidate",
       "priority": "medium",
       "tags": [
         "lane:docs",
@@ -526,6 +537,43 @@
       ],
       "parent": "H",
       "body": "A breaking release. Say plainly what was removed, that ranking is extracted rather than gone, and that --if-lamport's documented limitation from 401ec92 is now narrower because a lost race no longer discards the loser. DO NOT TAG. DO NOT PUBLISH."
+    }
+  ],
+  "findings": [
+    {
+      "key": "F-A1",
+      "title": "Telemetry disabled costs 83 ns: one getenv, no stat, no file",
+      "problem": "A1",
+      "method": "100k-iteration microbenchmark of the disabled path; 16-process concurrent append test; release-mode timing against a 26 ms baseline invocation",
+      "body": "Measured 2026-10-19. Disabled: 83 ns, a single getenv of JJJ_TELEMETRY — no stat, no directory probe, no file creation. Enabled: ~120 us, about 1% of a 26 ms invocation. 16 concurrent processes each appended one intact line via a single write_all to an O_APPEND handle with no lock and no interleaving. Records only {ts, command, subcommand, ms}; the module touches ArgMatches::subcommand only, never get_one/value_of/values_of, so entity content cannot leak by construction. Verified independently: push.rs copies a hard allowlist into a separate .jj/jjj-sync workspace and fetch.rs::classify ends in `_ => Target::Skip`, so .telemetry.jsonl cannot reach a remote.\n\nLIMITATION, lands on A4: a clap-rejected invocation is never recorded, because the process exits before any handler runs. That is precisely A4's most interesting signal — the verbs an agent reached for and did not find. A4 must capture it from the harness, not from telemetry.",
+      "refs": [
+        "src/telemetry.rs",
+        "tests/telemetry_test.rs"
+      ],
+      "measured_at": "2026-10-20T04:00:00Z"
+    },
+    {
+      "key": "F-A2",
+      "title": "Cache-off prime is 451 ms at 5,000 entities; p99 604 ms is already over",
+      "problem": "A2",
+      "method": "tools/bench/cache_off.py, release binary, synthetic corpora at 50/500/5,000/25,000 entities, p50 and p99 over 50 reps (200 on the 5,000 cell); decomposition by emptying event shards",
+      "body": "Measured 2026-10-19. Cache-off `prime` p50: 40.8 ms @ 50, 76.8 ms @ 500, 451.4 ms @ 5,000, 2884 ms @ 25,000. Cache-on: 38.8 / 41.7 / 87.0 / 856.3 ms. The 5,000 cell reproduced to 1 ms over 200 reps.\n\nThe criterion (p50 < 500 ms @ 5,000) did not fire, but the margin is 11% and that cell's p99 is 604 ms — already past the budget. The cost is ~82 us/entity at 5,000 and ~114 us at 25,000, so 500 ms is crossed at 4,500-5,500 entities: the gate sat on the knee by coincidence.\n\nThe result that actually strengthens the deletion is a different one: `prime` misses 500 ms WITH the cache at 25,000 too (856 ms). The cache's whole value window is a corpus of roughly 2,000-25,000 entities, and below 500 entities it is worth under 40 ms. The observed corpus is 52.\n\nDECOMPOSITION: emptying the event shards (75,004 events down to 4) moved `prime` 2% at 5,000 and 0% at 25,000. The event log is not the cost. Per-entity parse_frontmatter is.",
+      "refs": [
+        "tools/bench/cache_off.py",
+        "tools/bench/baseline-cache-off.json"
+      ],
+      "measured_at": "2026-10-20T04:00:00Z"
+    },
+    {
+      "key": "F-A3",
+      "title": "Op-log replay is free at 77 ns/op; deserialisation at 0.84 us/op is the cost",
+      "problem": "A3",
+      "method": "tools/spike-oplog standalone binary (excluded from the workspace), synthetic op-logs at 1/10/100/1,000/5,000 ops per entity, 128 B and 8 KB bodies, p99 over 1,000 trials; separate run with one git object read per pack",
+      "body": "Measured 2026-10-19. Parse+fold p99 at 1,000 ops/entity is 0.92 ms against the 50 ms criterion — 54x under. 9.1 ms with one git object read per pack. Holds at both 128 B and 8 KB bodies.\n\nFOUR RESULTS, in descending order of how much they change the plan:\n\n1. Replay is free: 77 ns/op to fold. Deserialisation is the cost at 0.84 us/op — 11x the fold. A snapshot must therefore store MATERIALISED STATE, not a memoised fold; memoising the cheap half saves nothing.\n\n2. Size degrades before time does. Growth is exactly linear with no knee: 1,090x amplification at 1,000 ops, 1.7 GB at 5,000 entities. The op-log's first failure mode is disk, not latency.\n\n3. The dominant cost is C3's layout decision, not C9's compaction. One git object per pack adds ~21 us open/read/close, 8x the parse cost, and moves the 50 ms crossing from ~17,000 ops to ~4,700. Free to decide before the code exists; expensive afterwards. C3 is promoted ahead of C9.\n\n4. The operating point is unmeasured, and that is the real gap. Observed usage is ~1 op/entity: minerva_old has 46 events across 45 problems, and neither live corpus has a `lamport` field at all. This curve becomes a decision only once A4 records ops/entity.\n\nSTRUCTURAL HOLE this exposes in the plan, verified independently: `prime` must read every entity to compute the ready front even though its output is constant in corpus size. An op-log makes each read op-proportional — 88x more expensive at 1,000 ops, crossing over at ~10 ops/entity — while A2's kill line implies a 100 us/entity budget, i.e. only ~34 ops/entity. Per-entity snapshots do not fix `prime`; it needs a corpus-level materialised read path, which is a cache. git-bug-rs confirms it from outside: without a cache layer it lists 48,889 issues in ~5 s against ~400 ms for git-bug with one, and its author attributes the gap to the missing cache. git-bug needs a cache BECAUSE it has an op-log.",
+      "refs": [
+        "tools/spike-oplog/measurements.txt"
+      ],
+      "measured_at": "2026-10-20T04:00:00Z"
     }
   ]
 }
