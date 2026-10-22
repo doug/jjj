@@ -83,8 +83,14 @@ impl App {
             let (tx, rx) = std::sync::mpsc::channel();
 
             std::thread::spawn(move || {
-                use crate::db::{search::find_similar, Database};
-                if let Ok(db) = Database::open(&db_path) {
+                use crate::db::search::find_similar;
+                // `Database::open` creates what is absent, so opening it here
+                // rebuilt the cache from a background thread in a repository
+                // that had deliberately removed it — and did so while the
+                // bypass flag was set, because this path never consulted it.
+                // The pane going quiet is the correct degradation: it shows
+                // similar items, and there is nothing to be similar to.
+                if let Some(db) = crate::db::open_cache_at(&db_path) {
                     if let Ok(results) = find_similar(db.conn(), &et, &eid, None, 5) {
                         let _ = tx.send(results);
                     }

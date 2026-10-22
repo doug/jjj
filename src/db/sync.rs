@@ -493,14 +493,25 @@ pub fn remove_entity_from_cache(db: &Database, entity_type: &str, entity_id: &st
 /// Returns `None` unconditionally when [`crate::db::bypassed`] is set, so the
 /// store's reads fall through to the canonical markdown walk.
 pub fn open_cache_if_present(repo_root: &std::path::Path) -> Option<Database> {
+    open_cache_at(&repo_root.join(".jj").join("jjj.db"))
+}
+
+/// Open a cache by its own path, for callers that already hold one.
+///
+/// The policy lives here rather than at each call site because it is three
+/// separate refusals — the bypass flag, an absent file, an unopenable file —
+/// and `Database::open` *creates* what is absent. A caller that writes
+/// `Database::open(path).ok()` and believes it has been careful has in fact
+/// built the cache it meant to avoid, which is why the bypass flag did not
+/// take effect everywhere it was set.
+pub fn open_cache_at(path: &std::path::Path) -> Option<Database> {
     if crate::db::bypassed() {
         return None;
     }
-    let path = repo_root.join(".jj").join("jjj.db");
     if !path.exists() {
         return None;
     }
-    Database::open(&path).ok()
+    Database::open(path).ok()
 }
 
 /// Number of texts to send in a single embedding API call.
