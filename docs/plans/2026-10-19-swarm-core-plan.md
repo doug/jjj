@@ -304,10 +304,44 @@ OAuth file at `~/.claude/.credentials.json` is **not** a substitute — the READ
 records that N containers racing to rotate one short-lived token can revoke the
 host login, so that path must not be used as a workaround.
 
-Everything else is ready: podman machine up, `localhost/jjj-swarm-agent:0.5.1`
-present (6 weeks old — `./swarm.sh build` should re-run so the trial exercises
-the current binary and the new shim), `--verbs` plumbed from `swarm.sh start`
-through to each container.
+`--verbs` is plumbed from `swarm.sh start` through to each container, and the
+release binary builds. **Two blockers remain, both needing a decision from the
+operator rather than more code.**
+
+**1. No credential.** As above.
+
+**2. The podman VM has no outbound TCP.** `./swarm.sh build` fails inside the
+container with `transfer too slow: failed to transfer more than 10 bytes in 30s
+(transferred 0 bytes)` from cargo. Diagnosed 2026-10-21, from inside the
+existing local image so that nothing had to be pulled:
+
+| probe | result |
+|---|---|
+| `getent hosts index.crates.io` | resolves (151.101.66.137) |
+| `curl https://index.crates.io/config.json` | `000` |
+| same, `--resolve` pinned to the IP | `000` |
+| `curl https://1.1.1.1/` | `000` |
+| `podman pull alpine` | `dial tcp 44.195.142.59:443: i/o timeout` |
+
+So DNS works — it is answered by the gvproxy resolver at `192.168.127.1` — and
+TCP egress does not. The host itself is fine (`index.crates.io` returns 200).
+
+**The standard fix is `podman machine stop && podman machine start`, and it was
+deliberately not run.** Six containers are up, and three of them do not come
+back by themselves:
+
+| container | up | restart policy |
+|---|---|---|
+| `howwedecide-postgres` | 2 weeks | **`no`** |
+| `howwedecide-api` | 2 weeks | **`no`** |
+| `howwedecide-cron` | 2 weeks | **`no`** |
+| `minerva` | 11 days | `unless-stopped` |
+| `bitmagnet-postgres` | 3 days | `unless-stopped` |
+| `bitmagnet` | 3 days | `unless-stopped` |
+
+Restarting the machine would leave the `howwedecide` stack down, including its
+database, until it is brought back up by hand. That is not a cost this plan gets
+to impose on an unrelated service to run a measurement.
 
 ### A3 result (2026-10-19) — ran; kill criterion did not fire; plan changed anyway
 
