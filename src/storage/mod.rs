@@ -16,6 +16,7 @@ mod milestones;
 mod problems;
 mod solutions;
 pub mod sync_state;
+pub mod validate;
 
 /// Write `content` to `path` atomically by writing to a uniquely-named `.tmp`
 /// sibling first, then renaming. The temp name includes the process ID and

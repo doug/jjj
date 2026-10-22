@@ -329,7 +329,120 @@ fn a_dangling_reference_is_still_refused_at_push() {
         "a dangling reference was published to every clone: {combined}"
     );
     assert!(
+        !combined.contains("All checks passed"),
+        "validation passed a corrupt corpus; push failed for some other reason: {combined}"
+    );
+    assert!(
         combined.contains("non-existent solution"),
         "the refusal should name the missing reference: {combined}"
+    );
+}
+
+/// The pre-publish gate must not depend on the cache existing.
+///
+/// `push` used to open SQLite — or build a throwaway in-memory database — load
+/// every entity into it and run the integrity checks in SQL. That made the
+/// cache load-bearing for *correctness* on this one path, so a plan to delete
+/// the cache would have silently deleted the only thing standing between a
+/// dangling reference and every other clone. Validation now reads the markdown
+/// directly, which is both the data being pushed and the only thing the remote
+/// will see.
+///
+/// Asserting the refusal is not enough on its own: the old code would also
+/// refuse, by building a database on the spot. What distinguishes the two is
+/// that no database is created.
+#[test]
+fn push_validates_without_a_cache_and_does_not_create_one() {
+    if !jj_available() {
+        return;
+    }
+    let repo = setup_test_repo();
+    run_jjj_success(repo.path(), &["problem", "new", "Present", "--force"]);
+
+    let db = repo.path().join(".jj/jjj.db");
+    if db.exists() {
+        fs::remove_file(&db).expect("remove cache");
+    }
+
+    fs::write(
+        repo.path()
+            .join(".jj/jjj-meta/critiques")
+            .join("01900000-0000-7000-8000-0000000000fd.md"),
+        "---\nid: '01900000-0000-7000-8000-0000000000fd'\n\
+         title: Dangling\nsolution_id: '01900000-0000-7000-8000-000000000098'\n\
+         status: open\nseverity: high\n\
+         created_at: '2026-08-20T00:00:00Z'\nupdated_at: '2026-08-20T00:00:00Z'\n---\n",
+    )
+    .expect("write critique");
+
+    let out = run_jjj(repo.path(), &["push"]);
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        !out.status.success(),
+        "a dangling reference was published with no cache present: {combined}"
+    );
+    assert!(
+        !combined.contains("All checks passed"),
+        "validation passed a corrupt corpus; push failed for some other reason: {combined}"
+    );
+    assert!(
+        combined.contains("non-existent solution"),
+        "the refusal should name the missing reference: {combined}"
+    );
+    assert!(
+        !db.exists(),
+        "push rebuilt the SQLite cache to validate; the markdown is the input \
+         either way, and rebuilding it is what made the cache load-bearing here"
+    );
+}
+
+/// A parent chain that closes on itself is refused, and reported once.
+///
+/// Reimplemented away from a recursive SQL walk, so the cycle case needs its
+/// own coverage: the dangling-reference test above cannot reach it, and a cycle
+/// that is merely reported as a dangling parent would name the wrong fault.
+#[test]
+fn a_parent_cycle_is_refused_at_push() {
+    if !jj_available() {
+        return;
+    }
+    let repo = setup_test_repo();
+    let a = "01900000-0000-7000-8000-00000000000a";
+    let b = "01900000-0000-7000-8000-00000000000b";
+    for (id, other, title) in [(a, b, "Ouroboros A"), (b, a, "Ouroboros B")] {
+        fs::write(
+            repo.path()
+                .join(".jj/jjj-meta/problems")
+                .join(format!("{id}.md")),
+            format!(
+                "---\nid: '{id}'\ntitle: {title}\nstatus: open\n\
+                 priority: medium\nparent_id: '{other}'\n\
+                 created_at: '2026-08-20T00:00:00Z'\nupdated_at: '2026-08-20T00:00:00Z'\n---\n"
+            ),
+        )
+        .expect("write problem");
+    }
+
+    let out = run_jjj(repo.path(), &["push"]);
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        !out.status.success(),
+        "a parent cycle was published: {combined}"
+    );
+    assert!(
+        !combined.contains("All checks passed"),
+        "validation passed a corrupt corpus; push failed for some other reason: {combined}"
+    );
+    assert!(
+        combined.contains("cycle in its parent chain"),
+        "the refusal should name the cycle rather than a missing parent: {combined}"
     );
 }

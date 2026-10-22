@@ -1,5 +1,4 @@
 use crate::context::CommandContext;
-use crate::db::{self, Database};
 use crate::error::{JjjError, Result};
 use crate::jj::JjClient;
 use crate::models::CritiqueStatus;
@@ -446,31 +445,16 @@ pub fn execute(
     // 4.4KB to 14.2KB of conflict debris, and cost an agent another agent's work
     // outright. The guard had existed for three months by then.
     //
-    // With no cache on disk, validate through a throwaway in-memory one: the
-    // markdown is the input either way, so the checks are identical and nothing
-    // is persisted.
-    let db_path = jj_client.repo_root().join(".jj").join("jjj.db");
-    let had_cache = db_path.exists();
+    // Validated straight off the markdown. This used to open the SQLite cache —
+    // or build a throwaway in-memory one — load every entity into it, and run
+    // the checks in SQL. That made `push` the one command where the cache was
+    // load-bearing for *correctness* rather than for speed, so removing the
+    // cache would have silently removed this gate. It also validated one copy
+    // removed from the truth: whatever the last load had put in the cache,
+    // rather than the files the push is about to copy.
     {
-        // Refresh the cache FROM markdown (markdown is canonical — never dump
-        // the DB back over it). `Database::open` rebuilds a dirty/interrupted
-        // DB to *empty*; dumping that over the markdown files would wipe them
-        // and push the wipe. Loading instead makes validation check the real
-        // current content, and push copies the untouched markdown files.
         println!("Validating metadata...");
-        let db = if had_cache {
-            Database::open(&db_path)?
-        } else {
-            Database::open_in_memory()?
-        };
-        if had_cache {
-            db::load_from_markdown_incremental(&db, store)?;
-        } else {
-            // Nothing to be incremental against, and no content_cache to seed:
-            // read every entity.
-            db::load_from_markdown(&db, store)?;
-        }
-        let errors = db::validate(&db)?;
+        let errors = crate::storage::validate::validate(store)?;
         if !errors.is_empty() {
             println!("Validation errors:");
             for error in &errors {
@@ -554,11 +538,19 @@ pub fn execute(
     state.advance(pushed_commit);
     state.save(store.meta_path())?;
 
-    // Clear dirty flag after successful push
-    if db_path.exists() {
-        let db = Database::open(&db_path)?;
-        db::set_dirty(&db, false)?;
-    }
+    // The dirty flag is deliberately NOT cleared here any more.
+    //
+    // It used to be, and that was correct while validation above loaded every
+    // entity into the cache: the cache really was up to date by the time the
+    // push succeeded, so declaring it clean was a true statement. Validation
+    // now reads the markdown directly and never opens the cache, so clearing
+    // the flag would assert freshness this command no longer establishes —
+    // and the flag is what `storage::mod`, `critiques::list` and `search` all
+    // consult before trusting a cached read. Marking a stale cache clean would
+    // make them serve stale entities.
+    //
+    // Leaving it set is the conservative direction: a cache believed dirty is
+    // re-derived, a cache wrongly believed clean is read.
 
     // 3. Smart prompts (unless --no-prompt)
     if !no_prompt {
