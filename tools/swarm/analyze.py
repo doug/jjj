@@ -503,6 +503,59 @@ def analyze_ops_per_entity(repo):
         print(f"    {kind:9s} {eid[:13]}  {c} writes")
 
 
+def analyze_command_demand(records):
+    """Which commands agents actually used, and how much search they did.
+
+    This exists to settle a specific question rather than to be interesting.
+    B1 reduces the cache to a derived index with no full-text table, and five
+    commands depend on FTS: `jjj search` and the `--search` flag on problem,
+    solution, critique and finding listings. Whether to replace them with a
+    markdown scan, keep FTS, or delete them outright was deferred to this
+    measurement, because the honest answer depends on whether a swarm searches
+    at all or just queries by status.
+
+    The two are easy to conflate and are not the same command. `jjj query`
+    filters by status, tag, assignee and sort; `jjj search` does full text with
+    ranking and snippets. An agent reaching for `query` is not evidence for
+    keeping FTS.
+    """
+    section("Harness: command demand (settles the FTS decision)")
+    if not records:
+        print("  no invocations logged")
+        return
+
+    # First-level subcommand only; `problem new` and `problem list` are the same
+    # command for this purpose, except where the --search flag is what matters.
+    verbs = collections.Counter()
+    for r in records:
+        argv = r.get("argv") or []
+        verb = next((a for a in argv if not a.startswith("-")), None)
+        if verb:
+            verbs[verb] += 1
+    total = sum(verbs.values())
+    print(f"  {total} invocations over {len(verbs)} distinct commands")
+    for verb, n in verbs.most_common(12):
+        print(f"    {verb:12s} {n:5d}  ({pct(n, total)}%)")
+
+    # The FTS-dependent surface, counted exactly.
+    full_text = sum(1 for r in records if (r.get("argv") or [])[:1] == ["search"])
+    flagged = sum(1 for r in records if "--search" in (r.get("argv") or []))
+    query = verbs.get("query", 0)
+    print(f"  FTS-dependent: {full_text} `search` + {flagged} `--search` "
+          f"= {full_text + flagged} of {total} ({pct(full_text + flagged, total)}%)")
+    print(f"  non-FTS filtering: {query} `query` ({pct(query, total)}%)")
+
+    if full_text + flagged == 0:
+        print("  → nothing used full text. Deleting it costs this swarm nothing,")
+        print("     and a markdown scan would be dead code written to be safe.")
+    elif pct(full_text + flagged, total) < 2:
+        print("  → full text is marginal. A markdown substring scan is the cheap")
+        print("     replacement; O(corpus) is irrelevant at this call volume.")
+    else:
+        print("  → full text is load-bearing. Deleting FTS needs a real")
+        print("     replacement, not a substring scan.")
+
+
 def analyze_harness_reaches(records):
     """What agents reached for that the trial did not give them.
 
@@ -696,6 +749,7 @@ def main():
         records = load_shim(root / "jjj-invocations.jsonl")
         analyze_harness_latency(records)
         analyze_harness_adherence(records)
+        analyze_command_demand(records)
         analyze_harness_reaches(records)
         analyze_harness_fitness(root)
         analyze_harness_health(root)

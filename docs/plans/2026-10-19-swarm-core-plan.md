@@ -456,11 +456,51 @@ already survive its absence**.
    there is no coherent middle. `problem new`'s duplicate check is a *separate*
    decision because it needs embeddings rather than FTS, and B2 removes those.
 
-**Still open and now explicit:** `push`'s `db validate` is the only site where
-the cache enforces a correctness property rather than serving a read. B1 cannot
-simply make it graceful — a silently-skipped validation is worse than a slow
-one. It either moves to a markdown-native check or `push` loses the gate
-knowingly.
+**Resolved 2026-10-21.** `push`'s `db validate` was the only site where the
+cache enforced a correctness property rather than serving a read.
+`storage::validate` now does the same eight checks over the markdown and `push`
+touches no database at all. Two traps on the way, both recorded because they
+generalise to the remaining sites:
+
+- The first version read through `list_problems()` and friends. Those are
+  DB-primary — served straight from a clean cache — so an entity written to
+  markdown but not yet loaded is invisible to them, and validation printed
+  "All checks passed" over a corpus containing a dangling critique. It must be
+  `list_fs`, whose own documentation warns about exactly this. **Any later
+  phase that moves a read off the cache has to ask which listing it is using.**
+- `push` also cleared the cache's dirty flag. True while validation loaded
+  every entity into the cache; false once it stopped. Six readers consult that
+  flag before trusting a cached read, so clearing it would have made them serve
+  stale entities. **Removing a cache *write* can break a cache *read* several
+  files away.**
+
+Also fixed: `tui/app/related.rs` opened the cache with `Database::open`, which
+*creates* what is absent, so the pane's background thread rebuilt the whole
+cache in a repository that had removed it — unobservably, from a thread. The
+three refusals (bypass flag, absent file, unopenable file) now live once as
+`db::open_cache_at`.
+
+**Not a defect, contrary to an earlier note in this plan:** the five `--search`
+paths rebuilding the cache under `JJJ_NO_DB=1` is documented behaviour.
+`db::bypassed()` states that the `--search` flags "are unaffected and still
+require the file", and that the flag is "a read-path measurement switch, not a
+supported way to run." Changing it would also break the cache-off benchmark.
+
+### The FTS decision is deferred to A4, and A4 now measures it
+
+The five FTS-dependent commands are one decision (§3). It is deferred until the
+trial reports, because the honest answer depends on whether a swarm does
+full-text search at all or only filters by status — and `jjj query` already
+does the latter, so an agent reaching for `query` is not evidence for keeping
+FTS.
+
+`analyze.py::analyze_command_demand` counts it exactly: `search` invocations
+plus `--search` flags, against `query`, as a share of all invocations. Its
+verdict thresholds are written down rather than left to interpretation —
+nothing used full text (delete it; a markdown scan would be dead code written
+to be safe), under 2% (marginal, a substring scan is the cheap replacement, and
+O(corpus) is irrelevant at that call volume), otherwise load-bearing (deleting
+FTS needs a real replacement). All three branches tested.
 
 
 **Counter-intuitive but load-bearing ordering.** `CACHE_FAITHFUL` on `Persist` means
