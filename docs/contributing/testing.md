@@ -9,13 +9,36 @@ This document describes the testing strategy and test suite for **jjj**.
 
 ## Test Structure
 
-```
-tests/
-├── config_management.rs       # Configuration tests
-├── integration_storage.rs     # Storage layer integration tests
-├── integration_test.rs        # End-to-end integration tests
-└── workflow_test.rs           # Workflow command tests
-```
+`tests/` holds several dozen integration suites. They group into a few kinds,
+and knowing which kind you are adding to matters more than the file names:
+
+| Kind | Examples | What it guards |
+|------|----------|----------------|
+| Per-command | `command_problem_test.rs`, `command_prime_test.rs`, `command_plan_test.rs` | One command's contract, including its `--json` shape |
+| Concurrency and durability | `concurrent_writers_test.rs`, `conditional_write_test.rs`, `lamport_invariant_test.rs`, `durability_test.rs` | That a write cannot destroy work the caller never saw |
+| Sync and merge | `push_fetch_test.rs`, `coordination_test.rs`, `unknown_fields_test.rs` | That two clones converge, and that an older client cannot delete a newer one's fields |
+| Format compatibility | `format_compat_test.rs` | That today's binary still reads every released corpus |
+| Documentation | `doc_test.rs`, `skill_test.rs`, `journey_test.rs` | That the docs are executable and do not drift |
+| Storage internals | `integration_storage.rs`, `sqlite_storage_test.rs`, `entity_body_test.rs` | The layer under the commands |
+
+Three of those deserve attention because they make documentation into tests:
+
+- **`doc_test.rs`** extracts ` ```bash,test ` blocks from everything under
+  `docs/` and runs them against a real binary in a throwaway jj repo — one repo
+  per file, blocks sharing state in order. A `# expect: <text>` line asserts
+  that the previous command's stdout contained it. **A documented example that
+  stops working fails the build**, which is the only way a reference page stays
+  true.
+- **`skill_test.rs`** checks `skills/jjj/SKILL.md` against the real CLI, so the
+  agent-facing manual cannot teach a command or flag that does not exist.
+- **`journey_test.rs`** runs every markdown file in `journeys/`, each as its own
+  `#[test]` so one failure names the journey that broke. They read as prose,
+  they execute as tests, and they are the right place for behaviour a user would
+  notice.
+
+Note that `SKILL.md` is pulled in with `include_str!`, so editing it rebuilds
+the crate and every test binary. That is deliberate — it is what makes the drift
+check unavoidable — but it does mean a one-word skill edit is not a cheap one.
 
 ## Running Tests
 
@@ -25,12 +48,24 @@ tests/
 cargo test
 ```
 
+### Run the full gate
+
+This is what to run before committing. It reports which stage failed rather than
+just failing:
+
+```bash
+./scripts/gate.sh          # fmt → invariants → clippy → tests; verdict in GATE_EXIT
+```
+
+It deliberately does **not** run `cargo fmt` before `cargo fmt --check`: a stage
+must not repair the thing it measures, or it always passes.
+
 ### Run Specific Test Suite
 
 ```bash
-cargo test --test config_management
-cargo test --test integration_test
-cargo test --test workflow_test
+cargo test --test command_problem_test
+cargo test --test durability_test
+cargo test --test doc_test
 ```
 
 ### Run a Specific Test
@@ -51,6 +86,29 @@ cargo test -- --nocapture
 ```bash
 cargo test -- --test-threads=4
 ```
+
+### Check the invariants
+
+A text check over `src/` where each rule names the incident it came from. It
+runs as its own CI job because it reports a broken fence in seconds rather than
+after a full compile:
+
+```bash
+./scripts/check-invariants.sh
+```
+
+### Check that every commit compiles
+
+A branch whose tip builds can still contain commits that do not, which makes
+`git bisect` useless exactly when you need it. A rebase that moves a caller
+ahead of the function it calls produces this without touching a line of code:
+
+```bash
+./scripts/verify-commits.sh origin/main
+```
+
+It compiles each commit in a throwaway worktree with a shared
+`CARGO_TARGET_DIR`, and prints `COMPILES=` / `BROKEN=` / `VERIFY_EXIT=`.
 
 ## Test Coverage
 
@@ -164,7 +222,9 @@ cargo test -- --test-threads=4
 
 ## Test Results
 
-Run `cargo test` to see current test results. Tests cover configuration management, storage operations, workflow commands, and integration scenarios.
+Run `./scripts/gate.sh` to see current results; `GATE_EXIT=0` with every stage
+reporting `GATE_OK=` is the pass condition. Do not quote a test count from this
+page — it goes stale the moment someone adds a test. Read it from the run.
 
 ## Testing Philosophy
 

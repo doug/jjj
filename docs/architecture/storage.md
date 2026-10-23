@@ -98,8 +98,20 @@ solutions/                                     # Solution storage
 critiques/                                     # Critique storage
 ├── 01958d5e-f6a7-7b8c-9d0e-1f2a3b4c5d6e.md
 └── 01958e6f-a7b8-7c9d-0e1f-2a3b4c5d6e7f.md
+findings/                                      # Finding storage (evidence)
+├── 01958f7a-b8c9-7d0e-1f2a-3b4c5d6e7f8a.md
+└── ...
+rankings/                                      # Per-user problem ordering
+└── {milestone_id}/
+    └── {user}.json
 events.jsonl                                   # Event log
+events/                                        # Per-pod event shards
+└── {user}.jsonl
 ```
+
+A ranking file is merged by last-writer-wins on its own `updated_at`, not by
+three-way merge: each one is authored by a single user, so there is no
+concurrent-edit case to reconcile. Event shards merge by line union.
 
 Entity files are named with their full UUID7 identifier. UUID7 is time-ordered, so files naturally sort chronologically.
 

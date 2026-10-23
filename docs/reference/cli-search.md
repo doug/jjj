@@ -5,7 +5,22 @@ description: CLI reference for searching across all jjj entities
 
 # Search Commands
 
-Search across problems, solutions, critiques, milestones, and events. Supports both text search and entity reference-based similarity search.
+Search across problems, solutions, critiques, findings, milestones, and events.
+Supports both text search and entity reference-based similarity search.
+
+> **Search requires the SQLite cache** at `.jj/jjj.db`. Full-text search and
+> embeddings are indexes, not stored data, so unlike the rest of jjj these
+> commands cannot fall back to walking the markdown. `jjj search` syncs the
+> cache itself; the `--search` flags on `problem list`, `solution list`,
+> `critique list` and `finding list` update it incrementally but need the file
+> to exist already. If a `--search` filter reports no index, run
+> `jjj db rebuild` once.
+>
+> This is also why `JJJ_NO_DB=1` does not affect these commands: it is a
+> read-path measurement switch for the paths that *have* a fallback.
+>
+> For filtering rather than searching — by status, tag, author, assignee —
+> use [`jjj query`](cli-orientation#jjj-query), which needs no cache.
 
 ## `jjj search`
 

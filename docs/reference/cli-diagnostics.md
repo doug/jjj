@@ -19,6 +19,12 @@ is easy to see once you know where to look. This gathers them in one place.
 Nothing here mutates the repository, so it is always safe to run, and it is the
 right thing to paste into a bug report.
 
+**`jjj doctor` exits non-zero when a check fails.** It used to print everything
+that was wrong and exit 0, so anything branching on the exit code — CI, a
+wrapper script, an agent deciding whether the repo is usable — was told the
+repository was healthy. If you script it, branch on the code rather than
+grepping the output.
+
 **Checks:**
 
 | Check | Reports |

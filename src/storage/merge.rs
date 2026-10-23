@@ -14,8 +14,11 @@
 //!   that were in the base and items added on either side. Items removed on
 //!   one side and unchanged on the other are dropped.
 //! - **Mappings** → recursively merged key-by-key.
-//! - **Scalars** that diverged on both sides → the side with the later
-//!   `updated_at` wins (lexicographic tiebreak on the serialized value).
+//! - **Scalars** that diverged on both sides → the side with the higher
+//!   `lamport` clock wins, because that one was written after observing the
+//!   other. Equal clocks mean genuinely concurrent (or pre-clock) writes and
+//!   fall back to `updated_at` compared as an *instant*, then to a
+//!   lexicographic tiebreak on the serialized value so clones still converge.
 //! - `created_at` / `updated_at` are always normalized at the end to
 //!   min / max across the two sides.
 //!

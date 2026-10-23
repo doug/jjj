@@ -158,6 +158,10 @@ pub enum Commands {
     /// Repeating a key ORs its values; different keys AND. A bare word matches
     /// the title; the bare word `mine` means the current actor.
     ///
+    /// The bare word `waiting` lists problems held back by unfinished
+    /// sub-problems, and names what each is blocked by. It is problem-only, so
+    /// it ignores any `type:` term.
+    ///
     /// Keys: type, status, tag, author, assignee, problem, sort, limit.
     /// Sort keys: edit (causal clock), created, updated, title — prefix with
     /// `-` to reverse.

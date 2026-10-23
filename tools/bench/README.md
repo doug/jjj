@@ -105,9 +105,12 @@ entities that nobody has.
 **Not measured here, and not fixed:** `search`, `problem list --search` and the
 other `--search` flags have no filesystem fallback. With `JJJ_NO_DB=1` they
 still create and populate `.jj/jjj.db` (the bypass is read-path only), and
-`jjj search` falls into a full `load_from_markdown` per invocation. `push` also
-opens the DB to run `db validate` before publishing. Those paths are B3's
-problem; this harness only records that they exist.
+`jjj search` falls into a full `load_from_markdown` per invocation. Those paths
+are B3's problem; this harness only records that they exist.
+
+`push` used to belong on that list — it opened the DB to run `db validate`
+before publishing. As of B1 it validates the markdown directly and touches no
+database at all, so a cache-off `push` measurement is now measuring `push`.
 
 ## Sync scaling (`sync_scaling.py`) — the open finding
 
