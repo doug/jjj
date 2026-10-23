@@ -17,6 +17,18 @@ export default defineConfig({
     favicon: '/favicon.svg',
     description: 'Distributed project management for Jujutsu',
     social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/doug/jjj' }],
+    // `bash,test` marks a block that `tests/doc_test.rs` executes against a real
+    // binary. Shiki has no such language, so every executable example — the most
+    // trustworthy blocks on the site — rendered as unhighlighted plain text.
+    // Alias it to bash rather than renaming the fences, because the fence string
+    // is what the test harness greps for.
+    expressiveCode: {
+      shiki: {
+        langAlias: {
+          'bash,test': 'bash',
+        },
+      },
+    },
     customCss: [
       './src/styles/global.css',
       './src/styles/custom.css',
@@ -52,7 +64,9 @@ export default defineConfig({
           { label: 'Problem Commands', slug: 'reference/cli-problem' },
           { label: 'Solution Commands', slug: 'reference/cli-solution' },
           { label: 'Critique Commands', slug: 'reference/cli-critique' },
+          { label: 'Finding Commands', slug: 'reference/cli-finding' },
           { label: 'Milestone Commands', slug: 'reference/cli-milestone' },
+          { label: 'Orientation & Planning', slug: 'reference/cli-orientation' },
           { label: 'Workflow Commands', slug: 'reference/cli-workflow' },
           { label: 'Search Commands', slug: 'reference/cli-search' },
           { label: 'Database Commands', slug: 'reference/cli-db' },
