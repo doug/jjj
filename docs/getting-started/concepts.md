@@ -14,6 +14,7 @@ description: Mapping traditional project management terms to jjj's Popperian con
 | **Issue / Bug** | **Problem** | Work begins with a problem. Problems are fundamental. |
 | **Branch / PR** | **Solution** | A solution is a *conjecture*—a tentative attempt that may be wrong. |
 | **Review Comment** | **Critique** | Error elimination through explicit criticism. |
+| **Benchmark / Metric** | **Finding** | Evidence about a problem. Measured, not agreed to. |
 | **Roadmap** | **Milestone** | Time-boxed cycles of problems to solve. |
 | **Invalid Issue** | **Dissolved** | A problem found to be based on false premises. |
 | **Merged** | **Approved** | A solution that has survived all current criticism. |
@@ -57,10 +58,30 @@ A **Critique** is how solutions improve. Criticism is not an attack; it's the me
 
 **Severities:** `low`, `medium`, `high`, `critical` — affect how urgently `jjj status` surfaces the issue.
 
-### 4. Milestones
+### 4. Findings (Evidence)
+
+A **Finding** is something you measured about a problem. It is the one kind with
+no approval path, and that is deliberate: a measurement is not something a
+reviewer agrees to. A finding is either **current** or **superseded** by a better
+measurement.
+
+**Finding lifecycle:** `current` → `superseded`
+
+- `current` — the best evidence available on this problem
+- `superseded` — a later measurement replaced it (`jjj finding supersede <old> --by <new>`).
+  The old finding is not deleted; what it said remains readable, which is how you
+  see a number move.
+
+Record *when the measurement was taken* with `--measured-at`, separately from
+when it was written down — two findings filed in the same minute may describe
+states a week apart. Solutions and critiques cite findings with `--cites`, which
+is what distinguishes a conjecture grounded in evidence from one that is merely
+plausible.
+
+### 5. Milestones
 
 **Milestones** are time-boxed goals that group problems together. They give you a roadmap view: which problems are targeted for which release, and how much progress has been made.
 
-### 5. Knowledge Growth
+### 6. Knowledge Growth
 
 The repository accumulates **verified knowledge**. An approved solution is not just merged code; it's documented evidence that a conjecture survived rigorous criticism. The event log (`jjj events`) records every state change and rationale, so you always know *why* a decision was made, not just *what* changed.

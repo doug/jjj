@@ -21,6 +21,9 @@ jjj organizes work around Karl Popper's theory of knowledge growth: bold conject
 - **Problems** — Things that need solving. Can form hierarchies via parent/child relationships.
 - **Solutions** — Conjectures to solve problems. Linked to jj Change IDs.
 - **Critiques** — Error elimination. Block solution approval until addressed.
+- **Findings** — Evidence measured about a problem. There is no approval path: a
+  measurement is cited or superseded, never accepted. Solutions and critiques
+  cite findings with `--cites`.
 - **Milestones** — Time-based goals grouping problems.
 
 ## Quick Start
@@ -61,11 +64,16 @@ Launch `jjj ui` for a full terminal interface with project tree, detail pane, an
 ### Workflow
 ```bash
 jjj init                    # Initialize jjj bookmark
+jjj prime                   # Orient in one call: next work, proposals, evidence
 jjj status                  # Show next actions (what to work on)
 jjj next                    # Top next actions (--top N, --mine, --json)
 jjj next --claim            # Claim the top item (assign to yourself)
+jjj query "status:open tag:perf sort:edit"   # One grammar across all five kinds
+jjj query waiting           # Parents held back by unfinished sub-problems
 jjj overlaps                # Detect files touched by multiple solutions
+jjj contention              # Where the fleet is doubled up vs untouched
 jjj insights                # Show project statistics (approval rate, cycle times)
+jjj doctor                  # Environment and repository diagnostics
 jjj ui                      # Launch interactive TUI
 jjj fetch                   # Fetch code and metadata from remote
 jjj push                    # Push code and metadata to remote
@@ -104,6 +112,22 @@ jjj critique list --solution "search index"              # List critiques
 jjj critique address "Missing error"                     # Mark addressed
 jjj critique dismiss "Missing error"                     # Dismiss (incorrect/irrelevant)
 jjj critique validate "Missing error"                    # Validate (solution should be withdrawn)
+```
+
+### Findings
+```bash
+jjj finding new "Search is slow" "p99 is 2.3s at 10k docs" --method "load test"
+jjj finding new "Search is slow" "..." --measured-at 2026-10-16T14:00:00Z
+jjj finding list --problem 01957d                  # Evidence on a problem
+jjj finding supersede <old> --by <new>             # A better measurement replaced it
+jjj solution new "Title" --problem "Search" --cites <finding>   # Cite evidence
+```
+
+### Escalations
+```bash
+jjj escalate "needs a DBA decision" --about 01957d  # Say a person is needed
+jjj escalate --respond 01957d "we are sharding"     # Answer without closing
+jjj escalate --clear 01957d                         # After a human acted
 ```
 
 ### Milestones

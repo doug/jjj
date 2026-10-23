@@ -139,6 +139,40 @@ longer needs a person" are different claims that often arrive at different times
 - **`jjj prime`** orients an agent in one call, and its default output is
   constant in corpus size: 7 lines at 50 entities, at 2,000 and at 25,000.
 
+### The cache stops being load-bearing for correctness
+
+- **`jjj push` validates the markdown, not the cache.** Its eight reference and
+  cycle checks ran against SQLite, so publishing was gated on a derived index
+  rather than on the files being published. The checks now walk the entity files
+  directly, and `push` opens no database at all — it neither requires a cache
+  nor creates one.
+
+  Two traps worth recording, because both are general. The first version read
+  through the ordinary listings, which serve straight from a clean cache; an
+  entity written to markdown but not yet indexed was therefore invisible, and
+  validation reported "All checks passed" over a corpus containing a dangling
+  reference. It has to be the authoritative filesystem walk. Separately, `push`
+  used to clear the cache's dirty flag — true while validation loaded every
+  entity, false once it stopped, and six readers consult that flag before
+  trusting a cached read. Removing a cache *write* can break a cache *read*
+  several files away.
+
+- **The TUI's related pane no longer rebuilds the cache it finds missing.** It
+  opened the database with a call that *creates* what is absent, so in a
+  repository with no cache a background thread silently rebuilt the whole thing
+  — unobservably, from a thread, while the user was looking at a list. Opening a
+  cache opportunistically now refuses in one place for all three reasons it
+  should: the bypass flag is set, the file is absent, or the file will not open.
+
+### Fixed
+
+- **`jjj prime` caps the escalation section like every other one.** Every
+  sibling section listed at most five items with an "and N more" line; the
+  escalation section printed all of them, in both the text and JSON paths. A
+  repository with ninety open escalations buried the rest of the briefing — the
+  one section most likely to be long was the one without a limit. `--full`
+  still shows everything, and the count has always been in the heading.
+
 ### Testing
 
 - **A format corpus per release, not just the oldest.** A corpus guards only the
@@ -150,6 +184,12 @@ longer needs a person" are different claims that often arrive at different times
 - **`scripts/check-invariants.sh`** runs as its own CI job. Each rule names the
   incident it came from, and because it is a text check over `src/` it reports a
   broken fence in seconds rather than after a compile.
+
+- **`scripts/verify-commits.sh`** compiles every commit on a branch, not just
+  its tip. A branch whose tip builds can still have commits in the middle that
+  do not, which makes `git bisect` useless exactly when it is needed; a rebase
+  that reorders a caller ahead of the function it calls produces this without
+  touching a line of code.
 
 ## 0.5.2 — 2026-08-22
 

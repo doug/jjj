@@ -63,7 +63,8 @@ events.jsonl
 
 Machine-local files under `.jj/jjj-meta/` that are deliberately **not** synced:
 `automation.toml` (executable rules), `.sync_state.json`, `.events_offsets.json`,
-`.lamport` (this clone's logical clock), and `jjj.db`.
+`.lamport` (this clone's logical clock), `.telemetry.jsonl` (only written when
+`JJJ_TELEMETRY=1`), and `jjj.db`.
 
 Entity files use YAML frontmatter + markdown body. Each entity has one free-form body field:
 - **Problem**: body = `description`

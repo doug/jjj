@@ -43,14 +43,49 @@ https://jjj.recursivewhy.com/SKILL.md
 
 ## What the Skill Teaches
 
-The skill gives the agent:
+The skill is the agent-facing manual, and it is checked against the real CLI by
+`tests/skill_test.rs`, so it cannot drift into teaching commands that do not
+exist. It covers:
 
-- The full command reference with correct syntax (current vocabulary: `submit` / `approve` / `withdraw`, not older aliases)
-- Entity resolution rules — fuzzy title match, UUID prefix, or full UUID
-- Blocking rules — what prevents `solution approve` from succeeding
-- The core workflow from problem creation through critique resolution to approval
-- JSON output flags for every command
-- GitHub integration commands
+**The machine interface**
+
+- The full command reference with correct syntax (current vocabulary:
+  `submit` / `approve` / `withdraw`, not older aliases)
+- Entity resolution — fuzzy title match, UUID prefix, or full UUID, and why
+  anything scripted should use ids
+- `--json` on every command, and reading ids back out of it
+- Establishing identity first (`JJJ_USER`, `jjj whoami`), because without it
+  every agent shares one identity and work claims overwrite each other
+
+**Orienting instead of re-deriving**
+
+- Starting every turn with `jjj prime` — one call for what to do, what is
+  already proposed, what is already measured, and what is blocked on a person
+- `jjj query` as the single filter grammar across all five kinds, including
+  `waiting` for work that is not ready yet
+- `jjj contention` for seeing where the fleet is piled up
+- Surviving context compaction
+
+**Evidence and argument**
+
+- Investigations are *findings*, not solutions — and conjectures cite them
+- Writing the argument in the body rather than the title, with `-` reading
+  stdin so long text survives shell quoting
+- `jjj plan apply` to create a whole graph in one call
+
+**Writing safely under concurrency**
+
+- Guarding a write with `--if-lamport`, and treating exit 13 as "re-read and
+  retry" rather than as a failure
+- What is **enforced** versus what is merely convention — notably that an open
+  critique blocks approval as a matter of mechanism, not etiquette
+
+**Multi-agent patterns**, each with a worked example: the claim loop (work
+distribution without a scheduler), rival conjectures, adversarial review,
+collision avoidance, distributed prioritization, and pods with parallel push.
+
+It also documents the known **failure modes** and how to set the whole thing up
+in an agent harness.
 
 ## Example Prompts
 
@@ -74,6 +109,15 @@ address it and approve the solution with a rationale.
 Search the event log for any decisions we made about caching.
 ```
 
+```
+Benchmark the search path, record what you measured as a finding,
+then propose a solution that cites it.
+```
+
+```
+What is blocked on me? Answer the escalations you can and clear them.
+```
+
 ## What the Agent Can Do
 
 | Task | What to say |
@@ -84,6 +128,10 @@ Search the event log for any decisions we made about caching.
 | Check status | "What's blocking progress right now?" |
 | Roadmap | "Show the milestone roadmap as JSON" |
 | Audit | "Search the event log for decisions about authentication" |
+| Orient | "Run `jjj prime` and tell me what you're picking up and why" |
+| Record evidence | "Measure it, then file a finding with the method you used" |
+| Plan a body of work | "Draft this as a jjj plan and apply it in one call" |
+| Ask for help | "Escalate anything only I can unblock, then keep going" |
 
 ## Keeping the Skill Current
 

@@ -176,3 +176,119 @@ jjj search "token" --type solution
 ```
 
 This helps avoid duplicating work and surfaces critiques from previous related efforts.
+
+## 12. Orienting at the Start of a Session
+
+Before reading any listing, get the whole state in one call:
+
+```bash
+jjj prime
+```
+
+It prints what to work on, what is already proposed (so you do not build the
+same thing twice), what has already been measured (so you do not re-measure
+it), and anything blocked on a person. Its default output does not grow with the
+corpus — the same handful of lines at fifty entities and at twenty-five
+thousand — so it is cheap to run every time. `--full` lifts the per-section cap,
+`--json` parses.
+
+This replaces the habit of running `status`, then `problem list`, then
+`solution list`, then `finding list`.
+
+## 13. Recording Evidence So Nobody Measures It Twice
+
+The result of an investigation is a **finding**, not a solution:
+
+```bash
+# What you measured, stated as a claim, with how to reproduce it
+jjj finding new "Search is slow" "p99 is 2.3s at 10k docs" \
+  --method "ab -n 1000 -c 10 against staging"
+
+# The measurement happened before you wrote it down
+jjj finding new "Search is slow" "p99 is 2.3s at 10k docs" \
+  --method "ab -n 1000 -c 10" --measured-at 2026-10-16T14:00:00Z
+
+# The conjecture that rests on it cites it
+jjj solution new "Add a trigram index" --problem "Search is slow" --cites <finding>
+```
+
+When a better measurement arrives, supersede rather than edit:
+
+```bash
+jjj finding supersede <old> --by <new>
+```
+
+The old finding stays readable. Knowing a number was once believed, and what
+corrected it, is what stops the same investigation being repeated — and the pair
+read together is how you show that a change actually worked.
+
+## 14. Filtering Without Full-Text Search
+
+`jjj query` is a filter across all five kinds and needs no cache, unlike
+`jjj search`:
+
+```bash
+# Open perf work, most recently edited first
+jjj query "status:open tag:perf sort:edit limit:10"
+
+# My submitted solutions
+jjj query "type:solution assignee:mine status:submitted"
+
+# How much of what, in one call instead of one listing per value
+jjj query "type:problem" --count-by status
+
+# Parents held back by unfinished sub-problems, and what blocks each
+jjj query waiting
+```
+
+Use `sort:edit` rather than `sort:updated`: it orders by the causal clock, which
+survives a clone whose system time is wrong.
+
+## 15. Creating a Whole Graph in One Call
+
+For a body of work with structure — sub-problems, the evidence behind them, the
+conjectures that cite it — describe it once and apply it:
+
+```bash
+jjj plan apply plan.json --dry-run    # validate, write nothing
+jjj plan apply plan.json --json       # apply, print key → id
+```
+
+Nodes reference each other by symbolic `key`, and any reference may instead name
+an entity that already exists, so a plan can extend the graph rather than only
+seed it. Nothing is written unless the whole plan validates. See
+[Orientation & Planning](/reference/cli-orientation#jjj-plan-apply) for the
+schema.
+
+## 16. Editing Without Clobbering a Concurrent Change
+
+Read the clock, then make the write conditional on it:
+
+```bash
+L=$(jjj problem show 01957d --json | jq '.lamport // 0')
+jjj problem edit 01957d --append-body "re-ran at 50k docs: p99 4.1s" --if-lamport "$L"
+```
+
+A clock of `0` is omitted from JSON, hence the `// 0` default. A refused write
+**exits 13**, which means "nothing was written, re-read and try again" — as
+distinct from exit 1, which means the command itself was wrong and retrying will
+not help. Use `--append-body` rather than `--body` when you are adding to a body
+rather than replacing it; it reads the existing text inside the write
+transaction, so there is no window in which an edit can be lost.
+
+## 17. Asking for a Human
+
+```bash
+# Only for what a person must do: a dead credential, a destructive step
+jjj escalate "the staging credential is dead" --about 01957d
+
+# Answer without closing, so the next agent does not hit the same wall
+jjj escalate --respond 01957d "rotated; new key is in the vault"
+
+# Close it once it is actually fixed
+jjj escalate --clear 01957d
+```
+
+`--respond` and `--clear` take an **id or prefix**, not the reason text. Keep
+retries and routine progress out of this channel — one that carries them is one
+nobody reads. `jjj prime` leads with open escalations and prints any reply.
